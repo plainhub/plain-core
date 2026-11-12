@@ -1,0 +1,17 @@
+{
+  "package": "atomic-waker",
+  "version": "1.1.2",
+  "repository": "https://github.com/smol-rs/atomic-waker",
+  "revision": "9969a29ccd1fe298e2df7346849c0095ba303a64",
+  "archive_sha256": "1505bd5d3d116872e7271a6d4e16d81d0c8570876c8de68093a09ac269d8aac0",
+  "files": {
+    "lib.rs": "d6ad9d585a8ea6c1c1810ae5151304a6858ff5e74966552f5556cfd962314710"
+  },
+  "retained": "Native atomic implementation shared by H2, Hyper and bounded channels.",
+  "removed": "no_std/portable-atomic compatibility and API documentation.",
+  "deduplication": "The state machine and cell storage are shared. Const specialization retains the standalone Release fetch_and and futures-core Release swap/debug assertion respectively; no new runtime flag, weaker ordering or extra hot-path branch.",
+  "futures_core_source_sha256": "67d3e3177332e95696bc727420beadc1af44b5c96da78ac8f97f9f5bae4fb143",
+  "futures_core_version": "0.3.34",
+  "futures_core_archive_sha256": "92d699e522242e69e3003b94ecc1f960f3a5e015aa7c5d7486e65ad01dd94f5e",
+  "futures_core_license": "Same futures-rs MIT/Apache licenses retained in ../async_channel."
+}

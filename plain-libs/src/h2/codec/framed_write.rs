@@ -2,12 +2,12 @@ use crate::h2::codec::UserError;
 use crate::h2::codec::UserError::*;
 use crate::h2::frame::{self, Frame, FrameSize};
 use crate::h2::hpack;
+use crate::http_io::poll_write_buf;
 use bytes::{Buf, BufMut, BytesMut};
 use std::io::{self, Cursor};
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
-use tokio_util::io::poll_write_buf;
 macro_rules! limited_write_buf {
     ($self : expr) => {{
         let limit = $self.max_frame_size() + frame::HEADER_LEN;

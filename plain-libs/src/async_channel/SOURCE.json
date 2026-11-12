@@ -1,0 +1,16 @@
+{
+  "package": "futures-channel",
+  "version": "0.3.34",
+  "repository": "https://github.com/rust-lang/futures-rs",
+  "revision": "705e6b5c0f06535b1aac1cb1989a172b3d45be8c",
+  "archive_sha256": "b1f9e3d69d39e4862ffed03ed071a76f9a13ba1d9109d355b0f0aa6b15e393c4",
+  "files": {
+    "mpsc/mod.rs": "fff4ec50657e5cf0ad1a14336b621cab9076abbae4eb732dc1530df637250539",
+    "mpsc/queue.rs": "22034085dc22050b708a37854e215fc7cbb16d65edc60370cb5d8f4b7faca18e",
+    "oneshot.rs": "1e4e33c75d72b5d11cc23710e2a08099e04b72bf2368b68e7c1eb0beb6fc03fa",
+    "lock.rs": "38655a797456ea4f67d132c42055cf74f18195e875c3b337fc81a12901f79292"
+  },
+  "retained": "Bounded MPSC and oneshot used by Hyper bodies, H2 upgrades and connection pooling.",
+  "removed": "Unbounded channels, Sink implementations disabled in the original approved features, generic Recv helpers, unused channel identity/hash/disconnection APIs, unused cancellation future and compatibility/documentation. Unused sender-cancellation waker slot and polling, receiver try-recv/manual-close APIs; existing production only sends, awaits, drops and checks sender cancellation. Unused error-query helper APIs; duplicate error Display bodies share one retained formatter with unchanged messages. Redundant optional sender shell and duplicate private send-readiness check after removal of the disconnect API.",
+  "performance": "Original queue/atomic orders and notification call boundary retained; generic queue pop remains eligible for inlining. Original/shared behavior and deterministic LLVM regression cover notification and sender readiness."
+}

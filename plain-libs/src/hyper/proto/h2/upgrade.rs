@@ -1,10 +1,10 @@
 use super::SendBuf;
 use super::ping::Recorder;
+use crate::async_channel::{mpsc, oneshot};
+use crate::atomic_waker::AtomicWaker;
 use crate::h2::{Reason, RecvStream, SendStream};
 use crate::hyper::rt::{Read, ReadBufCursor, Write};
-use atomic_waker::AtomicWaker;
 use bytes::{Buf, Bytes};
-use futures_channel::{mpsc, oneshot};
 use futures_core::{Stream, ready};
 use pin_project_lite::pin_project;
 use std::future::Future;

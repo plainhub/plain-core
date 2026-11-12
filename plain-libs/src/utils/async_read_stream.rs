@@ -46,26 +46,14 @@ impl<R: AsyncRead + Unpin> Stream for AsyncReadStream<R> {
         if !this.buf.has_remaining_mut() {
             this.buf.reserve(CAPACITY);
         }
-        let n = {
-            let dst = this.buf.chunk_mut();
-            // SAFETY: `UninitSlice` is a transparent wrapper around
-            // `[MaybeUninit<u8>]` (same conversion tokio-util uses); we
-            // only hand it to `ReadBuf`, which never reads the
-            // uninitialized bytes, only writes into them.
-            let dst = unsafe { dst.as_uninit_slice_mut() };
-            let mut read_buf = tokio::io::ReadBuf::uninit(dst);
-            let ptr = read_buf.filled().as_ptr();
-            ready!(Pin::new(&mut this.reader).poll_read(cx, &mut read_buf)?);
-            // The pointer must not have moved from under us.
-            assert_eq!(ptr, read_buf.filled().as_ptr());
-            read_buf.filled().len()
-        };
+        let n = ready!(crate::io_buf::poll_read_buf(
+            Pin::new(&mut this.reader),
+            cx,
+            &mut this.buf
+        ))?;
         if n == 0 {
-            return Poll::Ready(None); // EOF
+            return Poll::Ready(None);
         }
-        // SAFETY: `poll_read` reported exactly `n` bytes of the spare
-        // capacity as initialized, so advancing by that amount is sound.
-        unsafe { this.buf.advance_mut(n) };
         Poll::Ready(Some(Ok(this.buf.split().freeze())))
     }
 }

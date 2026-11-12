@@ -1,5 +1,7 @@
 use super::ping::{Ponger, Recorder};
 use super::{PipeToSendStream, SendBuf, ping};
+use crate::async_channel::mpsc::{Receiver, Sender};
+use crate::async_channel::{mpsc, oneshot};
 use crate::h2::SendStream;
 use crate::h2::client::ResponseFuture;
 use crate::h2::client::{Builder, Connection, SendRequest};
@@ -17,8 +19,6 @@ use crate::hyper::rt::{Read, Write};
 use crate::hyper::upgrade::Upgraded;
 use crate::hyper::{Request, Response};
 use bytes::Bytes;
-use futures_channel::mpsc::{Receiver, Sender};
-use futures_channel::{mpsc, oneshot};
 use futures_core::{FusedFuture, FusedStream, Stream, ready};
 use pin_project_lite::pin_project;
 use std::{

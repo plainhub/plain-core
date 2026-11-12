@@ -86,11 +86,11 @@ pub mod xml;
 mod h264;
 
 pub mod anyhow;
-pub mod fnv;
 #[cfg(feature = "image")]
 mod byte_order;
 #[cfg(feature = "time")]
 pub mod chrono;
+pub mod fnv;
 #[cfg(feature = "image")]
 pub mod image;
 #[cfg(feature = "image")]
@@ -229,3 +229,13 @@ mod codegen_test;
 pub mod opaque;
 #[cfg(feature = "auth")]
 mod oprf;
+
+#[cfg(all(not(target_arch = "wasm32"), feature = "http-runtime"))]
+mod async_channel;
+#[cfg(all(not(target_arch = "wasm32"), feature = "http-runtime"))]
+mod atomic_waker;
+#[cfg(all(not(target_arch = "wasm32"), feature = "http-runtime"))]
+mod http_io;
+
+#[cfg(not(target_arch = "wasm32"))]
+mod io_buf;

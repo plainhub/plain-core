@@ -4,18 +4,18 @@ use crate::h2::frame::{
 };
 use crate::h2::hpack;
 use crate::h2::proto::Error;
+use crate::http_io::FramedRead as InnerFramedRead;
+use crate::http_io::{LengthDelimitedCodec, LengthDelimitedCodecError};
 use bytes::{Buf, BytesMut};
 use futures_core::Stream;
 use std::io;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use tokio::io::AsyncRead;
-use tokio_util::codec::FramedRead as InnerFramedRead;
-use tokio_util::codec::{LengthDelimitedCodec, LengthDelimitedCodecError};
 const DEFAULT_SETTINGS_MAX_HEADER_LIST_SIZE: usize = 16 << 20;
 #[derive(Debug)]
 pub struct FramedRead<T> {
-    inner: InnerFramedRead<T, LengthDelimitedCodec>,
+    inner: InnerFramedRead<T>,
     hpack: hpack::Decoder,
     max_header_list_size: usize,
     max_continuation_frames: usize,
@@ -33,7 +33,7 @@ enum Continuable {
     PushPromise(frame::PushPromise),
 }
 impl<T> FramedRead<T> {
-    pub fn new(inner: InnerFramedRead<T, LengthDelimitedCodec>) -> FramedRead<T> {
+    pub fn new(inner: InnerFramedRead<T>) -> FramedRead<T> {
         let max_header_list_size = DEFAULT_SETTINGS_MAX_HEADER_LIST_SIZE;
         let max_continuation_frames =
             calc_max_continuation_frames(max_header_list_size, inner.decoder().max_frame_length());

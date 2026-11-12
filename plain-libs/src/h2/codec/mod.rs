@@ -6,6 +6,7 @@ use self::framed_read::FramedRead;
 use self::framed_write::FramedWrite;
 use crate::h2::frame::{self, Data, Frame};
 use crate::h2::proto::Error;
+use crate::http_io::LengthDelimitedCodec;
 use bytes::Buf;
 use futures_core::Stream;
 use futures_sink::Sink;
@@ -13,7 +14,6 @@ use std::io;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use tokio::io::{AsyncRead, AsyncWrite};
-use tokio_util::codec::length_delimited;
 #[derive(Debug)]
 pub struct Codec<T, B> {
     inner: FramedRead<FramedWrite<T, B>>,
@@ -29,12 +29,7 @@ where
     }
     pub fn with_max_recv_frame_size(io: T, max_frame_size: usize) -> Self {
         let framed_write = FramedWrite::new(io);
-        let delimited = length_delimited::Builder::new()
-            .big_endian()
-            .length_field_length(3)
-            .length_adjustment(9)
-            .num_skip(0)
-            .new_read(framed_write);
+        let delimited = crate::http_io::FramedRead::new(framed_write, LengthDelimitedCodec::new());
         let mut inner = FramedRead::new(delimited);
         inner.set_max_frame_size(max_frame_size);
         Codec { inner }

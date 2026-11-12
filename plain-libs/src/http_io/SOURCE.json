@@ -1,0 +1,17 @@
+{
+  "package": "tokio-util",
+  "version": "0.7.19",
+  "repository": "https://github.com/tokio-rs/tokio",
+  "revision": "f2189d3bd69d22638158a0ca8163b2e8daf18c5f",
+  "archive_sha256": "494815d09bf52b5548659851081238f0ca39ff638363907596da739561c62c52",
+  "files": {
+    "codec/length_delimited.rs": "598f71473f06a63cd87fb1ec087b981213e35401e5ed67bfd7ccc2d37fc7c79b",
+    "codec/framed_read.rs": "558def7e7644adf82d1cac05b196d1082e601b9c96c295503bc135157e6243d2",
+    "codec/framed_impl.rs": "902d9d55187ea348990adf1a394216a27c9a6cbce24b32080c799853a41fbf2e",
+    "codec/decoder.rs": "58bb9c2b41bd8de0933031325a06bef2354f75998958ad8096ca5c65a133772b",
+    "util/poll_buf.rs": "54736dde13f441b285f6ffeded9d0a80e30fccf468f5527493278e86c8451097"
+  },
+  "retained": "Exact production H2 codec shape: big-endian 3-byte payload length +9-byte header, no skipped bytes; original 8KiB buffering, errors/EOF/resumption and buffer split behavior. Shared generic buffer read/write helpers retain uninitialized-buffer validation and vectored I/O.",
+  "removed": "Unused generic codec builders/length widths/endianness/sink/framed-write/transport APIs and compatibility branches.",
+  "deduplication": "Uninitialized AsyncRead buffer handling is shared with utils::async_read_stream; no decoder body copying or redundant buffers."
+}

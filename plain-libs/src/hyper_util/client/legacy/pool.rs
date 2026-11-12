@@ -1,6 +1,6 @@
+use crate::async_channel::oneshot;
 use crate::hyper::rt::Timer as _;
 use crate::hyper_util::common::{exec, exec::Exec, timer::Timer};
-use futures_channel::oneshot;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::convert::Infallible;
 use std::error::Error as StdError;

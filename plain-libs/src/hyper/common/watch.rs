@@ -1,4 +1,4 @@
-use atomic_waker::AtomicWaker;
+use crate::atomic_waker::AtomicWaker;
 use std::sync::{
     Arc,
     atomic::{AtomicUsize, Ordering},

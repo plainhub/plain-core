@@ -1,10 +1,10 @@
 use super::DecodedLength;
+use crate::async_channel::{mpsc, oneshot};
 use crate::http::HeaderMap;
 use crate::http_body::{Body, Frame, SizeHint};
 use crate::hyper::common::watch;
 use crate::hyper::proto::h2::ping;
 use bytes::Bytes;
-use futures_channel::{mpsc, oneshot};
 use futures_core::ready;
 use futures_core::{Stream, stream::FusedStream};
 use std::fmt;

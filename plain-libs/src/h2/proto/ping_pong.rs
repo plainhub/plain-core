@@ -1,7 +1,7 @@
+use crate::atomic_waker::AtomicWaker;
 use crate::h2::codec::Codec;
 use crate::h2::frame::Ping;
 use crate::h2::proto::{self, PingPayload};
-use atomic_waker::AtomicWaker;
 use bytes::Buf;
 use std::io;
 use std::sync::Arc;

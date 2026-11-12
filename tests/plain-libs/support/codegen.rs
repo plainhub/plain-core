@@ -7,7 +7,7 @@ impl Drop for ProbeDir {
     }
 }
 
-pub(crate) fn external_calls(ir: &str, function: &str) -> Vec<String> {
+pub(crate) fn function_body(ir: &str, function: &str) -> Vec<String> {
     let lines: Vec<_> = ir.lines().collect();
     let mut name = function.to_owned();
     let mut seen = std::collections::HashSet::new();
@@ -39,6 +39,13 @@ pub(crate) fn external_calls(ir: &str, function: &str) -> Vec<String> {
     lines[start + 1..]
         .iter()
         .take_while(|line| line.trim() != "}")
+        .map(|line| line.trim().to_owned())
+        .collect()
+}
+
+pub(crate) fn external_calls(ir: &str, function: &str) -> Vec<String> {
+    function_body(ir, function)
+        .into_iter()
         .filter(|line| {
             !line.trim_start().starts_with(';')
                 && (line.contains("call ") || line.contains("invoke "))
@@ -52,6 +59,18 @@ pub(crate) fn compile_probe(source_text: &str) -> String {
     let library = std::env::var_os("PLAIN_LIBS_CODEGEN_RLIB").expect("production rlib is required");
     let dependencies =
         std::env::var_os("PLAIN_LIBS_CODEGEN_DEPS").expect("dependency directory is required");
+    compile_probe_externs(
+        source_text,
+        &[("plain_libs", PathBuf::from(library))],
+        PathBuf::from(dependencies),
+    )
+}
+
+pub(crate) fn compile_probe_externs(
+    source_text: &str,
+    libraries: &[(&str, PathBuf)],
+    dependencies: PathBuf,
+) -> String {
     static NEXT_PROBE: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
     let sequence = NEXT_PROBE.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let unique = std::time::SystemTime::now()
@@ -67,7 +86,8 @@ pub(crate) fn compile_probe(source_text: &str) -> String {
     let output = directory.0.join("probe.ll");
     fs::write(&source, source_text).unwrap();
     let compiler = std::env::var_os("RUSTC").unwrap_or_else(|| "rustc".into());
-    let result = Command::new(compiler)
+    let mut command = Command::new(compiler);
+    command
         .args([
             "--crate-type=lib",
             "--edition=2024",
@@ -80,17 +100,19 @@ pub(crate) fn compile_probe(source_text: &str) -> String {
             "debug-assertions=yes",
         ])
         .arg(&source)
-        .arg("--extern")
-        .arg(format!("plain_libs={}", PathBuf::from(library).display()))
         .arg("-L")
         .arg(format!(
             "dependency={}",
             PathBuf::from(dependencies).display()
         ))
         .arg("-o")
-        .arg(&output)
-        .output()
-        .unwrap();
+        .arg(&output);
+    for (name, library) in libraries {
+        command
+            .arg("--extern")
+            .arg(format!("{name}={}", library.display()));
+    }
+    let result = command.output().unwrap();
     assert!(
         result.status.success(),
         "{}",
