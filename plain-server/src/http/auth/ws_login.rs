@@ -622,8 +622,7 @@ async fn execute_request(state: &ServerState, request: Request) -> plain_libs::a
             let pairing_requires_approval = peer_chat_paired(&pending.request)
                 && (state.pairing_approval != crate::server::PairingApproval::FollowPasswordLogin
                     || !matches!(&pending.protection, LoginProtection::Password { .. }));
-            if matches!(&pending.protection, LoginProtection::DeviceConfirmation(_))
-                || pairing_requires_approval
+            if pairing_requires_approval
                 || state.prefs.get_or(
                     plain_rs::features::prefs::pref_keys::LOGIN_REQUIRE_APPROVAL,
                     true,

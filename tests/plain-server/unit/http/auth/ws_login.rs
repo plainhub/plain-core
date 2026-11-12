@@ -249,7 +249,7 @@ async fn browser_login(
     let pending: Value = plain_libs::serde_json::from_slice(&pending).unwrap();
     assert_eq!(
         pending["status"],
-        if password.is_none() || state.prefs.get_or("login_require_approval", true) {
+        if state.prefs.get_or("login_require_approval", true) {
             "PENDING"
         } else {
             "COMPLETED"
@@ -563,27 +563,6 @@ async fn successful_passwordless_logins_still_count_toward_the_rolling_ip_limit(
     for index in 0..LOGIN_ATTEMPT_LIMIT {
         let client_id = format!("successful-browser-{index}");
         let (mut socket, _, _, _) = browser_login(&state, port, &client_id, None).await;
-        assert!(
-            state.db.session_get(&client_id).unwrap().is_none(),
-            "passwordless requires local approval even with the preference disabled"
-        );
-        let id = state
-            .login_attempts
-            .lock()
-            .unwrap()
-            .pending
-            .iter()
-            .find(|(_, p)| p.client_id == client_id)
-            .unwrap()
-            .0
-            .clone();
-        server
-            .native_management()
-            .unwrap()
-            .confirm_web_login(id, true)
-            .await
-            .unwrap();
-        assert!(matches!(login_frame(&mut socket).await, Message::Binary(_)));
         assert!(state.db.session_get(&client_id).unwrap().is_some());
         assert!(state.login_attempts.lock().unwrap().pending.is_empty());
         socket.close(None).await.unwrap();
@@ -603,6 +582,46 @@ async fn successful_passwordless_logins_still_count_toward_the_rolling_ip_limit(
     );
     assert!(state.db.session_get("blocked").unwrap().is_none());
     server.shutdown().await;
+}
+
+#[cfg(feature = "http_transport")]
+#[tokio::test]
+async fn passwordless_without_approval_issues_a_session_once_and_preserves_access_gates() {
+    use futures_util::SinkExt;
+    use plain_libs::tokio_tungstenite::tungstenite::Message;
+    for disabled in [false, true] {
+        let (_directory, server, port) = passwordless_server().await;
+        let state = server.runtime_state();
+        state.prefs.set("login_require_approval", false).unwrap();
+        let (mut socket, channel, _, frame) = browser_login(&state, port, "browser", None).await;
+        let LoginChannel::Confirmation(c) = &channel.inner else { unreachable!() };
+        let saved = state.db.session_get("browser").unwrap().unwrap();
+        assert_eq!(saved.token, plain_libs::utils::base64::base64_encode(&c.api_key()));
+        assert_eq!(saved.r#type, plain_rs::features::sessions::SessionType::Login);
+        assert!(state.login_attempts.lock().unwrap().pending.is_empty());
+        if disabled {
+            state.prefs.set("remote_access", false).unwrap();
+        }
+        socket.send(Message::Binary(frame.clone().into())).await.unwrap();
+        let Message::Close(Some(close)) = login_frame(&mut socket).await else {
+            panic!("a second submission must close the connection");
+        };
+        if disabled {
+            assert_eq!(close.reason, "remote_access_disabled");
+        }
+        let unchanged = state.db.session_get("browser").unwrap().unwrap();
+        assert_eq!(unchanged.token, saved.token);
+        assert_eq!(unchanged.url_token, saved.url_token);
+        let records = state.db.audit_events(0, 20, None).unwrap();
+        assert_eq!(records.iter().filter(|row| row.r#type == "login").count(), 1);
+        let (mut replay, _) = plain_libs::tokio_tungstenite::connect_async(
+            format!("ws://127.0.0.1:{port}/auth?cid=replay")
+        ).await.unwrap();
+        replay.send(Message::Binary(frame.into())).await.unwrap();
+        assert!(matches!(login_frame(&mut replay).await, Message::Close(_)));
+        assert!(state.db.session_get("replay").unwrap().is_none());
+        server.shutdown().await;
+    }
 }
 
 #[test]
@@ -662,9 +681,10 @@ fn recovery_requests_follow_creation_order_independent_of_hash_iteration() {
 async fn signed_login_rejects_missing_and_repeated_hellos_before_any_grant() {
     use futures_util::SinkExt;
     use plain_libs::tokio_tungstenite::tungstenite::Message;
-    for repeat in [false, true] {
+    for (repeat, approval) in [(false, false), (true, false), (false, true), (true, true)] {
         let (_directory, server, port) = passwordless_server().await;
         let state = server.runtime_state();
+        state.prefs.set("login_require_approval", approval).unwrap();
         let (mut socket, _) =
             plain_libs::tokio_tungstenite::connect_async(format!("ws://127.0.0.1:{port}/auth?cid=browser"))
                 .await
