@@ -1,3 +1,4 @@
+use crate::checksum::Adler32;
 use crate::image_codecs::deflate::{
     huffman::{self, build_table},
     tables::{
@@ -5,7 +6,6 @@ use crate::image_codecs::deflate::{
         FIXED_LITLEN_TABLE, LEN_SYM_TO_LEN_BASE, LEN_SYM_TO_LEN_EXTRA, LITLEN_TABLE_ENTRIES,
     },
 };
-use crate::checksum::Adler32;
 #[derive(Debug, PartialEq)]
 pub enum DecompressionError {
     BadZlibHeader,
@@ -514,25 +514,8 @@ impl Decompressor {
                     output_index = output.len();
                     break;
                 }
-            } else if output_index + length + 15 <= output.len() {
-                let start = output_index - dist;
-                output.copy_within(start..start + 16, output_index);
-                if length > 16 || dist < 16 {
-                    for i in (0..length).step_by(dist.min(16)).skip(1) {
-                        output.copy_within(start + i..start + i + 16, output_index + i);
-                    }
-                }
             } else {
-                if dist < copy_length {
-                    for i in 0..copy_length {
-                        output[output_index + i] = output[output_index + i - dist];
-                    }
-                } else {
-                    output.copy_within(
-                        output_index - dist..output_index + copy_length - dist,
-                        output_index,
-                    )
-                }
+                copy_backreference(output, output_index, dist, copy_length);
                 if copy_length < length {
                     self.queued_backref = Some((dist, length - copy_length));
                     output_index = output.len();
@@ -671,25 +654,8 @@ impl Decompressor {
                     output_index = output.len();
                     break;
                 }
-            } else if output_index + length + 15 <= output.len() {
-                let start = output_index - dist;
-                output.copy_within(start..start + 16, output_index);
-                if length > 16 || dist < 16 {
-                    for i in (0..length).step_by(dist.min(16)).skip(1) {
-                        output.copy_within(start + i..start + i + 16, output_index + i);
-                    }
-                }
             } else {
-                if dist < copy_length {
-                    for i in 0..copy_length {
-                        output[output_index + i] = output[output_index + i - dist];
-                    }
-                } else {
-                    output.copy_within(
-                        output_index - dist..output_index + copy_length - dist,
-                        output_index,
-                    )
-                }
+                copy_backreference(output, output_index, dist, copy_length);
                 if copy_length < length {
                     self.queued_backref = Some((dist, length - copy_length));
                     output_index = output.len();
@@ -731,17 +697,21 @@ impl Decompressor {
             output_index += n;
             if n < len {
                 self.queued_rle = Some((data, len - n));
+                if !self.ignore_adler32 {
+                    self.checksum.write(&output[output_position..output_index]);
+                }
                 return Ok((0, n));
             }
         }
         if let Some((dist, len)) = self.queued_backref.take() {
             let n = len.min(output.len() - output_index);
-            for i in 0..n {
-                output[output_index + i] = output[output_index + i - dist];
-            }
+            copy_backreference(output, output_index, dist, n);
             output_index += n;
             if n < len {
                 self.queued_backref = Some((dist, len - n));
+                if !self.ignore_adler32 {
+                    self.checksum.write(&output[output_position..output_index]);
+                }
                 return Ok((0, n));
             }
         }
@@ -813,14 +783,14 @@ impl Decompressor {
                     self.fill_buffer(&mut remaining_input);
                     let align_bits = self.nbits % 8;
                     if self.nbits >= 32 + align_bits {
-                        self.checksum.write(&output[output_position..output_index]);
                         if align_bits != 0 {
                             self.consume_bits(align_bits);
                         }
-                        if !self.ignore_adler32
-                            && (self.peak_bits(32) as u32).swap_bytes() != self.checksum.finish()
-                        {
-                            return Err(DecompressionError::WrongChecksum);
+                        if !self.ignore_adler32 {
+                            self.checksum.write(&output[output_position..output_index]);
+                            if (self.peak_bits(32) as u32).swap_bytes() != self.checksum.finish() {
+                                return Err(DecompressionError::WrongChecksum);
+                            }
                         }
                         self.state = State::Done;
                         self.consume_bits(32);
@@ -889,3 +859,19 @@ pub fn decompress_to_vec_bounded(
         })
     }
 }
+
+#[inline]
+fn copy_backreference(output: &mut [u8], start: usize, distance: usize, length: usize) {
+    let seed = distance.min(length);
+    output.copy_within(start - distance..start - distance + seed, start);
+    let mut copied = seed;
+    while copied < length {
+        let count = copied.min(length - copied);
+        output.copy_within(start..start + count, start + copied);
+        copied += count;
+    }
+}
+
+#[cfg(test)]
+#[path = "../../../../tests/plain-libs/unit/image_codecs/deflate/decompress.rs"]
+mod tests;
