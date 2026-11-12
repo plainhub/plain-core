@@ -283,10 +283,6 @@ impl<'a> SliceRead<'a> {
             self.index += crate::memchr::memchr2(b'"', b'\\', rest).unwrap_or(rest.len());
             return;
         }
-        if let Some(offset) = scan::find_escape(rest) {
-            self.index += offset;
-            return;
-        }
         #[cfg(any(
             target_pointer_width = "64",
             target_arch = "aarch64",
@@ -311,7 +307,7 @@ impl<'a> SliceRead<'a> {
         type Chunk = u32;
         const STEP: usize = mem::size_of::<Chunk>();
         const ONE_BYTES: Chunk = Chunk::MAX / 255;
-        for chunk in rest.chunks_exact(STEP) {
+        for (index, chunk) in rest.chunks_exact(STEP).enumerate() {
             let chars = Chunk::from_le_bytes(chunk.try_into().unwrap());
             let contains_ctrl = chars.wrapping_sub(ONE_BYTES * 0x20) & !chars;
             let chars_quote = chars ^ (ONE_BYTES * Chunk::from(b'"'));
@@ -323,6 +319,12 @@ impl<'a> SliceRead<'a> {
                 self.index = unsafe { chunk.as_ptr().offset_from(self.slice.as_ptr()) } as usize
                     + masked.trailing_zeros() as usize / 8;
                 return;
+            }
+            if index == 1 {
+                if let Some(offset) = scan::find_escape(&rest[2 * STEP..]) {
+                    self.index += 2 * STEP + offset;
+                    return;
+                }
             }
         }
         self.index += rest.len() / STEP * STEP;

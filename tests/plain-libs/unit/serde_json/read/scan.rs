@@ -71,3 +71,14 @@ fn public_string_parse_uses_vectors_without_copying_or_accepting_invalid_utf8() 
         }
     }
 }
+
+#[test]
+fn nearby_escapes_keep_the_word_scan_instead_of_entering_vectors() {
+    for (encoded, decoded) in [(r"a\n", "a\n"), (r"汉字text \n", "汉字text \n")] {
+        let input = format!("\"{}\"", encoded.repeat(32));
+        BLOCKS.set(0);
+        let value: String = crate::serde_json::from_slice(input.as_bytes()).unwrap();
+        assert_eq!(value, decoded.repeat(32));
+        assert_eq!(BLOCKS.get(), 0);
+    }
+}

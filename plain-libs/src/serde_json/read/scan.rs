@@ -18,7 +18,7 @@ pub(super) fn find_escape(bytes: &[u8]) -> Option<usize> {
     all(target_arch = "aarch64", target_feature = "neon"),
     target_arch = "x86_64"
 ))]
-#[inline]
+#[inline(never)]
 unsafe fn find_vector<V: crate::memchr::vector::Vector>(bytes: &[u8]) -> usize {
     use crate::memchr::vector::MoveMask;
     let mut chunks = bytes.chunks_exact(V::BYTES);
