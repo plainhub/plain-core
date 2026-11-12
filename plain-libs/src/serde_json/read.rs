@@ -393,8 +393,6 @@ impl<'a> Read<'a> for SliceRead<'a> {
     }
     #[inline]
     fn peek(&mut self) -> Result<Option<u8>> {
-        #[cfg(test)]
-        tests::record_peek(self.index);
         Ok(if self.index < self.slice.len() {
             Some(self.slice[self.index])
         } else {
@@ -794,7 +792,3 @@ fn decode_four_hex_digits(a: u8, b: u8, c: u8, d: u8) -> Option<u16> {
         None
     }
 }
-
-#[cfg(test)]
-#[path = "../../../tests/plain-libs/unit/serde_json/read.rs"]
-mod tests;

@@ -107,3 +107,54 @@ fn number_scanning_preserves_errors_and_numeric_object_keys() {
         assert!(from_str::<std::collections::BTreeMap<i64, String>>(input).is_err());
     }
 }
+
+#[test]
+fn numeric_arrays_preserve_values_types_and_float_bits_at_each_growth_boundary() {
+    for len in [0, 1, 4, 5, 16, 17, 256, 1024] {
+        let integers: Vec<_> = (0..len).map(|n| (n as i64 - 511) * 1_000_003).collect();
+        let input = format!(
+            "[{}]",
+            integers
+                .iter()
+                .map(i64::to_string)
+                .collect::<Vec<_>>()
+                .join(",")
+        );
+        let parsed: Value = from_slice(input.as_bytes()).unwrap();
+        let values = parsed.as_array().unwrap();
+        assert_eq!(values.len(), len);
+        for (value, &expected) in values.iter().zip(&integers) {
+            assert_eq!(value.as_i64(), Some(expected));
+        }
+        assert_eq!(from_str::<Value>(&input).unwrap(), parsed);
+        assert_eq!(
+            from_reader::<_, Value>(std::io::Cursor::new(&input)).unwrap(),
+            parsed
+        );
+
+        let floats: Vec<_> = (0..len).map(|n| (n as f64 - 511.0) * 0.25).collect();
+        let input = format!(
+            "[{}]",
+            floats
+                .iter()
+                .map(|value| format!("{value:.2}"))
+                .collect::<Vec<_>>()
+                .join(",")
+        );
+        let parsed: Value = from_slice(input.as_bytes()).unwrap();
+        let values = parsed.as_array().unwrap();
+        assert_eq!(values.len(), len);
+        for (value, expected) in values.iter().zip(&floats) {
+            let Value::Number(number) = value else {
+                panic!("numeric array element must remain a number");
+            };
+            assert!(number.is_f64());
+            assert_eq!(number.as_f64().unwrap().to_bits(), expected.to_bits());
+        }
+        assert_eq!(from_str::<Value>(&input).unwrap(), parsed);
+        assert_eq!(
+            from_reader::<_, Value>(std::io::Cursor::new(&input)).unwrap(),
+            parsed
+        );
+    }
+}

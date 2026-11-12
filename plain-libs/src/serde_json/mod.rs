@@ -38,3 +38,7 @@ pub use crate::{
 #[cfg(test)]
 #[path = "../../../tests/plain-libs/unit/serde_json.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "../../../tests/plain-libs/unit/serde_json/codegen.rs"]
+mod codegen_tests;

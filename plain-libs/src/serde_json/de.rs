@@ -53,6 +53,15 @@ macro_rules! overflow {
         }
     };
 }
+#[inline(always)]
+fn append_decimal_digit(significand: u64, digit: u64) -> Option<u64> {
+    if overflow!(significand * 10 + digit, u64::MAX) {
+        None
+    } else {
+        // The caller validates the digit; the bound check makes wrapping arithmetic exact.
+        Some(significand.wrapping_mul(10).wrapping_add(digit))
+    }
+}
 pub(crate) enum ParserNumber {
     F64(f64),
     U64(u64),
@@ -298,6 +307,7 @@ impl<'de, R: Read<'de>> Deserializer<R> {
         }
         Ok(())
     }
+    #[inline(always)]
     fn parse_integer(&mut self, positive: bool) -> Result<ParserNumber> {
         let next = match tri!(self.next_char()) {
             Some(b) => b,
@@ -305,35 +315,40 @@ impl<'de, R: Read<'de>> Deserializer<R> {
                 return Err(self.error(ErrorCode::EofWhileParsingValue));
             }
         };
-        let (significand, next) = match next {
-            b'0' => {
-                let next = tri!(self.peek_or_null());
-                if matches!(next, b'0'..=b'9') {
-                    return Err(self.peek_error(ErrorCode::InvalidNumber));
-                }
-                (0, next)
-            }
+        match next {
+            b'0' => match tri!(self.peek_or_null()) {
+                b'0'..=b'9' => Err(self.peek_error(ErrorCode::InvalidNumber)),
+                _ => self.parse_number(positive, 0),
+            },
             c @ b'1'..=b'9' => {
                 let mut significand = (c - b'0') as u64;
                 loop {
                     match tri!(self.peek_or_null()) {
                         c @ b'0'..=b'9' => {
                             let digit = (c - b'0') as u64;
-                            if overflow!(significand * 10 + digit, u64::MAX) {
-                                return Ok(ParserNumber::F64(tri!(
-                                    self.parse_long_integer(positive, significand),
-                                )));
-                            }
+                            let next = match append_decimal_digit(significand, digit) {
+                                Some(next) => next,
+                                None => {
+                                    return Ok(ParserNumber::F64(tri!(
+                                        self.parse_long_integer(positive, significand),
+                                    )));
+                                }
+                            };
                             self.eat_char();
-                            significand = significand * 10 + digit;
+                            significand = next;
                         }
-                        next => break (significand, next),
+                        _ => {
+                            return self.parse_number(positive, significand);
+                        }
                     }
                 }
             }
-            _ => return Err(self.error(ErrorCode::InvalidNumber)),
-        };
-        Ok(match next {
+            _ => Err(self.error(ErrorCode::InvalidNumber)),
+        }
+    }
+    #[inline(always)]
+    fn parse_number(&mut self, positive: bool, significand: u64) -> Result<ParserNumber> {
+        Ok(match tri!(self.peek_or_null()) {
             b'.' => ParserNumber::F64(tri!(self.parse_decimal(positive, significand, 0))),
             b'e' | b'E' => ParserNumber::F64(tri!(self.parse_exponent(positive, significand, 0))),
             _ => {
@@ -360,12 +375,15 @@ impl<'de, R: Read<'de>> Deserializer<R> {
         let mut exponent_after_decimal_point = 0;
         while let c @ b'0'..=b'9' = tri!(self.peek_or_null()) {
             let digit = (c - b'0') as u64;
-            if overflow!(significand * 10 + digit, u64::MAX) {
-                let exponent = exponent_before_decimal_point + exponent_after_decimal_point;
-                return self.parse_decimal_overflow(positive, significand, exponent);
-            }
+            let next = match append_decimal_digit(significand, digit) {
+                Some(next) => next,
+                None => {
+                    let exponent = exponent_before_decimal_point + exponent_after_decimal_point;
+                    return self.parse_decimal_overflow(positive, significand, exponent);
+                }
+            };
             self.eat_char();
-            significand = significand * 10 + digit;
+            significand = next;
             exponent_after_decimal_point -= 1;
         }
         if exponent_after_decimal_point == 0 {
@@ -1646,3 +1664,7 @@ where
 {
     from_trait(read::StrRead::new(s))
 }
+
+#[cfg(test)]
+#[path = "../../../tests/plain-libs/unit/serde_json/de.rs"]
+mod tests;
