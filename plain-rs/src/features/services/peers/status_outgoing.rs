@@ -1,11 +1,11 @@
-use crate::features::peers::status::handshake;
 use crate::features::services::peers::status_runtime::ConnectionGuard;
 use crate::features::services::peers::status_runtime::emit;
 use crate::infrastructure::db::DPeer;
 use crate::infrastructure::db::chat_store::peers;
+use crate::infrastructure::protocols::websocket as crypto;
 use crate::runtime::Runtime as CoreRuntime;
-use plain_libs::anyhow::{Result, ensure};
 use futures_util::{SinkExt, StreamExt};
+use plain_libs::anyhow::{Result, ensure};
 use plain_libs::serde_json::json;
 use std::{
     collections::HashMap,
@@ -209,8 +209,8 @@ impl Outgoing {
             crate::features::services::peers::status_socket::connect(&url),
         )
         .await??;
-        let current =
-            peers::get(&state.db, &peer.id)?.ok_or_else(|| plain_libs::anyhow::anyhow!("Peer removed"))?;
+        let current = peers::get(&state.db, &peer.id)?
+            .ok_or_else(|| plain_libs::anyhow::anyhow!("Peer removed"))?;
         ensure!(
             current.is_paired()
                 && fingerprint(&current) == fingerprint(peer)
@@ -228,51 +228,30 @@ impl Outgoing {
             "Identity changed"
         );
         let keypair = crate::features::services::peers::peer_wire::signing_keypair(&state.prefs)?;
-        let challenge = tokio::time::timeout(Duration::from_secs(10), async {
-            match socket.next().await {
-                Some(Ok(plain_libs::tokio_tungstenite::tungstenite::Message::Text(text))) => {
-                    let value: plain_libs::serde_json::Value = plain_libs::serde_json::from_str(&text)?;
-                    let challenge = value
-                        .get("challenge")
-                        .and_then(|value| value.as_str())
-                        .ok_or_else(|| plain_libs::anyhow::anyhow!("Status challenge missing"))?;
-                    Ok::<_, plain_libs::anyhow::Error>(challenge.to_owned())
-                }
-                _ => Err(plain_libs::anyhow::anyhow!("Status challenge missing")),
-            }
-        })
-        .await??;
-        let body = handshake(
-            &plain_libs::utils::base64::base64_decode(&peer.key),
-            &keypair,
-            &actor,
-            &challenge,
-        )?;
-        tokio::time::timeout(
-            Duration::from_secs(5),
-            socket.send(plain_libs::tokio_tungstenite::tungstenite::Message::Binary(body.into())),
-        )
-        .await??;
-        tokio::time::timeout(Duration::from_secs(10), async {
-            loop {
-                match socket.next().await {
-                    Some(Ok(plain_libs::tokio_tungstenite::tungstenite::Message::Text(text)))
-                        if text == "ok" =>
-                    {
-                        return Ok(());
-                    }
-                    Some(Ok(plain_libs::tokio_tungstenite::tungstenite::Message::Binary(body)))
-                        if body.as_ref() == b"ok" =>
-                    {
-                        return Ok(());
-                    }
-                    Some(Ok(
-                        plain_libs::tokio_tungstenite::tungstenite::Message::Ping(_)
-                        | plain_libs::tokio_tungstenite::tungstenite::Message::Pong(_),
-                    )) => {}
-                    _ => return Err(plain_libs::anyhow::anyhow!("Status acknowledgement missing")),
-                }
-            }
+        let key = plain_libs::utils::base64::base64_decode(&peer.key);
+        let init = crypto::registration(&key, &actor, "/status")
+            .ok_or_else(|| plain_libs::anyhow::anyhow!("Invalid peer key"))?;
+        let mut stream = tokio::time::timeout(Duration::from_secs(10), async {
+            use plain_libs::tokio_tungstenite::tungstenite::Message;
+            socket.send(Message::Binary(init.clone().into())).await?;
+            let Some(Ok(Message::Binary(ack))) = socket.next().await else {
+                plain_libs::anyhow::bail!("Status acknowledgement missing");
+            };
+            let mut stream = crypto::acknowledge(&key, &actor, "/status", &init, &ack)
+                .ok_or_else(|| plain_libs::anyhow::anyhow!("Invalid status acknowledgement"))?;
+            let signature = crate::features::peers::status::proof(&keypair, &actor, &init, &ack)?;
+            let proof = stream
+                .encode(signature.as_bytes(), &key)
+                .ok_or_else(|| plain_libs::anyhow::anyhow!("Invalid status proof"))?;
+            socket.send(Message::Binary(proof.into())).await?;
+            let Some(Ok(Message::Binary(frame))) = socket.next().await else {
+                plain_libs::anyhow::bail!("Status confirmation missing");
+            };
+            ensure!(
+                stream.decode(&frame, &key).as_deref() == Some(b"ok"),
+                "Invalid status confirmation"
+            );
+            Ok::<_, plain_libs::anyhow::Error>(stream)
         })
         .await??;
         ensure!(self.current(epoch), "Status runtime stopped");
@@ -298,7 +277,11 @@ impl Outgoing {
         loop {
             tokio::select! {
                 _=tick.tick()=>ensure!(state.peer_status.connections.valid(&state.db,&lease) && peer.best_ip()==selected_ip && state.prefs.get::<String>(crate::features::prefs::pref_keys::CLIENT_ID)?.as_deref()==Some(&actor),"Peer changed"),
-                frame=socket.next()=>match frame { Some(Ok(plain_libs::tokio_tungstenite::tungstenite::Message::Close(_)))|None|Some(Err(_))=>return Err(plain_libs::anyhow::anyhow!("Status connection closed")),_=>{} }
+                frame=socket.next()=>match frame {
+                    Some(Ok(plain_libs::tokio_tungstenite::tungstenite::Message::Binary(frame))) => ensure!(stream.decode(&frame, &key).is_some(), "Invalid status frame"),
+                    Some(Ok(plain_libs::tokio_tungstenite::tungstenite::Message::Ping(_) | plain_libs::tokio_tungstenite::tungstenite::Message::Pong(_))) => {},
+                    _ => return Err(plain_libs::anyhow::anyhow!("Status connection closed")),
+                }
             }
         }
     }

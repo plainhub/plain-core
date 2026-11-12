@@ -311,41 +311,28 @@ fn signed_context_rejects_reencrypted_cross_channel_direct_and_legacy_frames() {
     );
 }
 #[test]
-fn status_handshake_and_graphql_signatures_cannot_cross_protocols() {
-    let db = Db::open(std::path::Path::new(":memory:")).unwrap();
-    let (peer, key, kp) = seed_paired_peer(&db);
-    let status = crate::features::peers::status::handshake(
-        &key,
-        &kp,
-        &peer,
-        &plain_libs::utils::uuid::Uuid::new_v4().to_string(),
-    )
-    .unwrap();
-    assert!(authenticate_status(&db, &peer, &status).is_ok());
+fn graphql_rejects_status_signature_purpose() {
+    let (db, _) = unique_db();
+    let (id, key, kp) = seed_paired_peer(&db);
+    let request = request_at("{}", now_ms());
+    let wrong_purpose = plain_libs::serde_json::json!(["PEER_STATUS", "", request]).to_string();
+    let signature = ed25519_sign(&kp, wrong_purpose.as_bytes());
+    let payload = plain_libs::serde_json::json!({
+        "signature": signature,
+        "request": plain_libs::serde_json::from_str::<plain_libs::serde_json::Value>(&request).unwrap(),
+    }).to_string();
     assert!(matches!(
-        authenticate(&db, &peer, "", &status),
-        Err(AuthError::MissingFields)
-    ));
-    let body = build_body(&kp, &key, "{}", now_ms());
-    assert!(authenticate(&db, &peer, "", &body).is_ok());
-    assert!(matches!(
-        authenticate_status(&db, &peer, &body),
-        Err(AuthError::MissingFields)
-    ));
-    let timestamp = now_ms();
-    let signature = ed25519_sign(&kp, format!("{timestamp}{peer}").as_bytes());
-    let body = plain_libs::crypto::xchacha_encrypt_raw(
-        &key,
-        format!("{signature}|{timestamp}|{peer}").as_bytes(),
-    )
-    .unwrap();
-    assert!(matches!(
-        authenticate_status(&db, &peer, &body),
+        authenticate(
+            &db,
+            &id,
+            "",
+            &encrypt_peer(&key, payload.as_bytes()).unwrap()
+        ),
         Err(AuthError::BadSignature)
     ));
 }
 #[test]
-fn peer_request_rejects_unsigned_outer_extras_old_frames_and_old_aad() {
+fn peer_request_rejects_unsigned_outer_extras_and_wrong_route_aad() {
     let (db, _) = unique_db();
     let (id, key, kp) = seed_paired_peer(&db);
     let request = request_at("{}", now_ms());
@@ -354,7 +341,6 @@ fn peer_request_rejects_unsigned_outer_extras_old_frames_and_old_aad() {
         ("GET", "/peer_graphql"),
         ("POST", "/graphql"),
         ("POST", "/guest_graphql"),
-        ("POST", "/peer_graphql"),
     ] {
         let body = plain_libs::crypto::xchacha_encrypt_raw_with_aad(
             &key,
@@ -493,7 +479,7 @@ fn signatures_cover_exact_request_bytes_including_whitespace_and_numbers() {
     ));
 }
 #[test]
-fn graphql_freshness_is_one_minute_without_shortening_status_window() {
+fn graphql_freshness_is_one_minute() {
     let (db, _) = unique_db();
     let (id, key, kp) = seed_paired_peer(&db);
     let now = now_ms();
@@ -506,28 +492,13 @@ fn graphql_freshness_is_one_minute_without_shortening_status_window() {
     for offset in [-59_000, 59_000] {
         assert!(authenticate(&db, &id, "", &build_body(&kp, &key, "{}", now + offset)).is_ok());
     }
-    let timestamp = now - 120_000;
-    let content = "status fixture";
-    let signature = ed25519_sign(&kp, status_signature_payload(timestamp, content).as_bytes());
-    let body = plain_libs::crypto::xchacha_encrypt_raw(
-        &key,
-        format!("{signature}|{timestamp}|{content}").as_bytes(),
-    )
-    .unwrap();
-    assert!(authenticate_status(&db, &id, &body).is_ok());
 }
 #[test]
-fn peer_signatures_have_distinct_leading_purposes() {
+fn peer_signature_has_explicit_leading_purpose() {
     let graphql: plain_libs::serde_json::Value =
         plain_libs::serde_json::from_str(&signature_payload("channel", "request JSON")).unwrap();
-    let status: plain_libs::serde_json::Value =
-        plain_libs::serde_json::from_str(&status_signature_payload(1, "body")).unwrap();
     assert_eq!(
         graphql,
         plain_libs::serde_json::json!(["PEER_REQUEST", "channel", "request JSON"])
-    );
-    assert_eq!(
-        status,
-        plain_libs::serde_json::json!(["PEER_STATUS", "", "1", "body"])
     );
 }

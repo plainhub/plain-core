@@ -1,7 +1,9 @@
-use plain_libs::protocols::http_client;
 use super::*;
 use crate::server::ContentServer;
 use futures_util::{SinkExt, StreamExt};
+use plain_libs::protocols::http_client;
+use plain_libs::serde_json::json;
+use plain_libs::tokio_tungstenite::{connect_async, tungstenite::Message};
 use plain_rs::features::chat::enums::DeviceType;
 use plain_rs::features::chat::enums::PeerStatus;
 use plain_rs::infrastructure::db::DPeer;
@@ -9,7 +11,6 @@ use plain_rs::infrastructure::db::Db;
 use plain_rs::infrastructure::db::chat_store::SaveMode;
 use plain_rs::infrastructure::db::chat_store::peers;
 use std::sync::Arc;
-use plain_libs::tokio_tungstenite::{connect_async, tungstenite::Message};
 
 #[tokio::test]
 async fn public_status_auth_scoped_connections_key_rotation_and_stop_use_rust_without_host() {
@@ -30,12 +31,7 @@ async fn public_status_auth_scoped_connections_key_rotation_and_stop_use_rust_wi
     let server = ContentServer::start(path.parent().unwrap(), &token, prefs.clone()).unwrap();
     let (cert_pem, cert_key) = plain_libs::tls::generate_pem(&["localhost".into()]).unwrap();
     let (http, _) = server
-        .start_public(
-            0,
-            0,
-            cert_pem.clone(),
-            cert_key.clone(),
-        )
+        .start_public(0, 0, cert_pem.clone(), cert_key.clone())
         .await
         .unwrap();
     let _client = http_client::builder().build().unwrap();
@@ -53,21 +49,34 @@ async fn public_status_auth_scoped_connections_key_rotation_and_stop_use_rust_wi
         key: &[u8],
         kp: &[u8],
         id: &str,
-    ) -> Vec<u8> {
-        let text = socket.next().await.unwrap().unwrap().into_text().unwrap();
-        let challenge: plain_libs::serde_json::Value = plain_libs::serde_json::from_str(&text).unwrap();
-        let body = plain_rs::features::peers::status::handshake(
-            key,
-            kp,
-            id,
-            challenge["challenge"].as_str().unwrap(),
-        )
-        .unwrap();
+    ) -> (crypto::Stream, Vec<u8>, Vec<u8>) {
+        let init = crypto::registration(key, "peer", "/status").unwrap();
+        socket
+            .send(Message::Binary(init.clone().into()))
+            .await
+            .unwrap();
+        let ack = socket.next().await.unwrap().unwrap().into_data();
+        let mut stream = crypto::acknowledge(key, "peer", "/status", &init, &ack).unwrap();
+        let signature = plain_rs::features::peers::status::proof(kp, id, &init, &ack).unwrap();
+        let body = stream.encode(signature.as_bytes(), key).unwrap();
         socket
             .send(Message::Binary(body.clone().into()))
             .await
             .unwrap();
-        body
+        (stream, init, body)
+    }
+    async fn confirmed(
+        socket: &mut plain_libs::tokio_tungstenite::WebSocketStream<
+            plain_libs::tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
+        >,
+        stream: &mut crypto::Stream,
+        key: &[u8],
+    ) {
+        let frame = socket.next().await.unwrap().unwrap().into_data();
+        assert_eq!(
+            stream.decode(&frame, key).as_deref(),
+            Some(b"ok".as_slice())
+        );
     }
     let url = format!("ws://127.0.0.1:{http}/status?cid=peer");
     let (mut bad, _) = connect_async(&url).await.unwrap();
@@ -75,26 +84,26 @@ async fn public_status_auth_scoped_connections_key_rotation_and_stop_use_rust_wi
     assert!(!matches!(bad.next().await,Some(Ok(Message::Text(t))) if t=="ok"));
     assert_eq!(snapshot(&server)["online"], json!([]));
     let (mut first, _) = connect_async(&url).await.unwrap();
-    let original = wire(&mut first, &key, &kp, "peer").await;
-    assert_eq!(
-        first.next().await.unwrap().unwrap().into_text().unwrap(),
-        "ok"
-    );
+    let (mut first_stream, original_init, original) = wire(&mut first, &key, &kp, "peer").await;
+    confirmed(&mut first, &mut first_stream, &key).await;
     let (mut replay, _) = connect_async(&url).await.unwrap();
-    let challenge = replay.next().await.unwrap().unwrap().into_text().unwrap();
-    assert!(
-        plain_libs::serde_json::from_str::<plain_libs::serde_json::Value>(&challenge).unwrap()["challenge"].is_string()
-    );
-    replay.send(Message::Binary(original.into())).await.unwrap();
-    assert!(!matches!(replay.next().await, Some(Ok(Message::Text(t))) if t == "ok"));
+    replay
+        .send(Message::Binary(original_init.into()))
+        .await
+        .unwrap();
+    assert!(matches!(replay.next().await, Some(Ok(Message::Binary(_)))));
+    replay
+        .send(Message::Binary(original.clone().into()))
+        .await
+        .unwrap();
+    assert!(!matches!(replay.next().await, Some(Ok(Message::Binary(_)))));
     assert_eq!(snapshot(&server)["online"], json!(["peer"]));
     let (mut second, _) = connect_async(&url).await.unwrap();
-    wire(&mut second, &key, &kp, "peer").await;
-    assert_eq!(
-        second.next().await.unwrap().unwrap().into_text().unwrap(),
-        "ok"
-    );
-    first.close(None).await.unwrap();
+    let (mut second_stream, _, _) = wire(&mut second, &key, &kp, "peer").await;
+    confirmed(&mut second, &mut second_stream, &key).await;
+    first.send(Message::Binary(original.into())).await.unwrap();
+    assert!(!matches!(first.next().await, Some(Ok(Message::Binary(_)))));
+    let _ = first.close(None).await;
     assert_eq!(snapshot(&server)["online"], json!(["peer"]));
     let new_key = [9; 32];
     let (new_kp, new_pk) = plain_libs::crypto::ed25519_generate();
@@ -103,17 +112,8 @@ async fn public_status_auth_scoped_connections_key_rotation_and_stop_use_rust_wi
     peers::save(&db, &[peer], SaveMode::Update).unwrap();
     assert_eq!(snapshot(&server)["online"], json!([]));
     let (mut replacement, _) = connect_async(&url).await.unwrap();
-    wire(&mut replacement, &new_key, &new_kp, "peer").await;
-    assert_eq!(
-        replacement
-            .next()
-            .await
-            .unwrap()
-            .unwrap()
-            .into_text()
-            .unwrap(),
-        "ok"
-    );
+    let (mut replacement_stream, _, _) = wire(&mut replacement, &new_key, &new_kp, "peer").await;
+    confirmed(&mut replacement, &mut replacement_stream, &new_key).await;
     let _ = tokio::time::timeout(Duration::from_secs(3), second.next())
         .await
         .unwrap();
@@ -211,12 +211,7 @@ async fn rust_outgoing_reconnects_same_address_without_native_and_stops_without_
     .unwrap();
     let (cert_pem, cert_key) = plain_libs::tls::generate_pem(&["localhost".into()]).unwrap();
     let (_, b_https) = b
-        .start_public(
-            0,
-            0,
-            cert_pem.clone(),
-            cert_key.clone(),
-        )
+        .start_public(0, 0, cert_pem.clone(), cert_key.clone())
         .await
         .unwrap();
     let mut b_peer = DPeer::new("b", "b", "127.0.0.1", Some(b_https), DeviceType::Phone);
@@ -226,26 +221,16 @@ async fn rust_outgoing_reconnects_same_address_without_native_and_stops_without_
     peers::save(&a_db, &[b_peer.clone()], SaveMode::Insert).unwrap();
     let a_token = plain_libs::utils::base64::base64_encode(&[13; 32]);
     let a = ContentServer::start(a_path.parent().unwrap(), &a_token, a_prefs).unwrap();
-    a.start_public(
-        0,
-        0,
-        cert_pem.clone(),
-        cert_key.clone(),
-    )
-    .await
-    .unwrap();
+    a.start_public(0, 0, cert_pem.clone(), cert_key.clone())
+        .await
+        .unwrap();
     wait_online(&a, "b", true).await;
     wait_online(&b, "a", true).await;
     b.stop_public().await;
     wait_online(&a, "b", false).await;
-    b.start_public(
-        0,
-        b_https,
-        cert_pem.clone(),
-        cert_key.clone(),
-    )
-    .await
-    .unwrap();
+    b.start_public(0, b_https, cert_pem.clone(), cert_key.clone())
+        .await
+        .unwrap();
     wait_online(&a, "b", true).await;
     b_peer.status = PeerStatus::Unpaired;
     peers::save(&a_db, &[b_peer.clone()], SaveMode::Update).unwrap();
@@ -265,14 +250,9 @@ async fn rust_outgoing_reconnects_same_address_without_native_and_stops_without_
             .snapshot(&a.runtime_state().db)["online"],
         json!([])
     );
-    a.start_public(
-        0,
-        0,
-        cert_pem.clone(),
-        cert_key.clone(),
-    )
-    .await
-    .unwrap();
+    a.start_public(0, 0, cert_pem.clone(), cert_key.clone())
+        .await
+        .unwrap();
     wait_online(&a, "b", true).await;
     a.stop_public().await;
     assert_eq!(control(&a, "RECONNECT").await, Ok(true));

@@ -1,8 +1,9 @@
 use crate::infrastructure::db::DPeer;
 use crate::infrastructure::db::Db;
-use crate::infrastructure::transport::auth as peer_auth;
+use crate::infrastructure::signature::SignaturePurpose;
 use plain_libs::anyhow::{Result, bail};
 use plain_libs::serde_json::{Value, json};
+use plain_libs::utils::base64::base64_encode;
 use std::{collections::HashMap, sync::Mutex};
 
 struct State {
@@ -10,13 +11,6 @@ struct State {
     connections: HashMap<String, DPeer>,
     hints: HashMap<String, DPeer>,
 }
-#[derive(serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct Proof {
-    client_id: String,
-    challenge: String,
-}
-
 pub struct Connections {
     id: String,
     state: Mutex<State>,
@@ -34,15 +28,6 @@ impl Default for Connections {
     }
 }
 impl Connections {
-    pub fn open(&self, db: &Db, id: &str, challenge: &str, body: &[u8]) -> Result<(String, bool)> {
-        let authenticated = peer_auth::authenticate_status(db, id, body)
-            .map_err(|e| plain_libs::anyhow::anyhow!(e.reason()))?;
-        let proof: Proof = plain_libs::serde_json::from_str(&authenticated.graphql_json)?;
-        if proof.client_id != id || proof.challenge != challenge {
-            bail!("Status proof does not match connection");
-        }
-        self.admit(db, authenticated.peer)
-    }
     pub fn admit(&self, db: &Db, peer: DPeer) -> Result<(String, bool)> {
         let id = &peer.id;
         let mut state = self.state.lock().unwrap();
@@ -187,28 +172,35 @@ impl Connections {
     }
 }
 
-pub fn handshake(key: &[u8], keypair: &[u8], client_id: &str, challenge: &str) -> Result<Vec<u8>> {
-    if client_id.is_empty() {
-        bail!("Missing client identity");
-    }
-    plain_libs::utils::uuid::Uuid::parse_str(challenge)?;
-    let content = plain_libs::serde_json::to_string(&Proof {
-        client_id: client_id.to_owned(),
-        challenge: challenge.to_owned(),
-    })?;
-    let timestamp = plain_libs::chrono::Utc::now().timestamp_millis();
+pub fn signature_payload(client_id: &str, init: &[u8], ack: &[u8]) -> String {
+    json!([
+        SignaturePurpose::PeerStatus,
+        client_id,
+        base64_encode(init),
+        base64_encode(ack)
+    ])
+    .to_string()
+}
+
+pub fn proof(keypair: &[u8], client_id: &str, init: &[u8], ack: &[u8]) -> Result<String> {
     let signature = plain_libs::crypto::ed25519_sign(
         keypair,
-        peer_auth::status_signature_payload(timestamp, &content).as_bytes(),
+        signature_payload(client_id, init, ack).as_bytes(),
     );
     if signature.is_empty() {
         bail!("Invalid signing identity");
     }
-    plain_libs::crypto::xchacha_encrypt_raw(
-        key,
-        format!("{signature}|{timestamp}|{content}").as_bytes(),
-    )
-    .ok_or_else(|| plain_libs::anyhow::anyhow!("Invalid peer key"))
+    Ok(signature)
+}
+
+pub fn verify(peer: &DPeer, init: &[u8], ack: &[u8], signature: &[u8]) -> bool {
+    std::str::from_utf8(signature).is_ok_and(|signature| {
+        plain_libs::crypto::ed25519_verify(
+            &peer.public_key,
+            signature_payload(&peer.id, init, ack).as_bytes(),
+            signature,
+        )
+    })
 }
 
 #[cfg(test)]

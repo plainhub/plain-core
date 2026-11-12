@@ -1,14 +1,14 @@
 use crate::server::ServerState;
+use futures_util::{SinkExt, StreamExt};
 use plain_libs::axum::{
     extract::{Query, State},
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use futures_util::{SinkExt, StreamExt};
 use plain_libs::protocols::websocket::{Message, WebSocket, WebSocketUpgrade};
 use plain_rs::features::services::peers::status_runtime::{ConnectionGuard, emit};
+use plain_rs::infrastructure::protocols::websocket::{self as crypto, Role};
 use serde::Deserialize;
-use plain_libs::serde_json::json;
 use std::time::Duration;
 
 #[derive(Clone)]
@@ -52,16 +52,21 @@ async fn connected(
     let authenticated = tokio::select! {
         _=stop.changed()=>None,
         _=public_stop.changed()=>None,
-        authenticated=tokio::time::timeout(Duration::from_secs(10), async {
-            let challenge = plain_libs::utils::uuid::Uuid::new_v4().into_string();
-            socket.send(Message::Text(json!({"challenge": challenge}).to_string().into())).await.ok()?;
-            match socket.next().await {
-                Some(Ok(Message::Binary(body))) => state.peer_status.connections.open(&state.db, &id, &challenge, &body).ok(),
-                _ => None,
-            }
-        }) => authenticated.ok().flatten(),
+        result=tokio::time::timeout(Duration::from_secs(10), async {
+            let peer = plain_rs::infrastructure::db::chat_store::peers::get(&state.db, &id).ok()??;
+            if !peer.is_paired() { return None; }
+            let key = plain_libs::utils::base64::base64_decode(&peer.key);
+            let (init, ack) = super::graphql::acknowledge(&mut socket, &id, &key, "/status").await.ok()?;
+            let mut stream = crypto::Stream::new("/status", &id, &init, &ack, Role::Server)?;
+            socket.send(Message::Binary(ack.clone().into())).await.ok()?;
+            let Some(Ok(Message::Binary(frame))) = socket.next().await else { return None; };
+            let signature = stream.decode(&frame, &key)?;
+            if !plain_rs::features::peers::status::verify(&peer, &init, &ack, &signature) { return None; }
+            let admitted = state.peer_status.connections.admit(&state.db, peer).ok()?;
+            Some((admitted, key, stream))
+        }) => result.ok().flatten(),
     };
-    let Some((lease, changed)) = authenticated else {
+    let Some(((lease, changed), key, mut stream)) = authenticated else {
         let _ = socket.close(None).await;
         return;
     };
@@ -73,7 +78,10 @@ async fn connected(
         emit(&state, &id, true);
     }
     let mut check = tokio::time::interval(Duration::from_secs(1));
-    let sent = tokio::select! {_=stop.changed()=>false,_=public_stop.changed()=>false,result=socket.send(Message::Text("ok".into()))=>result.is_ok()};
+    let Some(confirmation) = stream.encode(b"ok", &key) else {
+        return;
+    };
+    let sent = tokio::select! {_=stop.changed()=>false,_=public_stop.changed()=>false,result=socket.send(Message::Binary(confirmation.into()))=>result.is_ok()};
     if sent {
         loop {
             tokio::select! {
@@ -82,7 +90,9 @@ async fn connected(
                 _=check.tick()=>if !state.peer_status.connections.valid(&state.db,&lease) { break; },
                 frame=socket.next()=>match frame {
                     Some(Ok(Message::Close(_)))|None|Some(Err(_))=>break,
-                    _=>{},
+                    Some(Ok(Message::Binary(frame))) => if stream.decode(&frame, &key).is_none() { break; },
+                    Some(Ok(Message::Ping(_) | Message::Pong(_))) => {},
+                    _=>break,
                 }
             }
         }

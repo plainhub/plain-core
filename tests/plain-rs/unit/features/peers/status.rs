@@ -4,45 +4,17 @@ use crate::infrastructure::db::chat_store::SaveMode;
 use crate::infrastructure::db::chat_store::peers;
 
 #[test]
-fn status_proof_is_bound_to_connection_and_rejects_old_signed_content() {
-    let db = Db::open(std::path::Path::new(":memory:")).unwrap();
-    let key = [9; 32];
+fn status_identity_proof_is_bound_to_client_and_connection() {
     let (keypair, public_key) = plain_libs::crypto::ed25519_generate();
     let mut peer = DPeer::new("peer", "fixture", "127.0.0.1", None, DeviceType::Phone);
-    peer.status = PeerStatus::Paired;
-    peer.key = plain_libs::utils::base64::base64_encode(&key);
-    peer.public_key = plain_libs::utils::base64::base64_encode(&public_key);
-    peers::save(&db, &[peer], SaveMode::Insert).unwrap();
-    let first = plain_libs::utils::uuid::Uuid::new_v4().into_string();
-    let second = plain_libs::utils::uuid::Uuid::new_v4().into_string();
-    let body = handshake(&key, &keypair, "peer", &first).unwrap();
-    let connections = Connections::default();
-    assert!(connections.open(&db, "peer", &second, &body).is_err());
-    assert_eq!(connections.snapshot(&db)["online"], json!([]));
-    let plain = plain_libs::crypto::xchacha_decrypt_raw(&key, &body).unwrap();
-    let reencrypted = plain_libs::crypto::xchacha_encrypt_raw(&key, &plain).unwrap();
-    assert!(
-        connections
-            .open(&db, "peer", &second, &reencrypted)
-            .is_err()
-    );
-    let timestamp = plain_libs::chrono::Utc::now().timestamp_millis();
-    let signature = plain_libs::crypto::ed25519_sign(
-        &keypair,
-        peer_auth::status_signature_payload(timestamp, "peer").as_bytes(),
-    );
-    let old = plain_libs::crypto::xchacha_encrypt_raw(
-        &key,
-        format!("{signature}|{timestamp}|peer").as_bytes(),
-    )
-    .unwrap();
-    assert!(connections.open(&db, "peer", &first, &old).is_err());
-    assert!(connections.open(&db, "peer", &first, &body).is_ok());
-    let fresh = handshake(&key, &keypair, "peer", &second).unwrap();
-    assert!(connections.open(&db, "peer", &second, &fresh).is_ok());
-    assert_eq!(connections.snapshot(&db)["online"], json!(["peer"]));
-    assert!(handshake(&key, &keypair, "peer", "").is_err());
-    assert!(handshake(&key, &keypair, "", &first).is_err());
+    peer.public_key = base64_encode(&public_key);
+    let signature = proof(&keypair, "peer", b"init", b"ack").unwrap();
+    assert!(verify(&peer, b"init", b"ack", signature.as_bytes()));
+    assert!(!verify(&peer, b"other-init", b"ack", signature.as_bytes()));
+    assert!(!verify(&peer, b"init", b"other-ack", signature.as_bytes()));
+    peer.id = "other".into();
+    assert!(!verify(&peer, b"init", b"ack", signature.as_bytes()));
+    assert!(proof(&[], "peer", b"init", b"ack").is_err());
 }
 
 #[test]
