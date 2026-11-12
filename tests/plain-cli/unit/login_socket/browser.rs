@@ -55,7 +55,7 @@ async fn browser_login(
             now_ms(),
         )
         .unwrap();
-    let request = json!({"appName":"Fixture","appVersion":"1","osName":"Fixture","osVersion":"1","isMobile":false});
+    let request = json!({"appName":"Fixture","appVersion":"1","osName":"Fixture","osVersion":"1"});
     let encrypted = channel
         .encrypt_request(&plain_libs::serde_json::to_vec(&request).unwrap(), now_ms())
         .unwrap();

@@ -234,7 +234,7 @@ async fn browser_login(
         )
     };
     let session = plain_libs::crypto::EcdhSession::generate();
-    let request = json!({"appName":"Fixture","appVersion":"1","osName":"mac","osVersion":"27.2.0","isMobile":false});
+    let request = json!({"appName":"Fixture","appVersion":"1","osName":"mac","osVersion":"27.2.0"});
     let bytes = plain_libs::serde_json::to_vec(&request).unwrap();
     let mut encrypted = prefix;
     encrypted.extend(channel.encrypt_request(&bytes, now_ms()).unwrap());
@@ -960,7 +960,7 @@ async fn password_login_rejects_frames_without_a_key_exchange_and_without_outer_
         let request = json!({
             "password":digest, "loginContext":context,
             "appName":"Fixture", "appVersion":"1", "osName":"Fixture", "osVersion":"1",
-            "isMobile":false, "ecdhPublicKey":plain_libs::utils::base64::base64_encode(&session.public_key_bytes),
+            "ecdhPublicKey":plain_libs::utils::base64::base64_encode(&session.public_key_bytes),
         });
         let inner = plain_libs::crypto::xchacha_encrypt_raw(
             &digest.as_bytes()[..32],
@@ -1169,7 +1169,7 @@ async fn password_login_verifies_the_salted_record_and_rejects_reusable_stored_v
             unreachable!()
         };
         let session = plain_libs::crypto::EcdhSession::generate();
-        let request = json!({"password":secret,"loginContext":channel.context(),"appName":"Fixture","appVersion":"1","osName":"Fixture","osVersion":"1","isMobile":false,"ecdhPublicKey":plain_libs::utils::base64::base64_encode(&session.public_key_bytes)});
+        let request = json!({"password":secret,"loginContext":channel.context(),"appName":"Fixture","appVersion":"1","osName":"Fixture","osVersion":"1","ecdhPublicKey":plain_libs::utils::base64::base64_encode(&session.public_key_bytes)});
         let LoginChannel::Opaque(c) = &channel else {
             unreachable!()
         };

@@ -154,7 +154,6 @@ pub(super) async fn run(
     let request = json!({
         "appName":"PlainApp","appVersion":startup.app_version,
         "osName":startup.os_name,"osVersion":startup.os_version,
-        "isMobile":matches!(startup.device_type, crate::features::chat::enums::DeviceType::Phone | crate::features::chat::enums::DeviceType::Tablet),
         "peer":{"deviceName":local.name,"port":local.port,"deviceType":local.device_type,"ips":local.ips,"signaturePublicKey":base64_encode(&signing[32..])}
     });
     let mut url = base.join("auth")?;

@@ -592,10 +592,6 @@ async fn execute_request(state: &ServerState, request: Request) -> plain_libs::a
                 _ => os_name.as_str(),
             };
             request["osName"] = json!(canonical_os_name);
-            plain_libs::anyhow::ensure!(
-                request["isMobile"].is_boolean(),
-                "Invalid login metadata: isMobile"
-            );
             if let Some(peer) = request.get("peer").filter(|peer| !peer.is_null()) {
                 plain_libs::anyhow::ensure!(
                     peer["deviceName"].is_string()

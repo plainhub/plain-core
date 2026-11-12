@@ -60,7 +60,7 @@ fn offer(
             now,
         )
         .unwrap();
-    let request = json!({"appName":"Test","appVersion":"1","osName":"Fixture","osVersion":"1","isMobile":false,"peer":peer});
+    let request = json!({"appName":"Test","appVersion":"1","osName":"Fixture","osVersion":"1","peer":peer});
     let frame = plain_libs::serde_json::to_vec(&request).unwrap();
     let frame = keys.encrypt_request(&frame, now).unwrap();
     (

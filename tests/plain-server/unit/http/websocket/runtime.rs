@@ -146,7 +146,6 @@ async fn auth_confirmation_uses_host_callbacks_and_returns_the_hosts_decision_to
         let request = json!({
 
             "appName":"Test", "appVersion":"1", "osName":"Fixture", "osVersion":"1",
-            "isMobile":false,
             "peer":null,
         });
         let inner = plain_libs::serde_json::to_vec(&request).unwrap();
@@ -285,7 +284,6 @@ async fn malformed_login_frames_exhaust_the_ip_limit_before_decryption_despite_r
             let request = json!({
 
                 "appName":"Test", "appVersion":"1", "osName":"Fixture", "osVersion":"1",
-                "isMobile":false,
                 "peer":null,
             });
             let inner = if attempt == 0 {

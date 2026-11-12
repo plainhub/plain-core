@@ -636,7 +636,7 @@ async fn first_login_and_chat_range_use_proxy_without_a_management_token() {
         )
         .unwrap();
     let login_key = plain_libs::auth::api_key(&finish.session_key, &context);
-    let request = json!({"appName":"Fixture", "appVersion":"1", "osName":"Fixture", "osVersion":"1", "isMobile":false});
+    let request = json!({"appName":"Fixture", "appVersion":"1", "osName":"Fixture", "osVersion":"1"});
     let encrypted = plain_libs::crypto::xchacha_encrypt_raw_with_aad(
         &login_key,
         &plain_libs::serde_json::to_vec(&request).unwrap(),
