@@ -75,82 +75,88 @@ fn offer(
 }
 
 #[tokio::test]
-async fn approved_web_login_persists_credentials_and_executes_encrypted_graphql() {
-    let (dir, server) = fixture();
-    let state = server.runtime_state();
-    let (request, keys) = offer(&state, Value::Null);
-    let pending = ws_login::execute(&state, request).await.unwrap();
-    assert_eq!(pending["status"], "PENDING");
-    let issued = ws_login::execute(
-        &state,
-        ws_login::Request::Complete {
-            request_id: pending["requestId"].as_str().unwrap().to_owned(),
-        },
-    )
-    .await
-    .unwrap();
-    assert_eq!(issued["status"], "COMPLETED");
-    let shared = keys.api_key();
-    assert_eq!(
-        plain_libs::utils::base64::base64_encode(&shared),
-        issued["token"]
-    );
-    let row = state.db.session_get("browser").unwrap().unwrap();
-    assert_eq!(row.r#type, plain_rs::features::sessions::SessionType::Login);
-    assert_eq!(
-        plain_rs::infrastructure::db::Db::open(
-            &plain_rs::infrastructure::data_paths::DataPaths::new(dir.path()).database()
+async fn passwordless_web_login_persists_credentials_and_executes_encrypted_graphql() {
+    for approval in [false, true] {
+        let (dir, server) = fixture();
+        let state = server.runtime_state();
+        state.prefs.set("login_require_approval", approval).unwrap();
+        let (request, keys) = offer(&state, Value::Null);
+        let result = ws_login::execute(&state, request).await.unwrap();
+        let issued = if approval {
+            assert_eq!(result["status"], "PENDING");
+            assert!(state.db.session_get("browser").unwrap().is_none());
+            ws_login::execute(
+                &state,
+                ws_login::Request::Complete {
+                    request_id: result["requestId"].as_str().unwrap().to_owned(),
+                },
+            ).await.unwrap()
+        } else {
+            result
+        };
+        assert_eq!(issued["status"], "COMPLETED");
+        let shared = keys.api_key();
+        assert_eq!(
+            plain_libs::utils::base64::base64_encode(&shared),
+            issued["token"]
+        );
+        let row = state.db.session_get("browser").unwrap().unwrap();
+        assert_eq!(row.r#type, plain_rs::features::sessions::SessionType::Login);
+        assert_eq!(
+            plain_rs::infrastructure::db::Db::open(
+                &plain_rs::infrastructure::data_paths::DataPaths::new(dir.path()).database()
+            )
+            .unwrap()
+            .session_get("browser")
+            .unwrap()
+            .unwrap()
+            .token,
+            row.token
+        );
+        let encrypted = keys
+            .decrypt_response(
+                &plain_libs::utils::base64::base64_decode(issued["frame"].as_str().unwrap()),
+                plain_libs::chrono::Utc::now().timestamp_millis() as u64,
+            )
+            .unwrap();
+        let decrypted = encrypted;
+        assert_eq!(
+            plain_libs::serde_json::from_slice::<Value>(&decrypted).unwrap(),
+            issued["response"]
+        );
+        assert!(issued["response"].get("ecdhPublicKey").is_none());
+        assert!(issued["response"].get("signature").is_none());
+        let mut headers = HeaderMap::new();
+        headers.insert("c-id", "browser".parse().unwrap());
+        let encrypted = plain_rs::infrastructure::transport::http_request::encrypt(
+            &shared,
+            "/graphql",
+            &json!({"query":r#"{noteCount(query:"")}"#}).to_string(),
+        ).unwrap();
+        let context = plain_rs::infrastructure::transport::http_response::Context::new(&encrypted);
+        let response = graphql::call(
+            State(state.clone()),
+            headers.clone(),
+            plain_libs::axum::body::Bytes::from(encrypted),
         )
-        .unwrap()
-        .session_get("browser")
-        .unwrap()
-        .unwrap()
-        .token,
-        row.token
-    );
-    let encrypted = keys
-        .decrypt_response(
-            &plain_libs::utils::base64::base64_decode(issued["frame"].as_str().unwrap()),
-            plain_libs::chrono::Utc::now().timestamp_millis() as u64,
-        )
-        .unwrap();
-    let decrypted = encrypted;
-    assert_eq!(
-        plain_libs::serde_json::from_slice::<Value>(&decrypted).unwrap(),
-        issued["response"]
-    );
-    assert!(issued["response"].get("ecdhPublicKey").is_none());
-    assert!(issued["response"].get("signature").is_none());
-    let mut headers = HeaderMap::new();
-    headers.insert("c-id", "browser".parse().unwrap());
-    let encrypted = plain_rs::infrastructure::transport::http_request::encrypt(
-        &shared,
-        "/graphql",
-        &json!({"query":r#"{noteCount(query:"")}"#}).to_string(),
-    ).unwrap();
-    let context = plain_rs::infrastructure::transport::http_response::Context::new(&encrypted);
-    let response = graphql::call(
-        State(state.clone()),
-        headers.clone(),
-        plain_libs::axum::body::Bytes::from(encrypted),
-    )
-    .await;
-    assert_eq!(response.status(), StatusCode::OK);
-    let body = plain_libs::axum::body::to_bytes(response.into_body(), 1024 * 1024)
-        .await
-        .unwrap();
-    let body = context.decrypt(&shared, &body).unwrap();
-    assert!(plain_libs::serde_json::from_slice::<Value>(&body).unwrap()["errors"].is_null());
-    headers.insert(
-        "authorization",
-        format!("Bearer {}", row.token).parse().unwrap(),
-    );
-    assert_eq!(
-        graphql::call(State(state), headers, plain_libs::axum::body::Bytes::from("{}"))
+        .await;
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = plain_libs::axum::body::to_bytes(response.into_body(), 1024 * 1024)
             .await
-            .status(),
-        StatusCode::UNAUTHORIZED
-    );
+            .unwrap();
+        let body = context.decrypt(&shared, &body).unwrap();
+        assert!(plain_libs::serde_json::from_slice::<Value>(&body).unwrap()["errors"].is_null());
+        headers.insert(
+            "authorization",
+            format!("Bearer {}", row.token).parse().unwrap(),
+        );
+        assert_eq!(
+            graphql::call(State(state), headers, plain_libs::axum::body::Bytes::from("{}"))
+                .await
+                .status(),
+            StatusCode::UNAUTHORIZED
+        );
+    }
 }
 
 #[tokio::test]
