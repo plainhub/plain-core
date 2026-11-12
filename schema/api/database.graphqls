@@ -7,17 +7,18 @@ enum DbColumnType {
 	UNKNOWN
 }
 
+type DbTable {
+	name: String!
+	createSql: String!
+	columns: [DbTableColumn!]!
+}
+
 type DbTableColumn {
 	name: String!
 	dataType: DbColumnType!
 	notNull: Boolean!
 	defaultValue: String
 	primaryKey: Boolean!
-}
-
-type DbTableInfo {
-	idKey: String!
-	createSql: String!
 }
 
 extend type Mutation {
@@ -32,8 +33,6 @@ extend type Mutation {
 
 extend type Query {
 	dbPath: String!
-	dbTableColumns(table: String!): [DbTableColumn!]!
-	dbTableInfo(table: String!): DbTableInfo!
 	dbTableRowCount(table: String!): Long!
 	"""
 	Rows come back as pre-rendered JSON strings, one per row — the
@@ -41,5 +40,5 @@ extend type Query {
 	model.
 	"""
 	dbTableRows(table: String!, offset: Int!, limit: Int!): [String!]!
-	dbTables: [String!]!
+	dbTables: [DbTable!]!
 }

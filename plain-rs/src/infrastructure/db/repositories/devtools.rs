@@ -63,6 +63,12 @@ pub fn delete_table_rows(db: &Db, table: &str, ids: &[String]) -> Result<usize> 
     .map_err(browse_err)
 }
 
+pub struct TableSchema {
+    pub name: String,
+    pub create_sql: String,
+    pub columns: Vec<TableColumnMeta>,
+}
+
 pub struct SqliteFile {
     path: PathBuf,
     system: bool,
@@ -91,13 +97,6 @@ impl SqliteFile {
         self.path.is_file()
     }
 
-    pub fn tables(&self) -> Result<Vec<String>> {
-        Ok(browse::tables(&self.open()?)
-            .into_iter()
-            .filter(|name| !self.system || !name.eq_ignore_ascii_case("replay_receipts"))
-            .collect())
-    }
-
     pub fn table_row_count(&self, table: &str) -> Result<i64> {
         let conn = self.open()?;
         self.checked(&conn, table)?;
@@ -110,26 +109,28 @@ impl SqliteFile {
         browse::rows_page_text(&conn, table, offset, limit).map_err(browse_err)
     }
 
-    pub fn table_columns(&self, table: &str) -> Result<Vec<TableColumnMeta>> {
+    pub fn table_schemas(&self) -> Result<Vec<TableSchema>> {
         let conn = self.open()?;
-        self.checked(&conn, table)?;
-        Ok(browse::table_columns(&conn, table))
-    }
-
-    pub fn table_create_sql(&self, table: &str) -> Result<String> {
-        let conn = self.open()?;
-        self.checked(&conn, table)?;
-        Ok(conn.query_row(
-            "SELECT sql FROM sqlite_schema WHERE type = 'table' AND name = ?1",
-            [table],
-            |row| row.get(0),
-        )?)
-    }
-
-    pub fn table_id_key(&self, table: &str) -> Result<String> {
-        let conn = self.open()?;
-        self.checked(&conn, table)?;
-        Ok(self.id_key(&conn, table))
+        let mut statement = conn.prepare(
+            "SELECT name, sql FROM sqlite_schema WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name",
+        )?;
+        let tables = statement.query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })?;
+        let mut schemas = Vec::new();
+        for table in tables {
+            let (name, create_sql) = table?;
+            if self.system && name.eq_ignore_ascii_case("replay_receipts") {
+                continue;
+            }
+            let columns = browse::table_columns(&conn, &name);
+            schemas.push(TableSchema {
+                name,
+                create_sql,
+                columns,
+            });
+        }
+        Ok(schemas)
     }
 
     pub fn insert_table_row(&self, table: &str, row: &Map<String, Value>) -> Result<usize> {

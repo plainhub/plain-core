@@ -9,10 +9,10 @@ use plain_rs::infrastructure::types::Long;
 use std::sync::Arc;
 
 #[derive(SimpleObject, Clone, Debug, Default)]
-pub struct DbTableInfo {
-    #[graphql(name = "idKey")]
-    pub id_key: String,
+pub struct DbTable {
+    pub name: String,
     pub create_sql: String,
+    pub columns: Vec<DbTableColumn>,
 }
 
 #[derive(SimpleObject, Clone, Debug, Default)]
@@ -61,12 +61,33 @@ impl DbQuery {
         Ok(app_db(ctx).await?.path().to_string_lossy().into_owned())
     }
 
-    async fn db_tables(&self, ctx: &Context<'_>) -> plain_graphql::Result<Vec<String>> {
+    async fn db_tables(&self, ctx: &Context<'_>) -> plain_graphql::Result<Vec<DbTable>> {
         let file = app_db(ctx).await?;
         if !has_path(&file) {
             return Ok(vec![]);
         }
-        spawn(move || Ok(file.tables()?.into_iter().collect())).await
+        spawn(move || {
+            Ok(file
+                .table_schemas()?
+                .into_iter()
+                .map(|table| DbTable {
+                    name: table.name,
+                    create_sql: table.create_sql,
+                    columns: table
+                        .columns
+                        .into_iter()
+                        .map(|column| DbTableColumn {
+                            name: column.name,
+                            data_type: DbColumnType::parse(&column.data_type),
+                            not_null: column.not_null,
+                            default_value: column.default_value,
+                            primary_key: column.primary_key,
+                        })
+                        .collect(),
+                })
+                .collect())
+        })
+        .await
     }
 
     async fn db_table_row_count(
@@ -97,52 +118,6 @@ impl DbQuery {
         }
         spawn(move || file.table_rows_text(&table, offset as i64, limit as i64)).await
     }
-
-    async fn db_table_columns(
-        &self,
-        ctx: &Context<'_>,
-        table: String,
-    ) -> plain_graphql::Result<Vec<DbTableColumn>> {
-        let file = app_db(ctx).await?;
-        if !has_path(&file) {
-            return Ok(vec![]);
-        }
-        spawn(move || {
-            Ok(file
-                .table_columns(&table)?
-                .into_iter()
-                .map(|column| DbTableColumn {
-                    name: column.name,
-                    data_type: DbColumnType::parse(&column.data_type),
-                    not_null: column.not_null,
-                    default_value: column.default_value,
-                    primary_key: column.primary_key,
-                })
-                .collect())
-        })
-        .await
-    }
-
-    async fn db_table_info(
-        &self,
-        ctx: &Context<'_>,
-        table: String,
-    ) -> plain_graphql::Result<DbTableInfo> {
-        let file = app_db(ctx).await?;
-        if !has_path(&file) {
-            return Ok(DbTableInfo {
-                id_key: "id".to_string(),
-                create_sql: String::new(),
-            });
-        }
-        spawn(move || {
-            Ok(DbTableInfo {
-                id_key: file.table_id_key(&table)?,
-                create_sql: file.table_create_sql(&table)?,
-            })
-        })
-        .await
-    }
 }
 
 #[derive(Default)]
@@ -164,7 +139,8 @@ impl DbMutation {
             return Ok(false);
         }
         Ok(spawn(move || {
-            let mut row: plain_libs::serde_json::Map<String, plain_libs::serde_json::Value> = plain_libs::serde_json::from_str(&row)?;
+            let mut row: plain_libs::serde_json::Map<String, plain_libs::serde_json::Value> =
+                plain_libs::serde_json::from_str(&row)?;
             for value in row.values_mut() {
                 if value.is_null() {
                     *value = plain_libs::serde_json::Value::String("null".into());

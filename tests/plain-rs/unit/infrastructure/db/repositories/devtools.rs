@@ -143,7 +143,7 @@ fn delete_removes_only_named_rows() {
 }
 
 #[test]
-fn table_create_sql_preserves_constraints_and_rejects_unknown_tables() {
+fn table_schemas_preserve_constraints_and_columns() {
     let db = dbs("create-sql");
     let sql = "CREATE TABLE checked_rows (
     file_id TEXT NOT NULL PRIMARY KEY CHECK(length(file_id)>0),
@@ -152,8 +152,20 @@ fn table_create_sql_preserves_constraints_and_rejects_unknown_tables() {
     db.with_conn(|conn| conn.execute_batch(sql).unwrap());
     let path = db.with_conn(|conn| conn.path().unwrap().to_string());
     let file = SqliteFile::new(path);
-    assert_eq!(file.table_create_sql("checked_rows").unwrap(), sql);
-    for table in ["missing", "checked_rows' OR 1=1 --"] {
-        assert!(file.table_create_sql(table).is_err());
-    }
+    let tables = file.table_schemas().unwrap();
+    let table = tables
+        .iter()
+        .find(|table| table.name == "checked_rows")
+        .unwrap();
+    assert_eq!(table.create_sql, sql);
+    assert_eq!(table.columns.len(), 2);
+    assert_eq!(table.columns[0].name, "file_id");
+    assert!(table.columns[0].primary_key);
+    assert!(
+        !SqliteFile::system(file.path())
+            .table_schemas()
+            .unwrap()
+            .iter()
+            .any(|table| table.name == "replay_receipts")
+    );
 }

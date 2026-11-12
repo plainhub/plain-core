@@ -33,6 +33,10 @@ fn public_schema_matches_committed_sdl() {
 #[test]
 fn public_schema_exposes_the_contract_it_has_to_serve() {
     let sdl = sdl();
+    assert!(sdl.contains("dbTables: [DbTable!]!"));
+    assert!(!sdl.contains("type DbTableInfo"));
+    assert!(!sdl.contains("dbTableInfo("));
+    assert!(!sdl.contains("dbTableColumns("));
     assert!(!sdl.contains("includeTrashed"));
     assert!(!sdl.contains("embeddedAudioLyrics"));
     assert!(sdl.contains("keyValue(key: String!): JSON!"));

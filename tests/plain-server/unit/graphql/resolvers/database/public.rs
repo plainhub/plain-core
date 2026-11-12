@@ -24,7 +24,7 @@ fn fixture() -> (plain_libs::temporary::TempDir, PublicSchema) {
 #[tokio::test]
 async fn owned_database_browser_works_without_a_connected_host() {
     let (dir, schema) = fixture();
-    let response=schema.execute(r#"{dbPath dbTables dbTableInfo(table:"test_rows"){idKey createSql} dbTableRowCount(table:"test_rows") dbTableColumns(table:"test_rows"){name dataType notNull defaultValue primaryKey} dbTableRows(table:"test_rows",offset:1,limit:1)}"#).await;
+    let response=schema.execute(r#"{dbPath dbTables{name createSql columns{name dataType notNull defaultValue primaryKey}} dbTableRowCount(table:"test_rows") dbTableRows(table:"test_rows",offset:1,limit:1)}"#).await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     let data = response.data.into_json().unwrap();
     assert_eq!(
@@ -36,19 +36,22 @@ async fn owned_database_browser_works_without_a_connected_host() {
             .to_string_lossy()
             .as_ref()
     );
+    let tables = data["dbTables"].as_array().unwrap();
     assert!(
-        data["dbTables"]
-            .as_array()
-            .unwrap()
-            .contains(&json!("test_rows"))
+        !tables
+            .iter()
+            .any(|table| table["name"] == "replay_receipts")
     );
-    assert_eq!(data["dbTableInfo"]["idKey"], "key");
+    let table = tables
+        .iter()
+        .find(|table| table["name"] == "test_rows")
+        .unwrap();
     assert_eq!(
-        data["dbTableInfo"]["createSql"],
+        table["createSql"],
         "CREATE TABLE test_rows (key TEXT PRIMARY KEY, title TEXT NOT NULL DEFAULT 'untitled', size INTEGER, ratio REAL, bytes BLOB)"
     );
     assert_eq!(data["dbTableRowCount"], 2);
-    let columns = data["dbTableColumns"].as_array().unwrap();
+    let columns = table["columns"].as_array().unwrap();
     assert_eq!(columns[0]["dataType"], "TEXT");
     assert_eq!(columns[0]["primaryKey"], true);
     assert_eq!(columns[1]["notNull"], true);
@@ -94,10 +97,8 @@ async fn developer_mode_is_checked_for_every_database_request() {
         .unwrap();
     let requests = [
         "{dbPath}",
-        "{dbTables}",
-        "{dbTableInfo(table:\"test_rows\"){idKey}}",
+        "{dbTables{name createSql columns{name}}}",
         "{dbTableRowCount(table:\"test_rows\")}",
-        "{dbTableColumns(table:\"test_rows\"){name}}",
         "{dbTableRows(table:\"test_rows\",offset:0,limit:1)}",
         r#"mutation {createDbTableRow(table:"test_rows",row:"{\"key\":\"denied\"}")}"#,
         r#"mutation {deleteDbTableRows(table:"test_rows",ids:["a"])}"#,

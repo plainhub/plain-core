@@ -158,7 +158,7 @@ async fn authenticated_developer_apis_follow_mode_changes_without_relogin() {
     let state = server.runtime_state();
     for enabled in [false, true, false] {
         state.prefs.set("developer_mode", enabled).unwrap();
-        for document in ["{prefs}", "{dbPath}", "{dbTables}", "{appLogPath}"] {
+        for document in ["{prefs}", "{dbPath}", "{dbTables{name}}", "{appLogPath}"] {
             let (status, result) = call(state.clone(), &headers, document).await;
             assert_eq!(status, StatusCode::OK);
             if enabled {
