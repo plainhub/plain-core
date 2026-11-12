@@ -50,6 +50,7 @@ where
     pub fn find(&self, hash: u64, eq: impl FnMut(&T) -> bool) -> Option<&T> {
         self.raw.get(hash, eq)
     }
+    #[inline(always)]
     pub fn find_mut(&mut self, hash: u64, eq: impl FnMut(&T) -> bool) -> Option<&mut T> {
         self.raw.get_mut(hash, eq)
     }
@@ -534,6 +535,8 @@ impl<T> Default for IterMut<'_, T> {
 impl<'a, T> Iterator for IterMut<'a, T> {
     type Item = &'a mut T;
     fn next(&mut self) -> Option<Self::Item> {
+        #[cfg(test)]
+        crate::hashbrown::tests::record_mut_next();
         match self.inner.next() {
             Some(bucket) => Some(unsafe { bucket.as_mut() }),
             None => None,
@@ -547,6 +550,8 @@ impl<'a, T> Iterator for IterMut<'a, T> {
         Self: Sized,
         F: FnMut(B, Self::Item) -> B,
     {
+        #[cfg(test)]
+        crate::hashbrown::tests::record_mut_fold();
         self.inner
             .fold(init, |acc, bucket| unsafe { f(acc, bucket.as_mut()) })
     }

@@ -35,4 +35,4 @@ impl core::error::Error for TryReserveError {}
 
 #[cfg(test)]
 #[path = "../../../tests/plain-libs/unit/hashbrown.rs"]
-mod tests;
+pub(crate) mod tests;

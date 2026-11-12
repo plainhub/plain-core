@@ -391,7 +391,7 @@ impl<K, V> Core<K, V> {
     ) -> &mut Bucket<K, V> {
         let end = self.indices.len();
         assert!(index <= end);
-        self.shift_indices::<true>(index, end);
+        self.shift_indices::<true, false>(index, end);
         let entries = &*self.entries;
         self.indices.insert_unique(hash.get(), index, move |&i| {
             debug_assert_ne!(i, index);
@@ -414,16 +414,7 @@ impl<K, V> Core<K, V> {
         }
     }
     fn shift_remove_finish(&mut self, index: usize) -> (K, V) {
-        if index == 0 {
-            #[cfg(test)]
-            crate::indexmap::tests::record_full_shift();
-            // Removing the first entry leaves every remaining index above zero.
-            for index in &mut self.indices {
-                *index = index.wrapping_sub(1);
-            }
-        } else {
-            self.shift_indices::<false>(index + 1, self.entries.len());
-        }
+        self.shift_indices::<false, true>(index + 1, self.entries.len());
         let entry = self.entries.remove(index);
         (entry.key, entry.value)
     }
@@ -446,31 +437,45 @@ impl<K, V> Core<K, V> {
     }
 
     #[inline]
-    fn shift_indices<const INCREMENT: bool>(&mut self, start: usize, end: usize) {
+    // Keep the upstream threshold; balanced suffixes favor point lookups.
+    fn use_bulk_shift(&self, shifted: usize) -> bool {
+        #[cfg(test)]
+        crate::indexmap::tests::record_bulk_choice();
+        shifted > self.indices.capacity() / 2
+    }
+    #[inline(always)]
+    fn shift_matching_indices<const INCREMENT: bool>(&mut self, matches: impl Fn(usize) -> bool) {
+        self.indices.iter_mut().for_each(|index| {
+            if matches(*index) {
+                // Caller ranges and the removed first slot make the shift exact.
+                *index = if INCREMENT {
+                    index.wrapping_add(1)
+                } else {
+                    index.wrapping_sub(1)
+                };
+            }
+        });
+    }
+    #[inline]
+    fn shift_indices<const INCREMENT: bool, const REMOVED: bool>(
+        &mut self,
+        start: usize,
+        end: usize,
+    ) {
         let shifted_entries = &self.entries[start..end];
-        if shifted_entries.len() > self.indices.capacity() / 2 {
+        if self.use_bulk_shift(shifted_entries.len()) {
             if end == self.entries.len() {
-                #[cfg(test)]
-                crate::indexmap::tests::record_suffix_shift();
-                for index in &mut self.indices {
-                    if start <= *index {
-                        if INCREMENT {
-                            *index += 1;
-                        } else {
-                            *index -= 1;
-                        }
-                    }
+                if REMOVED && start == 1 {
+                    #[cfg(test)]
+                    crate::indexmap::tests::record_full_shift();
+                    self.shift_matching_indices::<INCREMENT>(|_| true);
+                } else {
+                    #[cfg(test)]
+                    crate::indexmap::tests::record_suffix_shift();
+                    self.shift_matching_indices::<INCREMENT>(|index| start <= index);
                 }
             } else {
-                for index in &mut self.indices {
-                    if start <= *index && *index < end {
-                        if INCREMENT {
-                            *index += 1;
-                        } else {
-                            *index -= 1;
-                        }
-                    }
-                }
+                self.shift_matching_indices::<INCREMENT>(|index| start <= index && index < end);
             }
         } else if INCREMENT {
             for (index, entry) in (start..end).zip(shifted_entries).rev() {
@@ -498,10 +503,10 @@ impl<K, V> Core<K, V> {
     }
     fn move_index_inner(&mut self, from: usize, to: usize) {
         if from < to {
-            self.shift_indices::<false>(from + 1, to + 1);
+            self.shift_indices::<false, false>(from + 1, to + 1);
             self.entries[from..=to].rotate_left(1);
         } else if to < from {
-            self.shift_indices::<true>(to, from);
+            self.shift_indices::<true, false>(to, from);
             self.entries[to..=from].rotate_right(1);
         }
     }

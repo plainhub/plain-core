@@ -204,11 +204,11 @@ impl<T> Bucket<T> {
     }
     #[inline]
     pub(crate) unsafe fn as_ref<'a>(&self) -> &'a T {
-        unsafe { &*self.as_ptr() }
+        unsafe { self.as_non_null().as_ref() }
     }
     #[inline]
     pub(crate) unsafe fn as_mut<'a>(&self) -> &'a mut T {
-        unsafe { &mut *self.as_ptr() }
+        unsafe { self.as_non_null().as_mut() }
     }
 }
 pub(crate) struct RawTable<T, A: Allocator = Global> {
@@ -1381,11 +1381,12 @@ impl<T> RawIterRange<T> {
         F: FnMut(B, Bucket<T>) -> B,
     {
         loop {
+            let count = self.current_group.0.0.count_ones() as usize;
+            debug_assert!(count <= n);
+            n -= count;
             while let Some(index) = self.current_group.next() {
-                debug_assert!(n != 0);
                 let bucket = unsafe { self.data.next_n(index) };
                 acc = f(acc, bucket);
-                n -= 1;
             }
             if n == 0 {
                 return acc;
@@ -1748,3 +1749,7 @@ impl<T, A: Allocator> RawExtractIf<'_, T, A> {
         None
     }
 }
+
+#[cfg(test)]
+#[path = "../../../tests/plain-libs/unit/hashbrown/raw.rs"]
+mod tests;

@@ -218,3 +218,7 @@ mod zmij;
 #[cfg(all(test, unix))]
 #[path = "../../tests/plain-libs/unit/dependency_benchmark.rs"]
 mod dependency_benchmark;
+
+#[cfg(test)]
+#[path = "../../tests/plain-libs/support/codegen.rs"]
+mod codegen_test;

@@ -141,3 +141,7 @@ pub use crate::{
 #[cfg(test)]
 #[path = "../../../tests/plain-libs/unit/indexmap.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "../../../tests/plain-libs/unit/indexmap/codegen.rs"]
+mod codegen_tests;
