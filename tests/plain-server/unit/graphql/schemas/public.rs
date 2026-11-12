@@ -182,7 +182,7 @@ fn public_schema_exposes_the_contract_it_has_to_serve() {
     assert!(playback.contains("mediaId: ID\n"));
     assert!(playback.contains("path: String\n"));
     assert!(!playback.contains("currentPath"));
-    assert!(sdl.contains("lastSeen: String!"));
+    assert!(sdl.contains("lastSeen: Instant!"));
     let pairing_input = sdl
         .split("input PairingDeviceInput {")
         .nth(1)
