@@ -397,3 +397,122 @@ fn native_hidden_library_ancestors_do_not_hide_cloud_documents() {
         true
     ));
 }
+
+#[cfg(target_os = "macos")]
+#[test]
+fn mounted_volume_exclusions_stop_before_hidden_and_git_ancestors() {
+    use std::os::unix::fs::MetadataExt;
+    use std::process::Command;
+
+    let directory = plain_libs::temporary::tempdir().unwrap();
+    let root = directory.path();
+    let image = root.join("volume.dmg");
+    let parent = root.join("parent");
+    let mount = parent.join("volume");
+    std::fs::create_dir_all(&mount).unwrap();
+    let created = Command::new("hdiutil")
+        .args([
+            "create",
+            "-size",
+            "32m",
+            "-fs",
+            "HFS+",
+            "-volname",
+            "scan-fixture",
+        ])
+        .arg(&image)
+        .output()
+        .unwrap();
+    assert!(
+        created.status.success(),
+        "{}",
+        String::from_utf8_lossy(&created.stderr)
+    );
+    let attached = Command::new("hdiutil")
+        .args(["attach", "-nobrowse", "-mountpoint"])
+        .arg(&mount)
+        .arg(&image)
+        .output()
+        .unwrap();
+    assert!(
+        attached.status.success(),
+        "{}",
+        String::from_utf8_lossy(&attached.stderr)
+    );
+    struct Mounted(std::path::PathBuf);
+    impl Drop for Mounted {
+        fn drop(&mut self) {
+            let result = Command::new("hdiutil")
+                .arg("detach")
+                .arg(&self.0)
+                .output()
+                .unwrap();
+            assert!(
+                result.status.success(),
+                "{}",
+                String::from_utf8_lossy(&result.stderr)
+            );
+        }
+    }
+    let _mounted = Mounted(mount.clone());
+    assert_ne!(
+        std::fs::metadata(&mount).unwrap().dev(),
+        std::fs::metadata(&parent).unwrap().dev()
+    );
+    let file = mount.join("visible.txt");
+    std::fs::write(&file, b"fixture").unwrap();
+    assert!(
+        Command::new("chflags")
+            .arg("hidden")
+            .arg(&parent)
+            .status()
+            .unwrap()
+            .success()
+    );
+    assert!(is_native_hidden(&parent));
+    assert!(
+        scan_excluded_root(&file).is_none(),
+        "a hidden parent outside the volume cannot exclude its contents"
+    );
+    assert!(scan_excluded_root(&mount.join("missing/removed.txt")).is_none());
+    assert!(
+        Command::new("chflags")
+            .arg("nohidden")
+            .arg(&parent)
+            .status()
+            .unwrap()
+            .success()
+    );
+    std::fs::create_dir(parent.join(".git")).unwrap();
+    assert!(
+        git_project_root(&file).is_none(),
+        "a repository outside the volume cannot exclude its contents"
+    );
+    assert!(scan_excluded_root(&file).is_none());
+    let hidden = mount.join(".hidden");
+    std::fs::create_dir(&hidden).unwrap();
+    assert_eq!(
+        scan_excluded_root(&hidden.join("missing.txt")),
+        Some(hidden.as_path())
+    );
+    let native_hidden = mount.join("native-hidden");
+    std::fs::create_dir(&native_hidden).unwrap();
+    assert!(
+        Command::new("chflags")
+            .arg("hidden")
+            .arg(&native_hidden)
+            .status()
+            .unwrap()
+            .success()
+    );
+    assert_eq!(
+        scan_excluded_root(&native_hidden.join("missing.txt")),
+        Some(native_hidden.as_path())
+    );
+    let repository = mount.join("repository");
+    std::fs::create_dir_all(repository.join(".git")).unwrap();
+    assert_eq!(
+        scan_excluded_root(&repository.join("missing.txt")),
+        Some(repository.as_path())
+    );
+}

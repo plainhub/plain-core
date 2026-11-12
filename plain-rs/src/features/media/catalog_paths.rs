@@ -73,8 +73,30 @@ pub fn requires_foreground_scan(_path: &Path) -> bool {
     false
 }
 
+fn volume_ancestors(path: &Path) -> impl Iterator<Item = &Path> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        let mut device = None;
+        path.ancestors().take_while(move |ancestor| {
+            if let Ok(metadata) = std::fs::metadata(ancestor) {
+                let current = metadata.dev();
+                if device.is_some_and(|device| device != current) {
+                    return false;
+                }
+                device = Some(current);
+            }
+            true
+        })
+    }
+    #[cfg(not(unix))]
+    {
+        path.ancestors()
+    }
+}
+
 pub fn scan_excluded_root(path: &Path) -> Option<&Path> {
-    path.ancestors()
+    volume_ancestors(path)
         .find(|ancestor| {
             ancestor
                 .file_name()
@@ -94,7 +116,7 @@ pub fn git_project_root(path: &Path) -> Option<&Path> {
     } else {
         path.parent()
     }?;
-    directory.ancestors().find(|directory| {
+    volume_ancestors(directory).find(|directory| {
         std::fs::metadata(directory.join(".git"))
             .is_ok_and(|metadata| metadata.is_dir() || metadata.is_file())
             || (directory.join("HEAD").is_file()
@@ -130,30 +152,9 @@ pub fn is_media_excluded_at(
     if is_media_excluded_name_or_root(&p, data_dir, cache_dir, extra_roots) {
         return true;
     }
-    #[cfg(unix)]
-    let device = {
-        use std::os::unix::fs::MetadataExt;
-        std::fs::metadata(&p).ok().map(|metadata| metadata.dev())
-    };
-    let mut ancestor = Some(Path::new(&p));
-    while let Some(dir) = ancestor {
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::MetadataExt;
-            if device.is_some_and(|device| {
-                std::fs::metadata(dir).is_ok_and(|metadata| metadata.dev() != device)
-            }) {
-                break;
-            }
-        }
-        if dir.join(".nomedia").is_file()
-            || hidden_ancestor_excluded(&p, dir, is_native_hidden(dir))
-        {
-            return true;
-        }
-        ancestor = dir.parent();
-    }
-    false
+    volume_ancestors(Path::new(&p)).any(|dir| {
+        dir.join(".nomedia").is_file() || hidden_ancestor_excluded(&p, dir, is_native_hidden(dir))
+    })
 }
 
 fn hidden_ancestor_excluded(path: &str, ancestor: &Path, hidden: bool) -> bool {
