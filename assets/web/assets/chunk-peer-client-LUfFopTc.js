@@ -1,1 +1,0 @@
-import{c as e}from"./chunk-login-peers-xdaIJaIr.js";import{i as t}from"./chunk-http-DVRN_e2U.js";import{r as n}from"./chunk-gql-client-Czt4ls5u.js";function r(n){return n.address?.baseUrl||t(e(n))}async function i(e,t,i){return n(`${r(e)}/graphql`,e.token,t,i)}export{i as n,r as t};
