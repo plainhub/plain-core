@@ -12,7 +12,7 @@ pub use map_request::{MapRequest, MapRequestLayer};
 pub use map_response::{MapResponse, MapResponseLayer};
 pub use oneshot::Oneshot;
 pub use service_fn::{ServiceFn, service_fn};
-pub trait ServiceExt<Request>: tower_service::Service<Request> {
+pub trait ServiceExt<Request>: crate::tower::Service<Request> {
     fn oneshot(self, req: Request) -> Oneshot<Self, Request>
     where
         Self: Sized,
@@ -53,4 +53,4 @@ pub trait ServiceExt<Request>: tower_service::Service<Request> {
         MapFuture::new(self, f)
     }
 }
-impl<T: ?Sized, Request> ServiceExt<Request> for T where T: tower_service::Service<Request> {}
+impl<T: ?Sized, Request> ServiceExt<Request> for T where T: crate::tower::Service<Request> {}

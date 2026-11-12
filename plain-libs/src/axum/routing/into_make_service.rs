@@ -3,7 +3,7 @@ use std::{
     future::ready,
     task::{Context, Poll},
 };
-use tower_service::Service;
+use crate::tower::Service;
 #[derive(Debug, Clone)]
 pub struct IntoMakeService<S> {
     svc: S,

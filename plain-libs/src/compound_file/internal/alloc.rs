@@ -1,5 +1,5 @@
 use crate::compound_file::internal::{Chain, Sector, Sectors, consts};
-use fnv::FnvHashSet;
+use crate::fnv::FnvHashSet;
 use std::io::{self, Read, Seek};
 
 //===========================================================================//

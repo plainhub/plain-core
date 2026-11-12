@@ -4,17 +4,16 @@ use super::{
 };
 use crate::axum_core::extract::{FromRequest, Request};
 use crate::http::Method;
-use async_trait::async_trait;
 use bytes::Bytes;
 #[derive(Debug)]
 pub struct RawForm(pub Bytes);
-#[async_trait]
+
 impl<S> FromRequest<S> for RawForm
 where
     S: Send + Sync,
 {
     type Rejection = RawFormRejection;
-    async fn from_request(req: Request, state: &S) -> Result<Self, Self::Rejection> {
+    async fn from_request<'extract>(req: Request, state: &'extract S) -> Result<Self, Self::Rejection>  where Self: 'extract {
         if req.method() == Method::GET {
             if let Some(query) = req.uri().query() {
                 return Ok(Self(Bytes::copy_from_slice(query.as_bytes())));

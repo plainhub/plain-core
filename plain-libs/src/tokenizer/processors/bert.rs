@@ -33,9 +33,8 @@ impl BertProcessing {
     }
 }
 
-#[derive(thiserror::Error, Debug)]
+#[derive(Debug)]
 pub enum BertProcessorError {
-    #[error("encodings vector length must be either 1 or 2")]
     InvalidEncodingsVecLength,
 }
 
@@ -190,3 +189,15 @@ impl PostProcessor for BertProcessing {
 #[cfg(test)]
 #[path = "../../../../tests/plain-libs/unit/tokenizer/processors/bert/tests.rs"]
 mod tests;
+
+impl std::fmt::Display for BertProcessorError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::InvalidEncodingsVecLength => {
+                f.write_str("encodings vector length must be either 1 or 2")
+            }
+        }
+    }
+}
+
+impl std::error::Error for BertProcessorError {}

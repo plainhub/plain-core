@@ -264,7 +264,7 @@ impl<R: fmt::Debug> fmt::Debug for HttpConnector<R> {
         f.debug_struct("HttpConnector").finish()
     }
 }
-impl<R> tower_service::Service<Uri> for HttpConnector<R>
+impl<R> crate::tower::Service<Uri> for HttpConnector<R>
 where
     R: Resolve + Clone + Send + Sync + 'static,
     R::Future: Send,

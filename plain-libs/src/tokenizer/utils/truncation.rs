@@ -39,12 +39,10 @@ impl Default for TruncationParams {
     }
 }
 
-#[derive(thiserror::Error, Debug)]
+#[derive(Debug)]
 pub enum TruncationError {
-    #[error("Truncation error: Second sequence not provided")]
     SecondSequenceNotProvided,
 
-    #[error("Truncation error: Sequence to truncate too short to respect the provided max_length")]
     SequenceTooShort,
 }
 
@@ -163,3 +161,12 @@ pub fn truncate_encodings(
 #[cfg(test)]
 #[path = "../../../../tests/plain-libs/unit/tokenizer/utils/truncation/tests.rs"]
 mod tests;
+
+impl std::fmt::Display for TruncationError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self { Self::SecondSequenceNotProvided => f.write_str("Truncation error: Second sequence not provided"),
+Self::SequenceTooShort => f.write_str("Truncation error: Sequence to truncate too short to respect the provided max_length"), }
+    }
+}
+
+impl std::error::Error for TruncationError {}

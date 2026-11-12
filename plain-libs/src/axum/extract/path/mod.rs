@@ -6,20 +6,19 @@ use crate::axum::{
 };
 use crate::axum_core::response::{IntoResponse, Response};
 use crate::http::{StatusCode, request::Parts};
-use async_trait::async_trait;
 use serde::de::DeserializeOwned;
 use std::{fmt, sync::Arc};
 #[derive(Debug)]
 pub struct Path<T>(pub T);
 crate::axum_core::__impl_deref!(Path);
-#[async_trait]
+
 impl<T, S> FromRequestParts<S> for Path<T>
 where
     T: DeserializeOwned + Send,
     S: Send + Sync,
 {
     type Rejection = PathRejection;
-    async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
+    async fn from_request_parts<'extract>(parts: &'extract mut Parts, _state: &'extract S) -> Result<Self, Self::Rejection>  where Self: 'extract {
         let params = match parts.extensions.get::<UrlParams>() {
             Some(UrlParams::Params(params)) => params,
             Some(UrlParams::InvalidUtf8InPathParam { key }) => {
@@ -215,13 +214,13 @@ impl fmt::Display for FailedToDeserializePathParams {
 impl std::error::Error for FailedToDeserializePathParams {}
 #[derive(Debug)]
 pub struct RawPathParams(Vec<(Arc<str>, PercentDecodedStr)>);
-#[async_trait]
+
 impl<S> FromRequestParts<S> for RawPathParams
 where
     S: Send + Sync,
 {
     type Rejection = RawPathParamsRejection;
-    async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
+    async fn from_request_parts<'extract>(parts: &'extract mut Parts, _state: &'extract S) -> Result<Self, Self::Rejection>  where Self: 'extract {
         let params = match parts.extensions.get::<UrlParams>() {
             Some(UrlParams::Params(params)) => params,
             Some(UrlParams::InvalidUtf8InPathParam { key }) => {

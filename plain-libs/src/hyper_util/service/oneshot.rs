@@ -1,7 +1,7 @@
 use pin_project_lite::pin_project;
 use std::pin::Pin;
 use std::task::{Context, Poll, ready};
-use tower_service::Service;
+use crate::tower::Service;
 pin_project! { #[project = OneshotProj] #[derive (Debug)] pub enum Oneshot < S : Service < Req >, Req > { NotReady { svc : S , req : Option < Req >, } , Called { #[pin] fut : S::Future , } , Done , } }
 impl<S, Req> Oneshot<S, Req>
 where

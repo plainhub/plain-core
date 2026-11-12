@@ -1,0 +1,9 @@
+{
+  "name": "fnv",
+  "version": "1.0.7",
+  "repository": "https://github.com/servo/rust-fnv",
+  "license": "MIT OR Apache-2.0",
+  "retained": "Default FNV-1a Hasher and used map/set aliases; shared with existing HTTP header implementation",
+  "removed": "custom key constructor, examples, unused aliases and upstream test utilities",
+  "registry_integrity": []
+}

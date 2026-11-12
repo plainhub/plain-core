@@ -166,7 +166,7 @@ pub(super) mod sealed {
     }
     impl<S, T> Connect for S
     where
-        S: tower_service::Service<Uri, Response = T> + Send + 'static,
+        S: crate::tower::Service<Uri, Response = T> + Send + 'static,
         S::Error: Into<Box<dyn StdError + Send + Sync>>,
         S::Future: Unpin + Send,
         T: Read + Write + Connection + Unpin + Send + 'static,
@@ -178,7 +178,7 @@ pub(super) mod sealed {
     }
     impl<S, T> ConnectSvc for S
     where
-        S: tower_service::Service<Uri, Response = T> + Send + 'static,
+        S: crate::tower::Service<Uri, Response = T> + Send + 'static,
         S::Error: Into<Box<dyn StdError + Send + Sync>>,
         S::Future: Unpin + Send,
         T: Read + Write + Connection + Unpin + Send + 'static,
@@ -192,7 +192,7 @@ pub(super) mod sealed {
     }
     impl<S, T> Sealed for S
     where
-        S: tower_service::Service<Uri, Response = T> + Send,
+        S: crate::tower::Service<Uri, Response = T> + Send,
         S::Error: Into<Box<dyn StdError + Send + Sync>>,
         S::Future: Unpin + Send,
         T: Read + Write + Connection + Unpin + Send + 'static,

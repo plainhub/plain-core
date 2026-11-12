@@ -11,8 +11,8 @@ use std::{
     pin::Pin,
     task::{Context, Poll},
 };
-use tower_layer::Layer;
-use tower_service::Service;
+use crate::tower::layer::Layer;
+use crate::tower::Service;
 pub fn from_fn<F, T>(f: F) -> FromFnLayer<F, (), T> {
     from_fn_with_state((), f)
 }

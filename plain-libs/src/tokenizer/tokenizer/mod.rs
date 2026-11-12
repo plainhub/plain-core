@@ -108,9 +108,8 @@ impl dyn PostProcessor {
     }
 }
 
-#[derive(thiserror::Error, Debug)]
+#[derive(Debug)]
 pub enum ProcessorError {
-    #[error("encodings vector length must be either 1 or 2")]
     InvalidEncodingsVecLength,
 }
 
@@ -221,8 +220,7 @@ where
     }
 }
 
-#[derive(thiserror::Error, Debug)]
-#[error("{0}")]
+#[derive(Debug)]
 pub struct BuilderError(String);
 
 pub struct TokenizerBuilder<M, N, PT, PP, D> {
@@ -425,8 +423,7 @@ impl DerefMut for Tokenizer {
     }
 }
 
-#[derive(thiserror::Error, Debug)]
-#[error("{0}")]
+#[derive(Debug)]
 pub struct TruncationParamError(String);
 
 #[derive(Clone, Debug)]
@@ -934,3 +931,35 @@ where
         })
     }
 }
+
+impl std::fmt::Display for ProcessorError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::InvalidEncodingsVecLength => {
+                f.write_str("encodings vector length must be either 1 or 2")
+            }
+        }
+    }
+}
+
+impl std::error::Error for ProcessorError {}
+
+impl std::fmt::Display for BuilderError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self(inner) => write!(f, "{0}", inner),
+        }
+    }
+}
+
+impl std::error::Error for BuilderError {}
+
+impl std::fmt::Display for TruncationParamError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self(inner) => write!(f, "{0}", inner),
+        }
+    }
+}
+
+impl std::error::Error for TruncationParamError {}

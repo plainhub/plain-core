@@ -12,5 +12,30 @@
     "sync_wrapper",
     "tokio",
     "util"
+  ],
+  "integrated": [
+    {
+      "name": "tower-layer",
+      "version": "0.3.3",
+      "repository": "https://github.com/tower-rs/tower",
+      "license_file": "LICENSE"
+    },
+    {
+      "name": "tower-service",
+      "version": "0.3.3",
+      "repository": "https://github.com/tower-rs/tower",
+      "license_file": "LICENSE"
+    }
+  ],
+  "removed_unused_layer_apis": [
+    "Identity",
+    "Stack",
+    "tuple arities not used by routing",
+    "upstream examples and test helpers"
+  ],
+  "registry_integrity": [],
+  "retained_layer_tuple_arities": [
+    2,
+    3
   ]
 }

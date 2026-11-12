@@ -1,6 +1,5 @@
 use crate::axum_core::{body::Body, response::IntoResponse};
 use crate::http::request::Parts;
-use async_trait::async_trait;
 use std::convert::Infallible;
 mod default_body_limit;
 mod from_ref;
@@ -16,74 +15,74 @@ mod private {
     #[derive(Debug, Clone, Copy)]
     pub enum ViaRequest {}
 }
-#[async_trait]
+
 
 pub trait FromRequestParts<S>: Sized {
     type Rejection: IntoResponse;
-    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection>;
+    fn from_request_parts<'extract>(parts: &'extract mut Parts, state: &'extract S) -> impl std::future::Future<Output = Result<Self, Self::Rejection>> + Send + 'extract where Self: 'extract;
 }
-#[async_trait]
+
 
 pub trait FromRequest<S, M = private::ViaRequest>: Sized {
     type Rejection: IntoResponse;
-    async fn from_request(req: Request, state: &S) -> Result<Self, Self::Rejection>;
+    fn from_request<'extract>(req: Request, state: &'extract S) -> impl std::future::Future<Output = Result<Self, Self::Rejection>> + Send + 'extract where Self: 'extract;
 }
-#[async_trait]
+
 impl<S, T> FromRequest<S, private::ViaParts> for T
 where
     S: Send + Sync,
     T: FromRequestParts<S>,
 {
     type Rejection = <Self as FromRequestParts<S>>::Rejection;
-    async fn from_request(req: Request, state: &S) -> Result<Self, Self::Rejection> {
+    async fn from_request<'extract>(req: Request, state: &'extract S) -> Result<Self, Self::Rejection>  where Self: 'extract {
         let (mut parts, _) = req.into_parts();
         Self::from_request_parts(&mut parts, state).await
     }
 }
-#[async_trait]
+
 impl<S, T> FromRequestParts<S> for Option<T>
 where
     T: FromRequestParts<S>,
     S: Send + Sync,
 {
     type Rejection = Infallible;
-    async fn from_request_parts(
-        parts: &mut Parts,
-        state: &S,
-    ) -> Result<Option<T>, Self::Rejection> {
+    async fn from_request_parts<'extract>(
+        parts: &'extract mut Parts,
+        state: &'extract S,
+    ) -> Result<Option<T>, Self::Rejection>  where Self: 'extract {
         Ok(T::from_request_parts(parts, state).await.ok())
     }
 }
-#[async_trait]
+
 impl<S, T> FromRequest<S> for Option<T>
 where
     T: FromRequest<S>,
     S: Send + Sync,
 {
     type Rejection = Infallible;
-    async fn from_request(req: Request, state: &S) -> Result<Option<T>, Self::Rejection> {
+    async fn from_request<'extract>(req: Request, state: &'extract S) -> Result<Option<T>, Self::Rejection>  where Self: 'extract {
         Ok(T::from_request(req, state).await.ok())
     }
 }
-#[async_trait]
+
 impl<S, T> FromRequestParts<S> for Result<T, T::Rejection>
 where
     T: FromRequestParts<S>,
     S: Send + Sync,
 {
     type Rejection = Infallible;
-    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+    async fn from_request_parts<'extract>(parts: &'extract mut Parts, state: &'extract S) -> Result<Self, Self::Rejection>  where Self: 'extract {
         Ok(T::from_request_parts(parts, state).await)
     }
 }
-#[async_trait]
+
 impl<S, T> FromRequest<S> for Result<T, T::Rejection>
 where
     T: FromRequest<S>,
     S: Send + Sync,
 {
     type Rejection = Infallible;
-    async fn from_request(req: Request, state: &S) -> Result<Self, Self::Rejection> {
+    async fn from_request<'extract>(req: Request, state: &'extract S) -> Result<Self, Self::Rejection>  where Self: 'extract {
         Ok(T::from_request(req, state).await)
     }
 }

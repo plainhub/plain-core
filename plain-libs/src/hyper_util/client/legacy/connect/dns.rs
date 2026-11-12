@@ -6,7 +6,7 @@ use std::str::FromStr;
 use std::task::{self, Poll};
 use std::{fmt, io, vec};
 use tokio::task::JoinHandle;
-use tower_service::Service;
+use crate::tower::Service;
 #[derive(Clone, Hash, Eq, PartialEq)]
 pub struct Name {
     host: Box<str>,
@@ -183,7 +183,7 @@ impl Iterator for SocketAddrs {
 mod sealed {
     use super::{Name, SocketAddr};
     use std::task::{self, Poll};
-    use tower_service::Service;
+    use crate::tower::Service;
     pub trait Resolve {
         type Addrs: Iterator<Item = SocketAddr>;
         type Error: Into<Box<dyn std::error::Error + Send + Sync>>;

@@ -1,5 +1,5 @@
 use self::private::DefaultBodyLimitService;
-use tower_layer::Layer;
+use crate::tower::layer::Layer;
 #[derive(Debug, Clone, Copy)]
 #[must_use]
 pub struct DefaultBodyLimit {
@@ -35,7 +35,7 @@ mod private {
     use super::DefaultBodyLimitKind;
     use crate::http::Request;
     use std::task::Context;
-    use tower_service::Service;
+    use crate::tower::Service;
     #[derive(Debug, Clone, Copy)]
     pub struct DefaultBodyLimitService<S> {
         pub(super) inner: S,

@@ -46,3 +46,23 @@ fn server_rejects_unmasked_frames_and_invalid_utf8() {
     );
     assert!(socket.read().is_err());
 }
+
+
+#[test]
+fn errors_preserve_status_text_from_conversions_and_exact_source_chains() {
+    use std::error::Error as _;
+    let error = Error::from(std::io::Error::new(std::io::ErrorKind::BrokenPipe, "generated disconnect"));
+    assert_eq!(error.to_string(), "IO error: generated disconnect");
+    assert_eq!(error.source().unwrap().downcast_ref::<std::io::Error>().unwrap().kind(), std::io::ErrorKind::BrokenPipe);
+    let error = Error::Http(Box::new(crate::http::Response::builder().status(403).body(None).unwrap()));
+    assert_eq!(error.to_string(), "HTTP error: 403 Forbidden");
+    assert!(error.source().is_none());
+    let error = Error::Tls(error::TlsError::InvalidDnsName);
+    assert_eq!(error.to_string(), "TLS error: Invalid DNS name");
+    assert!(error.source().unwrap().downcast_ref::<error::TlsError>().is_some());
+    assert!(error.source().unwrap().source().is_none());
+    let error = error::ProtocolError::from(crate::httparse::Error::Token);
+    assert!(error.source().unwrap().downcast_ref::<crate::httparse::Error>().is_some());
+    let error = error::CapacityError::MessageTooLong { size: 42, max_size: 7 };
+    assert_eq!(error.to_string(), "Message too long: 42 > 7");
+}

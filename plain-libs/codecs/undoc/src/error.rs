@@ -1,7 +1,6 @@
 //! Error types for the undoc library.
 
 use std::io;
-use thiserror::Error;
 
 /// Result type alias for undoc operations.
 pub type Result<T> = std::result::Result<T, Error>;
@@ -67,26 +66,21 @@ pub enum ErrorKind {
 }
 
 /// Errors that can occur during document processing.
-#[derive(Error, Debug)]
+#[derive(Debug)]
 pub enum Error {
     /// I/O error during file operations.
-    #[error("I/O error: {0}")]
-    Io(#[from] io::Error),
+    Io(io::Error),
 
     /// The file format could not be determined.
-    #[error("Unknown file format")]
     UnknownFormat,
 
     /// The file format is recognized but not supported.
-    #[error("Unsupported format: {0}")]
     UnsupportedFormat(String),
 
     /// Error reading ZIP archive.
-    #[error("ZIP archive error: {0}")]
     ZipArchive(String),
 
     /// Error parsing XML content.
-    #[error("XML parse error in {location}: {message}")]
     XmlParseWithContext {
         /// The error message
         message: String,
@@ -95,39 +89,30 @@ pub enum Error {
     },
 
     /// Error parsing XML content (legacy, no context).
-    #[error("XML parse error: {0}")]
     XmlParse(String),
 
     /// Invalid or malformed data in the document.
-    #[error("Invalid data: {0}")]
     InvalidData(String),
 
     /// A required document component is missing.
-    #[error("Missing component: {0}")]
     MissingComponent(String),
 
     /// Error during text encoding conversion.
-    #[error("Encoding error: {0}")]
     Encoding(String),
 
     /// A referenced style was not found.
-    #[error("Style not found: {0}")]
     StyleNotFound(String),
 
     /// A referenced resource was not found.
-    #[error("Resource not found: {0}")]
     ResourceNotFound(String),
 
     /// The document is encrypted and cannot be processed.
-    #[error("Document is encrypted")]
     Encrypted,
 
     /// Error during rendering.
-    #[error("Render error: {0}")]
     Render(String),
 
     /// A section was asked for by an index the document does not have.
-    #[error("section {index} is out of range: the document has {count} sections")]
     SectionOutOfRange {
         /// The index asked for (0-based).
         index: usize,
@@ -233,3 +218,44 @@ impl Error {
 #[cfg(test)]
 #[path = "../tests/unit/error.rs"]
 mod tests;
+
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Io(inner) => write!(f, "I/O error: {0}", inner),
+            Self::UnknownFormat => f.write_str("Unknown file format"),
+            Self::UnsupportedFormat(inner) => write!(f, "Unsupported format: {0}", inner),
+            Self::ZipArchive(inner) => write!(f, "ZIP archive error: {0}", inner),
+            Self::XmlParseWithContext { message, location } => {
+                write!(f, "XML parse error in {location}: {message}")
+            }
+            Self::XmlParse(inner) => write!(f, "XML parse error: {0}", inner),
+            Self::InvalidData(inner) => write!(f, "Invalid data: {0}", inner),
+            Self::MissingComponent(inner) => write!(f, "Missing component: {0}", inner),
+            Self::Encoding(inner) => write!(f, "Encoding error: {0}", inner),
+            Self::StyleNotFound(inner) => write!(f, "Style not found: {0}", inner),
+            Self::ResourceNotFound(inner) => write!(f, "Resource not found: {0}", inner),
+            Self::Encrypted => f.write_str("Document is encrypted"),
+            Self::Render(inner) => write!(f, "Render error: {0}", inner),
+            Self::SectionOutOfRange { index, count } => write!(
+                f,
+                "section {index} is out of range: the document has {count} sections"
+            ),
+        }
+    }
+}
+
+impl std::error::Error for Error {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Io(inner) => Some(inner),
+            _ => None,
+        }
+    }
+}
+
+impl From<io::Error> for Error {
+    fn from(inner: io::Error) -> Self {
+        Self::Io(inner)
+    }
+}

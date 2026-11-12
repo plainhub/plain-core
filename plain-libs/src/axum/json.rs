@@ -5,20 +5,19 @@ use crate::http::{
     StatusCode,
     header::{self, HeaderMap, HeaderValue},
 };
-use async_trait::async_trait;
 use bytes::{BufMut, Bytes, BytesMut};
 use serde::{Serialize, de::DeserializeOwned};
 #[derive(Debug, Clone, Copy, Default)]
 #[must_use]
 pub struct Json<T>(pub T);
-#[async_trait]
+
 impl<T, S> FromRequest<S> for Json<T>
 where
     T: DeserializeOwned,
     S: Send + Sync,
 {
     type Rejection = JsonRejection;
-    async fn from_request(req: Request, state: &S) -> Result<Self, Self::Rejection> {
+    async fn from_request<'extract>(req: Request, state: &'extract S) -> Result<Self, Self::Rejection>  where Self: 'extract {
         if json_content_type(req.headers()) {
             let bytes = Bytes::from_request(req, state).await?;
             Self::from_bytes(&bytes)

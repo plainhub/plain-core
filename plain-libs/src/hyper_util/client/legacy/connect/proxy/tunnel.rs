@@ -5,7 +5,7 @@ use std::error::Error as StdError;
 use std::marker::PhantomData;
 use std::pin::Pin;
 use std::task::{self, Poll, ready};
-use tower_service::Service;
+use crate::tower::Service;
 #[derive(Debug, Clone)]
 pub struct Tunnel<C> {
     headers: Headers,

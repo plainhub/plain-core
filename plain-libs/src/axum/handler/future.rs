@@ -4,7 +4,7 @@ use crate::tower::util::Oneshot;
 use futures_util::future::Map;
 use pin_project_lite::pin_project;
 use std::{convert::Infallible, future::Future, pin::Pin, task::Context};
-use tower_service::Service;
+use crate::tower::Service;
 opaque_future! { pub type IntoServiceFuture < F > = Map < F , fn (Response) -> Result < Response , Infallible >, >; }
 pin_project! { pub struct LayeredFuture < S > where S : Service < Request >, { #[pin] inner : Map < Oneshot < S , Request >, fn (Result < S::Response , S::Error >) -> Response >, } }
 impl<S> LayeredFuture<S>

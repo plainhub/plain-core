@@ -4,8 +4,8 @@ use std::{
     fmt,
     task::{Context, Poll},
 };
-use tower_layer::{LayerFn, layer_fn};
-use tower_service::Service;
+use crate::tower::layer::{LayerFn, layer_fn};
+use crate::tower::Service;
 pub struct BoxCloneService<T, U, E>(
     Box<
         dyn CloneService<T, Response = U, Error = E, Future = BoxFuture<'static, Result<U, E>>>

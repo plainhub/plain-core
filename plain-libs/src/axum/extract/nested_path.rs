@@ -2,13 +2,12 @@ use super::rejection::NestedPathRejection;
 use crate::axum::extract::Request;
 use crate::axum_core::extract::FromRequestParts;
 use crate::http::request::Parts;
-use async_trait::async_trait;
 use std::{
     sync::Arc,
     task::{Context, Poll},
 };
-use tower_layer::{Layer, layer_fn};
-use tower_service::Service;
+use crate::tower::layer::{Layer, layer_fn};
+use crate::tower::Service;
 #[derive(Debug, Clone)]
 pub struct NestedPath(Arc<str>);
 impl NestedPath {
@@ -16,13 +15,13 @@ impl NestedPath {
         &self.0
     }
 }
-#[async_trait]
+
 impl<S> FromRequestParts<S> for NestedPath
 where
     S: Send + Sync,
 {
     type Rejection = NestedPathRejection;
-    async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
+    async fn from_request_parts<'extract>(parts: &'extract mut Parts, _state: &'extract S) -> Result<Self, Self::Rejection>  where Self: 'extract {
         match parts.extensions.get::<Self>() {
             Some(nested_path) => Ok(nested_path.clone()),
             None => Err(NestedPathRejection),

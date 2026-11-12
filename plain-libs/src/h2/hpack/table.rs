@@ -1,7 +1,7 @@
 use super::Header;
 use crate::http::header;
 use crate::http::method::Method;
-use fnv::FnvHasher;
+use crate::fnv::FnvHasher;
 use std::collections::VecDeque;
 use std::hash::{Hash, Hasher};
 use std::{cmp, mem};

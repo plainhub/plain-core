@@ -13,8 +13,8 @@ use std::{
     pin::Pin,
     task::{Context, Poll},
 };
-use tower_layer::Layer;
-use tower_service::Service;
+use crate::tower::layer::Layer;
+use crate::tower::Service;
 pub fn map_request<F, T>(f: F) -> MapRequestLayer<F, (), T> {
     map_request_with_state((), f)
 }

@@ -1,7 +1,7 @@
 use std::fmt;
 use std::future::Future;
 use std::task::{Context, Poll};
-use tower_service::Service;
+use crate::tower::Service;
 pub fn service_fn<T>(f: T) -> ServiceFn<T> {
     ServiceFn { f }
 }

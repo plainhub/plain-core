@@ -1,7 +1,6 @@
 use super::{Extension, FromRequestParts};
 use crate::axum::extension::AddExtension;
 use crate::http::request::Parts;
-use async_trait::async_trait;
 use std::{
     convert::Infallible,
     fmt,
@@ -10,8 +9,8 @@ use std::{
     net::SocketAddr,
     task::{Context, Poll},
 };
-use tower_layer::Layer;
-use tower_service::Service;
+use crate::tower::layer::Layer;
+use crate::tower::Service;
 pub struct IntoMakeServiceWithConnectInfo<S, C> {
     svc: S,
     _connect_info: PhantomData<fn() -> C>,
@@ -82,14 +81,14 @@ where
 opaque_future! { pub type ResponseFuture < S , C > = std::future::Ready < Result < AddExtension < S , ConnectInfo < C >>, Infallible >>; }
 #[derive(Clone, Copy, Debug)]
 pub struct ConnectInfo<T>(pub T);
-#[async_trait]
+
 impl<S, T> FromRequestParts<S> for ConnectInfo<T>
 where
     S: Send + Sync,
     T: Clone + Send + Sync + 'static,
 {
     type Rejection = <Extension<Self> as FromRequestParts<S>>::Rejection;
-    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+    async fn from_request_parts<'extract>(parts: &'extract mut Parts, state: &'extract S) -> Result<Self, Self::Rejection>  where Self: 'extract {
         match Extension::<Self>::from_request_parts(parts, state).await {
             Ok(Extension(connect_info)) => Ok(connect_info),
             Err(err) => match parts.extensions.get::<MockConnectInfo<T>>() {

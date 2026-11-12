@@ -6,17 +6,16 @@ use crate::http::{
     header::{FORWARDED, HeaderMap},
     request::Parts,
 };
-use async_trait::async_trait;
 const X_FORWARDED_HOST_HEADER_KEY: &str = "X-Forwarded-Host";
 #[derive(Debug, Clone)]
 pub struct Host(pub String);
-#[async_trait]
+
 impl<S> FromRequestParts<S> for Host
 where
     S: Send + Sync,
 {
     type Rejection = HostRejection;
-    async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
+    async fn from_request_parts<'extract>(parts: &'extract mut Parts, _state: &'extract S) -> Result<Self, Self::Rejection>  where Self: 'extract {
         if let Some(host) = parse_forwarded(&parts.headers) {
             return Ok(Host(host.to_owned()));
         }

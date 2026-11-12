@@ -11,8 +11,8 @@ use std::{
     pin::Pin,
     task::{Context, Poll},
 };
-use tower_layer::Layer;
-use tower_service::Service;
+use crate::tower::layer::Layer;
+use crate::tower::Service;
 pub fn map_response<F, T>(f: F) -> MapResponseLayer<F, (), T> {
     map_response_with_state((), f)
 }

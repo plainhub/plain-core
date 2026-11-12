@@ -8,7 +8,7 @@ use bytes::BytesMut;
 use messages::*;
 use std::net::{IpAddr, SocketAddr, ToSocketAddrs};
 use std::task::{Context, Poll};
-use tower_service::Service;
+use crate::tower::Service;
 #[derive(Debug, Clone)]
 pub struct SocksV5<C> {
     inner: C,

@@ -30,6 +30,5 @@ codepages = ["plain-libs/encoding"]
 [dependencies]
 plain-libs = { path = "../..", features = ["compound-file", "document-nfc", "xml", "zip"] }
 serde = { version = "1", features = ["derive"] }
-thiserror = "2"
 
 [dev-dependencies]

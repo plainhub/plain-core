@@ -19,9 +19,8 @@ pub use self::json::Json;
 pub use self::routing::Router;
 pub use self::serve::serve;
 pub use self::service_ext::ServiceExt;
-pub use crate::axum_core::{BoxError, Error, RequestExt, RequestPartsExt};
+pub use crate::axum_core::{BoxError, Error, RequestExt};
 pub use crate::http;
-pub use async_trait::async_trait;
 
 #[cfg(test)]
 #[path = "../../../tests/plain-libs/unit/axum.rs"]

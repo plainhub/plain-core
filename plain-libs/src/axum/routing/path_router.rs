@@ -9,8 +9,8 @@ use crate::axum::{
 use crate::axum_core::response::IntoResponse;
 use crate::matchit::MatchError;
 use std::{borrow::Cow, collections::HashMap, convert::Infallible, fmt, sync::Arc};
-use tower_layer::Layer;
-use tower_service::Service;
+use crate::tower::layer::Layer;
+use crate::tower::Service;
 pub(super) struct PathRouter<S, const IS_FALLBACK: bool> {
     routes: HashMap<RouteId, Endpoint<S>>,
     node: Arc<Node>,

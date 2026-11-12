@@ -1,6 +1,6 @@
 use std::io::{self, Seek};
 
-use fnv::FnvHashSet;
+use crate::fnv::FnvHashSet;
 
 use crate::compound_file::internal::{Chain, DirEntry, Directory, MiniChain, Sector, consts};
 

@@ -1,5 +1,5 @@
 use crate::compound_file::internal::{self, Allocator, Chain, DirEntry, ObjType, Sector, consts};
-use fnv::{FnvHashMap, FnvHashSet};
+use crate::fnv::{FnvHashMap, FnvHashSet};
 use std::cmp::Ordering;
 use std::io::{self, Seek};
 

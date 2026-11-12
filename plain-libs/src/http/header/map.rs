@@ -1,3 +1,4 @@
+use crate::fnv::FnvHasher;
 pub use self::as_header_name::AsHeaderName;
 pub use self::into_header_name::IntoHeaderName;
 use super::HeaderValue;
@@ -1697,34 +1698,12 @@ where
             h.finish()
         }
         _ => {
-            let mut h = FnvHasher::new();
+            let mut h = FnvHasher::default();
             k.hash(&mut h);
             h.finish()
         }
     };
     HashValue((hash & MASK) as u16)
-}
-struct FnvHasher(u64);
-impl FnvHasher {
-    #[inline]
-    fn new() -> Self {
-        FnvHasher(0xcbf29ce484222325)
-    }
-}
-impl std::hash::Hasher for FnvHasher {
-    #[inline]
-    fn finish(&self) -> u64 {
-        self.0
-    }
-    #[inline]
-    fn write(&mut self, bytes: &[u8]) {
-        let mut hash = self.0;
-        for &b in bytes {
-            hash ^= b as u64;
-            hash = hash.wrapping_mul(0x100000001b3);
-        }
-        self.0 = hash;
-    }
 }
 mod into_header_name {
     use super::{Entry, HdrName, HeaderMap, HeaderName, MaxSizeReached};
@@ -1888,3 +1867,7 @@ mod as_header_name {
     }
     impl AsHeaderName for &String {}
 }
+
+#[cfg(test)]
+#[path = "../../../../tests/plain-libs/unit/http/header/map.rs"]
+mod shared_hash_tests;

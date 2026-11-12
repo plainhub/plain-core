@@ -1,5 +1,5 @@
 // Read-only compound file parser adapted from cfb 0.15.0 (SOURCE.json).
-use fnv::FnvHashSet;
+use crate::fnv::FnvHashSet;
 use std::{
     io::{self, Read, Seek, SeekFrom},
     mem::size_of,

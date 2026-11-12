@@ -10,7 +10,7 @@ use std::sync::Arc;
 use std::task::{Context, Poll};
 use std::{fmt, io};
 use tokio_rustls::TlsConnector;
-use tower_service::Service;
+use crate::tower::Service;
 pub(crate) type BoxError = Box<dyn std::error::Error + Send + Sync>;
 #[derive(Clone)]
 pub struct HttpsConnector<T> {

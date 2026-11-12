@@ -8,11 +8,9 @@ mod serialization;
 
 type Vocab = HashMap<String, u32>;
 
-#[derive(thiserror::Error, Debug)]
+#[derive(Debug)]
 pub enum Error {
-    #[error("WordLevel error: Missing [UNK] token from the vocabulary")]
     MissingUnkToken,
-    #[error("Bad vocabulary json file")]
     BadVocabulary,
 }
 
@@ -140,3 +138,16 @@ impl Model for WordLevel {
 #[cfg(test)]
 #[path = "../../../../../tests/plain-libs/unit/tokenizer/models/wordlevel/mod/tests.rs"]
 mod tests;
+
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::MissingUnkToken => {
+                f.write_str("WordLevel error: Missing [UNK] token from the vocabulary")
+            }
+            Self::BadVocabulary => f.write_str("Bad vocabulary json file"),
+        }
+    }
+}
+
+impl std::error::Error for Error {}

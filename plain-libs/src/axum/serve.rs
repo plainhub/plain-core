@@ -18,7 +18,7 @@ use tokio::{
     net::{TcpListener, TcpStream},
     sync::watch,
 };
-use tower_service::Service;
+use crate::tower::Service;
 pub fn serve<M, S>(tcp_listener: TcpListener, make_service: M) -> Serve<M, S>
 where
     M: for<'a> Service<IncomingStream<'a>, Error = Infallible, Response = S>,

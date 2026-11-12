@@ -3,8 +3,8 @@ use std::{
     future::Future,
     task::{Context, Poll},
 };
-use tower_layer::Layer;
-use tower_service::Service;
+use crate::tower::layer::Layer;
+use crate::tower::Service;
 #[derive(Clone)]
 pub struct MapFuture<S, F> {
     inner: S,

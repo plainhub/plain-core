@@ -17,8 +17,8 @@ use std::{
     fmt,
     task::{Context, Poll},
 };
-use tower_layer::Layer;
-use tower_service::Service;
+use crate::tower::layer::Layer;
+use crate::tower::Service;
 macro_rules! top_level_service_fn {
     ($name : ident , $method : ident) => {
         pub fn $name<T, S>(svc: T) -> MethodRouter<S, T::Error>

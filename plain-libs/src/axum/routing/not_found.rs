@@ -6,7 +6,7 @@ use std::{
     future::ready,
     task::{Context, Poll},
 };
-use tower_service::Service;
+use crate::tower::Service;
 #[derive(Clone, Copy, Debug)]
 pub(super) struct NotFound;
 impl<B> Service<Request<B>> for NotFound

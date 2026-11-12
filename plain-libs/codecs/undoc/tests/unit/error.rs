@@ -135,3 +135,13 @@ fn test_json_serialization_failure_is_classified_as_render() {
     let err = Error::Render("JSON serialization: recursion limit".to_string());
     assert_eq!(err.kind(), ErrorKind::Render);
 }
+
+
+#[test]
+fn io_conversion_preserves_error_kind_and_typed_source() {
+    use std::error::Error as _;
+    let error = Error::from(std::io::Error::new(std::io::ErrorKind::PermissionDenied, "generated denial"));
+    assert_eq!(error.kind(), ErrorKind::Io);
+    assert_eq!(error.to_string(), "I/O error: generated denial");
+    assert_eq!(error.source().unwrap().downcast_ref::<std::io::Error>().unwrap().kind(), std::io::ErrorKind::PermissionDenied);
+}

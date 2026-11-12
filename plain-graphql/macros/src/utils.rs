@@ -7,11 +7,9 @@ use syn::{
     Type, TypeGroup, TypeParamBound, TypeReference, parse_quote,
     visit_mut::{self, VisitMut},
 };
-use thiserror::Error;
-#[derive(Error, Debug)]
+#[derive(Debug)]
 pub enum GeneratorError {
-    #[error("{0}")]
-    Syn(#[from] syn::Error),
+    Syn(syn::Error),
 }
 impl GeneratorError {
     pub fn write_errors(self) -> TokenStream {
@@ -214,3 +212,25 @@ impl VisitMut for RemoveLifetime {
 #[cfg(test)]
 #[path = "../../../tests/plain-graphql-macros/unit/utils.rs"]
 mod tests;
+
+impl std::fmt::Display for GeneratorError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Syn(inner) => write!(f, "{0}", inner),
+        }
+    }
+}
+
+impl std::error::Error for GeneratorError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Syn(inner) => Some(inner),
+        }
+    }
+}
+
+impl From<syn::Error> for GeneratorError {
+    fn from(inner: syn::Error) -> Self {
+        Self::Syn(inner)
+    }
+}

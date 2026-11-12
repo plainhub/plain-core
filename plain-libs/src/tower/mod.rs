@@ -3,12 +3,13 @@
 pub(crate) mod macros;
 
 pub mod layer;
+mod service;
 
 pub mod util;
 pub use self::util::{ServiceExt, service_fn};
 
-pub use tower_layer::Layer;
-pub use tower_service::Service;
+pub use self::layer::Layer;
+pub use self::service::Service;
 mod sealed {
     pub trait Sealed<T> {}
 }

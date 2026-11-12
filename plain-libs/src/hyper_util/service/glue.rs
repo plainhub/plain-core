@@ -17,7 +17,7 @@ impl<S> TowerToHyperService<S> {
 }
 impl<S, R> crate::hyper::service::Service<R> for TowerToHyperService<S>
 where
-    S: tower_service::Service<R> + Clone,
+    S: crate::tower::Service<R> + Clone,
 {
     type Response = S::Response;
     type Error = S::Error;
@@ -28,10 +28,10 @@ where
         }
     }
 }
-pin_project! { pub struct TowerToHyperServiceFuture < S , R > where S : tower_service::Service < R >, { #[pin] future : Oneshot < S , R >, } }
+pin_project! { pub struct TowerToHyperServiceFuture < S , R > where S : crate::tower::Service < R >, { #[pin] future : Oneshot < S , R >, } }
 impl<S, R> Future for TowerToHyperServiceFuture<S, R>
 where
-    S: tower_service::Service<R>,
+    S: crate::tower::Service<R>,
 {
     type Output = Result<S::Response, S::Error>;
     #[inline]

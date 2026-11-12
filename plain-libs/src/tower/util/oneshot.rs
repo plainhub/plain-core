@@ -5,7 +5,7 @@ use std::{
     pin::Pin,
     task::{Context, Poll, ready},
 };
-use tower_service::Service;
+use crate::tower::Service;
 pin_project! { #[derive (Debug)] pub struct Oneshot < S : Service < Req >, Req > { #[pin] state : State < S , Req >, } }
 pin_project! { #[project = StateProj] enum State < S : Service < Req >, Req > { NotReady { svc : S , req : Option < Req >, } , Called { #[pin] fut : S::Future , } , Done , } }
 impl<S: Service<Req>, Req> State<S, Req> {

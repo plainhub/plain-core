@@ -2,7 +2,7 @@ pub mod error;
 pub mod future;
 use self::future::ResponseFuture;
 use std::task::{Context, Poll};
-use tower_service::Service;
+use crate::tower::Service;
 #[derive(Debug)]
 pub struct Optional<T> {
     inner: Option<T>,

@@ -1,17 +1,16 @@
 use super::{FromRequestParts, rejection::*};
 use crate::http::{Uri, request::Parts};
-use async_trait::async_trait;
 use serde::de::DeserializeOwned;
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Query<T>(pub T);
-#[async_trait]
+
 impl<T, S> FromRequestParts<S> for Query<T>
 where
     T: DeserializeOwned,
     S: Send + Sync,
 {
     type Rejection = QueryRejection;
-    async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
+    async fn from_request_parts<'extract>(parts: &'extract mut Parts, _state: &'extract S) -> Result<Self, Self::Rejection>  where Self: 'extract {
         Self::try_from_uri(&parts.uri)
     }
 }

@@ -18,3 +18,7 @@ pub use tokenizer::*;
 #[cfg(test)]
 #[path = "../../../tests/plain-libs/unit/tokenizer/inference.rs"]
 mod inference_tests;
+
+#[cfg(test)]
+#[path = "../../../tests/plain-libs/unit/tokenizer/errors.rs"]
+mod error_tests;

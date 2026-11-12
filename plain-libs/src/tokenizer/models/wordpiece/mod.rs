@@ -4,9 +4,8 @@ use std::collections::HashMap;
 
 mod serialization;
 
-#[derive(thiserror::Error, Debug)]
+#[derive(Debug)]
 pub enum Error {
-    #[error("WordPiece error: Missing [UNK] token from the vocabulary")]
     MissingUnkToken,
 }
 
@@ -209,3 +208,15 @@ impl Model for WordPiece {
 #[cfg(test)]
 #[path = "../../../../../tests/plain-libs/unit/tokenizer/models/wordpiece/mod/tests.rs"]
 mod tests;
+
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::MissingUnkToken => {
+                f.write_str("WordPiece error: Missing [UNK] token from the vocabulary")
+            }
+        }
+    }
+}
+
+impl std::error::Error for Error {}

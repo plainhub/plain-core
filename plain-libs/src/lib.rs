@@ -86,6 +86,7 @@ pub mod xml;
 mod h264;
 
 pub mod anyhow;
+pub mod fnv;
 #[cfg(feature = "image")]
 mod byte_order;
 #[cfg(feature = "time")]

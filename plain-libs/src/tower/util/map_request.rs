@@ -1,7 +1,7 @@
 use std::fmt;
 use std::task::{Context, Poll};
-use tower_layer::Layer;
-use tower_service::Service;
+use crate::tower::layer::Layer;
+use crate::tower::Service;
 #[derive(Clone)]
 pub struct MapRequest<S, F> {
     inner: S,

@@ -1,23 +1,22 @@
 use crate::axum_core::extract::{FromRef, FromRequestParts};
 use crate::http::request::Parts;
-use async_trait::async_trait;
 use std::{
     convert::Infallible,
     ops::{Deref, DerefMut},
 };
 #[derive(Debug, Default, Clone, Copy)]
 pub struct State<S>(pub S);
-#[async_trait]
+
 impl<OuterState, InnerState> FromRequestParts<OuterState> for State<InnerState>
 where
     InnerState: FromRef<OuterState>,
     OuterState: Send + Sync,
 {
     type Rejection = Infallible;
-    async fn from_request_parts(
-        _parts: &mut Parts,
-        state: &OuterState,
-    ) -> Result<Self, Self::Rejection> {
+    async fn from_request_parts<'extract>(
+        _parts: &'extract mut Parts,
+        state: &'extract OuterState,
+    ) -> Result<Self, Self::Rejection>  where Self: 'extract {
         let inner_state = InnerState::from_ref(state);
         Ok(Self(inner_state))
     }

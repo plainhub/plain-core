@@ -42,3 +42,16 @@ fn crate_paths_preserve_internal_and_explicit_consumer_paths() {
     let explicit = get_crate_path(&Some(syn::parse_quote!(::renamed_graphql)), false);
     assert_eq!(quote!(#explicit).to_string(), ":: renamed_graphql");
 }
+
+
+#[test]
+fn generator_error_preserves_syn_source_and_compile_error_tokens() {
+    use std::error::Error as _;
+    let original = syn::parse_str::<syn::Type>("fn(").unwrap_err();
+    let expected = original.to_compile_error().to_string();
+    let message = original.to_string();
+    let error = GeneratorError::from(original);
+    assert_eq!(error.to_string(), message);
+    assert!(error.source().unwrap().downcast_ref::<syn::Error>().is_some());
+    assert_eq!(error.write_errors().to_string(), expected);
+}

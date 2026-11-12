@@ -112,11 +112,11 @@ impl WebSocketUpgrade {
     }
 }
 
-#[crate::axum::async_trait]
+
 impl<S: Send + Sync> FromRequestParts<S> for WebSocketUpgrade {
     type Rejection = (StatusCode, &'static str);
 
-    async fn from_request_parts(parts: &mut Parts, _: &S) -> Result<Self, Self::Rejection> {
+    async fn from_request_parts<'extract>(parts: &'extract mut Parts, _: &'extract S) -> Result<Self, Self::Rejection>  where Self: 'extract {
         let bad_request = |message| (StatusCode::BAD_REQUEST, message);
         if parts.method != Method::GET {
             return Err((
