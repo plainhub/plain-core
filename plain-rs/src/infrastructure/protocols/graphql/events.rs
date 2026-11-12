@@ -19,7 +19,7 @@ pub const EVENTS: &[EventSpec] = &[
         capability: None,
     },
     EventSpec {
-        field: "preferencesChanged",
+        field: "prefsChanged",
         event: "PREFS_UPDATED",
         aliases: &[],
         invalidation: true,

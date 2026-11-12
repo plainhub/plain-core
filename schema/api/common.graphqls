@@ -233,7 +233,7 @@ type SmsSendResult {
 }
 
 type Subscription {
-	preferencesChanged: Boolean!
+	prefsChanged: Boolean!
 	peersChanged: Boolean!
 	channelsChanged: ChannelChange!
 	mdnsChanged: Boolean!

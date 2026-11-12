@@ -5,7 +5,7 @@ use plain_graphql::{Context, Result, Subscription};
 pub struct AppStateSubscriptions;
 #[Subscription]
 impl AppStateSubscriptions {
-    async fn preferences_changed(
+    async fn prefs_changed(
         &self,
         ctx: &Context<'_>,
     ) -> Result<BoxStream<'static, Result<bool>>> {
