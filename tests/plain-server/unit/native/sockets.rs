@@ -1,4 +1,5 @@
 use super::*;
+use plain_rs::infrastructure::protocols::websocket::Role;
 use crate::{server::ContentServer, test_support::HostRequests};
 use plain_libs::serde_json::json;
 use plain_rs::infrastructure::events::WsEvent;

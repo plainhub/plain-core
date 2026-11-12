@@ -123,6 +123,58 @@ pub struct Ack {
     pub server_nonce: String,
 }
 
+fn valid_nonce(nonce: &str) -> bool {
+    nonce.len() == 64
+        && nonce
+            .bytes()
+            .all(|byte| matches!(byte, b'0'..=b'9' | b'a'..=b'f'))
+}
+
+pub fn registration(key: &[u8], client: &str, path: &str) -> Option<Vec<u8>> {
+    let init = Init {
+        client_nonce: plain_libs::utils::hex::bytes_to_hex(&plain_libs::crypto::random_bytes(32)),
+    };
+    seal_init(
+        key,
+        client,
+        path,
+        &plain_libs::serde_json::to_vec(&init).ok()?,
+    )
+}
+
+pub fn accept_registration(key: &[u8], client: &str, path: &str, frame: &[u8]) -> Option<Vec<u8>> {
+    let init: Init =
+        plain_libs::serde_json::from_slice(&open_init(key, client, path, frame)?).ok()?;
+    if !valid_nonce(&init.client_nonce) {
+        return None;
+    }
+    let ack = Ack {
+        server_nonce: plain_libs::utils::hex::bytes_to_hex(&plain_libs::crypto::random_bytes(32)),
+    };
+    seal_ack(
+        key,
+        client,
+        path,
+        frame,
+        &plain_libs::serde_json::to_vec(&ack).ok()?,
+    )
+}
+
+pub fn acknowledge(
+    key: &[u8],
+    client: &str,
+    path: &str,
+    init: &[u8],
+    frame: &[u8],
+) -> Option<Stream> {
+    let ack: Ack =
+        plain_libs::serde_json::from_slice(&open_ack(key, client, path, init, frame)?).ok()?;
+    if !valid_nonce(&ack.server_nonce) {
+        return None;
+    }
+    Stream::new(path, client, init, frame, Role::Client)
+}
+
 pub fn encode_raw(event_name: &str, payload: &[u8]) -> Option<Vec<u8>> {
     if !valid_name(event_name) {
         return None;

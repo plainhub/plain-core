@@ -426,9 +426,9 @@ async fn run(
                     else { let _ = socket.send(close(1013,"invalid_request")).await; break; };
                 let path = match channel { Channel::Screen => "/screen", Channel::ImageEditor => "/image_editor", Channel::Auth => unreachable!() };
                 if stream.is_none() {
-                    let ack = match super::graphql::acknowledge_frame(&params.cid, &key, path, &frame) {
-                        Ok(ack) => ack,
-                        Err(_) => { let _ = socket.send(close(1008, "invalid_request")).await; break; }
+                    let ack = match plain_rs::infrastructure::protocols::websocket::accept_registration(&key, &params.cid, path, &frame) {
+                        Some(ack) => ack,
+                        None => { let _ = socket.send(close(1008, "invalid_request")).await; break; }
                     };
                     stream = plain_rs::infrastructure::protocols::websocket::Stream::new(path, &params.cid, &frame, &ack, plain_rs::infrastructure::protocols::websocket::Role::Server);
                     if socket.send(Message::Binary(ack.into())).await.is_err() { break; }

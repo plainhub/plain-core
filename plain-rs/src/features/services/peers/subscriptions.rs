@@ -4,6 +4,7 @@ use crate::infrastructure::host::request_scope::NativeRequestScope;
 use crate::infrastructure::protocols::graphql::PeerSubscriptionTarget;
 use crate::infrastructure::protocols::graphql::messages::ClientMessage;
 use crate::infrastructure::protocols::graphql::messages::ServerMessage;
+use crate::infrastructure::protocols::websocket;
 use crate::runtime::Runtime as CoreRuntime;
 use futures_util::{SinkExt, StreamExt};
 use plain_libs::anyhow::{Result, anyhow, ensure};
@@ -164,8 +165,8 @@ impl PeerSubscription {
             ),
         )
         .await??;
-        let init =
-            crate::features::services::peers::management_wire::registration(&key, &self.client)?;
+        let init = websocket::registration(&key, &self.client, "/graphql")
+            .ok_or_else(|| anyhow!("Invalid management session key"))?;
         socket.send(Message::Binary(init.clone().into())).await?;
         let ack = tokio::time::timeout(Duration::from_secs(10), socket.next())
             .await?
@@ -173,18 +174,12 @@ impl PeerSubscription {
         let Message::Binary(ack) = ack else {
             return Err(anyhow!("Encrypted management acknowledgement required"));
         };
-        let mut stream = crate::features::services::peers::management_wire::acknowledge(
-            &key,
-            &self.client,
-            &init,
-            &ack,
-        )?;
+        let mut stream = websocket::acknowledge(&key, &self.client, "/graphql", &init, &ack)
+            .ok_or_else(|| anyhow!("Invalid management acknowledgement"))?;
         self.current()?;
-        let confirmation = crate::features::services::peers::management_wire::encode(
-            &ClientMessage::Ping { payload: None },
-            &key,
-            &mut stream,
-        )?;
+        let confirmation = stream
+            .encode(&[], &key)
+            .ok_or_else(|| anyhow!("Invalid management confirmation"))?;
         socket.send(Message::Binary(confirmation.into())).await?;
         let mut heartbeat = tokio::time::interval_at(
             tokio::time::Instant::now() + Duration::from_secs(20),

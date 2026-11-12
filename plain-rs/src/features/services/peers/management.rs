@@ -437,13 +437,15 @@ async fn connection_loop(
                 use crate::features::services::peers::management_wire;
                 use crate::features::services::peers::management_wire::Incoming;
                 use crate::infrastructure::protocols::graphql::messages::ClientMessage;
+                use crate::infrastructure::protocols::websocket;
                 let url = http_client::Url::parse(&identity.url)?;
                 let client = url
                     .query_pairs()
                     .find(|(name, _)| name == "cid")
                     .map(|(_, value)| value.into_owned())
                     .ok_or_else(|| anyhow!("Management client missing"))?;
-                let registration = management_wire::registration(&key, &client)?;
+                let registration = websocket::registration(&key, &client, "/graphql")
+                    .ok_or_else(|| anyhow!("Invalid management session key"))?;
                 socket
                     .send(Message::Binary(registration.clone().into()))
                     .await?;
@@ -453,7 +455,13 @@ async fn connection_loop(
                 let Message::Binary(ack) = ack else {
                     return Err(anyhow!("Encrypted management acknowledgement required"));
                 };
-                let mut stream = management_wire::acknowledge(&key, &client, &registration, &ack)?;
+                let mut stream =
+                    websocket::acknowledge(&key, &client, "/graphql", &registration, &ack)
+                        .ok_or_else(|| anyhow!("Invalid management acknowledgement"))?;
+                let confirmation = stream
+                    .encode(&[], &key)
+                    .ok_or_else(|| anyhow!("Invalid management confirmation"))?;
+                socket.send(Message::Binary(confirmation.into())).await?;
                 for spec in management_wire::operations() {
                     let message = ClientMessage::Subscribe {
                         id: spec.field.into(),

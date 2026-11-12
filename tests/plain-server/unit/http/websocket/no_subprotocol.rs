@@ -10,6 +10,8 @@ enum InvalidFrame {
     PlainMessage,
     CorruptTag,
     Replay,
+    InitialPing,
+    InitialSubscribe,
 }
 
 #[tokio::test]
@@ -33,6 +35,8 @@ async fn no_subprotocol_keeps_encrypted_handshake_and_frame_validation() {
             InvalidFrame::PlainMessage,
             InvalidFrame::CorruptTag,
             InvalidFrame::Replay,
+            InvalidFrame::InitialPing,
+            InvalidFrame::InitialSubscribe,
         ] {
             let (mut socket, response) = plain_libs::tokio_tungstenite::connect_async(
                 format!("ws://{address}/graphql?cid={client}"),
@@ -62,26 +66,40 @@ async fn no_subprotocol_keeps_encrypted_handshake_and_frame_validation() {
                 let ack_json: graphql::Ack = plain_libs::serde_json::from_slice(&plain).unwrap();
                 assert_eq!(ack_json.server_nonce.len(), 64);
                 let mut stream = graphql::Stream::new("/graphql", &client, &init, &ack, Role::Client).unwrap();
-                let ping = br#"{"type":"ping","payload":{"encrypted":true}}"#;
-                let original = stream.encode(ping, &key).unwrap();
-                socket.send(ClientMessage::Binary(original.clone().into())).await.unwrap();
-                let ClientMessage::Binary(pong) = socket.next().await.unwrap().unwrap() else {
-                    panic!("encrypted pong required")
-                };
-                let decoded = stream.decode(&pong, &key).unwrap();
-                let message: plain_libs::serde_json::Value = plain_libs::serde_json::from_slice(&decoded).unwrap();
-                assert_eq!(message, json!({"type":"pong","payload":{"encrypted":true}}));
-                let frame = match invalid {
-                    InvalidFrame::PlainMessage => ClientMessage::Text(String::from_utf8(ping.to_vec()).unwrap().into()),
-                    InvalidFrame::CorruptTag => {
-                        let mut encrypted = stream.encode(ping, &key).unwrap();
-                        *encrypted.last_mut().unwrap() ^= 1;
-                        ClientMessage::Binary(encrypted.into())
-                    }
-                    InvalidFrame::Replay => ClientMessage::Binary(original.into()),
-                    _ => unreachable!(),
-                };
-                socket.send(frame).await.unwrap();
+                if matches!(invalid, InvalidFrame::InitialPing | InvalidFrame::InitialSubscribe) {
+                    let command = match invalid {
+                        InvalidFrame::InitialPing => br#"{"type":"ping"}"#.as_slice(),
+                        InvalidFrame::InitialSubscribe => br#"{"type":"subscribe","id":"early","payload":{"query":"subscription { accessUpdated }"}}"#.as_slice(),
+                        _ => unreachable!(),
+                    };
+                    socket.send(ClientMessage::Binary(stream.encode(command, &key).unwrap().into())).await.unwrap();
+                } else {
+                    let confirmation = stream.encode(&[], &key).unwrap();
+                    assert_eq!(u64::from_be_bytes(confirmation[..8].try_into().unwrap()), 1);
+                    socket.send(ClientMessage::Binary(confirmation.into())).await.unwrap();
+                    let ping = br#"{"type":"ping","payload":{"encrypted":true}}"#;
+                    let original = stream.encode(ping, &key).unwrap();
+                    assert_eq!(u64::from_be_bytes(original[..8].try_into().unwrap()), 2);
+                    socket.send(ClientMessage::Binary(original.clone().into())).await.unwrap();
+                    let ClientMessage::Binary(pong) = socket.next().await.unwrap().unwrap() else {
+                        panic!("encrypted pong required")
+                    };
+                    assert_eq!(u64::from_be_bytes(pong[..8].try_into().unwrap()), 1);
+                    let decoded = stream.decode(&pong, &key).unwrap();
+                    let message: plain_libs::serde_json::Value = plain_libs::serde_json::from_slice(&decoded).unwrap();
+                    assert_eq!(message, json!({"type":"pong","payload":{"encrypted":true}}), "empty confirmation must not produce a pong");
+                    let frame = match invalid {
+                        InvalidFrame::PlainMessage => ClientMessage::Text(String::from_utf8(ping.to_vec()).unwrap().into()),
+                        InvalidFrame::CorruptTag => {
+                            let mut encrypted = stream.encode(ping, &key).unwrap();
+                            *encrypted.last_mut().unwrap() ^= 1;
+                            ClientMessage::Binary(encrypted.into())
+                        }
+                        InvalidFrame::Replay => ClientMessage::Binary(original.into()),
+                        _ => unreachable!(),
+                    };
+                    socket.send(frame).await.unwrap();
+                }
             }
             let ClientMessage::Close(Some(close)) = socket.next().await.unwrap().unwrap() else {
                 panic!("invalid encrypted frame must close the connection")
@@ -143,6 +161,7 @@ async fn reconnect_reuses_no_replay_cache_and_requires_proof_of_the_new_ack() {
             );
             let mut stream =
                 graphql::Stream::new("/graphql", &client, &init, &ack, Role::Client).unwrap();
+            let confirmation = stream.encode(&[], &key).unwrap();
             let ping = stream.encode(br#"{"type":"ping"}"#, &key).unwrap();
             if attempt == 1 {
                 socket
@@ -150,6 +169,10 @@ async fn reconnect_reuses_no_replay_cache_and_requires_proof_of_the_new_ack() {
                     .await
                     .unwrap();
             } else {
+                socket
+                    .send(ClientMessage::Binary(confirmation.clone().into()))
+                    .await
+                    .unwrap();
                 socket
                     .send(ClientMessage::Binary(ping.clone().into()))
                     .await
@@ -169,7 +192,7 @@ async fn reconnect_reuses_no_replay_cache_and_requires_proof_of_the_new_ack() {
                     .send(ClientMessage::Binary(ping.clone().into()))
                     .await
                     .unwrap();
-                old_frame = ping;
+                old_frame = confirmation;
             }
             let ClientMessage::Close(Some(frame)) = socket.next().await.unwrap().unwrap() else {
                 panic!("replay must close the connection")

@@ -9,8 +9,6 @@ use plain_libs::axum::{
 use plain_libs::protocols::websocket::{CloseFrame, Message, WebSocket, WebSocketUpgrade};
 use plain_rs::infrastructure::host::request_scope::NativeRequestScope;
 use plain_rs::infrastructure::protocols::websocket as graphql;
-use plain_rs::infrastructure::protocols::websocket::Ack;
-use plain_rs::infrastructure::protocols::websocket::Init;
 use plain_rs::infrastructure::protocols::websocket::Role;
 use serde::Deserialize;
 use std::time::Duration;
@@ -36,7 +34,6 @@ struct Connection {
     session: std::sync::Arc<crate::graphql::subscriptions::session::Session>,
     stream: graphql::Stream,
     key: Vec<u8>,
-    first: Vec<u8>,
 }
 
 pub(crate) async fn handshake(
@@ -64,40 +61,11 @@ pub(crate) async fn acknowledge(
     let Message::Binary(init_frame) = first else {
         return Err("Encrypted handshake required".into());
     };
-    let ack = acknowledge_frame(client, key, path, &init_frame)?;
+    let ack =
+        graphql::accept_registration(key, client, path, &init_frame).ok_or("Invalid handshake")?;
     Ok((init_frame.to_vec(), ack))
 }
 
-pub(super) fn acknowledge_frame(
-    client: &str,
-    key: &[u8],
-    path: &str,
-    init_frame: &[u8],
-) -> Result<Vec<u8>, String> {
-    let plain = graphql::open_init(key, client, path, &init_frame).ok_or("Invalid handshake")?;
-    let init: Init =
-        plain_libs::serde_json::from_slice(&plain).map_err(|error| error.to_string())?;
-    if init.client_nonce.len() != 64
-        || !init
-            .client_nonce
-            .bytes()
-            .all(|byte| matches!(byte, b'0'..=b'9' | b'a'..=b'f'))
-    {
-        return Err("Invalid nonce".into());
-    }
-    let ack = Ack {
-        server_nonce: plain_libs::utils::hex::bytes_to_hex(&plain_libs::crypto::random_bytes(32)),
-    };
-    let ack_frame = graphql::seal_ack(
-        key,
-        client,
-        path,
-        &init_frame,
-        &plain_libs::serde_json::to_vec(&ack).map_err(|error| error.to_string())?,
-    )
-    .ok_or("Invalid acknowledgement")?;
-    Ok(ack_frame)
-}
 async fn establish(
     socket: &mut WebSocket,
     state: &ServerState,
@@ -134,6 +102,9 @@ async fn establish(
     let first = stream
         .decode(&first, &key)
         .ok_or("Invalid encrypted confirmation")?;
+    if !first.is_empty() {
+        return Err("Empty encrypted confirmation required".into());
+    }
     let context = if local.is_some() {
         RequestContext::authenticated_local(state.clone(), client.clone())
     } else {
@@ -150,7 +121,6 @@ async fn establish(
         session,
         stream,
         key,
-        first,
     })
 }
 async fn run(mut socket: WebSocket, state: ServerState, client: String) {
@@ -164,10 +134,8 @@ async fn run(mut socket: WebSocket, state: ServerState, client: String) {
             session,
             mut stream,
             key,
-            first,
         }) => {
             let result = async {
-                session.send(std::str::from_utf8(&first).map_err(|error| error.to_string())?)?;
                 session.mark_online()?;
                 let mut read = Box::pin(session.read());
                 loop {

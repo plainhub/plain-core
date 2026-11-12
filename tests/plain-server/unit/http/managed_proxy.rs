@@ -49,6 +49,8 @@ async fn managed_proxy_keeps_the_browser_session_and_streams_a_peer_range() {
     let (_, b_port) = b.start_public(0, 0, b_cert, b_key).await.unwrap();
     let a_state = a.runtime_state();
     let b_state = b.runtime_state();
+    a_state.management.shutdown().await;
+    b_state.management.shutdown().await;
     let a_id = a_state.native_client_id().unwrap();
     let b_id = b_state.native_client_id().unwrap();
     let browser = login(&a_state, "browser");
@@ -343,6 +345,19 @@ async fn managed_proxy_keeps_the_browser_session_and_streams_a_peer_range() {
         "wss://localhost:{a_port}/proxy/{b_id}/graphql?cid={}",
         browser.client_id
     );
+    assert!(b_state.subscription_sessions.snapshot().is_empty());
+    for command in [
+        json!({"type":"ping"}),
+        json!({"type":"subscribe","id":"early","payload":{"query":"subscription { accessUpdated }"}}),
+    ] {
+        tokio::time::timeout(
+            Duration::from_secs(12),
+            rejected_subscription_confirmation(&socket, &browser.client_id, &key, pin, command),
+        )
+        .await
+        .unwrap();
+        assert!(b_state.subscription_sessions.snapshot().is_empty(), "invalid confirmation must not open an upstream subscription");
+    }
     tokio::time::timeout(
         Duration::from_secs(12),
         subscription(&socket, &browser.client_id, &key, pin),
@@ -918,6 +933,44 @@ fn upload_body(metadata: &[u8], data: &[u8]) -> http_client::Body {
     ))
 }
 
+async fn rejected_subscription_confirmation(
+    url: &str,
+    client: &str,
+    key: &[u8],
+    pin: [u8; 32],
+    command: plain_libs::serde_json::Value,
+) {
+    let tls = http_client::pinned_tls_config(pin).unwrap();
+    let (mut socket, _) = plain_libs::tokio_tungstenite::connect_async_tls_with_config(
+        url,
+        None,
+        false,
+        Some(plain_libs::tokio_tungstenite::Connector::Rustls(Arc::new(tls))),
+    )
+    .await
+    .unwrap();
+    let init = graphql::seal_init(
+        key,
+        client,
+        "/graphql",
+        json!({"clientNonce":"ab".repeat(32)}).to_string().as_bytes(),
+    )
+    .unwrap();
+    socket.send(Message::Binary(init.clone().into())).await.unwrap();
+    let Message::Binary(ack) = socket.next().await.unwrap().unwrap() else {
+        panic!("Missing challenge")
+    };
+    assert!(graphql::open_ack(key, client, "/graphql", &init, &ack).is_some());
+    let mut cipher = graphql::Stream::new("/graphql", client, &init, &ack, graphql::Role::Client).unwrap();
+    let frame = cipher.encode(command.to_string().as_bytes(), key).unwrap();
+    assert_eq!(u64::from_be_bytes(frame[..8].try_into().unwrap()), 1);
+    socket.send(Message::Binary(frame.into())).await.unwrap();
+    let Message::Close(Some(close)) = socket.next().await.unwrap().unwrap() else {
+        panic!("Nonempty confirmation must close the proxy connection")
+    };
+    assert_eq!(u16::from(close.code), 1008);
+}
+
 async fn subscription(url: &str, client: &str, key: &[u8], pin: [u8; 32]) {
     let request = url.into_client_request().unwrap();
     let tls = http_client::pinned_tls_config(pin).unwrap();
@@ -951,6 +1004,10 @@ async fn subscription(url: &str, client: &str, key: &[u8], pin: [u8; 32]) {
     assert!(graphql::open_ack(key, client, "/graphql", &init, &ack).is_some());
     let mut cipher =
         graphql::Stream::new("/graphql", client, &init, &ack, graphql::Role::Client).unwrap();
+    socket
+        .send(Message::Binary(cipher.encode(&[], key).unwrap().into()))
+        .await
+        .unwrap();
     for (message, expected) in [
         (json!({"type":"ping"}), "pong"),
         (

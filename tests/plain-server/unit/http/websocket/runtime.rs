@@ -764,6 +764,7 @@ async fn online_clients_follow_authenticated_graphql_connections() {
             );
             let mut stream =
                 wire::Stream::new("/graphql", &client, &init, &ack, wire::Role::Client).unwrap();
+            socket.send(Frame::Binary(stream.encode(&[], &key).unwrap().into())).await.unwrap();
             socket
                 .send(Frame::Binary(
                     stream.encode(br#"{"type":"ping"}"#, &key).unwrap().into(),

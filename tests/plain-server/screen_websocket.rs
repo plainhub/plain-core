@@ -282,6 +282,10 @@ async fn screen_transports_authenticated_media_and_controls_separately_from_subs
         plain_rs::infrastructure::protocols::websocket::Role::Client,
     )
     .unwrap();
+    subscriptions
+        .send(ClientMessage::Binary(subscription_stream.encode(&[], &key).unwrap().into()))
+        .await
+        .unwrap();
     for (id, query) in [
         (
             "codec",
@@ -586,6 +590,10 @@ async fn remote_subscriptions_enforce_access_and_deliver_pomodoro_updates() {
         plain_rs::infrastructure::protocols::websocket::Role::Client,
     )
     .unwrap();
+    socket
+        .send(ClientMessage::Binary(stream.encode(&[], &key).unwrap().into()))
+        .await
+        .unwrap();
     let query = json!({"type":"subscribe","id":"private","payload":{"query":"subscription { pairingSucceeded { deviceId key } }"}}).to_string();
     socket
         .send(ClientMessage::Binary(

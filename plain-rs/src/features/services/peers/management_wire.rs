@@ -3,7 +3,6 @@ use crate::infrastructure::protocols::graphql::events::EventSpec;
 use crate::infrastructure::protocols::graphql::messages::ClientMessage;
 use crate::infrastructure::protocols::graphql::messages::ServerMessage;
 use crate::infrastructure::protocols::websocket;
-use crate::infrastructure::protocols::websocket::Role;
 use plain_libs::anyhow::{Result, anyhow, ensure};
 
 pub(super) fn operations() -> impl Iterator<Item = &'static EventSpec> {
@@ -19,39 +18,6 @@ pub(super) fn operations() -> impl Iterator<Item = &'static EventSpec> {
                 | "CLIPBOARD_CHANGED"
         )
     })
-}
-pub(super) fn registration(key: &[u8], client: &str) -> Result<Vec<u8>> {
-    let init = crate::infrastructure::protocols::websocket::Init {
-        client_nonce: plain_libs::utils::hex::bytes_to_hex(&plain_libs::crypto::random_bytes(32)),
-    };
-    websocket::seal_init(
-        key,
-        client,
-        "/graphql",
-        &plain_libs::serde_json::to_vec(&init)?,
-    )
-    .ok_or_else(|| anyhow!("Invalid management session key"))
-}
-pub(super) fn acknowledge(
-    key: &[u8],
-    client: &str,
-    init: &[u8],
-    ack: &[u8],
-) -> Result<websocket::Stream> {
-    let plain = websocket::open_ack(key, client, "/graphql", init, ack)
-        .ok_or_else(|| anyhow!("Invalid management acknowledgement"))?;
-    let ack_body: crate::infrastructure::protocols::websocket::Ack =
-        plain_libs::serde_json::from_slice(&plain)?;
-    ensure!(
-        ack_body.server_nonce.len() == 64
-            && ack_body
-                .server_nonce
-                .bytes()
-                .all(|byte| byte.is_ascii_hexdigit()),
-        "Invalid management nonce"
-    );
-    websocket::Stream::new("/graphql", client, init, ack, Role::Client)
-        .ok_or_else(|| anyhow!("Invalid management binding"))
 }
 pub(super) fn encode(
     message: &ClientMessage,

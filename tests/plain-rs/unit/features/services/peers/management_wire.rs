@@ -1,7 +1,8 @@
 use super::*;
+use websocket::Role;
 
 fn streams(key: &[u8], client: &str) -> (websocket::Stream, websocket::Stream) {
-    let init = registration(key, client).unwrap();
+    let init = websocket::registration(key, client, "/graphql").unwrap();
     let ack = websocket::seal_ack(
         key,
         client,
@@ -12,22 +13,8 @@ fn streams(key: &[u8], client: &str) -> (websocket::Stream, websocket::Stream) {
     .unwrap();
     (
         websocket::Stream::new("/graphql", client, &init, &ack, Role::Server).unwrap(),
-        acknowledge(key, client, &init, &ack).unwrap(),
+        websocket::acknowledge(key, client, "/graphql", &init, &ack).unwrap(),
     )
-}
-
-#[test]
-fn registration_binds_identity_and_path_without_timestamp() {
-    let key = [7; 32];
-    let init = registration(&key, "client").unwrap();
-    let plain = websocket::open_init(&key, "client", "/graphql", &init).unwrap();
-    let value: plain_libs::serde_json::Value = plain_libs::serde_json::from_slice(&plain).unwrap();
-    assert!(value.get("timestampMillis").is_none());
-    assert_eq!(value["clientNonce"].as_str().unwrap().len(), 64);
-    assert!(websocket::open_init(&key, "client", "/screen", &init).is_none());
-    assert!(websocket::open_init(&key, "other", "/graphql", &init).is_none());
-    assert!(websocket::open_init(&[8; 32], "client", "/graphql", &init).is_none());
-    assert!(registration(&[7; 31], "client").is_err());
 }
 
 #[test]

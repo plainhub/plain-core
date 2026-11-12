@@ -117,10 +117,10 @@ fn handshake_binds_both_authenticated_fresh_frames_without_time() {
     assert!(open_init(&key, "client", "/graphql", &changed_init).is_none());
     assert!(open_init(&key, "other", "/graphql", &init).is_none());
     assert!(open_init(&key, "client", "/screen", &init).is_none());
-    assert!(plain_libs::serde_json::from_str::<Init>(
-        r#"{"clientNonce":"ab","timestampMillis":0}"#
-    )
-    .is_err());
+    assert!(
+        plain_libs::serde_json::from_str::<Init>(r#"{"clientNonce":"ab","timestampMillis":0}"#)
+            .is_err()
+    );
     let response = plain_libs::serde_json::to_vec(&Ack {
         server_nonce: "cd".repeat(32),
     })
@@ -162,9 +162,8 @@ fn independent_cross_language_vectors_match_the_complete_wire_contract() {
         let _: Init =
             plain_libs::serde_json::from_slice(&open_init(&key, client, path, &init).unwrap())
                 .unwrap();
-        let _: Ack =
-            plain_libs::serde_json::from_slice(&open_ack(&key, client, path, &init, &ack).unwrap())
-                .unwrap();
+        assert!(acknowledge(&key, client, path, &init, &ack).is_some());
+        assert!(bytes(&vector["clientFrames"][0]["plain"]).is_empty());
         for (name, role) in [
             ("clientFrames", Role::Server),
             ("serverFrames", Role::Client),
@@ -175,6 +174,62 @@ fn independent_cross_language_vectors_match_the_complete_wire_contract() {
                 assert_eq!(stream.decode(&frame, &key).unwrap(), bytes(&entry["plain"]));
                 assert!(stream.decode(&frame, &key).is_none());
             }
+        }
+    }
+}
+
+#[test]
+fn handshake_nonce_vectors_are_identical_for_clients_and_servers() {
+    let vectors: plain_libs::serde_json::Value = plain_libs::serde_json::from_str(include_str!(
+        "../../../../../plain-rs/testdata/crypto/websocket-handshake-vectors.json"
+    ))
+    .unwrap();
+    let key = [7; 32];
+    for path in ["/graphql", "/screen", "/image_editor"] {
+        let init = registration(&key, "client", path).unwrap();
+        let other = registration(&key, "client", path).unwrap();
+        assert_ne!(init, other);
+        assert!(registration(&[7; 31], "client", path).is_none());
+        assert!(accept_registration(&[8; 32], "client", path, &init).is_none());
+        assert!(accept_registration(&key, "other", path, &init).is_none());
+        assert!(accept_registration(&key, "client", "/other", &init).is_none());
+        let ack = accept_registration(&key, "client", path, &init).unwrap();
+        assert!(acknowledge(&key, "other", path, &init, &ack).is_none());
+        assert!(acknowledge(&key, "client", path, &other, &ack).is_none());
+        let mut client = acknowledge(&key, "client", path, &init, &ack).unwrap();
+        let mut server = Stream::new(path, "client", &init, &ack, Role::Server).unwrap();
+        assert!(
+            server
+                .decode(&client.encode(&[], &key).unwrap(), &key)
+                .unwrap()
+                .is_empty()
+        );
+        let business = client.encode(b"business", &key).unwrap();
+        assert_eq!(&business[..8], &2u64.to_be_bytes());
+        assert_eq!(server.decode(&business, &key).unwrap(), b"business");
+        for vector in vectors.as_array().unwrap() {
+            let body = plain_libs::serde_json::to_vec(&vector["body"]).unwrap();
+            let ack = seal_ack(&key, "client", path, &init, &body).unwrap();
+            assert_eq!(
+                acknowledge(&key, "client", path, &init, &ack).is_some(),
+                vector["valid"].as_bool().unwrap(),
+                "{} {path} ack",
+                vector["name"]
+            );
+            let mut body = vector["body"].clone();
+            if let Some(fields) = body.as_object_mut() {
+                if let Some(nonce) = fields.remove("serverNonce") {
+                    fields.insert("clientNonce".into(), nonce);
+                }
+            }
+            let body = plain_libs::serde_json::to_vec(&body).unwrap();
+            let init = seal_init(&key, "client", path, &body).unwrap();
+            assert_eq!(
+                accept_registration(&key, "client", path, &init).is_some(),
+                vector["valid"].as_bool().unwrap(),
+                "{} {path} init",
+                vector["name"]
+            );
         }
     }
 }

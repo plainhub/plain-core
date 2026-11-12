@@ -1,4 +1,5 @@
 use super::*;
+use plain_rs::infrastructure::protocols::websocket::Init;
 use futures_util::SinkExt;
 use plain_libs::protocols::http_client;
 use plain_libs::serde_json::{Value, json};
@@ -46,6 +47,7 @@ async fn scanning_with_300_http_requests_and_page_changes_preserves_the_encrypte
         let ClientMessage::Binary(ack) = socket.next().await.unwrap().unwrap() else { panic!("encrypted acknowledgement required") };
         graphql::open_ack(&key, &client, "/graphql", &init, &ack).unwrap();
         let mut cipher = graphql::Stream::new("/graphql", &client, &init, &ack, Role::Client).unwrap();
+        socket.send(ClientMessage::Binary(cipher.encode(&[], &key).unwrap().into())).await.unwrap();
         for (id, query) in [("scan", "subscription { mediaScanProgress { indexed state } }"), ("media", "subscription { mediaLibraryUpdated { types } }")] {
             let frame = cipher.encode(json!({"type":"subscribe","id":id,"payload":{"query":query}}).to_string().as_bytes(), &key).unwrap();
             socket.send(ClientMessage::Binary(frame.into())).await.unwrap();

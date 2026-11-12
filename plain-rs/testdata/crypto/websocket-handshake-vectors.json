@@ -1,0 +1,90 @@
+[
+  {
+    "name": "lowercase",
+    "body": {
+      "serverNonce": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+    },
+    "valid": true
+  },
+  {
+    "name": "uppercase",
+    "body": {
+      "serverNonce": "ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789"
+    },
+    "valid": false
+  },
+  {
+    "name": "short",
+    "body": {
+      "serverNonce": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "valid": false
+  },
+  {
+    "name": "long",
+    "body": {
+      "serverNonce": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "valid": false
+  },
+  {
+    "name": "non_hex",
+    "body": {
+      "serverNonce": "gggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggg"
+    },
+    "valid": false
+  },
+  {
+    "name": "whitespace",
+    "body": {
+      "serverNonce": "                                                                "
+    },
+    "valid": false
+  },
+  {
+    "name": "number",
+    "body": {
+      "serverNonce": 123
+    },
+    "valid": false
+  },
+  {
+    "name": "null_nonce",
+    "body": {
+      "serverNonce": null
+    },
+    "valid": false
+  },
+  {
+    "name": "array_nonce",
+    "body": {
+      "serverNonce": [
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      ]
+    },
+    "valid": false
+  },
+  {
+    "name": "missing",
+    "body": {},
+    "valid": false
+  },
+  {
+    "name": "unknown_field",
+    "body": {
+      "serverNonce": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "timestampMillis": 0
+    },
+    "valid": false
+  },
+  {
+    "name": "null",
+    "body": null,
+    "valid": false
+  },
+  {
+    "name": "array",
+    "body": [],
+    "valid": false
+  }
+]

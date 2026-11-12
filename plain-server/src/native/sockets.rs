@@ -4,7 +4,7 @@ use plain_libs::anyhow::{Result, anyhow, ensure};
 use plain_libs::tokio_tungstenite::tungstenite::{Message, protocol::WebSocketConfig};
 use plain_rs::infrastructure::{
     host::request_scope::NativeRequestScope,
-    protocols::websocket::{self, Role, Stream},
+    protocols::websocket::{self, Stream},
 };
 use serde::Deserialize;
 use std::{
@@ -317,18 +317,8 @@ async fn peer(
         .await?;
         route.check_current(state)?;
         let path = session.kind.path();
-        let init = websocket::Init {
-            client_nonce: plain_libs::utils::hex::bytes_to_hex(&plain_libs::crypto::random_bytes(
-                32,
-            )),
-        };
-        let registration = websocket::seal_init(
-            &route.key,
-            &route.client_id,
-            path,
-            &plain_libs::serde_json::to_vec(&init)?,
-        )
-        .ok_or_else(|| anyhow!("Socket registration failed"))?;
+        let registration = websocket::registration(&route.key, &route.client_id, path)
+            .ok_or_else(|| anyhow!("Socket registration failed"))?;
         socket
             .send(Message::Binary(registration.clone().into()))
             .await?;
@@ -339,19 +329,9 @@ async fn peer(
         else {
             return Err(anyhow!("Encrypted socket acknowledgement required"));
         };
-        let plain = websocket::open_ack(&route.key, &route.client_id, path, &registration, &ack)
-            .ok_or_else(|| anyhow!("Invalid socket acknowledgement"))?;
-        let body: websocket::Ack = plain_libs::serde_json::from_slice(&plain)?;
-        ensure!(
-            body.server_nonce.len() == 64
-                && body
-                    .server_nonce
-                    .bytes()
-                    .all(|byte| byte.is_ascii_hexdigit()),
-            "Invalid socket nonce"
-        );
-        let mut stream = Stream::new(path, &route.client_id, &registration, &ack, Role::Client)
-            .ok_or_else(|| anyhow!("Invalid socket binding"))?;
+        let mut stream =
+            websocket::acknowledge(&route.key, &route.client_id, path, &registration, &ack)
+                .ok_or_else(|| anyhow!("Invalid socket acknowledgement"))?;
         let confirmation = stream
             .encode(&[], &route.key)
             .ok_or_else(|| anyhow!("Socket confirmation failed"))?;

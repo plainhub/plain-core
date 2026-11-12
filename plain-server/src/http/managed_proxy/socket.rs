@@ -70,6 +70,9 @@ async fn run(
         let first = stream
             .decode(&first, &key)
             .ok_or("Invalid encrypted frame")?;
+        if !first.is_empty() {
+            return Err("Empty encrypted confirmation required".into());
+        }
         let route = state
             .managed_proxy
             .route(&state, &target)
@@ -95,7 +98,6 @@ async fn run(
                 &upstream,
                 stream,
                 &key,
-                first,
             )
             .await
         }
@@ -133,9 +135,7 @@ async fn relay(
     upstream: &PeerSubscription,
     mut stream: Stream,
     key: &[u8],
-    first: Vec<u8>,
 ) -> Result<(), String> {
-    let mut first = Some(first);
     let mut active = HashSet::<String>::new();
     let mut recheck = tokio::time::interval(Duration::from_secs(1));
     recheck.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
@@ -146,19 +146,13 @@ async fn relay(
             .map_err(|_| "Management session revoked")?;
         tokio::select! {
             _ = recheck.tick() => {}
-            incoming = async {
-                if first.is_some() { None } else { socket.next().await }
-            } => {
-                let plain = if let Some(plain) = first.take() {
-                    plain
-                } else {
-                    match incoming {
-                        Some(Ok(Message::Binary(frame))) => stream.decode(&frame, key).ok_or("Invalid encrypted frame")?,
-                        Some(Ok(Message::Ping(bytes))) => { send(socket, Message::Pong(bytes)).await?; continue; },
-                        Some(Ok(Message::Pong(_))) => continue,
-                        Some(Ok(Message::Close(_))) | None => return Ok(()),
-                        _ => return Err("Invalid subscription frame".into()),
-                    }
+            incoming = socket.next() => {
+                let plain = match incoming {
+                    Some(Ok(Message::Binary(frame))) => stream.decode(&frame, key).ok_or("Invalid encrypted frame")?,
+                    Some(Ok(Message::Ping(bytes))) => { send(socket, Message::Pong(bytes)).await?; continue; },
+                    Some(Ok(Message::Pong(_))) => continue,
+                    Some(Ok(Message::Close(_))) | None => return Ok(()),
+                    _ => return Err("Invalid subscription frame".into()),
                 };
                 let message = plain_libs::serde_json::from_slice::<ClientMessage>(&plain).map_err(|_| "Invalid subscription request")?;
                 match &message {
