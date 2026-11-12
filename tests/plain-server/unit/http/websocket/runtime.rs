@@ -939,12 +939,12 @@ async fn password_keys(
     client_id: &str,
 ) -> PasswordKeys {
     use futures_util::{SinkExt, StreamExt};
-    use opaque_ke::{ClientLogin, ClientLoginFinishParameters, CredentialResponse, Identifiers};
+    use plain_libs::opaque::{ClientLogin, ClientLoginFinishParameters, CredentialResponse, Identifiers};
     use plain_libs::tokio_tungstenite::tungstenite::Message;
     let signing = plain_rs::features::prefs::security::signing_keypair(&state.prefs).unwrap();
     let context = plain_libs::auth::context(client_id, &signing[32..]);
     let client =
-        ClientLogin::<plain_libs::auth::Suite>::start(&mut rand_core::OsRng, b"secret").unwrap();
+        ClientLogin::start(&mut rand_core::OsRng, b"secret").unwrap();
     socket
         .send(Message::Binary(client.message.serialize().to_vec().into()))
         .await
@@ -970,7 +970,7 @@ async fn password_keys(
         )
         .unwrap();
     PasswordKeys {
-        key: plain_libs::auth::api_key(&finish.session_key, &context),
+        key: plain_libs::auth::api_key(&finish.session_key[..], &context),
         context,
         ke3: finish.message.serialize().to_vec(),
     }

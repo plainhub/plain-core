@@ -1,5 +1,5 @@
-use plain_libs::auth::{server, Suite, context, ksf, CLIENT_IDENTITY};
-use opaque_ke::{ClientLogin, ClientLoginFinishParameters, CredentialResponse, Identifiers};
+use plain_libs::auth::{server, context, ksf, CLIENT_IDENTITY};
+use plain_libs::opaque::{ClientLogin, ClientLoginFinishParameters, CredentialResponse, Identifiers};
 use rand_core::OsRng;
 
 #[test]
@@ -7,7 +7,7 @@ fn registration_and_login_bind_identity_context_and_key() {
     let identity = [7; 32];
     let registration = server::register(b"correct horse", &identity).unwrap();
     let context = context("client", &identity);
-    let client = ClientLogin::<Suite>::start(&mut OsRng, b"correct horse").unwrap();
+    let client = ClientLogin::start(&mut OsRng, b"correct horse").unwrap();
     let (server, ke2) = server::start(&registration.setup, &registration.record,
         &client.message.serialize(), &context, &identity).unwrap();
     let ksf = ksf();
@@ -28,7 +28,7 @@ fn rejects_wrong_password_context_identity_and_tampered_messages() {
     let context = context("client", &identity);
     for case in 0..5 {
         let password = if case == 0 { b"wrong password".as_slice() } else { b"correct horse".as_slice() };
-        let client = ClientLogin::<Suite>::start(&mut OsRng, password).unwrap();
+        let client = ClientLogin::start(&mut OsRng, password).unwrap();
         let (server, mut ke2) = server::start(&registration.setup, &registration.record,
             &client.message.serialize(), &context, &identity).unwrap();
         if case == 3 { let last = ke2.len()-1; ke2[last] ^= 1; }
@@ -56,7 +56,7 @@ fn independent_logins_have_different_keys() {
     let context = context("client", &identity);
     let mut keys = Vec::new();
     for _ in 0..2 {
-        let client = ClientLogin::<Suite>::start(&mut OsRng, b"correct horse").unwrap();
+        let client = ClientLogin::start(&mut OsRng, b"correct horse").unwrap();
         let (server, ke2) = server::start(&registration.setup,&registration.record,&client.message.serialize(),&context,&identity).unwrap();
         let ksf = ksf();
         let result = client.state.finish(&mut OsRng,b"correct horse",CredentialResponse::deserialize(&ke2).unwrap(),ClientLoginFinishParameters {

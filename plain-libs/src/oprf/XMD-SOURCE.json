@@ -1,0 +1,13 @@
+{
+  "package": "elliptic-curve",
+  "version": "0.13.8",
+  "repository": "https://github.com/RustCrypto/traits",
+  "archive_sha256": "b5e6043086bf7973472e0c7dff2142ea0b680d30e18d9cc40f267efbf222bd47",
+  "files": {
+    "hash2curve/hash2field/expand_msg/xmd.rs": "5a85d4084395e924bbb2e32640beaba8c8c8476695e70baf0b341155a6a5dd87"
+  },
+  "retained": "One-block SHA512 XMD message expansion only; no elliptic-curve or bigint arithmetic",
+  "pruned": [
+    "Uncalled suites/modes, generic compatibility/builders, remote keys, alternate curves, test utilities, serialization framework"
+  ]
+}

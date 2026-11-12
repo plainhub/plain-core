@@ -155,14 +155,14 @@ async fn browser_login(
             .await
             .unwrap();
     let (channel, prefix) = if let Some(password) = password {
-        use opaque_ke::{
+        use plain_libs::opaque::{
             ClientLogin, ClientLoginFinishParameters, CredentialResponse, Identifiers,
         };
         let signing = plain_rs::features::prefs::security::signing_keypair(&state.prefs).unwrap();
         let identity = &signing[32..];
         let context = plain_libs::auth::context(client_id, identity);
         let client =
-            ClientLogin::<plain_libs::auth::Suite>::start(&mut rand_core::OsRng, password.as_bytes())
+            ClientLogin::start(&mut rand_core::OsRng, password.as_bytes())
                 .unwrap();
         socket
             .send(Message::Binary(client.message.serialize().to_vec().into()))
@@ -188,7 +188,7 @@ async fn browser_login(
                 },
             )
             .unwrap();
-        let key = plain_libs::auth::api_key(&finish.session_key, &context);
+        let key = plain_libs::auth::api_key(&finish.session_key[..], &context);
         let channel = LoginChannel::Opaque(OpaqueChannel {
             key,
             context,
@@ -797,7 +797,7 @@ async fn server_configuration_selects_the_handshake_mode_without_client_input() 
                 .await
                 .unwrap();
         } else {
-            let client = opaque_ke::ClientLogin::<plain_libs::auth::Suite>::start(
+            let client = plain_libs::opaque::ClientLogin::start(
                 &mut rand_core::OsRng,
                 b"password",
             )

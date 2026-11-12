@@ -224,3 +224,8 @@ mod dependency_benchmark;
 #[cfg(test)]
 #[path = "../../tests/plain-libs/support/codegen.rs"]
 mod codegen_test;
+
+#[cfg(feature = "auth")]
+pub mod opaque;
+#[cfg(feature = "auth")]
+mod oprf;

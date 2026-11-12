@@ -1,0 +1,22 @@
+{
+  "package": "opaque-ke",
+  "version": "4.1.0-pre.2",
+  "repository": "https://github.com/meta/opaque-ke",
+  "archive_sha256": "2c65d1dc9028caf5939b337f655a78dc1bbb5867686e5041cb36f5d5e8b5a9ce",
+  "files": {
+    "opaque.rs": "3a969e1b6e467d63b76a2742b05a019c64b0a3add865de69e280902a523c10a9",
+    "messages.rs": "cdf331a54015c4cb8cb9d66ea04ac676be6df875f7ac068d6dcef0abd50809f7",
+    "envelope.rs": "6304bf9d1f067a6cee00296dca28b6a33af6a9c3b39b5fc9472b39b32ebd40cf",
+    "key_exchange/tripledh.rs": "b2f0335657dd977b430f5224a3e07044bf0e2f3f0f382e027625b6d1c14cee6f",
+    "key_exchange/shared.rs": "391c510886f92d7d078ecf0b2b62879c69949aaec8a757c32ff8d392d984497f",
+    "key_exchange/group/ristretto255.rs": "76fd2cfd95ad6bad6472dd75995eb601411489a782ddfe3f6a4e375369e6090f",
+    "ksf.rs": "f9d8b12dd59eff46aa97bf388eb0bde651442a8762df403649609a5a421f2341",
+    "serialization/mod.rs": "1276fc0bd14e43745ffe19f6559e409c5697f2923db0b955e89c490c8e1793db",
+    "errors.rs": "49ec6a4de495f436a0d01c1f8fb8574e29b48dad0d5da6eb4ed6e96c8daa728d"
+  },
+  "retained": "Fixed Ristretto255/SHA512/TripleDH registration/login only",
+  "pruned": [
+    "Uncalled suites/modes, generic compatibility/builders, remote keys, alternate curves, test utilities, serialization framework"
+  ],
+  "source_policy": "Only protocol composition is specialized; existing approved Dalek, SHA512, Argon2 and HKDF/HMAC primitives remain external and unchanged."
+}

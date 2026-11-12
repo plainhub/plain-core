@@ -1,0 +1,16 @@
+{
+  "package": "voprf",
+  "version": "0.5.0",
+  "repository": "https://github.com/meta/voprf",
+  "archive_sha256": "28f59c30c76e2fea54cdece6a054e2662feffa7ab19658a7887524265ee39470",
+  "files": {
+    "oprf.rs": "8a587fa5354b9bcd34d914ca9d19b2ac12d5f35447a69c92e59b5f6744b7b95e",
+    "common.rs": "728b2ba45fa7ad5ce0a9184f05abca0c459d0ea883ca95d2635afef70a05ae81",
+    "group/ristretto.rs": "fc992e8ecec56815338ed799ecfc0ee8e4be30251fbab02eda2f71f80a7ab1a9"
+  },
+  "retained": "Base OPRF only",
+  "pruned": [
+    "Uncalled suites/modes, generic compatibility/builders, remote keys, alternate curves, test utilities, serialization framework"
+  ],
+  "source_policy": "Only protocol composition is specialized; existing approved Dalek, SHA512, Argon2 and HKDF/HMAC primitives remain external and unchanged."
+}

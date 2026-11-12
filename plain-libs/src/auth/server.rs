@@ -1,6 +1,6 @@
-use super::{CLIENT_IDENTITY, Suite, ksf};
-use opaque_ke::errors::ProtocolError;
-use opaque_ke::{
+use super::{CLIENT_IDENTITY, ksf};
+use crate::opaque::errors::ProtocolError;
+use crate::opaque::{
     ClientRegistration, ClientRegistrationFinishParameters, CredentialFinalization,
     CredentialRequest, Identifiers, ServerLogin, ServerLoginParameters, ServerRegistration,
     ServerSetup,
@@ -15,8 +15,8 @@ pub struct Registration {
 }
 
 pub fn register(password: &[u8], server_identity: &[u8]) -> Result<Registration, ProtocolError> {
-    let setup = ServerSetup::<Suite>::new(&mut OsRng);
-    let client = ClientRegistration::<Suite>::start(&mut OsRng, password)?;
+    let setup = ServerSetup::new(&mut OsRng);
+    let client = ClientRegistration::start(&mut OsRng, password)?;
     let response = ServerRegistration::start(&setup, client.message, CLIENT_IDENTITY)?;
     let stretched = ksf();
     let upload = client.state.finish(
@@ -34,7 +34,7 @@ pub fn register(password: &[u8], server_identity: &[u8]) -> Result<Registration,
     Ok(Registration {
         setup: Zeroizing::new(setup.serialize().to_vec()),
         record: Zeroizing::new(
-            ServerRegistration::<Suite>::finish(upload.message)
+            ServerRegistration::finish(upload.message)
                 .serialize()
                 .to_vec(),
         ),
@@ -42,7 +42,7 @@ pub fn register(password: &[u8], server_identity: &[u8]) -> Result<Registration,
 }
 
 pub struct Login {
-    state: ServerLogin<Suite>,
+    state: ServerLogin,
 }
 
 pub fn start(
@@ -52,9 +52,9 @@ pub fn start(
     context: &[u8],
     server_identity: &[u8],
 ) -> Result<(Login, Vec<u8>), ProtocolError> {
-    let setup = ServerSetup::<Suite>::deserialize(setup)?;
-    let record = ServerRegistration::<Suite>::deserialize(record)?;
-    let request = CredentialRequest::<Suite>::deserialize(request)?;
+    let setup = ServerSetup::deserialize(setup)?;
+    let record = ServerRegistration::deserialize(record)?;
+    let request = CredentialRequest::deserialize(request)?;
     let result = ServerLogin::start(
         &mut OsRng,
         &setup,
@@ -80,7 +80,7 @@ pub fn start(
 impl Login {
     pub fn finish(self, message: &[u8]) -> Result<Zeroizing<Vec<u8>>, ProtocolError> {
         let result = self.state.finish(
-            CredentialFinalization::<Suite>::deserialize(message)?,
+            CredentialFinalization::deserialize(message)?,
             Default::default(),
         )?;
         Ok(Zeroizing::new(result.session_key.to_vec()))
@@ -88,19 +88,18 @@ impl Login {
 }
 
 pub fn public_key(setup: &[u8]) -> Result<Vec<u8>, ProtocolError> {
-    Ok(ServerSetup::<Suite>::deserialize(setup)?
-        .keypair()
-        .public()
+    Ok(ServerSetup::deserialize(setup)?
+        .public_key()
         .serialize()
         .to_vec())
 }
 
 pub fn finalization_len() -> usize {
-    opaque_ke::generic_array::GenericArray::<u8, opaque_ke::CredentialFinalizationLen<Suite>>::default().len()
+    64
 }
 
 pub fn validate_registration(setup: &[u8], record: &[u8]) -> Result<(), ProtocolError> {
-    ServerSetup::<Suite>::deserialize(setup)?;
-    ServerRegistration::<Suite>::deserialize(record)?;
+    ServerSetup::deserialize(setup)?;
+    ServerRegistration::deserialize(record)?;
     Ok(())
 }

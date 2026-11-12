@@ -1,14 +1,6 @@
 use crate::aad::{AadPurpose, LoginPurpose};
-use opaque_ke::argon2::{Algorithm, Argon2, Params, Version};
-use opaque_ke::{CipherSuite, Ristretto255, TripleDh};
-use sha2::{Digest, Sha256, Sha512};
-
-pub struct Suite;
-impl CipherSuite for Suite {
-    type OprfCs = Ristretto255;
-    type KeyExchange = TripleDh<Ristretto255, Sha512>;
-    type Ksf = Argon2<'static>;
-}
+use argon2::{Algorithm, Argon2, Params, Version};
+use sha2::{Digest, Sha256};
 
 pub const CLIENT_IDENTITY: &[u8] = b"web-admin";
 
@@ -22,7 +14,11 @@ pub fn ksf() -> Argon2<'static> {
 
 pub fn context(client_id: &str, server_key: &[u8]) -> Vec<u8> {
     let mut out = Vec::new();
-    for part in [LoginPurpose::Password.as_str().as_bytes(), client_id.as_bytes(), server_key] {
+    for part in [
+        LoginPurpose::Password.as_str().as_bytes(),
+        client_id.as_bytes(),
+        server_key,
+    ] {
         out.extend_from_slice(
             &u32::try_from(part.len())
                 .expect("context length")
@@ -58,5 +54,4 @@ mod wasm;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod server;
 
-#[cfg(not(target_arch = "wasm32"))]
 pub mod client;

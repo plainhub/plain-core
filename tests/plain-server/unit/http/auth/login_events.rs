@@ -4,7 +4,7 @@ use super::*;
 #[tokio::test]
 async fn invalid_password_proof_is_recorded_once_without_session_or_secrets() {
     use futures_util::SinkExt;
-    use opaque_ke::{ClientLogin, ClientLoginFinishParameters, CredentialResponse, Identifiers};
+    use plain_libs::opaque::{ClientLogin, ClientLoginFinishParameters, CredentialResponse, Identifiers};
     use plain_libs::tokio_tungstenite::tungstenite::Message;
     let (_directory, server, port) = passwordless_server().await;
     let state = server.runtime_state();
@@ -12,7 +12,7 @@ async fn invalid_password_proof_is_recorded_once_without_session_or_secrets() {
     let signing = plain_rs::features::prefs::security::signing_keypair(&state.prefs).unwrap();
     let identity = &signing[32..];
     let context = plain_libs::auth::context("bad-proof", identity);
-    let client = ClientLogin::<plain_libs::auth::Suite>::start(&mut rand_core::OsRng, b"fixture-password").unwrap();
+    let client = ClientLogin::start(&mut rand_core::OsRng, b"fixture-password").unwrap();
     let (mut socket, _) = plain_libs::tokio_tungstenite::connect_async(format!("ws://127.0.0.1:{port}/auth?cid=bad-proof")).await.unwrap();
     socket.send(Message::Binary(client.message.serialize().to_vec().into())).await.unwrap();
     let Message::Binary(response) = login_frame(&mut socket).await else { panic!("OPAQUE response required") };

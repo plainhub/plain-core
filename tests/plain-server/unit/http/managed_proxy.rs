@@ -602,7 +602,7 @@ async fn first_login_and_chat_range_use_proxy_without_a_management_token() {
     let mut socket = reconnected;
     let password = b"fixture-password";
     let login =
-        opaque_ke::ClientLogin::<plain_libs::auth::Suite>::start(&mut rand_core::OsRng, password)
+        plain_libs::opaque::ClientLogin::start(&mut rand_core::OsRng, password)
             .unwrap();
     socket
         .send(Message::Binary(login.message.serialize().to_vec().into()))
@@ -624,10 +624,10 @@ async fn first_login_and_chat_range_use_proxy_without_a_management_token() {
         .finish(
             &mut rand_core::OsRng,
             password,
-            opaque_ke::CredentialResponse::<plain_libs::auth::Suite>::deserialize(&ke2).unwrap(),
-            opaque_ke::ClientLoginFinishParameters::new(
+            plain_libs::opaque::CredentialResponse::deserialize(&ke2).unwrap(),
+            plain_libs::opaque::ClientLoginFinishParameters::new(
                 Some(&context),
-                opaque_ke::Identifiers {
+                plain_libs::opaque::Identifiers {
                     client: Some(plain_libs::auth::CLIENT_IDENTITY),
                     server: Some(&identity),
                 },
@@ -635,7 +635,7 @@ async fn first_login_and_chat_range_use_proxy_without_a_management_token() {
             ),
         )
         .unwrap();
-    let login_key = plain_libs::auth::api_key(&finish.session_key, &context);
+    let login_key = plain_libs::auth::api_key(&finish.session_key[..], &context);
     let request = json!({"appName":"Fixture", "appVersion":"1", "osName":"Fixture", "osVersion":"1"});
     let encrypted = plain_libs::crypto::xchacha_encrypt_raw_with_aad(
         &login_key,
