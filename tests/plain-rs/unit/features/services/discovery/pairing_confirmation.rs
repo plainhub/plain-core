@@ -102,7 +102,10 @@ async fn signed_reply_commits_both_peers_and_retries_keep_original_key() {
     assert_eq!(peer(&b, "a").unwrap().updated_at, b_peer.updated_at);
 
     let mut forged = reply.clone();
-    forged.signature = base64_encode(&[0; 64]);
+    let PairingReply::Accept(accepted) = &mut forged else {
+        panic!("Expected acceptance")
+    };
+    accepted.signature = base64_encode(&[0; 64]);
     assert!(
         a.pairing_runtime
             .confirmations
@@ -171,7 +174,11 @@ async fn declined_reply_is_cached_and_does_not_write_peers() {
         .cached_response(&request)
         .unwrap()
         .unwrap();
-    assert_eq!(cached.signature, reply.signature);
+    let (PairingReply::Reject(cached_rejection), PairingReply::Reject(rejection)) = (&cached, &reply)
+    else {
+        panic!("Expected rejection")
+    };
+    assert_eq!(cached_rejection.signature, rejection.signature);
     a.pairing_runtime
         .confirmations
         .response(&a, &cached, "")
