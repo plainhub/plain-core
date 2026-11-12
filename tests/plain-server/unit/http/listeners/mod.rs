@@ -152,7 +152,8 @@ async fn listener_task_abort_is_reported_and_shutdown_finishes_listener_tasks() 
 #[tokio::test]
 async fn nearby_client_handles_probe_accept_reject_timeout_and_offline() {
     use plain_libs::axum::http::{HeaderMap, StatusCode};
-    use plain_rs::features::discovery::nearby_http::{Message, post_url, probe, send, url};
+    use plain_rs::features::discovery::nearby_http::{post_url, probe, send, url};
+    use plain_rs::features::discovery::nearby_wire::Message;
     use plain_rs::features::peers::pairing::protocol::PairingCancel;
 
     let (cert, key) = certificate();
@@ -160,9 +161,6 @@ async fn nearby_client_handles_probe_accept_reject_timeout_and_offline() {
         "/nearby",
         post(|headers: HeaderMap, body: String| async move {
             assert_eq!(headers["content-type"], "application/json");
-            if body == "DISCOVER:" {
-                return StatusCode::OK;
-            }
             if body == "slow" {
                 tokio::time::sleep(Duration::from_millis(100)).await;
                 return StatusCode::OK;

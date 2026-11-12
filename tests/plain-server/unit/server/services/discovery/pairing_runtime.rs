@@ -1,5 +1,5 @@
 use plain_libs::protocols::http_client;
-use plain_rs::features::discovery::nearby_http::Message;
+use plain_rs::features::discovery::nearby_wire::Message;
 use plain_rs::features::peers::pairing::sessions::Target;
 use plain_rs::features::services::discovery::pairing::Device;
 use plain_rs::features::services::discovery::pairing_runtime::*;
@@ -66,6 +66,26 @@ async fn public_nearby_endpoint_runs_pairing_parser_in_rust() {
         .unwrap();
     assert_eq!(malformed.status(), http_client::StatusCode::BAD_REQUEST);
     assert_eq!(malformed.text().await.unwrap(), "invalid nearby message");
+    for body in [
+        "DISCOVER:",
+        r#"DISCOVER_REPLY:{"id":"peer","name":"Fixture","port":1234,"signaturePublicKey":"key","deviceType":"PHONE","version":"1","platform":"test"}"#,
+    ] {
+        let response = client
+            .post(format!("https://127.0.0.1:{https_port}/nearby"))
+            .body(body)
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), http_client::StatusCode::BAD_REQUEST);
+        assert_eq!(response.text().await.unwrap(), "unknown message type");
+    }
+    let health = client
+        .get(format!("https://127.0.0.1:{https_port}/health"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(health.status(), http_client::StatusCode::OK);
+    assert_eq!(health.text().await.unwrap(), "OK");
     let state = server.runtime_state();
     let recipient_key =
         plain_rs::features::services::peers::peer_wire::signing_keypair(&state.prefs).unwrap();

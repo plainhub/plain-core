@@ -1,6 +1,6 @@
 use crate::features::discovery::nearby_devices::DiscoveryMethod;
 use crate::features::discovery::nearby_http;
-use crate::features::discovery::nearby_http::Message;
+use crate::features::discovery::nearby_wire::Message;
 use crate::features::peers::pairing::protocol::PairingCancel;
 use crate::features::peers::pairing::protocol::PairingReply;
 use crate::features::peers::pairing::protocol::{PairingRequest, PairingRequestPayload};
@@ -613,7 +613,7 @@ pub async fn handle_nearby_post(
         .unwrap_or_default();
     if !matches!(
         kind,
-        "PAIR_REQUEST" | "PAIRING_ACCEPT" | "PAIRING_REJECT" | "PAIR_CANCEL" | "DISCOVER" | "DISCOVER_REPLY"
+        "PAIR_REQUEST" | "PAIRING_ACCEPT" | "PAIRING_REJECT" | "PAIR_CANCEL"
     ) {
         return Ok(false);
     }
@@ -642,7 +642,6 @@ pub async fn handle_nearby_post(
         Message::PairCancel(cancel) => {
             execute(state, Request::ReceiveCancel { cancel }).await?;
         }
-        Message::Discover | Message::DiscoverReply(_) => {}
     }
     Ok(true)
 }

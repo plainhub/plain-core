@@ -1,6 +1,6 @@
 use crate::server::ServerState;
 use plain_libs::anyhow::Result;
-use plain_rs::features::discovery::nearby_wire::Message;
+use plain_rs::features::discovery::nearby_wire::{DISCOVER_REQUEST, Message};
 use plain_rs::features::services::discovery::discovery_advertisement;
 use plain_rs::features::services::discovery::pairing_runtime;
 use plain_rs::infrastructure::protocols::ble;
@@ -12,6 +12,13 @@ pub(super) async fn dispatch(
 ) -> Result<Vec<u8>> {
     let (metadata, body) = ble::parts(bytes)?;
     let body = std::str::from_utf8(body)?;
+    if body == DISCOVER_REQUEST {
+        plain_libs::anyhow::ensure!(metadata.is_empty(), "Invalid Nearby metadata");
+        let reply =
+            discovery_advertisement::execute(state, discovery_advertisement::Request::Reply {})
+                .await?;
+        return ble::message(&[], reply.to_string().as_bytes());
+    }
     let message = match Message::parse(body) {
         Ok(message) => message,
         Err(error) if !metadata.is_empty() => return Err(error),
@@ -22,13 +29,6 @@ pub(super) async fn dispatch(
         "Invalid Nearby metadata"
     );
     let request = match message {
-        Message::Discover => {
-            let reply =
-                discovery_advertisement::execute(state, discovery_advertisement::Request::Reply {})
-                    .await?;
-            return ble::message(&[], reply.to_string().as_bytes());
-        }
-        Message::DiscoverReply(_) => return ble::message(&[], &[]),
         Message::PairRequest(payload) => pairing_runtime::Request::ReceiveRequest {
             payload,
             client_id: std::str::from_utf8(metadata)?.to_owned(),

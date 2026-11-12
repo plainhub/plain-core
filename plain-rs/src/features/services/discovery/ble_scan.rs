@@ -144,11 +144,11 @@ pub async fn read_payload(
     owner: u64,
     client_id: &str,
 ) -> Result<Option<String>, String> {
-    let body = crate::features::discovery::nearby_wire::Message::Discover
-        .wire()
-        .map_err(|error| error.to_string())?;
-    let request = crate::infrastructure::protocols::ble::message(&[], body.as_bytes())
-        .map_err(|error| error.to_string())?;
+    let request = crate::infrastructure::protocols::ble::message(
+        &[],
+        crate::features::discovery::nearby_wire::DISCOVER_REQUEST.as_bytes(),
+    )
+    .map_err(|error| error.to_string())?;
     let reply = state
         .host
         .call_current(

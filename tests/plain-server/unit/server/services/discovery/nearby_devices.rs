@@ -20,8 +20,7 @@ async fn rust_sweep_keeps_lan_probes_independent_of_bluetooth_pause() {
     let (cert_pem, cert_key) = plain_libs::tls::generate_pem(&["localhost".into()]).unwrap();
     let listeners = crate::http::listeners::HttpListeners::start(
         plain_libs::axum::Router::new()
-            .route("/health", plain_libs::axum::routing::get(crate::http::health::health))
-            .route("/nearby", plain_libs::axum::routing::post(|| async { "1" })),
+            .route("/health", plain_libs::axum::routing::get(crate::http::health::health)),
         0,
         0,
         cert_pem,

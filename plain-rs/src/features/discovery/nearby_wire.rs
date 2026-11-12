@@ -5,6 +5,8 @@ use crate::features::peers::pairing::protocol::{PairingAccept, PairingReject, Pa
 use plain_libs::anyhow::{Result, ensure};
 use serde::{Deserialize, Serialize};
 
+pub const DISCOVER_REQUEST: &str = "DISCOVER:";
+
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DiscoverReply {
@@ -32,8 +34,6 @@ pub struct DiscoverReply {
     deny_unknown_fields
 )]
 pub enum Message {
-    Discover,
-    DiscoverReply(DiscoverReply),
     PairRequest(PairingRequestPayload),
     PairingAccept(PairingAccept),
     PairingReject(PairingReject),

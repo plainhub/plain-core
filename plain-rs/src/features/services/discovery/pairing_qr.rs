@@ -6,7 +6,8 @@ use super::{
 };
 use crate::features::{
     discovery::{
-        nearby_http::{self, Message},
+        nearby_http,
+        nearby_wire::Message,
         pairing_code,
     },
     peers::pairing::{

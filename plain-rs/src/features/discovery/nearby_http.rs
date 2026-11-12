@@ -1,4 +1,4 @@
-pub use crate::features::discovery::nearby_wire::Message;
+use crate::features::discovery::nearby_wire::Message;
 use plain_libs::anyhow::Result;
 use plain_libs::protocols::http_client;
 use std::{sync::OnceLock, time::Duration};
@@ -20,6 +20,9 @@ fn client() -> Result<&'static http_client::Client> {
 /// Endpoint the nearby wire speaks to. Shared with the TLS listener
 /// tests in plain-server, which assert against the same URL.
 pub fn url(ip: &str, port: u16) -> Result<String> {
+    endpoint_url(ip, port, "/nearby")
+}
+fn endpoint_url(ip: &str, port: u16, path: &str) -> Result<String> {
     plain_libs::anyhow::ensure!(port != 0, "Missing nearby port");
     let host = ip.trim().trim_start_matches('[').trim_end_matches(']');
     plain_libs::anyhow::ensure!(
@@ -27,7 +30,7 @@ pub fn url(ip: &str, port: u16) -> Result<String> {
         "Invalid nearby host"
     );
     Ok(plain_libs::utils::http_url::build_url(
-        "https", host, port, "/nearby",
+        "https", host, port, path,
     ))
 }
 /// POST a raw wire body; `false` on transport failure, timeout or a
@@ -59,13 +62,12 @@ pub async fn send(ip: &str, port: u16, message: &Message, client_id: Option<&str
     .await
 }
 pub async fn probe(ip: &str, port: u16) -> Result<bool> {
-    post_url(
-        &url(ip, port)?,
-        "DISCOVER:".into(),
-        Duration::from_millis(2500),
-        None,
-    )
-    .await
+    let result = client()?
+        .get(endpoint_url(ip, port, "/health")?)
+        .timeout(Duration::from_millis(2500))
+        .send()
+        .await;
+    Ok(result.is_ok_and(|response| response.status().is_success()))
 }
 #[cfg(test)]
 #[path = "../../../../tests/plain-rs/unit/features/discovery/nearby_http.rs"]
