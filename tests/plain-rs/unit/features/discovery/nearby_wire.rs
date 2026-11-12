@@ -5,6 +5,8 @@ use plain_libs::serde_json::json;
 fn canonical_messages_round_trip_and_reject_unknown_or_malformed_payloads() {
     for value in [
         json!({"kind":"DISCOVER"}),
+        json!({"kind":"PAIRING_REJECT","payload":{"requestId":"request","signature":"proof"}}),
+        json!({"kind":"PAIRING_ACCEPT","payload":{"requestId":"request","port":8443,"deviceType":"PHONE","ecdhPublicKey":"key","ips":[],"signature":"proof","awareSupported":false}}),
         json!({"kind":"PAIR_CANCEL","payload":{"fromId":"a","toId":"b","requestSignature":"request","signaturePublicKey":"public","timestamp":1,"signature":"proof"}}),
         json!({"kind":"DISCOVER_REPLY","payload":{"id":"peer","name":"Fixture","port":1234,"deviceType":"PHONE","version":"1","signaturePublicKey":"test-public-key","platform":"test"}}),
     ] {
@@ -22,7 +24,8 @@ fn canonical_messages_round_trip_and_reject_unknown_or_malformed_payloads() {
         "PAIR_CANCEL:bad",
         "no prefix",
         "PAIR_REQUEST:{}",
-        "PAIR_RESPONSE:{}",
+        "PAIRING_REJECT:{\"requestId\":\"request\",\"signature\":\"proof\",\"port\":8443}",
+        "PAIRING_ACCEPT:{\"requestId\":\"request\",\"port\":8443,\"deviceType\":\"PHONE\",\"ecdhPublicKey\":\"key\",\"accepted\":true}",
     ] {
         assert!(Message::parse(bad).is_err(), "{bad}");
     }

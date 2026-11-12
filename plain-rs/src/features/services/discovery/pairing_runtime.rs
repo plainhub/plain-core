@@ -2,7 +2,7 @@ use crate::features::discovery::nearby_devices::DiscoveryMethod;
 use crate::features::discovery::nearby_http;
 use crate::features::discovery::nearby_http::Message;
 use crate::features::peers::pairing::protocol::PairingCancel;
-use crate::features::peers::pairing::protocol::PairingResponse;
+use crate::features::peers::pairing::protocol::PairingReply;
 use crate::features::peers::pairing::protocol::{PairingRequest, PairingRequestPayload};
 use crate::features::peers::pairing::sessions::Target;
 use crate::features::peers::pairing::sessions::Ticket;
@@ -116,7 +116,7 @@ pub enum Request {
         cancel: PairingCancel,
     },
     Complete {
-        response: PairingResponse,
+        response: PairingReply,
         sender_ip: String,
     },
     Respond {
@@ -526,14 +526,14 @@ pub async fn execute(state: &CoreRuntime, request: Request) -> plain_libs::anyho
                 }
             }
             if let Some(response) = cached {
-                if response.accepted && !known.is_paired() {
+                if matches!(response, PairingReply::Accept(_)) && !known.is_paired() {
                     return Ok(Value::Null);
                 }
                 send_incoming(
                     state,
                     &request,
                     &Target::from(&request),
-                    Message::PairResponse(response),
+                    Message::from(response),
                 )
                 .await?;
             } else if is_new
@@ -592,7 +592,7 @@ pub async fn execute(state: &CoreRuntime, request: Request) -> plain_libs::anyho
                 state,
                 &request,
                 &target,
-                Message::PairResponse(response.clone()),
+                Message::from(response.clone()),
             )
             .await?;
             json!({"response":response})
@@ -613,7 +613,7 @@ pub async fn handle_nearby_post(
         .unwrap_or_default();
     if !matches!(
         kind,
-        "PAIR_REQUEST" | "PAIR_RESPONSE" | "PAIR_CANCEL" | "DISCOVER" | "DISCOVER_REPLY"
+        "PAIR_REQUEST" | "PAIRING_ACCEPT" | "PAIRING_REJECT" | "PAIR_CANCEL" | "DISCOVER" | "DISCOVER_REPLY"
     ) {
         return Ok(false);
     }
@@ -630,18 +630,14 @@ pub async fn handle_nearby_post(
             )
             .await?;
         }
-        Message::PairResponse(response) if response.signature_public_key.is_some() => {
+        Message::PairingAccept(response) if response.signature_public_key.is_some() => {
             super::pairing_qr::complete(state, response, remote_ip, client_id.unwrap_or_default())?;
         }
-        Message::PairResponse(response) => {
-            execute(
-                state,
-                Request::Complete {
-                    response,
-                    sender_ip: remote_ip.to_string(),
-                },
-            )
-            .await?;
+        Message::PairingAccept(response) => {
+            execute(state, Request::Complete { response: PairingReply::Accept(response), sender_ip: remote_ip.to_string() }).await?;
+        }
+        Message::PairingReject(response) => {
+            execute(state, Request::Complete { response: PairingReply::Reject(response), sender_ip: remote_ip.to_string() }).await?;
         }
         Message::PairCancel(cancel) => {
             execute(state, Request::ReceiveCancel { cancel }).await?;
@@ -668,7 +664,7 @@ pub async fn accept_report(state: &CoreRuntime, kind: &str, payload: &str) -> pl
                 ble: true,
             }
         }
-        "PAIRING_RESPONSE_REPORTED" => Request::Complete {
+        "PAIRING_REPLY_REPORTED" => Request::Complete {
             response: plain_libs::serde_json::from_str(payload)?,
             sender_ip: String::new(),
         },

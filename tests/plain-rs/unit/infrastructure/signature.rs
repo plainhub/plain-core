@@ -9,7 +9,7 @@ use plain_libs::{
 fn signature_purposes_are_distinct_and_not_interchangeable() {
     let purposes = [
         SignaturePurpose::WebApprovalResponse,
-        SignaturePurpose::ChatPairRequest,
+        SignaturePurpose::PairRequest,
         SignaturePurpose::PairingAccept,
         SignaturePurpose::PairingReject,
         SignaturePurpose::PairCancel,

@@ -1,3 +1,4 @@
+use crate::infrastructure::signature::SignaturePurpose;
 use super::{
     pairing_attempts::PairingPhase,
     pairing_confirmation::{chat_key, save_peer, verification_code},
@@ -11,7 +12,7 @@ use crate::features::{
     peers::pairing::{
         now_ms,
         peer_store::Facts,
-        protocol::{PairingRequest, PairingRequestPayload, PairingResponse},
+        protocol::{PairingRequest, PairingRequestPayload, PairingAccept},
         sessions::RESPONSE_TIMEOUT,
     },
     services::peers::peer_wire::signing_keypair,
@@ -49,24 +50,26 @@ struct Displayed {
 
 struct Scanned {
     started: Instant,
-    response: PairingResponse,
+    response: PairingAccept,
     facts: Option<Facts>,
     previous_identity: Option<String>,
 }
 
 fn response_input(
     request: &PairingRequest,
-    response: &PairingResponse,
+    response: &PairingAccept,
     sender_id: &str,
-) -> [u8; 32] {
+) -> Vec<u8> {
     let mut mac =
         Hmac::<sha2_mac::Sha256>::new_from_slice(request.payload.signature.as_bytes()).unwrap();
     mac.update(
-        plain_libs::serde_json::json!(["qr-pair-response", sender_id, response.signature_data()])
+        plain_libs::serde_json::json!(["qr-pair-accept", sender_id, response.signature_data()])
             .to_string()
             .as_bytes(),
     );
-    mac.finalize().into_bytes().into()
+    plain_libs::serde_json::json!([SignaturePurpose::QrPairAccept, base64_encode(&mac.finalize().into_bytes())])
+        .to_string()
+        .into_bytes()
 }
 
 pub async fn display(state: &Runtime) -> Result<Display> {
@@ -147,7 +150,7 @@ pub async fn respond(
     let device = local_device(state).await?;
     ensure!(device.port != 0, "Active listener required");
     let response = prepare_response(state, &request, &sender, &address, device)?;
-    let message = Message::PairResponse(response);
+    let message = Message::PairingAccept(response);
     loop {
         if nearby_http::send(&address, request.payload.port, &message, Some(&sender)).await? {
             commit_scanned(state, &request, &address)?;
@@ -170,7 +173,7 @@ fn prepare_response(
     sender: &str,
     address: &str,
     device: super::pairing::Device,
-) -> Result<PairingResponse> {
+) -> Result<PairingAccept> {
     let _commit = state.pairing_runtime.commit.lock().unwrap();
     let mut scanned = state.pairing_runtime.qr.scanned.lock().unwrap();
     scanned.retain(|_, entry| entry.started.elapsed() < RESPONSE_TIMEOUT);
@@ -184,7 +187,7 @@ fn prepare_response(
     let shared = ecdh
         .compute_shared_key(&base64_decode(&request.payload.ecdh_public_key))
         .ok_or_else(|| plain_libs::anyhow::anyhow!("Invalid pairing key"))?;
-    let mut response = PairingResponse {
+    let mut response = PairingAccept {
         request_id: id.clone(),
         signature_public_key: Some(base64_encode(&key[32..])),
         from_name: Some(device.name),
@@ -192,7 +195,6 @@ fn prepare_response(
         device_type: device.device_type,
         ips: device.ips,
         ecdh_public_key: base64_encode(&ecdh.public_key_bytes),
-        accepted: true,
         signature: String::new(),
         aware_supported: device.aware_supported,
     };
@@ -242,7 +244,7 @@ fn commit_scanned(state: &Runtime, request: &PairingRequest, address: &str) -> R
 
 pub(super) fn complete(
     state: &Runtime,
-    response: PairingResponse,
+    response: PairingAccept,
     address: IpAddr,
     sender: &str,
 ) -> Result<()> {
@@ -264,7 +266,6 @@ pub(super) fn complete(
             && request.from_id != sender
             && !name.trim().is_empty()
             && response.port != 0
-            && response.accepted
             && ed25519_verify(
                 key,
                 &response_input(request, &response, sender),
@@ -302,3 +303,7 @@ pub(super) fn complete(
     entry.completed = Some(response.signature);
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "../../../../../tests/plain-rs/unit/features/services/discovery/pairing_qr.rs"]
+mod tests;

@@ -54,11 +54,12 @@ fn signed_request_response_bind_recipient_identity_and_ecdh() {
     let (req, ak) = request(&a, device(), &target(&b, "b")).unwrap();
     assert!(security::verify_request(&req));
     let (reply, bk) = response(&b, req.clone(), true, device()).unwrap().unwrap();
-    assert!(security::verify_response(
+    let PairingReply::Accept(reply) = reply else { panic!("Expected acceptance") };
+    assert!(security::verify_accept(
         &reply,
         &target(&b, "b").device_public_key
     ));
-    assert!(!security::verify_response(
+    assert!(!security::verify_accept(
         &reply,
         &target(&c, "c").device_public_key
     ));
@@ -76,14 +77,17 @@ fn signed_request_response_bind_recipient_identity_and_ecdh() {
     forged.target_public_key = target(&c, "c").device_public_key;
     assert!(!security::verify_request(&forged));
     let mut forged = reply;
-    forged.accepted = false;
-    assert!(!security::verify_response(
+    forged.ecdh_public_key.clear();
+    assert!(!security::verify_accept(
         &forged,
         &target(&b, "b").device_public_key
     ));
     let (denied, key) = response(&b, req.clone(), false, device()).unwrap().unwrap();
-    assert!(!denied.accepted);
-    assert!(denied.ecdh_public_key.is_empty());
+    let PairingReply::Reject(denied) = denied else { panic!("Expected rejection") };
+    assert_eq!(denied.request_id, req.payload.request_id());
+    assert!(security::verify_reject(&denied, &target(&b, "b").device_public_key));
+    assert!(!security::verify_reject(&denied, &target(&c, "c").device_public_key));
+    assert_eq!(plain_libs::serde_json::to_value(&denied).unwrap().as_object().unwrap().len(), 2);
     assert!(key.is_none());
     for timestamp in [i64::MIN, i64::MAX] {
         let mut bad = req.clone();

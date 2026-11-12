@@ -237,7 +237,7 @@ async fn incoming_ble_response_uses_matching_address_and_shared_handshake_exactl
         };
         assert_eq!(call["method"], "pairingNotification");
         assert_eq!(call["params"]["address"], "fixture-mac");
-        let Message::PairResponse(response) =
+        let Message::PairingAccept(response) =
             Message::parse(call["params"]["body"].as_str().unwrap()).unwrap()
         else {
             panic!()
@@ -251,7 +251,7 @@ async fn incoming_ble_response_uses_matching_address_and_shared_handshake_exactl
         Request::Respond {
             request: request.clone(),
             accepted: true,
-            device: device(),
+                device: device(),
         },
     )
     .await
@@ -261,7 +261,7 @@ async fn incoming_ble_response_uses_matching_address_and_shared_handshake_exactl
     remote_state
         .pairing_runtime
         .confirmations
-        .response(&remote_state, &response, "")
+        .response(&remote_state, &PairingReply::Accept(response.clone()), "")
         .unwrap();
     let a = crate::infrastructure::db::chat_store::peers::get(&state.db, "remote")
         .unwrap()
@@ -284,7 +284,7 @@ async fn incoming_ble_response_uses_matching_address_and_shared_handshake_exactl
                 .unwrap();
         };
         assert_eq!(call["method"], "pairingNotification");
-        let Message::PairResponse(reply) =
+        let Message::PairingAccept(reply) =
             Message::parse(call["params"]["body"].as_str().unwrap()).unwrap()
         else {
             panic!()
@@ -331,11 +331,11 @@ async fn raw_ble_reports_are_validated_in_rust_before_platform_calls() {
             r#"{"request":{},"address":"adapter"}"#,
         ),
         (
-            "PAIRING_RESPONSE_REPORTED",
+            "PAIRING_REPLY_REPORTED",
             r#"{"fromId":"peer","accepted":true}"#,
         ),
         ("PAIRING_CANCEL_REPORTED", r#"{"fromId":"peer"}"#),
-        ("PAIRING_RESPONSE_REPORTED", "not-json"),
+        ("PAIRING_REPLY_REPORTED", "not-json"),
         ("PAIRING_CANCEL_REPORTED", "null"),
     ] {
         assert!(

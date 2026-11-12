@@ -1,7 +1,7 @@
 use crate::features::chat::enums::DeviceType;
 use crate::features::peers::pairing::protocol::PairingCancel;
 use crate::features::peers::pairing::protocol::PairingRequestPayload;
-use crate::features::peers::pairing::protocol::PairingResponse;
+use crate::features::peers::pairing::protocol::{PairingAccept, PairingReject, PairingReply};
 use plain_libs::anyhow::{Result, ensure};
 use serde::{Deserialize, Serialize};
 
@@ -35,8 +35,14 @@ pub enum Message {
     Discover,
     DiscoverReply(DiscoverReply),
     PairRequest(PairingRequestPayload),
-    PairResponse(PairingResponse),
+    PairingAccept(PairingAccept),
+    PairingReject(PairingReject),
     PairCancel(PairingCancel),
+}
+impl From<PairingReply> for Message {
+    fn from(reply: PairingReply) -> Self {
+        match reply { PairingReply::Accept(value) => Self::PairingAccept(value), PairingReply::Reject(value) => Self::PairingReject(value) }
+    }
 }
 impl Message {
     pub fn wire(&self) -> Result<String> {

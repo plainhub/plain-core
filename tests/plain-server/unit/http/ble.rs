@@ -351,15 +351,14 @@ async fn nearby_pairing_preserves_signatures_and_the_actual_radio_return_address
         .unwrap();
     assert_eq!(call["method"], "pairingNotification");
     assert_eq!(call["params"]["address"], "actual-radio-source");
-    let Message::PairResponse(response) =
+    let Message::PairingReject(response) =
         Message::parse(call["params"]["body"].as_str().unwrap()).unwrap()
     else {
         panic!("Expected pairing response")
     };
     assert_eq!(response.request_id, expected_request_id);
-    assert!(!response.accepted);
     assert!(
-        plain_rs::features::peers::pairing::security::verify_response(
+        plain_rs::features::peers::pairing::security::verify_reject(
             &response,
             &requester_target_key,
         )
@@ -371,11 +370,7 @@ async fn nearby_pairing_preserves_signatures_and_the_actual_radio_return_address
             plain_libs::serde_json::json!({"id":call["id"],"result":true}),
         )
         .unwrap();
-    assert!(
-        !task.await.unwrap()["response"]["accepted"]
-            .as_bool()
-            .unwrap()
-    );
+    assert_eq!(task.await.unwrap()["response"]["kind"], "PAIRING_REJECT");
     assert!(
         !plain_rs::infrastructure::db::chat_store::peers::get(&state.db, "nearby-peer")
             .unwrap().unwrap().is_paired()

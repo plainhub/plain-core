@@ -1,5 +1,5 @@
 use crate::features::peers::pairing::protocol::PairingRequest;
-use crate::features::peers::pairing::protocol::PairingResponse;
+use crate::features::peers::pairing::protocol::PairingAccept;
 use crate::features::peers::pairing::timestamp_ok;
 pub fn verify_request(request: &PairingRequest) -> bool {
     !request.from_id.is_empty()
@@ -13,7 +13,7 @@ pub fn verify_request(request: &PairingRequest) -> bool {
             &request.payload.signature,
         )
 }
-pub fn verify_response(response: &PairingResponse, public_key: &str) -> bool {
+pub fn verify_accept(response: &PairingAccept, public_key: &str) -> bool {
     plain_libs::crypto::ed25519_verify(
         public_key,
         response.signature_data().as_bytes(),
@@ -35,4 +35,8 @@ pub fn verify_cancel(
             cancel.signature_data().as_bytes(),
             &cancel.signature,
         )
+}
+
+pub fn verify_reject(reply: &crate::features::peers::pairing::protocol::PairingReject, public_key: &str) -> bool {
+    plain_libs::crypto::ed25519_verify(public_key, reply.signature_data().as_bytes(), &reply.signature)
 }

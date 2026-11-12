@@ -1,6 +1,6 @@
 use crate::features::peers::pairing::{
     peer_store::{self, Facts},
-    protocol::{PairingRequest, PairingResponse},
+    protocol::{PairingRequest, PairingAccept, PairingReply},
     sessions::{RESPONSE_TIMEOUT, Target, Ticket},
 };
 use crate::features::services::discovery::{
@@ -32,7 +32,7 @@ enum Phase {
         completed: bool,
     },
     Server {
-        response: Option<PairingResponse>,
+        response: Option<PairingReply>,
     },
 }
 fn derive(input: &[u8], salt: &[u8], info: &[u8]) -> [u8; 32] {
@@ -44,7 +44,7 @@ fn derive(input: &[u8], salt: &[u8], info: &[u8]) -> [u8; 32] {
     expand.update(&[1]);
     expand.finalize().into_bytes().into()
 }
-pub(super) fn chat_key(shared: &[u8; 32], request: &PairingRequest, response: &PairingResponse) -> [u8; 32] {
+pub(super) fn chat_key(shared: &[u8; 32], request: &PairingRequest, response: &PairingAccept) -> [u8; 32] {
     let context = Sha256::digest(
         plain_libs::serde_json::json!([
             "pairing",
@@ -164,7 +164,7 @@ impl Confirmations {
             })
     }
 
-    pub fn cached_response(&self, request: &PairingRequest) -> Result<Option<PairingResponse>> {
+    pub fn cached_response(&self, request: &PairingRequest) -> Result<Option<PairingReply>> {
         self.with(|entries| {
             Ok(entries.get(&request.payload.request_id())
                 .filter(|e| e.request.signature_data() == request.signature_data())
@@ -180,7 +180,7 @@ impl Confirmations {
         request: &PairingRequest,
         accepted: bool,
         device: pairing::Device,
-    ) -> Result<(PairingResponse, Target)> {
+    ) -> Result<(PairingReply, Target)> {
         let _commit = state.pairing_runtime.commit.lock().unwrap();
         self.with(|entries| {
             let e = entries
@@ -204,7 +204,7 @@ impl Confirmations {
             let (reply, ecdh) =
                 pairing::response(&state.prefs, e.request.clone(), accepted, device)?
                     .ok_or_else(|| plain_libs::anyhow::anyhow!("Invalid pairing request"))?;
-            if let Some(ecdh) = ecdh {
+            if let (PairingReply::Accept(accepted), Some(ecdh)) = (&reply, ecdh) {
                 let shared = ecdh
                     .compute_shared_key(&base64_decode(&request.payload.ecdh_public_key))
                     .ok_or_else(|| plain_libs::anyhow::anyhow!("Invalid pairing key"))?;
@@ -218,7 +218,7 @@ impl Confirmations {
                         ips,
                         port: request.payload.port,
                         device_type: request.payload.device_type,
-                        key: base64_encode(&chat_key(&shared, &e.request, &reply)),
+                        key: base64_encode(&chat_key(&shared, &e.request, accepted)),
                         public_key: request.payload.signature_public_key.clone(),
                     },
                     e.previous_identity.as_deref(),
@@ -237,13 +237,13 @@ impl Confirmations {
     pub fn response(
         &self,
         state: &CoreRuntime,
-        response: &PairingResponse,
+        reply: &PairingReply,
         sender_ip: &str,
     ) -> Result<()> {
         let _commit = state.pairing_runtime.commit.lock().unwrap();
         self.with(|entries| {
             let e = entries
-                .get_mut(&response.request_id)
+                .get_mut(reply.request_id())
                 .ok_or_else(|| plain_libs::anyhow::anyhow!("Unknown pairing response"))?;
             let Phase::Client {
                 ticket,
@@ -253,15 +253,13 @@ impl Confirmations {
             else {
                 plain_libs::anyhow::bail!("Unexpected pairing role")
             };
-            ensure!(
-                response.signature_public_key.is_none() && response.from_name.is_none(),
-                "Unexpected pairing identity"
-            );
             let public_key = &ticket.target.device_public_key;
-            ensure!(
-                crate::features::peers::pairing::security::verify_response(response, public_key),
-                "Pairing identity mismatch"
-            );
+            let valid = match reply {
+                PairingReply::Accept(value) => value.signature_public_key.is_none() && value.from_name.is_none()
+                    && crate::features::peers::pairing::security::verify_accept(value, public_key),
+                PairingReply::Reject(value) => crate::features::peers::pairing::security::verify_reject(value, public_key),
+            };
+            ensure!(valid, "Pairing identity mismatch");
             if *completed {
                 return Ok(());
             }
@@ -273,20 +271,23 @@ impl Confirmations {
                         .is_some(),
                 "Pairing expired or cancelled"
             );
-            if !response.accepted {
-                ensure!(pending.is_none(), "Pairing response changed");
-                state
-                    .pairing
-                    .cancel(&ticket.target.device_id, Some(&ticket.generation));
-                *completed = true;
-                pairing_runtime::failed(
-                    state,
-                    &ticket.target,
-                    "Pairing rejected",
-                    Some(&ticket.generation),
-                );
-                return Ok(());
-            }
+            let response = match reply {
+                PairingReply::Reject(_) => {
+                    ensure!(pending.is_none(), "Pairing response changed");
+                    state
+                        .pairing
+                        .cancel(&ticket.target.device_id, Some(&ticket.generation));
+                    *completed = true;
+                    pairing_runtime::failed(
+                        state,
+                        &ticket.target,
+                        "Pairing rejected",
+                        Some(&ticket.generation),
+                    );
+                    return Ok(());
+                }
+                PairingReply::Accept(value) => value,
+            };
             if let Some((signature, _)) = pending {
                 ensure!(*signature == response.signature, "Pairing response changed");
             } else {

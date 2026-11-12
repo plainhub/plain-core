@@ -109,11 +109,11 @@ async fn ble_initiator_signs_filters_notifications_commits_shared_key_and_closes
                                 .respond(&remote_state, &request, true, device())
                                 .unwrap();
                             notifications.push_back("malformed".into());
-                            let mut wrong = response.clone();
+                            let crate::features::peers::pairing::protocol::PairingReply::Accept(mut wrong) = response.clone() else { panic!("Expected acceptance") };
                             wrong.request_id = "unrelated".into();
-                            notifications.push_back(Message::PairResponse(wrong).wire().unwrap());
+                            notifications.push_back(Message::PairingAccept(wrong).wire().unwrap());
                             notifications
-                                .push_back(Message::PairResponse(response).wire().unwrap());
+                                .push_back(Message::from(response).wire().unwrap());
                         }
                         _ => panic!("Unexpected pairing wire message"),
                     }

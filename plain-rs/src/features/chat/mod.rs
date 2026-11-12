@@ -5,7 +5,7 @@
 //! What lives here, in rough layers:
 //! - [`enums`] — the wire enums (chat/peer/channel status, device type).
 //! - [`pairing`] — LAN pairing wire protocol (`PAIR_REQUEST:` /
-//!   `PAIR_RESPONSE:` / `PAIR_CANCEL:` over HTTPS `POST /nearby`).
+//!   `PAIRING_ACCEPT:` / `PAIRING_REJECT:` / `PAIR_CANCEL:` over HTTPS `POST /nearby`).
 //! - [`channel`] — group-chat system-message wire types + canonical
 //!   signature payloads.
 //! - [`crate::infrastructure::db`] — the SQLite storage layer, same schema as plain-app's

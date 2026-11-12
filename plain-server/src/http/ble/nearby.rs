@@ -35,8 +35,12 @@ pub(super) async fn dispatch(
             address,
             ble: true,
         },
-        Message::PairResponse(response) => pairing_runtime::Request::Complete {
-            response,
+        Message::PairingAccept(response) => pairing_runtime::Request::Complete {
+            response: plain_rs::features::peers::pairing::protocol::PairingReply::Accept(response),
+            sender_ip: address,
+        },
+        Message::PairingReject(response) => pairing_runtime::Request::Complete {
+            response: plain_rs::features::peers::pairing::protocol::PairingReply::Reject(response),
             sender_ip: address,
         },
         Message::PairCancel(cancel) => pairing_runtime::Request::ReceiveCancel { cancel },

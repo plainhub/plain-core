@@ -195,16 +195,19 @@ async fn run(state: &CoreRuntime, ticket: &Ticket, packet: &str) -> Result<(), C
             Ok(message) => message,
             Err(_) => continue,
         };
-        if let Message::PairResponse(response) = message {
-            if response.request_id == crate::features::peers::pairing::protocol::request_id(&ticket.request_signature) {
-                match state
-                    .pairing_runtime
-                    .confirmations
-                    .response(state, &response, "")
-                {
-                    Ok(()) => return Ok(()),
-                    Err(error) => log::warn!("BLE pairing response rejected: {error}"),
-                }
+        let response = match message {
+            Message::PairingAccept(value) => crate::features::peers::pairing::protocol::PairingReply::Accept(value),
+            Message::PairingReject(value) => crate::features::peers::pairing::protocol::PairingReply::Reject(value),
+            _ => continue,
+        };
+        if response.request_id() == crate::features::peers::pairing::protocol::request_id(&ticket.request_signature) {
+            match state
+                .pairing_runtime
+                .confirmations
+                .response(state, &response, "")
+            {
+                Ok(()) => return Ok(()),
+                Err(error) => log::warn!("BLE pairing response rejected: {error}"),
             }
         }
     }

@@ -211,7 +211,7 @@ impl HostEvents {
         self.state.thumbnails.submit(token, bytes)
     }
 
-    pub async fn report_pairing_response(&self, payload: String) -> Result<(), String> {
+    pub async fn report_pairing_reply(&self, payload: String) -> Result<(), String> {
         if !self.state.host.is_current(self.generation) {
             return Err("host disconnected".into());
         }
@@ -499,7 +499,7 @@ impl HostEvents {
 
     pub async fn publish_text(&self, kind: &str, payload: String) -> Result<(), String> {
         match kind {
-            "PAIRING_RESPONSE_REPORTED" => self.report_pairing_response(payload).await,
+            "PAIRING_REPLY_REPORTED" => self.report_pairing_reply(payload).await,
             "NOTIFICATION_REPORTED" => self.report_notification(payload).await,
             "IMAGE_CATALOG_CHANGED" => self.report_image_catalog_changed(payload).await,
             "NETWORK_INTERFACES_CHANGED" => self.report_network_interfaces_changed(payload).await,

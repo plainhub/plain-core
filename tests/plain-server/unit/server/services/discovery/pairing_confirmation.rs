@@ -66,7 +66,7 @@ async fn scanner_sends_only_the_response_and_both_tls_peers_save_the_same_key() 
     };
     let signing =
         plain_rs::features::services::peers::peer_wire::signing_keypair(&remote.prefs).unwrap();
-    let mut forged = plain_rs::features::peers::pairing::protocol::PairingResponse {
+    let mut forged = plain_rs::features::peers::pairing::protocol::PairingAccept {
         request_id: qr.request_id.clone(),
         signature_public_key: Some(base64_encode(&signing[32..])),
         from_name: Some("Unverified scanner".into()),
@@ -75,14 +75,13 @@ async fn scanner_sends_only_the_response_and_both_tls_peers_save_the_same_key() 
         ecdh_public_key: base64_encode(
             &plain_libs::crypto::EcdhSession::generate().public_key_bytes,
         ),
-        accepted: true,
         ips: vec![],
         signature: String::new(),
         aware_supported: false,
     };
     forged.signature =
         plain_libs::crypto::ed25519_sign(&signing, forged.signature_data().as_bytes());
-    let message = plain_rs::features::discovery::nearby_wire::Message::PairResponse(forged);
+    let message = plain_rs::features::discovery::nearby_wire::Message::PairingAccept(forged);
     assert!(
         !plain_rs::features::discovery::nearby_http::send(
             "127.0.0.1",

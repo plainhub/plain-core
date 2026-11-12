@@ -1,3 +1,4 @@
+use crate::infrastructure::signature::SignaturePurpose;
 use serde::{Deserialize, Serialize};
 
 use crate::features::chat::enums::DeviceType;
@@ -45,7 +46,7 @@ pub fn request_id(signature: &str) -> String {
 impl PairingRequest {
     pub fn signature_data(&self) -> String {
         plain_libs::serde_json::json!([
-            "chat-pair-request",
+            SignaturePurpose::PairRequest,
             self.from_id,
             self.payload.signature_public_key,
             self.to_id,
@@ -64,7 +65,7 @@ impl PairingRequest {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct PairingResponse {
+pub struct PairingAccept {
     pub request_id: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub signature_public_key: Option<String>,
@@ -73,7 +74,6 @@ pub struct PairingResponse {
     pub port: u16,
     pub device_type: DeviceType,
     pub ecdh_public_key: String,
-    pub accepted: bool,
     #[serde(default)]
     pub ips: Vec<String>,
     #[serde(default)]
@@ -82,21 +82,46 @@ pub struct PairingResponse {
     pub aware_supported: bool,
 }
 
-impl PairingResponse {
+impl PairingAccept {
     pub fn signature_data(&self) -> String {
         plain_libs::serde_json::json!([
-            "chat-pair-response",
+            SignaturePurpose::PairingAccept,
             self.request_id,
             self.signature_public_key,
             self.from_name,
             self.port,
             self.device_type.as_str(),
             self.ecdh_public_key,
-            self.accepted,
             self.ips,
             self.aware_supported,
         ])
         .to_string()
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PairingReject {
+    pub request_id: String,
+    pub signature: String,
+}
+impl PairingReject {
+    pub fn signature_data(&self) -> String {
+        plain_libs::serde_json::json!([SignaturePurpose::PairingReject, self.request_id]).to_string()
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(tag = "kind", content = "payload", deny_unknown_fields)]
+pub enum PairingReply {
+    #[serde(rename = "PAIRING_ACCEPT")]
+    Accept(PairingAccept),
+    #[serde(rename = "PAIRING_REJECT")]
+    Reject(PairingReject),
+}
+impl PairingReply {
+    pub fn request_id(&self) -> &str {
+        match self { Self::Accept(value) => &value.request_id, Self::Reject(value) => &value.request_id }
     }
 }
 
@@ -113,7 +138,7 @@ pub struct PairingCancel {
 impl PairingCancel {
     pub fn signature_data(&self) -> String {
         plain_libs::serde_json::json!([
-            "pair-cancel",
+            SignaturePurpose::PairCancel,
             self.from_id,
             self.to_id,
             self.request_signature,

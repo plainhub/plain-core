@@ -2,8 +2,8 @@
 pub enum SignaturePurpose {
     #[serde(rename = "WEB_APPROVAL_RESPONSE")]
     WebApprovalResponse,
-    #[serde(rename = "CHAT_PAIR_REQUEST")]
-    ChatPairRequest,
+    #[serde(rename = "PAIR_REQUEST")]
+    PairRequest,
     #[serde(rename = "PAIRING_ACCEPT")]
     PairingAccept,
     #[serde(rename = "PAIRING_REJECT")]

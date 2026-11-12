@@ -44,7 +44,7 @@ async fn native_events_enforce_direction_and_reconcile_lag() {
         if matches!(
             *kind,
             "PAIRING_REQUEST_REPORTED"
-                | "PAIRING_RESPONSE_REPORTED"
+                | "PAIRING_REPLY_REPORTED"
                 | "PAIRING_CANCEL_REPORTED"
                 | "NOTIFICATION_REPORTED"
                 | "CLIPBOARD_REPORTED"

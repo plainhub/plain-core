@@ -1,5 +1,5 @@
 use crate::features::peers::pairing::now_ms;
-use crate::features::peers::pairing::protocol::PairingResponse;
+use crate::features::peers::pairing::protocol::{PairingAccept, PairingReject, PairingReply};
 use crate::features::peers::pairing::protocol::{PairingRequest, PairingRequestPayload};
 use crate::features::peers::pairing::security;
 use crate::features::prefs::Prefs;
@@ -58,7 +58,7 @@ pub(super) fn response(
     request: PairingRequest,
     accepted: bool,
     device: Device,
-) -> Result<Option<(PairingResponse, Option<EcdhSession>)>> {
+) -> Result<Option<(PairingReply, Option<EcdhSession>)>> {
     if !security::verify_request(&request) {
         return Ok(None);
     }
@@ -69,25 +69,26 @@ pub(super) fn response(
             && request.target_public_key == local_key,
         "Pairing target identity mismatch"
     );
-    let ecdh = accepted.then(EcdhSession::generate);
-    let mut response = PairingResponse {
+    if !accepted {
+        let mut reply = PairingReject { request_id: request.payload.request_id(), signature: String::new() };
+        reply.signature = plain_libs::crypto::ed25519_sign(&kp, reply.signature_data().as_bytes());
+        return Ok(Some((PairingReply::Reject(reply), None)));
+    }
+    let ecdh = EcdhSession::generate();
+    let mut response = PairingAccept {
         request_id: request.payload.request_id(),
         signature_public_key: None,
         from_name: None,
         port: device.port,
         device_type: device.device_type,
-        ecdh_public_key: ecdh
-            .as_ref()
-            .map(|e| plain_libs::utils::base64::base64_encode(&e.public_key_bytes))
-            .unwrap_or_default(),
-        accepted,
+        ecdh_public_key: plain_libs::utils::base64::base64_encode(&ecdh.public_key_bytes),
         ips: device.ips,
         signature: String::new(),
         aware_supported: device.aware_supported,
     };
     response.signature =
         plain_libs::crypto::ed25519_sign(&kp, response.signature_data().as_bytes());
-    Ok(Some((response, ecdh)))
+    Ok(Some((PairingReply::Accept(response), Some(ecdh))))
 }
 use crate::features::peers::pairing::protocol::PairingCancel;
 use crate::features::peers::pairing::sessions::Sessions;

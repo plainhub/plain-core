@@ -25,7 +25,7 @@ fn request_signature_data_format_is_locked() {
     let req = sample_request();
     assert_eq!(
         req.signature_data(),
-        r#"["chat-pair-request","client-a","SIGPK","receiver","AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=","Mac",8443,"COMPUTER","ECDH",1700000000000,["203.0.113.10","203.0.113.11"],false]"#
+        r#"["PAIR_REQUEST","client-a","SIGPK","receiver","AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=","Mac",8443,"COMPUTER","ECDH",1700000000000,["203.0.113.10","203.0.113.11"],false]"#
     );
     // `from_ip` is stamped by the receiver and must not affect the signature.
     let mut stamped = req.clone();
@@ -38,22 +38,21 @@ fn request_signature_data_format_is_locked() {
 }
 
 #[test]
-fn response_signature_data_format_is_locked() {
-    let resp = PairingResponse {
+fn accept_signature_data_format_is_locked() {
+    let resp = PairingAccept {
         request_id: "REQUEST_ID".into(),
         signature_public_key: None,
         from_name: None,
         port: 2443,
         device_type: crate::features::chat::enums::DeviceType::Phone,
         ecdh_public_key: "ECDH2".to_string(),
-        accepted: true,
         ips: vec![],
         signature: String::new(),
         aware_supported: false,
     };
     assert_eq!(
         resp.signature_data(),
-        r#"["chat-pair-response","REQUEST_ID",null,null,2443,"PHONE","ECDH2",true,[],false]"#
+        r#"["PAIRING_ACCEPT","REQUEST_ID",null,null,2443,"PHONE","ECDH2",[],false]"#
     );
 }
 
@@ -78,7 +77,7 @@ fn legacy_unsigned_cancellation_and_unbound_response_are_rejected() {
         plain_libs::serde_json::from_value::<PairingCancel>(plain_libs::serde_json::json!({"fromId":"a","toId":"b"}))
             .is_err()
     );
-    assert!(plain_libs::serde_json::from_value::<PairingResponse>(plain_libs::serde_json::json!({"fromId":"b","toId":"a","port":2443,"deviceType":"PHONE","ecdhPublicKey":"key","signaturePublicKey":"signer","accepted":true,"timestamp":1,"signature":"old"})).is_err());
+    assert!(plain_libs::serde_json::from_value::<PairingAccept>(plain_libs::serde_json::json!({"fromId":"b","toId":"a","port":2443,"deviceType":"PHONE","ecdhPublicKey":"key","signaturePublicKey":"signer","accepted":true,"timestamp":1,"signature":"old"})).is_err());
 }
 
 #[test]
@@ -119,4 +118,15 @@ fn delimiters_cannot_move_between_signed_fields() {
     b.from_id = "a".into();
     b.payload.from_name = "b|c".into();
     assert_ne!(a.signature_data(), b.signature_data());
+}
+
+#[test]
+fn reject_has_only_bound_request_and_signature() {
+    let value = PairingReject { request_id: "request".into(), signature: "signature".into() };
+    assert_eq!(value.signature_data(), r#"["PAIRING_REJECT","request"]"#);
+    let wire = plain_libs::serde_json::to_value(&value).unwrap();
+    assert_eq!(wire.as_object().unwrap().len(), 2);
+    let mut extra = wire;
+    extra["ecdhPublicKey"] = plain_libs::serde_json::json!("unexpected");
+    assert!(plain_libs::serde_json::from_value::<PairingReject>(extra).is_err());
 }
