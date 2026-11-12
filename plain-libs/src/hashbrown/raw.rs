@@ -49,7 +49,7 @@ struct ProbeSeq {
     stride: usize,
 }
 impl ProbeSeq {
-    #[inline]
+    #[inline(always)]
     fn move_next(&mut self, bucket_mask: usize) {
         debug_assert!(
             self.stride <= bucket_mask,

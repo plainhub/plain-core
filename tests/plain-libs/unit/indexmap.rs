@@ -242,3 +242,36 @@ fn ordered_removal_moves_owned_handles_without_cloning_payloads_or_dropping_twic
     drop(map);
     assert_eq!(drops.get(), 1024);
 }
+
+#[test]
+fn sparse_range_mutations_keep_all_keys_addressable() {
+    let mut map = IndexMap::with_capacity(65536);
+    let mut expected: Vec<_> = (0..2048).map(|key| (key, key * 3)).collect();
+    for &(key, value) in &expected {
+        map.insert(key, value);
+    }
+    for key in 0..128 {
+        assert_eq!(map.shift_remove(&key), Some(key * 3));
+        expected.remove(0);
+    }
+    for (from, to) in [(0, 1919), (1919, 0), (1, 1918), (1918, 1), (12, 12)] {
+        map.move_index(from, to);
+        let entry = expected.remove(from);
+        expected.insert(to, entry);
+    }
+    for index in [0, 1, expected.len(), expected.len() + 1] {
+        let key = 10000 + index;
+        assert_eq!(map.shift_insert(index, key, key * 3), None);
+        expected.insert(index, (key, key * 3));
+    }
+    assert_eq!(
+        map.iter()
+            .map(|(&key, &value)| (key, value))
+            .collect::<Vec<_>>(),
+        expected
+    );
+    for (index, &(key, value)) in expected.iter().enumerate() {
+        assert_eq!(map.get_index_of(&key), Some(index));
+        assert_eq!(map.get(&key), Some(&value));
+    }
+}

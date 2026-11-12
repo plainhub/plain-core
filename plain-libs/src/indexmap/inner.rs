@@ -478,12 +478,17 @@ impl<K, V> Core<K, V> {
                 self.shift_matching_indices::<INCREMENT>(|index| start <= index && index < end);
             }
         } else if INCREMENT {
-            for (index, entry) in (start..end).zip(shifted_entries).rev() {
-                update_index(&mut self.indices, entry.hash, index, index + 1);
+            let mut index = end;
+            for entry in shifted_entries.iter().rev() {
+                index = index.wrapping_sub(1);
+                update_index(&mut self.indices, entry.hash, index, index.wrapping_add(1));
             }
         } else {
-            for (index, entry) in (start..end).zip(shifted_entries) {
-                update_index(&mut self.indices, entry.hash, index, index - 1);
+            // The validated slice and caller ranges bound both the counter and shifted index.
+            let mut index = start;
+            for entry in shifted_entries {
+                update_index(&mut self.indices, entry.hash, index, index.wrapping_sub(1));
+                index = index.wrapping_add(1);
             }
         }
     }

@@ -73,6 +73,7 @@ where
             None => None,
         }
     }
+    #[inline(always)]
     pub fn entry(
         &mut self,
         hash: u64,

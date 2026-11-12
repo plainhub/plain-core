@@ -52,12 +52,14 @@ pub(crate) fn compile_probe(source_text: &str) -> String {
     let library = std::env::var_os("PLAIN_LIBS_CODEGEN_RLIB").expect("production rlib is required");
     let dependencies =
         std::env::var_os("PLAIN_LIBS_CODEGEN_DEPS").expect("dependency directory is required");
+    static NEXT_PROBE: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+    let sequence = NEXT_PROBE.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let unique = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_nanos();
     let directory = ProbeDir(std::env::temp_dir().join(format!(
-        "plain-libs-codegen-{}-{unique}",
+        "plain-libs-codegen-{}-{unique}-{sequence}",
         std::process::id()
     )));
     fs::create_dir(&directory.0).unwrap();
@@ -74,6 +76,8 @@ pub(crate) fn compile_probe(source_text: &str) -> String {
             "opt-level=3",
             "-C",
             "codegen-units=1",
+            "-C",
+            "debug-assertions=yes",
         ])
         .arg(&source)
         .arg("--extern")

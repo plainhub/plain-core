@@ -6,13 +6,17 @@ fn ordered_shifts_inline_hash_lookups_and_use_standard_bucket_references() {
     let ir = compile_probe(
         r#"
 extern crate plain_libs;
-type Map = plain_libs::indexmap::IndexMap<u64, u64, std::hash::BuildHasherDefault<std::collections::hash_map::DefaultHasher>>;
+#[derive(PartialEq, Eq, Hash)]
+pub struct Key(pub u64);
+type Map = plain_libs::indexmap::IndexMap<Key, u64, std::hash::BuildHasherDefault<std::collections::hash_map::DefaultHasher>>;
 #[unsafe(no_mangle)]
-pub fn remove_key(map: &mut Map, key: u64) -> Option<u64> { map.shift_remove(&key) }
+pub fn remove_key(map: &mut Map, key: u64) -> Option<u64> { map.shift_remove(&Key(key)) }
 #[unsafe(no_mangle)]
-pub fn remove_index(map: &mut Map, index: usize) -> Option<(u64, u64)> { map.shift_remove_index(index) }
+pub fn remove_index(map: &mut Map, index: usize) -> Option<(Key, u64)> { map.shift_remove_index(index) }
 #[unsafe(no_mangle)]
 pub fn move_index(map: &mut Map, from: usize, to: usize) { map.move_index(from, to) }
+#[unsafe(no_mangle)]
+pub fn insert(map: &mut Map, key: u64, value: u64) -> Option<u64> { map.insert(Key(key), value) }
 "#,
     );
     let unexpected: Vec<_> = ir
@@ -20,12 +24,15 @@ pub fn move_index(map: &mut Map, from: usize, to: usize) { map.move_index(from, 
         .filter(|line| {
             !line.trim_start().starts_with(';')
                 && (line.contains("call ") || line.contains("invoke "))
-                && ((line.contains("hashbrown") && line.contains("find_mut"))
+                && ((line.contains("hashbrown")
+                    && (line.contains("find_mut")
+                        || line.contains("move_next")
+                        || line.contains("5entry")))
                     || line.contains("panic_misaligned_pointer_dereference"))
         })
         .collect();
     assert!(
         unexpected.is_empty(),
-        "ordered shifts retain per-entry wrapper calls or pointer checks: {unexpected:?}"
+        "ordered shifts retain lookup/probe/entry wrapper calls or pointer checks: {unexpected:?}"
     );
 }
