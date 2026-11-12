@@ -1,11 +1,12 @@
 use super::*;
+use plain_libs::utils::uuid::Uuid;
 
-fn id(millis: u64, random: u8) -> Uuid {
+fn id(millis: u64, random: u8) -> RequestId {
     let mut bytes = [random; 16];
     bytes[..6].copy_from_slice(&millis.to_be_bytes()[2..]);
     bytes[6] = (bytes[6] & 15) | 0x70;
     bytes[8] = (bytes[8] & 63) | 0x80;
-    Uuid::from_bytes(bytes)
+    RequestId::parse(&Uuid::from_bytes(bytes).to_string()).unwrap()
 }
 
 fn cache(wall: i64, now: Instant) -> Cache {

@@ -4,17 +4,20 @@ pub struct Context(Vec<u8>);
 
 impl Context {
     pub fn new(request: &[u8]) -> Self {
-        let mut aad = b"r\0".to_vec();
-        aad.extend_from_slice(&Sha256::digest(request));
-        Self(aad)
+        let mut binding = vec![0];
+        binding.extend_from_slice(&Sha256::digest(request));
+        Self(binding)
     }
 
     pub fn encrypt(&self, key: &[u8], plaintext: &[u8]) -> Option<Vec<u8>> {
-        plain_libs::crypto::xchacha_encrypt_raw_with_aad(key, plaintext, &self.0)
+        let mut body = self.0.clone();
+        body.extend_from_slice(plaintext);
+        plain_libs::crypto::xchacha_encrypt_raw(key, &body)
     }
 
     pub fn decrypt(&self, key: &[u8], response: &[u8]) -> Option<Vec<u8>> {
-        plain_libs::crypto::xchacha_decrypt_raw_with_aad(key, response, &self.0)
+        let body = plain_libs::crypto::xchacha_decrypt_raw(key, response)?;
+        Some(body.strip_prefix(self.0.as_slice())?.to_vec())
     }
 }
 

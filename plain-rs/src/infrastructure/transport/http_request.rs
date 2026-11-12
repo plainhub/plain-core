@@ -1,4 +1,4 @@
-/// AEAD request binding uses the logical destination, also across proxy/BLE/Aware.
+/// REST request binding uses the logical destination, also across proxy/BLE/Aware.
 pub fn aad(method: &str, endpoint: &str) -> Vec<u8> {
     let mut aad = b"http-request\0".to_vec();
     aad.extend_from_slice(method.as_bytes());
@@ -7,23 +7,28 @@ pub fn aad(method: &str, endpoint: &str) -> Vec<u8> {
     aad
 }
 pub fn encrypt_raw(key: &[u8], method: &str, endpoint: &str, payload: &[u8]) -> Option<Vec<u8>> {
-    plain_libs::crypto::xchacha_encrypt_raw_with_aad(key, payload, &aad(method, endpoint))
+    if matches!(endpoint, "/graphql" | "/guest_graphql" | "/peer_graphql") {
+        if method != "POST" {
+            return None;
+        }
+        plain_libs::crypto::xchacha_encrypt_raw(key, payload)
+    } else {
+        plain_libs::crypto::xchacha_encrypt_raw_with_aad(key, payload, &aad(method, endpoint))
+    }
 }
 pub fn decrypt_raw(key: &[u8], method: &str, endpoint: &str, payload: &[u8]) -> Option<Vec<u8>> {
-    plain_libs::crypto::xchacha_decrypt_raw_with_aad(key, payload, &aad(method, endpoint))
+    if matches!(endpoint, "/graphql" | "/guest_graphql" | "/peer_graphql") {
+        if method != "POST" {
+            return None;
+        }
+        plain_libs::crypto::xchacha_decrypt_raw(key, payload)
+    } else {
+        plain_libs::crypto::xchacha_decrypt_raw_with_aad(key, payload, &aad(method, endpoint))
+    }
 }
 pub fn encrypt(key: &[u8], endpoint: &str, payload: &str) -> Result<Vec<u8>, &'static str> {
-    let body = if endpoint == "/graphql" {
-        let mut request: plain_libs::serde_json::Value =
-            plain_libs::serde_json::from_str(payload).map_err(|_| "Invalid GraphQL request")?;
-        request
-            .as_object_mut()
-            .ok_or("Invalid GraphQL request")?
-            .insert(
-                "requestId".into(),
-                crate::features::record_id::generate().into(),
-            );
-        request.to_string()
+    let body = if matches!(endpoint, "/graphql" | "/guest_graphql") {
+        super::graphql_request::Envelope::new(payload)?.json()?
     } else {
         format!(
             "{}|{}|{}",

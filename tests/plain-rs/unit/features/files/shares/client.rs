@@ -23,16 +23,10 @@ fn guest_wire_and_file_ids_use_existing_xchacha_contract_and_exact_query_encodin
         .unwrap(),
     )
     .unwrap();
-    let parts: Vec<_> = plain.splitn(3, '|').collect();
-    assert!(
-        parts[0]
-            .parse::<u64>()
-            .unwrap()
-            .abs_diff(crate::features::peers::pairing::now_ms() as u64)
-            < 1000
-    );
-    assert!(plain_libs::utils::uuid::Uuid::parse_str(parts[1]).is_ok());
-    let document: Value = plain_libs::serde_json::from_str(parts[2]).unwrap();
+    let envelope = crate::infrastructure::transport::graphql_request::Envelope::parse(&plain).unwrap();
+    let id = envelope.id().unwrap();
+    assert!(id.timestamp().abs_diff(crate::features::peers::pairing::now_ms()) < 1000);
+    let document: Value = plain_libs::serde_json::from_str(&plain).unwrap();
     assert_eq!(
         document["variables"]["relativePath"],
         "folder/quoted\" 中文%"

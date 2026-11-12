@@ -1,7 +1,6 @@
 use plain_libs::axum::http::StatusCode;
-use plain_libs::utils::uuid::Uuid;
 use plain_rs::infrastructure::db::{Db, SessionRow};
-use serde::Deserialize;
+use plain_rs::infrastructure::transport::graphql_request::{Envelope, RequestId};
 use sha2::{Digest, Sha256};
 use std::{
     collections::{HashMap, HashSet},
@@ -23,17 +22,11 @@ pub(crate) struct GraphqlReplay {
 }
 
 struct Cache {
-    sessions: HashMap<SessionKey, HashMap<Uuid, Instant>>,
+    sessions: HashMap<SessionKey, HashMap<RequestId, Instant>>,
     total: usize,
     last_cleanup: Instant,
     clock_wall: i64,
     clock_instant: Instant,
-}
-
-#[derive(Deserialize)]
-struct RequestId {
-    #[serde(rename = "requestId")]
-    request_id: String,
 }
 
 fn session_key(session: &SessionRow) -> SessionKey {
@@ -75,17 +68,10 @@ impl GraphqlReplay {
         if self.retired.contains(&key) {
             return Err(StatusCode::UNAUTHORIZED);
         }
-        let id = plain_libs::serde_json::from_str::<RequestId>(plain)
+        let id = Envelope::parse(plain)
             .map_err(|_| StatusCode::BAD_REQUEST)?
-            .request_id;
-        if id.len() != 36 {
-            return Err(StatusCode::BAD_REQUEST);
-        }
-        let id = Uuid::parse_str(&id).map_err(|_| StatusCode::BAD_REQUEST)?;
-        let bytes = id.as_bytes();
-        if bytes[6] >> 4 != 7 || bytes[8] & 0xc0 != 0x80 {
-            return Err(StatusCode::BAD_REQUEST);
-        }
+            .id()
+            .ok_or(StatusCode::BAD_REQUEST)?;
         let mut cache = self
             .state
             .lock()
@@ -112,7 +98,7 @@ impl Cache {
     fn admit(
         &mut self,
         key: SessionKey,
-        id: Uuid,
+        id: RequestId,
         wall: i64,
         now: Instant,
         session_limit: usize,
@@ -129,9 +115,7 @@ impl Cache {
             self.clock_wall = wall;
             self.clock_instant = now;
         }
-        let mut timestamp = [0; 8];
-        timestamp[2..].copy_from_slice(&id.as_bytes()[..6]);
-        if wall < 0 || (wall as u64).abs_diff(u64::from_be_bytes(timestamp)) > WINDOW_MS {
+        if !id.is_fresh(wall, WINDOW_MS) {
             return Err(StatusCode::BAD_REQUEST);
         }
         if now.duration_since(self.last_cleanup) >= CLEANUP_INTERVAL {

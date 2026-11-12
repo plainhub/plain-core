@@ -34,19 +34,17 @@ fn signing_current_peer_and_channel_keys_and_authenticated_crypto_roundtrip() {
         },
     )
     .unwrap();
-    let split: Vec<_> = first.body.splitn(4, '|').collect();
+    let split: crate::infrastructure::transport::graphql_request::SignedEnvelope = plain_libs::serde_json::from_str(&first.body).unwrap();
     assert!(plain_libs::crypto::ed25519_verify(
         &base64_encode(&public),
         crate::infrastructure::transport::auth::signature_payload(
-            split[1].parse().unwrap(),
             "",
-            split[2],
-            split[3]
+            split.request.get()
         )
         .as_bytes(),
-        split[0]
+        &split.signature
     ));
-    let gql: plain_libs::serde_json::Value = plain_libs::serde_json::from_str(split[3]).unwrap();
+    let gql: plain_libs::serde_json::Value = plain_libs::serde_json::from_str(split.request.get()).unwrap();
     assert_eq!(gql["variables"]["content"], content);
     assert_eq!(first.key, peer.key);
     let decoded_key = plain_libs::utils::base64::base64_decode(&first.key);

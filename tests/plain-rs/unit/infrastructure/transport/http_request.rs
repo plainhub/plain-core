@@ -40,31 +40,53 @@ fn response_authentication_binds_key_and_request() {
 }
 
 #[test]
-fn request_binding_rejects_other_methods_routes_and_unbound_ciphertexts() {
+fn graphql_requests_use_empty_aad_and_only_post() {
     let body = encrypt(&[7; 32], "/graphql", r#"{"query":"{ payload }"}"#).unwrap();
     assert!(decrypt_raw(&[7; 32], "POST", "/graphql", &body).is_some());
     assert!(decrypt_raw(&[7; 32], "GET", "/graphql", &body).is_none());
-    assert!(decrypt_raw(&[7; 32], "POST", "/guest_graphql", &body).is_none());
-    let old =
-        plain_libs::crypto::xchacha_encrypt_raw(&[7; 32], br#"{"query":"{ payload }"}"#).unwrap();
+    assert!(plain_libs::crypto::xchacha_decrypt_raw(&[7; 32], &body).is_some());
+    let old = plain_libs::crypto::xchacha_encrypt_raw_with_aad(
+        &[7; 32],
+        b"payload",
+        &aad("POST", "/graphql"),
+    )
+    .unwrap();
     assert!(decrypt_raw(&[7; 32], "POST", "/graphql", &old).is_none());
-    assert_eq!(aad("POST", "/graphql"), b"http-request\0POST\0/graphql");
 }
 
 #[test]
-fn only_graphql_uses_the_uuid_json_envelope() {
+fn main_and_guest_share_the_uuid_json_envelope() {
     let body = encrypt(&[7; 32], "/init", "init").unwrap();
     let plain = String::from_utf8(decrypt_raw(&[7; 32], "POST", "/init", &body).unwrap()).unwrap();
     assert_eq!(plain.splitn(3, '|').nth(2), Some("init"));
-    for invalid in ["not json", "[]", "null"] {
-        assert!(encrypt(&[7; 32], "/graphql", invalid).is_err());
+    for endpoint in ["/graphql", "/guest_graphql"] {
+        for invalid in ["not json", "[]", "null"] {
+            assert!(encrypt(&[7; 32], endpoint, invalid).is_err());
+        }
+        let body = encrypt(&[7; 32], endpoint, r#"{"requestId":"caller-value","query":"query Q($text: String!) { q(text:$text) }","variables":{"text":"a|b"},"operationName":"Q"}"#).unwrap();
+        let request: plain_libs::serde_json::Value = plain_libs::serde_json::from_slice(
+            &decrypt_raw(&[7; 32], "POST", endpoint, &body).unwrap(),
+        )
+        .unwrap();
+        assert_ne!(request["requestId"], "caller-value");
+        assert_eq!(request["variables"]["text"], "a|b");
+        assert_eq!(request["operationName"], "Q");
     }
-    let body = encrypt(&[7; 32], "/graphql", r#"{"requestId":"caller-value","query":"query Q($text: String!) { q(text:$text) }","variables":{"text":"a|b"},"operationName":"Q"}"#).unwrap();
-    let request: plain_libs::serde_json::Value = plain_libs::serde_json::from_slice(
-        &decrypt_raw(&[7; 32], "POST", "/graphql", &body).unwrap(),
-    )
-    .unwrap();
-    assert_ne!(request["requestId"], "caller-value");
-    assert_eq!(request["variables"]["text"], "a|b");
-    assert_eq!(request["operationName"], "Q");
+}
+
+#[test]
+fn graphql_crypto_carries_only_the_payload_without_route_metadata() {
+    let key = [7; 32];
+    for endpoint in ["/graphql", "/guest_graphql", "/peer_graphql"] {
+        let body = encrypt_raw(&key, "POST", endpoint, b"payload").unwrap();
+        assert_eq!(
+            plain_libs::crypto::xchacha_decrypt_raw(&key, &body).unwrap(),
+            b"payload"
+        );
+        for other in ["/graphql", "/guest_graphql", "/peer_graphql"] {
+            assert_eq!(decrypt_raw(&key, "POST", other, &body).unwrap(), b"payload");
+        }
+        assert!(encrypt_raw(&key, "GET", endpoint, b"payload").is_none());
+        assert!(decrypt_raw(&key, "GET", endpoint, &body).is_none());
+    }
 }

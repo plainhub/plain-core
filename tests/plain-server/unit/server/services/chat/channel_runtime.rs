@@ -80,7 +80,7 @@ async fn signed_invites_ack_keys_and_deleted_broadcast_use_rust_snapshot() {
                     let body = plain_rs::features::services::peers::ble_transport::test_peer_wire(
                         &ble, p, &key,
                     );
-                    let pieces: Vec<_> = body.splitn(4, '|').collect();
+                    let pieces: plain_rs::infrastructure::transport::graphql_request::SignedEnvelope = plain_libs::serde_json::from_str(&body).unwrap();
                     let public = plain_libs::utils::base64::base64_encode(
                         &plain_rs::features::services::peers::peer_wire::signing_keypair(&prefs)
                             .unwrap()[32..],
@@ -88,19 +88,17 @@ async fn signed_invites_ack_keys_and_deleted_broadcast_use_rust_snapshot() {
                     assert!(plain_libs::crypto::ed25519_verify(
                         &public,
                         plain_rs::infrastructure::transport::auth::signature_payload(
-                            pieces[1].parse().unwrap(),
                             if p["peer"]["id"] == "paired" {
                                 ""
                             } else {
                                 &channel_id
                             },
-                            pieces[2],
-                            pieces[3]
+                            pieces.request.get()
                         )
                         .as_bytes(),
-                        pieces[0]
+                        &pieces.signature
                     ));
-                    let wire: Value = plain_libs::serde_json::from_str(pieces[3]).unwrap();
+                    let wire: Value = plain_libs::serde_json::from_str(pieces.request.get()).unwrap();
                     let payload: Value =
                         plain_libs::serde_json::from_str(wire["variables"]["payload"].as_str().unwrap())
                             .unwrap();
@@ -315,7 +313,7 @@ async fn peer_key_changes_before_physical_send_are_rejected_and_accept_leave_dec
                         &[9; 32],
                     );
                     let wire: Value =
-                        plain_libs::serde_json::from_str(body.splitn(4, '|').nth(3).unwrap()).unwrap();
+                        plain_libs::serde_json::from_str::<Value>(&body).unwrap()["request"].clone();
                     let kind = wire["variables"]["type"].as_str().unwrap().to_string();
                     if kind == "INVITE_ACCEPT" {
                         let payload: Value =

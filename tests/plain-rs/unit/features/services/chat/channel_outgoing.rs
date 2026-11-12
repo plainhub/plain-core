@@ -49,19 +49,17 @@ fn private_prepare_uses_persisted_signing_identity_and_current_peer_keys() {
     assert_eq!(result.targets[1].key, channel.key);
     assert_eq!(result.targets[1].channel_id, channel.id);
     let body = wire(&prefs, result.message_type, &result.payload, "").unwrap();
-    let pieces: Vec<_> = body.splitn(4, '|').collect();
+    let pieces: crate::infrastructure::transport::graphql_request::SignedEnvelope = plain_libs::serde_json::from_str(&body).unwrap();
     assert!(plain_libs::crypto::ed25519_verify(
         &base64_encode(&public),
         crate::infrastructure::transport::auth::signature_payload(
-            pieces[1].parse().unwrap(),
             "",
-            pieces[2],
-            pieces[3]
+            pieces.request.get()
         )
         .as_bytes(),
-        pieces[0]
+        &pieces.signature
     ));
-    let wire: plain_libs::serde_json::Value = plain_libs::serde_json::from_str(pieces[3]).unwrap();
+    let wire: plain_libs::serde_json::Value = plain_libs::serde_json::from_str(pieces.request.get()).unwrap();
     assert_eq!(wire["variables"]["type"], "UPDATE");
     let payload: plain_libs::serde_json::Value =
         plain_libs::serde_json::from_str(wire["variables"]["payload"].as_str().unwrap()).unwrap();

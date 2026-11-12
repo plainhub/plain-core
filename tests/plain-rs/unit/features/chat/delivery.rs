@@ -33,7 +33,7 @@ impl PeerTransport for Transport {
     ) -> std::result::Result<(), String> {
         self.calls.fetch_add(1, Ordering::SeqCst);
         assert_eq!(key, &[7; 32]);
-        let graphql: Value = plain_libs::serde_json::from_str(body.splitn(4, '|').nth(3).unwrap()).unwrap();
+        let graphql: Value = plain_libs::serde_json::from_str::<Value>(&body).unwrap()["request"].clone();
         let content: Value =
             plain_libs::serde_json::from_str(graphql["variables"]["content"].as_str().unwrap()).unwrap();
         assert_eq!(content["type"], "TEXT");

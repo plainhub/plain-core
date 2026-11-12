@@ -87,17 +87,10 @@ pub fn peer_graphql_urls(peer: &DPeer) -> Vec<String> {
         .collect()
 }
 
-fn now_ms() -> i64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_millis() as i64
-}
-
 /// POST a `createChatItem` GraphQL request to `peer_graphql_urls`, trying
 /// each URL in order and returning `Ok(())` on the first successful
 /// delivery. Payload format: XChaCha20-Poly1305 over
-/// `signature|timestamp|nonce|GraphQL_JSON`.
+/// a signed JSON envelope containing the shared UUIDv7 GraphQL request.
 pub async fn deliver_to_peer<T: PeerTransport>(
     transport: &T,
     peer_graphql_urls: &[String],
@@ -157,7 +150,9 @@ pub async fn deliver_signed<T: PeerTransport + ?Sized>(
             errors.push(format!("{peer_graphql_url}: failed decrypting response"));
             continue;
         };
-        let Ok(value) = plain_libs::serde_json::from_slice::<plain_libs::serde_json::Value>(&decrypted) else {
+        let Ok(value) =
+            plain_libs::serde_json::from_slice::<plain_libs::serde_json::Value>(&decrypted)
+        else {
             log::warn!("deliver_to_peer invalid JSON from {peer_graphql_url}");
             errors.push(format!("{peer_graphql_url}: invalid JSON response"));
             continue;
@@ -203,16 +198,11 @@ pub fn signed_request(
     variables: plain_libs::serde_json::Value,
     channel_id: &str,
 ) -> Result<String, String> {
-    let graphql_json = plain_libs::serde_json::to_string(&json!({"query":query,"variables":variables}))
-        .map_err(|e| e.to_string())?;
-    let ts = now_ms();
-    let nonce = plain_libs::utils::uuid::Uuid::new_v4().into_string();
-    let signed = crate::infrastructure::transport::auth::signature_payload(
-        ts,
-        channel_id,
-        &nonce,
-        &graphql_json,
-    );
+    let graphql_json =
+        plain_libs::serde_json::to_string(&json!({"query":query,"variables":variables}))
+            .map_err(|e| e.to_string())?;
+    let request = super::graphql_request::Envelope::new(&graphql_json)?.json()?;
+    let signed = super::auth::signature_payload(channel_id, &request);
     let signature = ed25519_sign(kp_bytes, signed.as_bytes());
     if kp_bytes.len() != 64
         || !plain_libs::crypto::ed25519_verify(
@@ -223,7 +213,12 @@ pub fn signed_request(
     {
         return Err("Invalid peer signing keypair".into());
     }
-    Ok(format!("{signature}|{ts}|{nonce}|{graphql_json}"))
+    plain_libs::serde_json::to_string(&super::graphql_request::SignedEnvelope {
+        signature,
+        request: plain_libs::serde_json::value::RawValue::from_string(request)
+            .map_err(|e| e.to_string())?,
+    })
+    .map_err(|e| e.to_string())
 }
 pub fn chat_item_request(
     kp_bytes: &[u8],
@@ -303,7 +298,9 @@ pub async fn deliver_channel_system_message<T: PeerTransport>(
             log::warn!("[channel] {} response decrypt failed from {url}", msg_type);
             continue;
         };
-        let Ok(value) = plain_libs::serde_json::from_slice::<plain_libs::serde_json::Value>(&decrypted) else {
+        let Ok(value) =
+            plain_libs::serde_json::from_slice::<plain_libs::serde_json::Value>(&decrypted)
+        else {
             continue;
         };
         if value.get("errors").is_some_and(|errors| {

@@ -64,18 +64,10 @@ impl Link {
     pub fn request(&self, relative_path: Option<&str>) -> Result<Vec<u8>> {
         let query = "query($relativePath: String) { sharedInfo(relativePath: $relativePath) { name readOnly requiresPassword expiresAt urlToken entries { name relativePath isDir size mimeType hasThumb } } }";
         let body = json!({"query":query,"variables":{"relativePath":relative_path}}).to_string();
-        let envelope = format!(
-            "{}|{}|{body}",
-            crate::features::peers::pairing::now_ms(),
-            plain_libs::utils::uuid::Uuid::new_v4()
-        );
-        crate::infrastructure::transport::http_request::encrypt_raw(
-            &self.key()?,
-            "POST",
-            "/guest_graphql",
-            envelope.as_bytes(),
+        crate::infrastructure::transport::http_request::encrypt(
+            &self.key()?, "/guest_graphql", &body,
         )
-        .ok_or_else(|| plain_libs::anyhow::anyhow!("Cannot encrypt shared request"))
+        .map_err(|_| plain_libs::anyhow::anyhow!("Cannot encrypt shared request"))
     }
     pub fn response(&self, request: &[u8], bytes: &[u8]) -> Result<Info> {
         let plain = crate::infrastructure::transport::http_response::Context::new(request)

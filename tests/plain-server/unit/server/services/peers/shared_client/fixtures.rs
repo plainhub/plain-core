@@ -60,9 +60,8 @@ pub(super) async fn tls() -> (
             assert_eq!(headers["c-id"], "fixture");
             let plain = plain_rs::infrastructure::transport::http_request::decrypt_raw(&[7;32], "POST", "/guest_graphql", &body).unwrap();
             let plain = String::from_utf8(plain).unwrap();
-            let parts: Vec<_> = plain.splitn(3, '|').collect();
-            assert!(plain_libs::utils::uuid::Uuid::parse_str(parts[1]).is_ok());
-            let request: Value = plain_libs::serde_json::from_str(parts[2]).unwrap();
+            let request: Value = plain_libs::serde_json::from_str(&plain).unwrap();
+            assert!(plain_rs::infrastructure::transport::graphql_request::RequestId::parse(request["requestId"].as_str().unwrap()).is_some());
             count.fetch_add(1, Ordering::SeqCst);
             if request["variables"]["relativePath"] == "slow" {
                 started.notify_one();

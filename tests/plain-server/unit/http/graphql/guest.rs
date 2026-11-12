@@ -34,18 +34,10 @@ async fn guest_executes_encrypted_contract_and_rejects_replay_and_revocation() {
         .unwrap();
     let key = plain_libs::utils::base64::base64_decode_checked(&service.token(&share.id).unwrap())
         .unwrap();
-    let wrap = |nonce: &str, query: &str| {
-        let nonce = nonce.repeat(32);
-        plain_rs::infrastructure::transport::http_request::encrypt_raw(
-            &key,
-            "POST",
-            "/guest_graphql",
-            format!("{}|{nonce}|{query}", plain_libs::chrono::Utc::now().timestamp_millis()).as_bytes(),
-        )
-        .unwrap()
+    let wrap = |query: &str| {
+        plain_rs::infrastructure::transport::http_request::encrypt(&key, "/guest_graphql", query).unwrap()
     };
     let body = wrap(
-        "a",
         r#"{"query":"query($path:String){ alias:sharedInfo(relativePath:$path){name readOnly expiresAt entries{name relativePath isDir size mimeType hasThumb}} }","variables":{"path":""}}"#,
     );
     let (status, encrypted) = execute_guest(&state, &share.id, &body).await;
@@ -65,9 +57,9 @@ async fn guest_executes_encrypted_contract_and_rejects_replay_and_revocation() {
     assert_eq!(execute_guest(&state, &share.id, &body).await.0, 400);
     assert_eq!(execute_guest(&state, &share.id, &[0; 40]).await.0, 401);
     assert_eq!(execute_guest(&state, "", &body).await.0, 401);
-    let malformed = wrap("b", "invalid");
+    let malformed = plain_rs::infrastructure::transport::http_request::encrypt_raw(&key, "POST", "/guest_graphql", b"invalid").unwrap();
     assert_eq!(execute_guest(&state, &share.id, &malformed).await.0, 400);
-    let forbidden = wrap("c", r#"{"query":"{ shareRecords { id } }"}"#);
+    let forbidden = wrap( r#"{"query":"{ shareRecords { id } }"}"#);
     let (status, encrypted) = execute_guest(&state, &share.id, &forbidden).await;
     assert_eq!(status, 200);
     let result: Value = plain_libs::serde_json::from_slice(

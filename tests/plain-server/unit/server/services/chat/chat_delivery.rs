@@ -76,7 +76,7 @@ async fn explicit_message_retry_root_probes_open_transport_and_sends_original_ro
                         &[7; 32],
                     );
                     let document: Value =
-                        plain_libs::serde_json::from_str(wire.splitn(4, '|').nth(3).unwrap()).unwrap();
+                        plain_libs::serde_json::from_str::<Value>(&wire).unwrap()["request"].clone();
                     assert_eq!(
                         document["query"],
                         plain_rs::infrastructure::transport::contract::CREATE_CHAT_ITEM

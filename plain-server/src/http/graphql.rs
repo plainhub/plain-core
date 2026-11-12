@@ -281,11 +281,15 @@ async fn execute_guest(state: &ServerState, id: &str, body: &[u8]) -> (u16, Vec<
     };
     let context = plain_rs::infrastructure::transport::http_response::Context::new(body);
     let now = plain_libs::chrono::Utc::now().timestamp_millis();
-    let body = match state.guest_replay.admit(&state.db, id, &plain, now) {
-        Ok(p) => p,
-        Err(_) => return (400, vec![]),
+    let request_id = match plain_rs::infrastructure::transport::graphql_request::Envelope::parse(&plain)
+        .ok().and_then(|request| request.id()) {
+        Some(id) => id,
+        None => return (400, vec![]),
     };
-    let request: plain_graphql::Request = match plain_libs::serde_json::from_str(body) {
+    if !matches!(request_id.admit_persistent(&state.db, "guest", id, now, 60_000), Ok(true)) {
+        return (400, vec![]);
+    }
+    let request: plain_graphql::Request = match plain_libs::serde_json::from_str(&plain) {
         Ok(p) => p,
         Err(_) => return (400, vec![]),
     };
