@@ -1,3 +1,10 @@
+type Sim {
+	id: ID!
+	label: String!
+	number: String!
+	subscriptionId: Int!
+}
+
 type Sms {
 	id: ID!
 	body: String!
@@ -67,6 +74,7 @@ extend type Mutation {
 
 extend type Query {
 	archivedSmsConversations(query: String!, offset: Int!, limit: Int!): [SmsConversation!]!
+	sims: [Sim!]!
 	sms(query: String!, offset: Int!, limit: Int!): [Sms!]!
 	smsBoxCounts: SmsCounts!
 	smsConversationCount(query: String!): Int!

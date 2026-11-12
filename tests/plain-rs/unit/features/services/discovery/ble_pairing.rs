@@ -109,11 +109,15 @@ async fn ble_initiator_signs_filters_notifications_commits_shared_key_and_closes
                                 .respond(&remote_state, &request, true, device())
                                 .unwrap();
                             notifications.push_back("malformed".into());
-                            let crate::features::peers::pairing::protocol::PairingReply::Accept(mut wrong) = response.clone() else { panic!("Expected acceptance") };
+                            let crate::features::peers::pairing::protocol::PairingReply::Accept(
+                                mut wrong,
+                            ) = response.clone()
+                            else {
+                                panic!("Expected acceptance")
+                            };
                             wrong.request_id = "unrelated".into();
                             notifications.push_back(Message::PairingAccept(wrong).wire().unwrap());
-                            notifications
-                                .push_back(Message::from(response).wire().unwrap());
+                            notifications.push_back(Message::from(response).wire().unwrap());
                         }
                         _ => panic!("Unexpected pairing wire message"),
                     }
@@ -165,10 +169,13 @@ async fn ble_initiator_signs_filters_notifications_commits_shared_key_and_closes
     assert_eq!(local_peer.key, remote_peer.key);
     assert!(local_peer.is_paired());
     assert!(state.pairing.tickets().is_empty());
-    assert_eq!(events.recv().await.unwrap().event_type, WS_PAIRING_STARTED);
+    let started = events.recv().await.unwrap();
+    assert_eq!(started.event_type, WS_PAIRING_STARTED);
+    let notice: Value = plain_libs::serde_json::from_str(&started.payload).unwrap();
+    assert_eq!(notice["verificationCode"].as_str().unwrap().len(), 8);
     assert_eq!(
         events.recv().await.unwrap().event_type,
-        crate::features::chat::events::WS_PAIRING_SUCCESS
+        crate::features::chat::events::WS_PAIRING_COMPLETED
     );
     remote.shutdown().await;
     local.shutdown().await;

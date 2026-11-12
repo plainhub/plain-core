@@ -1,26 +1,21 @@
-use crate::infrastructure::signature::SignaturePurpose;
 use super::{
-    pairing_attempts::PairingPhase,
     pairing_confirmation::{chat_key, save_peer, verification_code},
     pairing_runtime::local_device,
 };
 use crate::features::{
-    discovery::{
-        nearby_http,
-        nearby_wire::Message,
-        pairing_code,
-    },
+    discovery::{nearby_http, nearby_wire::Message, pairing_code},
     peers::pairing::{
         now_ms,
         peer_store::Facts,
-        protocol::{PairingRequest, PairingRequestPayload, PairingAccept},
+        protocol::{PairingAccept, PairingRequest, PairingRequestPayload},
         sessions::RESPONSE_TIMEOUT,
     },
     services::peers::peer_wire::signing_keypair,
 };
+use crate::infrastructure::signature::SignaturePurpose;
 use crate::runtime::Runtime;
-use plain_libs::anyhow::{Result, ensure};
 use hmac::{Hmac, KeyInit, Mac};
+use plain_libs::anyhow::{Result, ensure};
 use plain_libs::{
     crypto::{EcdhSession, ed25519_sign, ed25519_verify},
     utils::base64::{base64_decode, base64_encode},
@@ -40,6 +35,32 @@ pub struct Display {
 pub struct Pairings {
     displayed: Mutex<Option<Displayed>>,
     scanned: Mutex<HashMap<String, Scanned>>,
+    codes: Mutex<HashMap<String, String>>,
+}
+
+impl Pairings {
+    pub fn remember(
+        &self,
+        code: &str,
+    ) -> Result<crate::features::discovery::nearby_devices::Device> {
+        let payload = pairing_code::parse(code)?;
+        let mut codes = self.codes.lock().unwrap();
+        codes.retain(|_, code| pairing_code::parse(code).is_ok());
+        ensure!(
+            codes.contains_key(&payload.from_id) || codes.len() < 128,
+            "Pairing capacity exceeded"
+        );
+        codes.insert(payload.from_id.clone(), code.into());
+        Ok(payload.into_device())
+    }
+    pub fn pending(&self, peer_id: &str) -> Result<Option<pairing_code::Payload>> {
+        self.codes
+            .lock()
+            .unwrap()
+            .get(peer_id)
+            .map(|code| pairing_code::parse(code))
+            .transpose()
+    }
 }
 
 struct Displayed {
@@ -56,11 +77,7 @@ struct Scanned {
     previous_identity: Option<String>,
 }
 
-fn response_input(
-    request: &PairingRequest,
-    response: &PairingAccept,
-    sender_id: &str,
-) -> Vec<u8> {
+fn response_input(request: &PairingRequest, response: &PairingAccept, sender_id: &str) -> Vec<u8> {
     let mut mac =
         Hmac::<sha2_mac::Sha256>::new_from_slice(request.payload.signature.as_bytes()).unwrap();
     mac.update(
@@ -68,13 +85,18 @@ fn response_input(
             .to_string()
             .as_bytes(),
     );
-    plain_libs::serde_json::json!([SignaturePurpose::QrPairAccept, base64_encode(&mac.finalize().into_bytes())])
-        .to_string()
-        .into_bytes()
+    plain_libs::serde_json::json!([
+        SignaturePurpose::QrPairAccept,
+        base64_encode(&mac.finalize().into_bytes())
+    ])
+    .to_string()
+    .into_bytes()
 }
 
 pub async fn display(state: &Runtime) -> Result<Display> {
-    let id = state.native_client_id().map_err(plain_libs::anyhow::Error::msg)?;
+    let id = state
+        .native_client_id()
+        .map_err(plain_libs::anyhow::Error::msg)?;
     let mut device = local_device(state).await?;
     device.ips.retain(|ip| {
         ip.parse::<IpAddr>()
@@ -126,28 +148,18 @@ pub fn create_display(
     Ok(display)
 }
 
-pub async fn respond(
-    state: &Runtime,
-    payload: pairing_code::Payload,
-    generation: &str,
-) -> Result<()> {
+pub async fn respond(state: &Runtime, payload: pairing_code::Payload) -> Result<()> {
     let request = payload.into_request();
-    let sender = state.native_client_id().map_err(plain_libs::anyhow::Error::msg)?;
+    let sender = state
+        .native_client_id()
+        .map_err(plain_libs::anyhow::Error::msg)?;
     ensure!(request.from_id != sender, "Cannot pair with this device");
     let address = crate::infrastructure::transport::lan::best_host(
         &request.payload.ips,
         &crate::infrastructure::transport::lan::local_interfaces(),
     );
     ensure!(!address.is_empty(), "No reachable pairing address");
-    state.pairing_runtime.attempts.set_verification_code(
-        state,
-        generation,
-        &verification_code(&request),
-    );
-    state
-        .pairing_runtime
-        .attempts
-        .transition(state, generation, PairingPhase::Pairing, None, None);
+
     let device = local_device(state).await?;
     ensure!(device.port != 0, "Active listener required");
     let response = prepare_response(state, &request, &sender, &address, device)?;
@@ -155,13 +167,7 @@ pub async fn respond(
     loop {
         if nearby_http::send(&address, request.payload.port, &message, Some(&sender)).await? {
             commit_scanned(state, &request, &address)?;
-            state.pairing_runtime.attempts.transition(
-                state,
-                generation,
-                PairingPhase::Succeeded,
-                None,
-                None,
-            );
+
             return Ok(());
         }
         tokio::time::sleep(std::time::Duration::from_secs(3)).await;
@@ -239,6 +245,17 @@ fn commit_scanned(state: &Runtime, request: &PairingRequest, address: &str) -> R
             None,
         )?;
         entry.facts = None;
+    } else {
+        let peer = crate::infrastructure::db::chat_store::peers::get(&state.db, &request.from_id)?
+            .ok_or_else(|| plain_libs::anyhow::anyhow!("Peer removed"))?;
+        super::pairing_runtime::success(
+            state,
+            &plain_libs::serde_json::to_value(
+                crate::features::services::peers::peer_address::view(&peer),
+            )?,
+            address,
+            None,
+        );
     }
     Ok(())
 }

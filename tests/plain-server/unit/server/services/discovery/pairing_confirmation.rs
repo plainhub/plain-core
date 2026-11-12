@@ -1,7 +1,6 @@
 use plain_libs::utils::base64::base64_encode;
 use plain_rs::features::services::discovery::pairing;
 use plain_rs::features::services::discovery::pairing_attempts::Mode;
-use plain_rs::features::services::discovery::pairing_attempts::PairingPhase;
 use std::sync::Arc;
 
 fn fixture(id: &str) -> (plain_libs::temporary::TempDir, crate::server::ContentServer) {
@@ -42,15 +41,7 @@ async fn scanner_sends_only_the_response_and_both_tls_peers_save_the_same_key() 
     let local = local_server.runtime_state().core;
     let remote = remote_server.runtime_state().core;
     assert!(
-        pairing_attempts::start(
-            &remote,
-            Some("display".into()),
-            None,
-            Some(Mode::Chat),
-            None,
-            None,
-            None,
-        )
+        pairing_attempts::start(&remote, "display".into(), Mode::Chat, None, None)
         .await
         .is_err()
     );
@@ -98,46 +89,23 @@ async fn scanner_sends_only_the_response_and_both_tls_peers_save_the_same_key() 
             .is_none()
     );
 
+    let native = remote_server.native_graphql().unwrap();
+    let parsed = native.execute(plain_graphql::Request::new("query($code:String!){parsePairingCode(code:$code){id}}")
+        .variables(plain_graphql::Variables::from_json(plain_libs::serde_json::json!({"code":qr.payload})))).await;
+    assert!(parsed.errors.is_empty(), "{:?}", parsed.errors);
+    assert_eq!(parsed.data.into_json().unwrap()["parsePairingCode"]["id"], "display");
     for _ in 0..2 {
-        let attempt = pairing_attempts::start(
-            &remote,
-            Some("display".into()),
-            Some(qr.payload.clone()),
-            Some(Mode::Chat),
-            None,
-            None,
-            None,
-        )
-        .await
-        .unwrap();
-        let complete = tokio::time::timeout(std::time::Duration::from_secs(5), async {
-            loop {
-                let current = remote
-                    .pairing_runtime
-                    .attempts
-                    .get(&attempt.generation)
-                    .unwrap();
-                if matches!(
-                    current.phase,
-                    PairingPhase::Succeeded | PairingPhase::Failed
-                ) {
-                    break current;
-                }
-                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        let mut notices = remote.events.subscribe();
+        let response = native.execute(plain_graphql::Request::new(r#"mutation{pairDevice(input:{peerId:"display",mode:CHAT})}"#)).await;
+        assert!(response.errors.is_empty(), "{:?}", response.errors);
+        assert_eq!(response.data.into_json().unwrap()["pairDevice"], true);
+        tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            while let Ok(event) = notices.recv().await {
+                assert_ne!(event.event_type, "PAIRING_FAILED", "{}", event.payload);
+                if event.event_type == "PAIRING_COMPLETED" { return; }
             }
-        })
-        .await
-        .unwrap();
-        assert_eq!(
-            complete.phase,
-            PairingPhase::Succeeded,
-            "{:?}",
-            complete.error
-        );
-        assert_eq!(
-            complete.verification_code.as_deref(),
-            Some(qr.verification_code.as_str())
-        );
+            panic!("pairing notification closed");
+        }).await.unwrap();
         assert_eq!(qr.verification_code.len(), 8);
         assert!(
             qr.verification_code
@@ -151,8 +119,8 @@ async fn scanner_sends_only_the_response_and_both_tls_peers_save_the_same_key() 
     }
     let mut completed = 0;
     while let Ok(event) = incoming.try_recv() {
-        assert_ne!(event.event_type, "PAIRING_REQUEST_RECEIVED");
-        if event.event_type == "PAIRING_SUCCESS" {
+        assert_ne!(event.event_type, "PAIRING_REQUESTED");
+        if event.event_type == "PAIRING_COMPLETED" {
             let payload: plain_libs::serde_json::Value = plain_libs::serde_json::from_str(&event.payload).unwrap();
             assert_eq!(payload["requestId"], qr.request_id);
             assert_eq!(payload["ip"], "127.0.0.1");

@@ -14,9 +14,9 @@ fn public_pairing_success_excludes_credentials_without_changing_native_payload()
         "password": "private-password",
         "credentials": {"key": "nested-key"}
     });
-    let event = WsEvent::targeted(WS_PAIRING_SUCCESS, payload.to_string(), "client");
+    let event = WsEvent::targeted(WS_PAIRING_COMPLETED, payload.to_string(), "client");
     let public = event.clone().into_public().unwrap();
-    assert_eq!(public.event_type, WS_PAIRING_SUCCESS);
+    assert_eq!(public.event_type, WS_PAIRING_COMPLETED);
     assert_eq!(public.target_cid.as_deref(), Some("client"));
     assert_eq!(
         plain_libs::serde_json::from_str::<plain_libs::serde_json::Value>(&public.payload).unwrap(),
@@ -38,13 +38,13 @@ fn public_pairing_success_drops_malformed_and_binary_payloads() {
         r#"{"deviceId":"peer","deviceName":"Device","ip":false,"key":"secret"}"#,
     ] {
         assert!(
-            WsEvent::broadcast(WS_PAIRING_SUCCESS, payload.into())
+            WsEvent::broadcast(WS_PAIRING_COMPLETED, payload.into())
                 .into_public()
                 .is_none()
         );
     }
     assert!(
-        WsEvent::broadcast_binary(WS_PAIRING_SUCCESS, b"secret".to_vec())
+        WsEvent::broadcast_binary(WS_PAIRING_COMPLETED, b"secret".to_vec())
             .into_public()
             .is_none()
     );

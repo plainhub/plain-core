@@ -96,19 +96,10 @@ pub struct ImageModelsUpdate {
 #[derive(SimpleObject, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PairingRequestNotice {
-    pub to_id: ID,
-    pub target_public_key: String,
+    pub from_ip: String,
     pub from_id: ID,
     pub from_name: String,
-    pub port: i32,
     pub device_type: plain_rs::features::services::device::types::DeviceType,
-    pub ecdh_public_key: String,
-    pub signature_public_key: String,
-    pub timestamp: Long,
-    pub ips: Vec<String>,
-    pub signature: String,
-    pub from_ip: String,
-    pub aware_supported: bool,
     pub verification_code: String,
     pub identity_changed: bool,
 }
@@ -125,6 +116,7 @@ pub struct PairingCompletedNotice {
 #[derive(SimpleObject, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PairingProgressNotice {
+    pub verification_code: Option<String>,
     pub device_id: ID,
     pub device_name: String,
     pub error: Option<String>,

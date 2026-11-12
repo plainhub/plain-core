@@ -24,7 +24,7 @@ async fn native_events_enforce_direction_and_reconcile_lag() {
     for kind in [
         "MESSAGE_CREATED",
         "SMS_SEND_RESULT",
-        "PAIRING_SUCCESS",
+        "PAIRING_COMPLETED",
         "CONTENT_CHANGED",
         "CLIPBOARD_CHANGED",
         "UNKNOWN_EVENT",

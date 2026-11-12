@@ -10,7 +10,8 @@ fn response_signature_binds_qr_request_sender_and_response() {
     })).unwrap();
     let response: PairingAccept = from_value(json!({
         "requestId":"request", "port":8080, "deviceType":"COMPUTER", "ecdhPublicKey":"response-ecdh"
-    })).unwrap();
+    }))
+    .unwrap();
     let (key, public) = plain_libs::crypto::ed25519_generate();
     let public = base64_encode(&public);
     let bytes = response_input(&request, &response, "scanner");

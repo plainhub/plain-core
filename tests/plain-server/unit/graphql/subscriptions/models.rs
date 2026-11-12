@@ -36,12 +36,10 @@ fn pairing_notices_preserve_device_enums_and_reject_unknown_values() {
     ] {
         let value: PairingRequestNotice =
             plain_libs::serde_json::from_value(source(expected.as_str())).unwrap();
-        assert_eq!(value.to_id.as_str(), "local");
-        assert_eq!(value.target_public_key, "local-signing");
+        assert_eq!(value.from_id.as_str(), "peer");
         assert!(!value.identity_changed);
         assert_eq!(value.device_type, expected);
-        assert_eq!(value.timestamp, Long(5000000000));
-        assert_eq!(value.signature, "signature");
+        assert_eq!(value.verification_code, "123456789");
     }
     assert!(
         plain_libs::serde_json::from_value::<PairingRequestNotice>(source("FUTURE_DEVICE"))

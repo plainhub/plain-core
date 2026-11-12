@@ -1,5 +1,4 @@
 use super::*;
-use crate::features::services::discovery::pairing_attempts::Mode;
 use std::sync::Arc;
 fn fixture(id: &str) -> (plain_libs::temporary::TempDir, crate::test_runtime::Core) {
     let dir = plain_libs::temporary::tempdir().unwrap();
@@ -25,11 +24,6 @@ fn device() -> pairing::Device {
 }
 fn begin(a: &CoreRuntime, b: &CoreRuntime) -> (PairingRequest, Ticket) {
     let id = b.native_client_id().unwrap();
-    let (attempt, _, _) = a
-        .pairing_runtime
-        .attempts
-        .begin(Some(a), Some(id.clone()), None, Mode::Chat)
-        .unwrap();
     let key = crate::features::services::peers::peer_wire::signing_keypair(&b.prefs).unwrap();
     let target = Target {
         device_id: id,
@@ -38,15 +32,9 @@ fn begin(a: &CoreRuntime, b: &CoreRuntime) -> (PairingRequest, Ticket) {
         device_ip: "127.0.0.1".into(),
         device_port: 2443,
     };
-    let value = pairing::start_generation(
-        &a.prefs,
-        &a.pairing,
-        target,
-        device(),
-        Some(attempt.generation),
-    )
-    .unwrap();
-    let request: PairingRequest = plain_libs::serde_json::from_value(value["request"].clone()).unwrap();
+    let value = pairing::start_generation(&a.prefs, &a.pairing, target, device(), None).unwrap();
+    let request: PairingRequest =
+        plain_libs::serde_json::from_value(value["request"].clone()).unwrap();
     let ticket: Ticket = plain_libs::serde_json::from_value(value["ticket"].clone()).unwrap();
     a.pairing_runtime
         .confirmations
@@ -69,17 +57,7 @@ async fn signed_reply_commits_both_peers_and_retries_keep_original_key() {
     let (_bd, b) = fixture("b");
     let a = a.runtime_state();
     let b = b.runtime_state();
-    let (request, ticket) = begin(&a, &b);
-    let code = a
-        .pairing_runtime
-        .attempts
-        .get(&ticket.generation)
-        .unwrap()
-        .verification_code
-        .unwrap();
-    assert_eq!(code, verification_code(&request));
-    assert_eq!(code.len(), 8);
-    assert!(code.bytes().all(|byte| byte.is_ascii_digit()));
+    let (request, _) = begin(&a, &b);
     assert!(peer(&a, "b").is_none());
     assert!(peer(&b, "a").is_none());
 
@@ -119,14 +97,7 @@ async fn signed_reply_commits_both_peers_and_retries_keep_original_key() {
         .unwrap();
     let a_peer = peer(&a, "b").unwrap();
     assert_eq!(a_peer.key, b_peer.key);
-    assert_eq!(
-        a.pairing_runtime
-            .attempts
-            .get(&ticket.generation)
-            .unwrap()
-            .phase,
-        PairingPhase::Succeeded
-    );
+
     a.pairing_runtime
         .confirmations
         .response(&a, &reply, "")
@@ -162,7 +133,7 @@ async fn declined_reply_is_cached_and_does_not_write_peers() {
     let (_bd, b) = fixture("b");
     let a = a.runtime_state();
     let b = b.runtime_state();
-    let (request, ticket) = begin(&a, &b);
+    let (request, _) = begin(&a, &b);
     let (reply, _) = b
         .pairing_runtime
         .confirmations
@@ -174,7 +145,8 @@ async fn declined_reply_is_cached_and_does_not_write_peers() {
         .cached_response(&request)
         .unwrap()
         .unwrap();
-    let (PairingReply::Reject(cached_rejection), PairingReply::Reject(rejection)) = (&cached, &reply)
+    let (PairingReply::Reject(cached_rejection), PairingReply::Reject(rejection)) =
+        (&cached, &reply)
     else {
         panic!("Expected rejection")
     };
@@ -183,14 +155,7 @@ async fn declined_reply_is_cached_and_does_not_write_peers() {
         .confirmations
         .response(&a, &cached, "")
         .unwrap();
-    assert_eq!(
-        a.pairing_runtime
-            .attempts
-            .get(&ticket.generation)
-            .unwrap()
-            .phase,
-        PairingPhase::Failed
-    );
+
     assert!(peer(&a, "b").is_none());
     assert!(peer(&b, "a").is_none());
 }

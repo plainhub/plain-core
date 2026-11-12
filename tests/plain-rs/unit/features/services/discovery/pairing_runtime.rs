@@ -70,15 +70,22 @@ async fn expired_incoming_request_rejects_both_decisions_without_pairing() {
         None,
     )
     .unwrap();
-    let request: PairingRequest = plain_libs::serde_json::from_value(started["request"].clone()).unwrap();
+    let request: PairingRequest =
+        plain_libs::serde_json::from_value(started["request"].clone()).unwrap();
     let mut pinned = crate::infrastructure::db::DPeer::new(
-        &request.from_id, "Fixture", "192.0.2.1", None,
+        &request.from_id,
+        "Fixture",
+        "192.0.2.1",
+        None,
         crate::features::chat::enums::DeviceType::Phone,
     );
     pinned.public_key = request.payload.signature_public_key.clone();
     crate::infrastructure::db::chat_store::peers::save(
-        &state.db, &[pinned], crate::infrastructure::db::chat_store::SaveMode::Insert,
-    ).unwrap();
+        &state.db,
+        &[pinned],
+        crate::infrastructure::db::chat_store::SaveMode::Insert,
+    )
+    .unwrap();
 
     let ticket: crate::features::peers::pairing::sessions::Ticket =
         plain_libs::serde_json::from_value(started["ticket"].clone()).unwrap();
@@ -120,7 +127,9 @@ async fn expired_incoming_request_rejects_both_decisions_without_pairing() {
     }
     assert!(
         !crate::infrastructure::db::chat_store::peers::get(&state.db, &request.from_id)
-            .unwrap().unwrap().is_paired()
+            .unwrap()
+            .unwrap()
+            .is_paired()
     );
     local.shutdown().await;
     remote.shutdown().await;
@@ -149,15 +158,22 @@ async fn incoming_ble_response_uses_matching_address_and_shared_handshake_exactl
         None,
     )
     .unwrap();
-    let request: PairingRequest = plain_libs::serde_json::from_value(started["request"].clone()).unwrap();
+    let request: PairingRequest =
+        plain_libs::serde_json::from_value(started["request"].clone()).unwrap();
     let mut pinned = crate::infrastructure::db::DPeer::new(
-        &request.from_id, "Fixture", "192.0.2.1", None,
+        &request.from_id,
+        "Fixture",
+        "192.0.2.1",
+        None,
         crate::features::chat::enums::DeviceType::Phone,
     );
     pinned.public_key = request.payload.signature_public_key.clone();
     crate::infrastructure::db::chat_store::peers::save(
-        &state.db, &[pinned], crate::infrastructure::db::chat_store::SaveMode::Insert,
-    ).unwrap();
+        &state.db,
+        &[pinned],
+        crate::infrastructure::db::chat_store::SaveMode::Insert,
+    )
+    .unwrap();
 
     let ticket: crate::features::peers::pairing::sessions::Ticket =
         plain_libs::serde_json::from_value(started["ticket"].clone()).unwrap();
@@ -251,7 +267,7 @@ async fn incoming_ble_response_uses_matching_address_and_shared_handshake_exactl
         Request::Respond {
             request: request.clone(),
             accepted: true,
-                device: device(),
+            device: device(),
         },
     )
     .await
@@ -365,7 +381,7 @@ async fn pairing_key_goes_only_to_the_host_and_is_redelivered_after_disconnect()
         let public = events.recv().await.unwrap();
         assert_eq!(
             public.event_type,
-            crate::features::chat::events::WS_PAIRING_SUCCESS
+            crate::features::chat::events::WS_PAIRING_COMPLETED
         );
         let payload: Value = plain_libs::serde_json::from_str(&public.payload).unwrap();
         assert!(payload.get("key").is_none());

@@ -32,7 +32,11 @@ async fn removed_ble_websocket_does_not_upgrade() {
         .parse()
         .unwrap(),
     );
-    assert!(plain_libs::tokio_tungstenite::connect_async(request).await.is_err());
+    assert!(
+        plain_libs::tokio_tungstenite::connect_async(request)
+            .await
+            .is_err()
+    );
     server.shutdown().await;
 }
 
@@ -251,8 +255,6 @@ fn signed_nearby_request() -> (
 #[tokio::test]
 async fn nearby_pairing_preserves_signatures_and_the_actual_radio_return_address() {
     use plain_rs::features::discovery::nearby_wire::Message;
-    use plain_rs::features::services::discovery::pairing;
-    use plain_rs::features::services::discovery::pairing_runtime;
     let (_dir, server) = fixture();
     let state = server.runtime_state();
     let (local_key, _) = plain_libs::crypto::ed25519_generate();
@@ -272,13 +274,19 @@ async fn nearby_pairing_preserves_signatures_and_the_actual_radio_return_address
     request.payload.signature =
         plain_libs::crypto::ed25519_sign(&requester_key, request.signature_data().as_bytes());
     let mut pinned = plain_rs::infrastructure::db::DPeer::new(
-        &request.from_id, "Fixture", "192.0.2.1", None,
+        &request.from_id,
+        "Fixture",
+        "192.0.2.1",
+        None,
         plain_rs::features::chat::enums::DeviceType::Phone,
     );
     pinned.public_key = request.payload.signature_public_key.clone();
     plain_rs::infrastructure::db::chat_store::peers::save(
-        &state.db, &[pinned], plain_rs::infrastructure::db::chat_store::SaveMode::Insert,
-    ).unwrap();
+        &state.db,
+        &[pinned],
+        plain_rs::infrastructure::db::chat_store::SaveMode::Insert,
+    )
+    .unwrap();
     let mut invalid = request.clone();
     invalid.payload.from_name.push_str("tampered");
     let mut events = state.events.subscribe();
@@ -313,42 +321,34 @@ async fn nearby_pairing_preserves_signatures_and_the_actual_radio_return_address
     assert_eq!(ble::nearby_body(&ack).unwrap(), b"1");
 
     let event = events.try_recv().unwrap();
-    assert_eq!(event.event_type, "PAIRING_REQUEST_RECEIVED");
-    let delivered: plain_rs::features::peers::pairing::protocol::PairingRequest =
+    assert_eq!(event.event_type, "PAIRING_REQUESTED");
+    let notice: plain_libs::serde_json::Value =
         plain_libs::serde_json::from_str(&event.payload).unwrap();
-    assert_eq!(delivered.payload.signature, request.payload.signature);
-    let notice: plain_libs::serde_json::Value = plain_libs::serde_json::from_str(&event.payload).unwrap();
-    let code = notice["verificationCode"].as_str().unwrap();
-    assert_eq!(code.len(), 8);
-    assert!(code.bytes().all(|byte| byte.is_ascii_digit()));
-    assert_eq!(delivered.from_ip, "");
-    assert!(plain_rs::features::peers::pairing::security::verify_request(&delivered));
+    assert_eq!(notice["fromId"], request.from_id);
+    assert_eq!(notice["fromIp"], "");
+    assert_eq!(notice.as_object().unwrap().len(), 6);
+    assert_eq!(notice["verificationCode"].as_str().unwrap().len(), 8);
+    assert!(
+        state
+            .pairing
+            .incoming_target(&request.from_id, &request.payload.signature)
+            .is_some()
+    );
     let (generation, mut calls) = state.host.connect();
-    let responding = state.clone();
+    let native = server.native_graphql().unwrap();
     let expected_request_id = request.payload.request_id();
     let requester_target_key = request.target_public_key.clone();
-    let task = tokio::spawn(async move {
-        pairing_runtime::execute(
-            &responding,
-            pairing_runtime::Request::Respond {
-                request,
-                accepted: false,
-                device: pairing::Device {
-                    name: "Local fixture".into(),
-                    port: 2443,
-                    device_type: plain_rs::features::chat::enums::DeviceType::Computer,
-                    ips: vec![],
-                    aware_supported: false,
-                },
-            },
-        )
-        .await
-        .unwrap()
+    let mut task = tokio::spawn(async move {
+        native
+            .execute(plain_graphql::Request::new(
+                r#"mutation{respondToPairing(peerId:"nearby-peer",accepted:false)}"#,
+            ))
+            .await
     });
-    let call = tokio::time::timeout(Duration::from_secs(2), calls.recv())
-        .await
-        .unwrap()
-        .unwrap();
+    let call = tokio::select! {
+        result = &mut task => panic!("Pairing response ended before transport: {result:?}"),
+        call = tokio::time::timeout(Duration::from_secs(15), calls.recv()) => call.unwrap().unwrap(),
+    };
     assert_eq!(call["method"], "pairingNotification");
     assert_eq!(call["params"]["address"], "actual-radio-source");
     let Message::PairingReject(response) =
@@ -357,12 +357,10 @@ async fn nearby_pairing_preserves_signatures_and_the_actual_radio_return_address
         panic!("Expected pairing response")
     };
     assert_eq!(response.request_id, expected_request_id);
-    assert!(
-        plain_rs::features::peers::pairing::security::verify_reject(
-            &response,
-            &requester_target_key,
-        )
-    );
+    assert!(plain_rs::features::peers::pairing::security::verify_reject(
+        &response,
+        &requester_target_key,
+    ));
     state
         .host
         .reply(
@@ -370,10 +368,14 @@ async fn nearby_pairing_preserves_signatures_and_the_actual_radio_return_address
             plain_libs::serde_json::json!({"id":call["id"],"result":true}),
         )
         .unwrap();
-    assert_eq!(task.await.unwrap()["response"]["kind"], "PAIRING_REJECT");
+    let response = task.await.unwrap();
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    assert_eq!(response.data.into_json().unwrap()["respondToPairing"], true);
     assert!(
         !plain_rs::infrastructure::db::chat_store::peers::get(&state.db, "nearby-peer")
-            .unwrap().unwrap().is_paired()
+            .unwrap()
+            .unwrap()
+            .is_paired()
     );
     state.host.disconnect(generation);
     server.shutdown().await;
@@ -394,13 +396,19 @@ async fn nearby_cancel_requires_the_matching_signed_request() {
     request.payload.signature =
         plain_libs::crypto::ed25519_sign(&key, request.signature_data().as_bytes());
     let mut pinned = plain_rs::infrastructure::db::DPeer::new(
-        &request.from_id, "Fixture", "192.0.2.1", None,
+        &request.from_id,
+        "Fixture",
+        "192.0.2.1",
+        None,
         plain_rs::features::chat::enums::DeviceType::Phone,
     );
     pinned.public_key = request.payload.signature_public_key.clone();
     plain_rs::infrastructure::db::chat_store::peers::save(
-        &state.db, &[pinned], plain_rs::infrastructure::db::chat_store::SaveMode::Insert,
-    ).unwrap();
+        &state.db,
+        &[pinned],
+        plain_rs::infrastructure::db::chat_store::SaveMode::Insert,
+    )
+    .unwrap();
     let body = Message::PairRequest(request.payload.clone())
         .wire()
         .unwrap();
@@ -447,7 +455,9 @@ async fn nearby_cancel_requires_the_matching_signed_request() {
     }
     assert!(
         !plain_rs::infrastructure::db::chat_store::peers::get(&state.db, "nearby-peer")
-            .unwrap().unwrap().is_paired()
+            .unwrap()
+            .unwrap()
+            .is_paired()
     );
     server.shutdown().await;
 }

@@ -5,8 +5,8 @@ struct PublicSchema {
     state: ServerState,
     _server: crate::server::ContentServer,
 }
-use plain_rs::features::prefs::Prefs;
 use plain_libs::serde_json::{Value, json};
+use plain_rs::features::prefs::Prefs;
 use std::sync::Arc;
 
 fn stub(host: Arc<Host>, handler: impl Fn(&str, Value) -> Value + Send + 'static) {
@@ -141,7 +141,7 @@ async fn first_chat_pairing_requires_a_scanned_request() {
     let (_dir, schema) = fixture();
     let paired = query(
         &schema,
-        r#"mutation { pairDevice(input: { id: "peer-9" }) { deviceId generation mode phase } }"#,
+        r#"mutation { pairDevice(input: { peerId: "peer-9", mode: CHAT }) }"#,
     )
     .await;
     assert!(
@@ -157,13 +157,7 @@ async fn responding_requires_a_verified_current_pairing_request() {
     let (_dir, schema) = fixture();
     let responded = query(
         &schema,
-        r#"mutation { respondToPairing(input: {
-            toId: "local", targetPublicKey: "local-signing",
-            fromId: "peer-9", fromName: "Tablet", port: 4321, deviceType: TABLET,
-            ecdhPublicKey: "ecdh", signaturePublicKey: "sig", timestamp: 1767322,
-            ips: ["192.0.2.5"], signature: "signed", fromIp: "192.0.2.5",
-            awareSupported: true
-        }, accepted: true) }"#,
+        r#"mutation { respondToPairing(peerId: "peer-9", accepted: true) }"#,
     )
     .await;
     assert!(
@@ -177,7 +171,7 @@ async fn cancelling_and_unpairing_both_acknowledge() {
     let (_dir, schema) = fixture();
     for (document, field) in [
         (
-            r#"mutation { cancelPairing(generation: "peer-9") }"#,
+            r#"mutation { cancelPairing(peerId: "peer-9") }"#,
             "cancelPairing",
         ),
         (r#"mutation { unpairPeer(id: "peer-1") }"#, "unpairPeer"),
@@ -188,7 +182,7 @@ async fn cancelling_and_unpairing_both_acknowledge() {
             result["errors"].as_array().is_none_or(Vec::is_empty),
             "{result}"
         );
-        assert_eq!(result["data"][field], field != "cancelPairing", "{result}");
+        assert_eq!(result["data"][field], true, "{result}");
     }
 }
 
@@ -212,7 +206,7 @@ async fn unsupported_transport_does_not_call_native_pairing() {
     let mut events = schema.state.events.subscribe();
     let paired = query(
         &schema,
-        r#"mutation { pairDevice(input: { id: "no-route" }) { deviceId generation mode phase } }"#,
+        r#"mutation { pairDevice(input: { peerId: "no-route", mode: CHAT }) }"#,
     )
     .await;
     assert!(
@@ -222,11 +216,8 @@ async fn unsupported_transport_does_not_call_native_pairing() {
     tokio::time::timeout(std::time::Duration::from_secs(5), async {
         loop {
             let event = events.recv().await.unwrap();
-            if event.event_type == "PAIRING_STATE_CHANGED" {
-                let value: Value = plain_libs::serde_json::from_str(&event.payload).unwrap();
-                if value["phase"] == "FAILED" {
-                    break;
-                }
+            if event.event_type == "PAIRING_FAILED" {
+                break;
             }
         }
     })
@@ -239,7 +230,7 @@ async fn pairing_rejects_caller_supplied_discovery_metadata() {
     let (_dir, schema) = fixture();
     let result = query(
         &schema,
-        r#"mutation { pairDevice(input: { id: "peer-invalid", lastSeen: "invalid-time" }) { generation } }"#,
+        r#"mutation { pairDevice(input: { peerId: "peer-invalid", mode: CHAT, lastSeen: "invalid-time" }) }"#,
     )
     .await;
     assert!(

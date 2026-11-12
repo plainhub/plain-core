@@ -1,6 +1,6 @@
 pub const MEDIA_LIBRARY_UPDATED: &str = "MEDIA_LIBRARY_UPDATED";
 pub const MEDIA_SCAN_PROGRESS: &str = "MEDIA_SCAN_PROGRESS";
-pub const WS_PAIRING_SUCCESS: &str = "PAIRING_SUCCESS";
+pub const WS_PAIRING_COMPLETED: &str = "PAIRING_COMPLETED";
 
 #[derive(Clone, Debug)]
 pub struct WsEvent {
@@ -48,7 +48,7 @@ impl WsEvent {
         if self.is_internal() {
             return None;
         }
-        if self.event_type != WS_PAIRING_SUCCESS {
+        if self.event_type != WS_PAIRING_COMPLETED {
             return Some(self);
         }
         #[cfg(feature = "chat")]

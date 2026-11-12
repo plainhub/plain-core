@@ -263,7 +263,7 @@ async fn lan_runtime_sends_signed_tls_requests_and_cancel_cannot_remove_replacem
     );
     let second = execute(
         &state,
-        start(plain_rs::features::discovery::nearby_devices::DiscoveryMethod::DnsSd),
+        start(plain_rs::features::discovery::nearby_devices::DiscoveryMethod::Lan),
     )
     .await
     .unwrap();
@@ -316,7 +316,7 @@ async fn lan_runtime_sends_signed_tls_requests_and_cancel_cannot_remove_replacem
     listeners.shutdown().await;
     let failed = execute(
         &state,
-        start(plain_rs::features::discovery::nearby_devices::DiscoveryMethod::DnsSd),
+        start(plain_rs::features::discovery::nearby_devices::DiscoveryMethod::Lan),
     )
     .await
     .unwrap();
@@ -332,12 +332,12 @@ async fn native_main_pairing_queries_are_read_only_and_reject_stale_request_iden
     let native = server.native_graphql().unwrap();
     let response = native
         .execute(plain_graphql::Request::new(
-            r#"{ pairingStates { deviceId generation phase } }"#,
+            r#"{ peers { id } }"#,
         ))
         .await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     let data = response.data.into_json().unwrap();
-    assert_eq!(data["pairingStates"], json!([]));
+    assert_eq!(data["peers"], json!([]));
     assert!(
         !server
             .native_management()
@@ -347,10 +347,10 @@ async fn native_main_pairing_queries_are_read_only_and_reject_stale_request_iden
     );
     let response = native
         .execute(plain_graphql::Request::new(
-            r#"mutation { cancelPairing(generation:"absent") }"#,
+            r#"mutation { cancelPairing(peerId:"absent") }"#,
         ))
         .await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
-    assert_eq!(response.data.into_json().unwrap()["cancelPairing"], false);
+    assert_eq!(response.data.into_json().unwrap()["cancelPairing"], true);
     server.shutdown().await;
 }

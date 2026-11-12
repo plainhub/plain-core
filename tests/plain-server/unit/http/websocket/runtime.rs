@@ -858,7 +858,7 @@ async fn remote_pairing_completion_omits_secret_key_and_channel_invites_keep_nam
     state
         .events
         .send(WsEvent::broadcast(
-            "PAIRING_SUCCESS",
+            "PAIRING_COMPLETED",
             json!({"deviceId":"peer","deviceName":"Peer","ip":"host","key":"secret"}).to_string(),
         ))
         .unwrap();

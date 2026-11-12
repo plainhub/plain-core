@@ -1,28 +1,27 @@
-use crate::features::services::discovery::pairing_attempts::PairingPhase;
 use crate::features::services::discovery::pairing_attempts::Resolved;
 use crate::runtime::Runtime as CoreRuntime;
-use plain_libs::anyhow::{Result, ensure};
 use futures_util::{SinkExt, StreamExt};
+use plain_libs::anyhow::{Result, ensure};
 use plain_libs::protocols::http_client;
+use plain_libs::serde_json::{Value, json};
 use plain_libs::utils::base64::base64_decode;
 use plain_libs::utils::base64::base64_encode;
-use plain_libs::serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use std::time::Duration;
-use tokio::sync::mpsc;
 
 pub(super) async fn run(
     state: &CoreRuntime,
-    generation: &str,
+    peer_id: &str,
     target: Resolved,
     password: Option<String>,
-    mut passwords: mpsc::Receiver<String>,
 ) -> Result<()> {
     let base = target
         .url
         .as_ref()
         .ok_or_else(|| plain_libs::anyhow::anyhow!("No management address available"))?;
-    let client_id = state.native_client_id().map_err(plain_libs::anyhow::Error::msg)?;
+    let client_id = state
+        .native_client_id()
+        .map_err(plain_libs::anyhow::Error::msg)?;
     let saved = if target.target.device_id.is_empty() {
         None
     } else {
@@ -60,14 +59,7 @@ pub(super) async fn run(
             )?;
             let _commit = state.pairing_runtime.commit.lock().unwrap();
             ensure!(
-                state
-                    .pairing_runtime
-                    .attempts
-                    .get(generation)
-                    .is_some_and(|s| !matches!(
-                        s.phase,
-                        PairingPhase::Cancelled | PairingPhase::Failed
-                    )),
+                state.pairing_runtime.attempts.contains(peer_id),
                 "cancelled"
             );
             let name = text(&metadata, "deviceName")?;
@@ -84,12 +76,15 @@ pub(super) async fn run(
                         json!({"id":saved.id}).to_string(),
                     ));
             }
-            state.pairing_runtime.attempts.transition(
+            let mut peer = saved.clone();
+            peer.name = name.into();
+            crate::features::services::discovery::pairing_runtime::success(
                 state,
-                generation,
-                PairingPhase::Succeeded,
+                &plain_libs::serde_json::to_value(
+                    crate::features::services::peers::peer_address::view(&peer),
+                )?,
+                &peer.ip,
                 None,
-                Some(&saved.id),
             );
             return Ok(());
         }
@@ -97,27 +92,28 @@ pub(super) async fn run(
     let password_required = init["passwordRequired"]
         .as_bool()
         .ok_or_else(|| plain_libs::anyhow::anyhow!("invalid_auth_response"))?;
+    ensure!(
+        !password_required || password.is_some(),
+        "password_required"
+    );
     let changed = saved.as_ref().is_some_and(|p| p.public_key != public_key);
     if changed || (!password_required && saved.is_none()) {
         let digest = Sha256::digest(base64_decode(&public_key))
             .iter()
             .map(|b| format!("{b:02x}"))
             .collect::<String>();
-        let mut trust = state.pairing_runtime.attempts.trust_changes(generation)?;
-        state
+        let mut trust = state
             .pairing_runtime
             .attempts
-            .set_identity_changed(state, generation, changed);
-        state
-            .pairing_runtime
-            .attempts
-            .set_verification_code(state, generation, &digest);
-        state.pairing_runtime.attempts.transition(
+            .request_confirmation(peer_id)?;
+        super::pairing_confirmation::publish_notice(
             state,
-            generation,
-            PairingPhase::TrustRequired,
-            None,
-            None,
+            peer_id,
+            &target.target.device_name,
+            base.host_str().unwrap_or_default(),
+            target.device_type,
+            &digest,
+            changed,
         );
         while !*trust.borrow_and_update() {
             trust
@@ -127,23 +123,7 @@ pub(super) async fn run(
         }
     }
     let password = if password_required {
-        let password = match password {
-            Some(password) => password,
-            None => {
-                state.pairing_runtime.attempts.transition(
-                    state,
-                    generation,
-                    PairingPhase::PasswordRequired,
-                    None,
-                    None,
-                );
-                passwords
-                    .recv()
-                    .await
-                    .ok_or_else(|| plain_libs::anyhow::anyhow!("cancelled"))?
-            }
-        };
-        Some(password)
+        Some(password.ok_or_else(|| plain_libs::anyhow::anyhow!("password_required"))?)
     } else {
         None
     };
@@ -164,12 +144,11 @@ pub(super) async fn run(
     })
     .map_err(|_| plain_libs::anyhow::anyhow!("Invalid management address"))?;
     url.query_pairs_mut().append_pair("cid", &client_id);
-    state.pairing_runtime.attempts.transition(
+
+    crate::features::services::discovery::pairing_runtime::event(
         state,
-        generation,
-        PairingPhase::Authenticating,
-        None,
-        None,
+        crate::features::chat::events::WS_PAIRING_STARTED,
+        json!({"deviceId":peer_id,"deviceName":target.target.device_name}),
     );
     let mut socket = crate::features::services::peers::status_socket::connect(url.as_str())
         .await
@@ -243,10 +222,10 @@ pub(super) async fn run(
             &target.target.device_id,
             plain_libs::chrono::Utc::now().timestamp_millis() as u64,
         )?;
-        state.pairing_runtime.attempts.set_verification_code(
+        crate::features::services::discovery::pairing_runtime::event(
             state,
-            generation,
-            &channel.verification_code,
+            crate::features::chat::events::WS_PAIRING_STARTED,
+            json!({"deviceId":peer_id,"deviceName":target.target.device_name,"verificationCode":channel.verification_code}),
         );
         let encrypted = channel.encrypt_request(
             &plain_libs::serde_json::to_vec(&request)?,
@@ -272,13 +251,6 @@ pub(super) async fn run(
                 let response: Value = plain_libs::serde_json::from_slice(&plain)
                     .map_err(|_| plain_libs::anyhow::anyhow!("invalid_auth_response"))?;
                 if response["status"] == "PENDING" {
-                    state.pairing_runtime.attempts.transition(
-                        state,
-                        generation,
-                        PairingPhase::WaitingConfirmation,
-                        None,
-                        None,
-                    );
                     continue;
                 }
                 break response;
@@ -300,13 +272,6 @@ pub(super) async fn run(
         }
     };
     let remote_id = verify_response(&response, &target.target.device_id)?;
-    {
-        let _commit = state.pairing_runtime.commit.lock().unwrap();
-        state
-            .pairing_runtime
-            .attempts
-            .claim_identity(Some(state), generation, &remote_id)?;
-    }
     let shared = protection.key();
     let metadata = metadata(state, base, &client_id, &shared).await?;
     ensure!(
@@ -319,11 +284,7 @@ pub(super) async fn run(
     let token = base64_encode(&shared);
     let _commit = state.pairing_runtime.commit.lock().unwrap();
     ensure!(
-        state
-            .pairing_runtime
-            .attempts
-            .get(generation)
-            .is_some_and(|s| !matches!(s.phase, PairingPhase::Cancelled | PairingPhase::Failed)),
+        state.pairing_runtime.attempts.contains(peer_id),
         "cancelled"
     );
     let current = crate::infrastructure::db::chat_store::peers::get(&state.db, &remote_id)?;
@@ -331,13 +292,7 @@ pub(super) async fn run(
         current.as_ref().map(|p| &p.public_key) == saved.as_ref().map(|p| &p.public_key),
         "peer_identity_changed"
     );
-    state.pairing_runtime.attempts.transition(
-        state,
-        generation,
-        PairingPhase::Committing,
-        None,
-        Some(&remote_id),
-    );
+
     let device_type = text(&metadata, "deviceType")?
         .parse()
         .unwrap_or(target.device_type);
@@ -367,17 +322,13 @@ pub(super) async fn run(
                 .unwrap_or_default(),
         )
         .map_err(|_| plain_libs::anyhow::anyhow!("Failed to save paired device"))?;
-    state.pairing_runtime.attempts.transition(
-        state,
-        generation,
-        PairingPhase::Succeeded,
-        None,
-        Some(&remote_id),
-    );
+
     if let Some(peer) = crate::infrastructure::db::chat_store::peers::get(&state.db, &remote_id)? {
         crate::features::services::discovery::pairing_runtime::success(
             state,
-            &plain_libs::serde_json::to_value(crate::features::services::peers::peer_address::view(&peer))?,
+            &plain_libs::serde_json::to_value(
+                crate::features::services::peers::peer_address::view(&peer),
+            )?,
             &peer.ip,
             None,
         );
@@ -426,13 +377,16 @@ impl Protection {
                 plain_libs::crypto::xchacha_decrypt_raw_with_aad(key, data, aad)
                     .ok_or_else(|| plain_libs::anyhow::anyhow!("invalid_auth_response"))
             }
-            Self::Confirmation(c) => {
-                c.decrypt_response(data, plain_libs::chrono::Utc::now().timestamp_millis() as u64)
-            }
+            Self::Confirmation(c) => c.decrypt_response(
+                data,
+                plain_libs::chrono::Utc::now().timestamp_millis() as u64,
+            ),
         }
     }
 }
-async fn next_binary<S>(socket: &mut plain_libs::tokio_tungstenite::WebSocketStream<S>) -> Result<Vec<u8>>
+async fn next_binary<S>(
+    socket: &mut plain_libs::tokio_tungstenite::WebSocketStream<S>,
+) -> Result<Vec<u8>>
 where
     S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
 {

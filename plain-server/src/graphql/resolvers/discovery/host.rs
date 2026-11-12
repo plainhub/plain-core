@@ -9,10 +9,9 @@ pub struct DiscoveryHostQuery;
 
 #[Object]
 impl DiscoveryHostQuery {
-    fn parse_pairing_code(&self, code: String) -> Option<NearbyDevice> {
-        plain_rs::features::discovery::pairing_code::parse(&code)
-            .ok()
-            .map(|payload| NearbyDevice::from_snapshot_device(payload.into_device()))
+    fn parse_pairing_code(&self, ctx: &Context<'_>, code: String) -> Option<NearbyDevice> {
+        ctx.data::<ServerState>().ok()?.pairing_runtime.qr.remember(&code)
+            .ok().map(NearbyDevice::from_snapshot_device)
     }
     fn nearby_devices(&self, ctx: &Context<'_>) -> plain_graphql::Result<Vec<NearbyDevice>> {
         let state = ctx.data::<ServerState>()?;

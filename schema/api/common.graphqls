@@ -163,25 +163,17 @@ type PairingCompletedNotice {
 }
 
 type PairingProgressNotice {
+	verificationCode: String
 	deviceId: ID!
 	deviceName: String!
 	error: String
 }
 
 type PairingRequestNotice {
-	toId: ID!
-	targetPublicKey: String!
+	fromIp: String!
 	fromId: ID!
 	fromName: String!
-	port: Int!
 	deviceType: DeviceType!
-	ecdhPublicKey: String!
-	signaturePublicKey: String!
-	timestamp: Long!
-	ips: [String!]!
-	signature: String!
-	fromIp: String!
-	awareSupported: Boolean!
 	verificationCode: String!
 	identityChanged: Boolean!
 }
@@ -240,7 +232,6 @@ type Subscription {
 	nearbyDevicesChanged: Boolean!
 	downloadsChanged: Boolean!
 	imageModelsUpdated: ImageModelsUpdate!
-	pairingChanged: Boolean!
 	pairingRequested: PairingRequestNotice!
 	pairingCompleted: PairingCompletedNotice!
 	pairingStarted: PairingProgressNotice!

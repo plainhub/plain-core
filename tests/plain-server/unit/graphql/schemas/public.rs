@@ -191,15 +191,13 @@ fn public_schema_exposes_the_contract_it_has_to_serve() {
         .next()
         .unwrap();
     for field in [
-        "id: ID",
-        "host: String",
-        "mode: PairingMode",
+        "peerId: ID!",
+        "mode: PairingMode!",
         "password: String",
-        "generation: String",
     ] {
         assert!(pairing_input.contains(field));
     }
-    for obsolete in ["name:", "ips:", "lastSeen:", "deviceType:"] {
+    for obsolete in ["id:", "host:", "generation:", "confirm:", "name:", "ips:", "lastSeen:", "deviceType:"] {
         assert!(!pairing_input.contains(obsolete));
     }
     assert!(sdl.contains("enum AudioCommandAction {"));
@@ -359,9 +357,9 @@ fn public_schema_exposes_the_contract_it_has_to_serve() {
         "declineChatChannelInvite(id: ID!): Boolean!",
         "peers: [Peer!]!",
         "sims: [Sim!]!",
-        "pairDevice(input: PairingDeviceInput!): PairingState!",
-        "cancelPairing(generation: String!): Boolean!",
-        "respondToPairing(input: PairingRequestInput!, accepted: Boolean!): Boolean!",
+        "pairDevice(input: PairingDeviceInput!): Boolean!",
+        "cancelPairing(peerId: ID!): Boolean!",
+        "respondToPairing(peerId: ID!, accepted: Boolean!): Boolean!",
         "deletePeer(id: ID!): Boolean!",
         "unpairPeer(id: ID!): Boolean!",
     ] {
@@ -841,9 +839,6 @@ fn closed_fields_keep_named_enums_and_required_wrappers() {
         ("type", "Session", "type", "SessionType!"),
         ("type", "Session", "appName", "String!"),
         ("type", "Session", "appVersion", "String!"),
-        ("type", "PairingState", "phase", "PairingPhase!"),
-        ("input", "PeerRecordInput", "status", "PeerStatus!"),
-        ("input", "PeerRecordInput", "deviceType", "DeviceType!"),
         ("type", "PairingRequestNotice", "deviceType", "DeviceType!"),
         (
             "type",
@@ -875,10 +870,7 @@ fn closed_fields_keep_named_enums_and_required_wrappers() {
         ("PeerStatus", "PAIRED UNPAIRED CHANNEL"),
         ("DiscoveryMethod", "LAN DNS_SD BLE QR"),
         ("SessionType", "LOGIN API_TOKEN"),
-        (
-            "PairingPhase",
-            "STARTING TRUST_REQUIRED PASSWORD_REQUIRED AUTHENTICATING PAIRING WAITING_CONFIRMATION COMMITTING SUCCEEDED FAILED CANCELLED",
-        ),
+
         (
             "ImageSearchStatusType",
             "UNAVAILABLE DOWNLOADING LOADING READY ERROR",
@@ -937,3 +929,17 @@ fn access_feature_contract_has_exact_values_and_wrappers() {
 
 #[path = "event_contract.rs"]
 mod event_contract;
+
+#[test]
+fn pairing_commands_have_no_public_ui_state_or_client_record_snapshots() {
+    let sdl = sdl();
+    for name in ["PairingState", "PairingPhase", "PairingRequestInput", "PeerRecordInput", "pairingStates", "pairingChanged"] {
+        assert!(!sdl.contains(name), "obsolete pairing contract: {name}");
+    }
+    let input = sdl.split("input PairingDeviceInput {").nth(1).unwrap().split('}').next().unwrap();
+    assert!(input.contains("peerId: ID!"));
+    assert!(input.contains("mode: PairingMode!"));
+    assert!(input.contains("password: String"));
+    assert_eq!(input.lines().filter(|line| line.contains(':')).count(),3);
+    assert!(sdl.contains("peerFileUrl(id: ID!, fileId: String!): String!"));
+}

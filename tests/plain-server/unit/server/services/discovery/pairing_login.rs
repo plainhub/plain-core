@@ -1,13 +1,9 @@
-use futures_util::SinkExt;
-use futures_util::StreamExt;
+use plain_libs::serde_json::Value;
+use plain_libs::serde_json::json;
 use plain_libs::utils::base64::base64_decode;
 use plain_libs::utils::base64::base64_encode;
 use plain_rs::features::services::discovery::pairing_attempts;
-use plain_rs::features::services::discovery::pairing_attempts::PairingPhase;
 use plain_rs::runtime::Runtime as ServerState;
-use plain_libs::serde_json::Value;
-use plain_libs::serde_json::json;
-use sha2::Digest;
 use std::time::Duration;
 
 #[cfg(feature = "http_transport")]
@@ -81,37 +77,84 @@ async fn server_with_policy(
     (directory, server, port)
 }
 
-#[cfg(feature = "http_transport")]
-async fn phase(
-    state: &ServerState,
-    generation: &str,
-    expected: &[PairingPhase],
-) -> pairing_attempts::State {
-    let mut events = state.events.subscribe();
+#[derive(serde::Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+struct Notice {
+    device_id: Option<String>,
+    error: Option<String>,
+    verification_code: Option<String>,
+    #[serde(default)]
+    identity_changed: bool,
+}
+async fn notice(
+    events: &mut tokio::sync::broadcast::Receiver<plain_rs::infrastructure::events::WsEvent>,
+    kind: &str,
+) -> Notice {
     tokio::time::timeout(Duration::from_secs(15), async {
-        loop {
-            let value = state.pairing_runtime.attempts.get(generation).unwrap();
-            if expected.contains(&value.phase) {
-                return value;
+        while let Ok(event) = events.recv().await {
+            if event.event_type == kind {
+                return plain_libs::serde_json::from_str(&event.payload).unwrap();
             }
-            assert!(
-                !matches!(value.phase, PairingPhase::Failed | PairingPhase::Cancelled),
-                "{:?}: {:?}",
-                value.phase,
-                value.error
-            );
-            events.recv().await.unwrap();
+            assert_ne!(event.event_type, "PAIRING_FAILED", "{}", event.payload);
         }
+        panic!("pairing notifications closed")
     })
     .await
-    .unwrap_or_else(|_| panic!("Expected {expected:?}; current {}",plain_libs::serde_json::to_string(&state.pairing_runtime.attempts.get(generation)).unwrap()))
+    .unwrap()
 }
-
-#[cfg(feature = "http_transport")]
-async fn trust_identity(state: &ServerState, generation: &str) {
-    let waiting = phase(state, generation, &[PairingPhase::TrustRequired]).await;
-    assert_eq!(waiting.verification_code.as_ref().unwrap().len(), 64);
-    plain_rs::features::services::discovery::pairing_confirmation::confirm(state, generation)
+async fn code(
+    events: &mut tokio::sync::broadcast::Receiver<plain_rs::infrastructure::events::WsEvent>,
+) -> Notice {
+    tokio::time::timeout(Duration::from_secs(15), async {
+        while let Ok(event) = events.recv().await {
+            if event.event_type == "PAIRING_STARTED" {
+                let notice: Notice = plain_libs::serde_json::from_str(&event.payload).unwrap();
+                if notice.verification_code.is_some() {
+                    return notice;
+                }
+            }
+            assert_ne!(event.event_type, "PAIRING_FAILED", "{}", event.payload);
+        }
+        panic!("pairing notifications closed")
+    })
+    .await
+    .unwrap()
+}
+async fn register_target(state: &ServerState, remote: &ServerState) -> String {
+    let id = remote.native_client_id().unwrap();
+    let key =
+        plain_rs::features::services::peers::peer_wire::signing_keypair(&remote.prefs).unwrap();
+    state
+        .nearby_devices
+        .observe(
+            plain_rs::features::discovery::nearby_devices::Device {
+                id: id.clone(),
+                name: "Fixture".into(),
+                ips: vec!["127.0.0.1".into()],
+                port: remote.public_ports().await.unwrap().1,
+                remote_access: Some(true),
+                signature_public_key: base64_encode(&key[32..]),
+                device_type: plain_rs::features::chat::enums::DeviceType::Computer,
+                version: "1".into(),
+                platform: "fixture".into(),
+                last_seen_at: plain_rs::infrastructure::db::now_iso(),
+                discovery_methods: vec![
+                    plain_rs::features::discovery::nearby_devices::DiscoveryMethod::Lan,
+                ],
+            },
+            true,
+        )
+        .unwrap();
+    id
+}
+async fn trust_identity(
+    state: &ServerState,
+    events: &mut tokio::sync::broadcast::Receiver<plain_rs::infrastructure::events::WsEvent>,
+    peer_id: &str,
+) {
+    let waiting = notice(events, "PAIRING_REQUESTED").await;
+    assert_eq!(waiting.verification_code.unwrap().len(), 64);
+    plain_rs::features::services::discovery::pairing_confirmation::respond(state, peer_id, true)
         .await
         .unwrap();
 }
@@ -133,9 +176,11 @@ async fn confirmation_request(events: &mut ConfirmationCallbacks) -> Value {
 #[tokio::test]
 async fn passwordless_native_management_displays_the_same_code_and_commits_only_after_approval() {
     let (_local_dir, local, _) = server().await;
-    let (_remote_dir, remote, port) = server().await;
+    let (_remote_dir, remote, _) = server().await;
     let state = local.runtime_state();
     let remote_state = remote.runtime_state();
+    let peer_id = register_target(&state, &remote_state).await;
+    let mut notices = state.events.subscribe();
     remote_state
         .prefs
         .set("login_require_approval", false)
@@ -143,18 +188,18 @@ async fn passwordless_native_management_displays_the_same_code_and_commits_only_
     let mut events = ConfirmationCallbacks::new(&remote_state);
     let remote_id = remote_state.native_client_id().unwrap();
     let local_id = state.native_client_id().unwrap();
-    let started = pairing_attempts::start(
-        &state,
-        Some(remote_id.clone()),
-        Some(format!("127.0.0.1:{port}")),
-        Some(pairing_attempts::Mode::Manage),
-        None,
-        None,
-        None,
-    )
-    .await
-    .unwrap();
-    trust_identity(&state, &started.generation).await;
+    assert!(
+        pairing_attempts::start(
+            &state,
+            peer_id.clone(),
+            pairing_attempts::Mode::Manage,
+            None,
+            None
+        )
+        .await
+        .unwrap()
+    );
+    trust_identity(&state, &mut notices, &peer_id).await;
     let request = confirmation_request(&mut events).await;
     let client = state.host.startup();
     assert!(!client.os_name.is_empty());
@@ -168,12 +213,7 @@ async fn passwordless_native_management_displays_the_same_code_and_commits_only_
     assert_eq!(request["request"]["osVersion"], client.os_version);
     assert_eq!(request["request"]["appVersion"], client.app_version);
 
-    let waiting = phase(
-        &state,
-        &started.generation,
-        &[PairingPhase::WaitingConfirmation],
-    )
-    .await;
+    let waiting = code(&mut notices).await;
     assert_eq!(
         waiting.verification_code.as_deref(),
         request["request"]["verificationCode"].as_str()
@@ -191,7 +231,7 @@ async fn passwordless_native_management_displays_the_same_code_and_commits_only_
         .confirm_web_login(request["requestId"].as_str().unwrap().into(), true)
         .await
         .unwrap();
-    phase(&state, &started.generation, &[PairingPhase::Succeeded]).await;
+    notice(&mut notices, "PAIRING_COMPLETED").await;
     let peer = plain_rs::infrastructure::db::chat_store::peers::get(&state.db, &remote_id)
         .unwrap()
         .unwrap();
@@ -226,51 +266,42 @@ async fn actual_native_management_uses_encrypted_auth_and_saves_both_grants_once
     let (_remote_dir, remote, remote_port) = server().await;
     let state = local.runtime_state();
     let remote_state = remote.runtime_state();
-    plain_rs::features::prefs::security::set_password_login(&remote_state.prefs,"fixture-password")
+    let peer_id = register_target(&state, &remote_state).await;
+    let mut notices = state.events.subscribe();
+    plain_rs::features::prefs::security::set_password_login(
+        &remote_state.prefs,
+        "fixture-password",
+    )
     .unwrap();
     let mut events = ConfirmationCallbacks::new(&remote_state);
-    let http_port = remote_state.public_ports().await.unwrap().0;
-    let initial = pairing_attempts::start(
-        &state,
-        None,
-        Some(format!("http://127.0.0.1:{http_port}")),
-        Some(pairing_attempts::Mode::Manage),
-        None,
-        None,
-        None,
-    )
-    .await
-    .unwrap();
-    assert!(initial.device_id.is_none());
-    phase(
-        &state,
-        &initial.generation,
-        &[PairingPhase::PasswordRequired],
-    )
-    .await;
+    assert!(
+        pairing_attempts::start(
+            &state,
+            peer_id.clone(),
+            pairing_attempts::Mode::Manage,
+            None,
+            None
+        )
+        .await
+        .unwrap()
+    );
+    notice(&mut notices, "PAIRING_FAILED").await;
     pairing_attempts::start(
         &state,
-        None,
-        None,
-        None,
+        peer_id.clone(),
+        pairing_attempts::Mode::Manage,
         Some("fixture-password".into()),
-        Some(initial.generation.clone()),
         None,
     )
     .await
     .unwrap();
     let request = confirmation(&mut events).await;
-    phase(
-        &state,
-        &initial.generation,
-        &[PairingPhase::WaitingConfirmation],
-    )
-    .await;
+    notice(&mut notices, "PAIRING_STARTED").await;
     crate::http::auth::ws_login::Confirmation::new(remote_state.clone())
         .decide(&request, true)
         .await
         .unwrap();
-    let finished = phase(&state, &initial.generation, &[PairingPhase::Succeeded]).await;
+    let finished = notice(&mut notices, "PAIRING_COMPLETED").await;
     let completed = events.next("systemWebLoginCompleted").await;
     assert!(completed["request"]["password"].is_null());
     assert!(
@@ -311,18 +342,18 @@ async fn actual_native_management_uses_encrypted_auth_and_saves_both_grants_once
         )
         .unwrap();
     let mut local_events = state.events.subscribe();
-    let again = pairing_attempts::start(
-        &state,
-        Some(remote_id.clone()),
-        None,
-        Some(pairing_attempts::Mode::Manage),
-        None,
-        None,
-        None,
-    )
-    .await
-    .unwrap();
-    phase(&state, &again.generation, &[PairingPhase::Succeeded]).await;
+    assert!(
+        pairing_attempts::start(
+            &state,
+            peer_id.clone(),
+            pairing_attempts::Mode::Manage,
+            None,
+            None
+        )
+        .await
+        .unwrap()
+    );
+    notice(&mut notices, "PAIRING_COMPLETED").await;
     let refreshed = plain_rs::infrastructure::db::chat_store::peers::get(&state.db, &remote_id)
         .unwrap()
         .unwrap();
@@ -334,7 +365,8 @@ async fn actual_native_management_uses_encrypted_auth_and_saves_both_grants_once
     let mut updated = false;
     while let Ok(event) = local_events.try_recv() {
         if event.event_type == plain_rs::features::chat::events::WS_PEER_UPDATED {
-            updated |= plain_libs::serde_json::from_str::<Value>(&event.payload).unwrap()["id"] == remote_id;
+            updated |= plain_libs::serde_json::from_str::<Value>(&event.payload).unwrap()["id"]
+                == remote_id;
         }
     }
     assert!(updated);
@@ -362,39 +394,28 @@ async fn actual_native_management_uses_encrypted_auth_and_saves_both_grants_once
 #[tokio::test]
 async fn no_password_still_requires_remote_approval_and_cancel_prevents_local_commit() {
     let (_local_dir, local, _) = server().await;
-    let (_remote_dir, remote, port) = server().await;
+    let (_remote_dir, remote, _) = server().await;
     let state = local.runtime_state();
     let remote_state = remote.runtime_state();
+    let peer_id = register_target(&state, &remote_state).await;
+    let mut notices = state.events.subscribe();
     let mut events = ConfirmationCallbacks::new(&remote_state);
-    let first = pairing_attempts::start(
-        &state,
-        Some(remote_state.native_client_id().unwrap()),
-        Some(format!("127.0.0.1:{port}")),
-        Some(pairing_attempts::Mode::Manage),
-        None,
-        None,
-        None,
-    )
-    .await
-    .unwrap();
-    trust_identity(&state, &first.generation).await;
+    assert!(
+        pairing_attempts::start(
+            &state,
+            peer_id.clone(),
+            pairing_attempts::Mode::Manage,
+            None,
+            None
+        )
+        .await
+        .unwrap()
+    );
+    trust_identity(&state, &mut notices, &peer_id).await;
     let request = confirmation(&mut events).await;
-    phase(
-        &state,
-        &first.generation,
-        &[PairingPhase::WaitingConfirmation],
-    )
-    .await;
-    assert!(
-        pairing_attempts::cancel(&state, &first.generation)
-            .await
-            .unwrap()
-    );
-    assert!(
-        !pairing_attempts::cancel(&state, &first.generation)
-            .await
-            .unwrap()
-    );
+    notice(&mut notices, "PAIRING_STARTED").await;
+    assert!(pairing_attempts::cancel(&state, &peer_id).await.unwrap());
+    assert!(pairing_attempts::cancel(&state, &peer_id).await.unwrap());
     let _ = crate::http::auth::ws_login::Confirmation::new(remote_state.clone())
         .decide(&request, true)
         .await;
@@ -403,15 +424,7 @@ async fn no_password_still_requires_remote_approval_and_cancel_prevents_local_co
             .unwrap()
             .is_empty()
     );
-    assert_eq!(
-        state
-            .pairing_runtime
-            .attempts
-            .get(&first.generation)
-            .unwrap()
-            .phase,
-        PairingPhase::Cancelled
-    );
+    assert!(!state.pairing_runtime.attempts.contains(&peer_id));
     local.shutdown().await;
     remote.shutdown().await;
 }
@@ -420,23 +433,25 @@ async fn no_password_still_requires_remote_approval_and_cancel_prevents_local_co
 #[tokio::test]
 async fn wrong_password_never_creates_a_local_grant() {
     let (_local_dir, local, _) = server().await;
-    let (_remote_dir, remote, port) = server().await;
+    let (_remote_dir, remote, _) = server().await;
     let state = local.runtime_state();
     let other = remote.runtime_state();
-    plain_rs::features::prefs::security::set_password_login(&other.prefs,"fixture-password")
-    .unwrap();
-    let first = pairing_attempts::start(
-        &state,
-        None,
-        Some(format!("127.0.0.1:{port}")),
-        Some(pairing_attempts::Mode::Manage),
-        Some("wrong".into()),
-        None,
-        None,
-    )
-    .await
-    .unwrap();
-    let result = phase(&state, &first.generation, &[PairingPhase::Failed]).await;
+    let peer_id = register_target(&state, &other).await;
+    let mut notices = state.events.subscribe();
+    plain_rs::features::prefs::security::set_password_login(&other.prefs, "fixture-password")
+        .unwrap();
+    assert!(
+        pairing_attempts::start(
+            &state,
+            peer_id.clone(),
+            pairing_attempts::Mode::Manage,
+            Some("wrong".into()),
+            None
+        )
+        .await
+        .unwrap()
+    );
+    let result = notice(&mut notices, "PAIRING_FAILED").await;
     assert_eq!(result.error.as_deref(), Some("invalid_password"));
     assert!(
         plain_rs::infrastructure::db::chat_store::peers::all(&state.db)
@@ -461,6 +476,8 @@ async fn known_key_mismatch_preserves_existing_grants() {
     let (_remote_dir, remote, port) = server().await;
     let state = local.runtime_state();
     let other = remote.runtime_state();
+    let peer_id = register_target(&state, &other).await;
+    let mut notices = state.events.subscribe();
     let remote_id = other.native_client_id().unwrap();
     state
         .db
@@ -475,23 +492,21 @@ async fn known_key_mismatch_preserves_existing_grants() {
             &base64_encode(&[8; 32]),
         )
         .unwrap();
-    let first = pairing_attempts::start(
-        &state,
-        Some(remote_id.clone()),
-        Some(format!("127.0.0.1:{port}")),
-        Some(pairing_attempts::Mode::Manage),
-        None,
-        None,
-        None,
-    )
-    .await
-    .unwrap();
-    let waiting = phase(&state, &first.generation, &[PairingPhase::TrustRequired]).await;
+    assert!(
+        pairing_attempts::start(
+            &state,
+            peer_id.clone(),
+            pairing_attempts::Mode::Manage,
+            None,
+            None
+        )
+        .await
+        .unwrap()
+    );
+    let waiting = notice(&mut notices, "PAIRING_REQUESTED").await;
     assert!(waiting.identity_changed);
     assert_eq!(waiting.verification_code.as_ref().unwrap().len(), 64);
-    pairing_attempts::cancel(&state, &first.generation)
-        .await
-        .unwrap();
+    pairing_attempts::cancel(&state, &peer_id).await.unwrap();
     let peer = plain_rs::infrastructure::db::chat_store::peers::get(&state.db, &remote_id)
         .unwrap()
         .unwrap();
@@ -512,44 +527,52 @@ async fn known_key_mismatch_preserves_existing_grants() {
 #[tokio::test]
 async fn remote_rejection_and_native_scope_closure_do_not_save_credentials() {
     let (_local_dir, local, _) = server().await;
-    let (_remote_dir, remote, port) = server().await;
+    let (_remote_dir, remote, _) = server().await;
     let state = local.runtime_state();
     let other = remote.runtime_state();
+    let peer_id = register_target(&state, &other).await;
+    let mut notices = state.events.subscribe();
     let mut events = ConfirmationCallbacks::new(&other);
-    let initial = pairing_attempts::start(
-        &state,
-        None,
-        Some(format!("127.0.0.1:{port}")),
-        Some(pairing_attempts::Mode::Manage),
-        None,
-        None,
-        None,
-    )
-    .await
-    .unwrap();
-    trust_identity(&state, &initial.generation).await;
+    assert!(
+        pairing_attempts::start(
+            &state,
+            peer_id.clone(),
+            pairing_attempts::Mode::Manage,
+            None,
+            None
+        )
+        .await
+        .unwrap()
+    );
+    trust_identity(&state, &mut notices, &peer_id).await;
     let request = confirmation(&mut events).await;
     crate::http::auth::ws_login::Confirmation::new(other.clone())
         .decide(&request, false)
         .await
         .unwrap();
-    let failed = phase(&state, &initial.generation, &[PairingPhase::Failed]).await;
+    let failed = notice(&mut notices, "PAIRING_FAILED").await;
     assert_eq!(failed.error.as_deref(), Some("rejected"));
     assert!(
         plain_rs::infrastructure::db::chat_store::peers::all(&state.db)
             .unwrap()
             .is_empty()
     );
-    plain_rs::features::prefs::security::set_password_login(&other.prefs,"fixture-password")
-    .unwrap();
     let scope = plain_rs::infrastructure::host::request_scope::NativeRequestScope::default();
-    let response = local.native_graphql().unwrap().execute_scoped(plain_graphql::Request::new(format!("mutation {{ pairDevice(input: {{ host: \"127.0.0.1:{port}\", mode: MANAGE }}) {{ generation }} }}")), scope.clone()).await;
+    let response = local
+        .native_graphql()
+        .unwrap()
+        .execute_scoped(
+            plain_graphql::Request::new(format!(
+                "mutation {{ pairDevice(input: {{ peerId: \"{peer_id}\", mode: MANAGE }}) }}"
+            )),
+            scope.clone(),
+        )
+        .await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
-    let data = response.data.into_json().unwrap();
-    let generation = data["pairDevice"]["generation"].as_str().unwrap();
-    phase(&state, generation, &[PairingPhase::PasswordRequired]).await;
+    assert_eq!(response.data.into_json().unwrap()["pairDevice"], true);
+    notice(&mut notices, "PAIRING_REQUESTED").await;
     scope.close();
-    phase(&state, generation, &[PairingPhase::Cancelled]).await;
+    notice(&mut notices, "PAIRING_CANCELED").await;
     assert!(
         plain_rs::infrastructure::db::chat_store::peers::all(&state.db)
             .unwrap()
@@ -573,8 +596,10 @@ async fn a_local_commit_failure_preserves_the_old_row_and_reports_the_remote_gra
     let (_remote_dir, remote, port) = server().await;
     let state = local.runtime_state();
     let other = remote.runtime_state();
-    plain_rs::features::prefs::security::set_password_login(&other.prefs,"fixture-password")
-    .unwrap();
+    let peer_id = register_target(&state, &other).await;
+    let mut notices = state.events.subscribe();
+    plain_rs::features::prefs::security::set_password_login(&other.prefs, "fixture-password")
+        .unwrap();
     let remote_id = other.native_client_id().unwrap();
     let signing =
         plain_rs::features::services::peers::peer_wire::signing_keypair(&other.prefs).unwrap();
@@ -593,23 +618,23 @@ async fn a_local_commit_failure_preserves_the_old_row_and_reports_the_remote_gra
         .unwrap();
     state.db.with_conn(|conn| conn.execute_batch("CREATE TRIGGER fail_local_pair BEFORE UPDATE ON peers BEGIN SELECT RAISE(ABORT,'fixture local failure'); END;")).unwrap();
     let mut events = ConfirmationCallbacks::new(&other);
-    let initial = pairing_attempts::start(
-        &state,
-        Some(remote_id.clone()),
-        Some(format!("127.0.0.1:{port}")),
-        Some(pairing_attempts::Mode::Manage),
-        Some("fixture-password".into()),
-        None,
-        None,
-    )
-    .await
-    .unwrap();
+    assert!(
+        pairing_attempts::start(
+            &state,
+            peer_id.clone(),
+            pairing_attempts::Mode::Manage,
+            Some("fixture-password".into()),
+            None
+        )
+        .await
+        .unwrap()
+    );
     let request = confirmation(&mut events).await;
     crate::http::auth::ws_login::Confirmation::new(other.clone())
         .decide(&request, true)
         .await
         .unwrap();
-    let failed = phase(&state, &initial.generation, &[PairingPhase::Failed]).await;
+    let failed = notice(&mut notices, "PAIRING_FAILED").await;
     assert_eq!(
         failed.error.as_deref(),
         Some("Failed to save paired device")
@@ -650,6 +675,7 @@ async fn web_management_pairs_by_device_id_and_keeps_the_grant_on_a() {
     let (_b_dir, b, b_port) = server().await;
     let a_state = a.runtime_state();
     let b_state = b.runtime_state();
+    let mut notices = a_state.events.subscribe();
     let a_id = a_state.native_client_id().unwrap();
     let b_id = b_state.native_client_id().unwrap();
     let mut events = ConfirmationCallbacks::new(&b_state);
@@ -661,8 +687,9 @@ async fn web_management_pairs_by_device_id_and_keeps_the_grant_on_a() {
         DeviceType::Computer,
     );
     peers::save(&a_state.db, &[peer], SaveMode::Insert).unwrap();
-    let mut browser = sessions::create(&a_state, "fixture-browser".into()).unwrap();
-    browser.client_id = "fixture-browser".into();
+    let mut browser =
+        sessions::create(&a_state, "48c31447-a359-454e-8eda-199fd6483fd1".into()).unwrap();
+    browser.client_id = "48c31447-a359-454e-8eda-199fd6483fd1".into();
     browser.r#type = plain_rs::features::sessions::SessionType::Login;
     a_state.db.session_save(&browser).unwrap();
     let http = http_client::builder()
@@ -676,7 +703,7 @@ async fn web_management_pairs_by_device_id_and_keeps_the_grant_on_a() {
         let id = browser.client_id.clone();
         async move {
             let body = json!({
-                "query":"mutation($input: PairingDeviceInput!) { pairDevice(input: $input) { generation } }",
+                "query":"mutation($input: PairingDeviceInput!) { pairDevice(input: $input) }",
                 "variables":{"input":input},
             });
             let response = management_http::exchange(
@@ -692,15 +719,22 @@ async fn web_management_pairs_by_device_id_and_keeps_the_grant_on_a() {
             plain_libs::serde_json::from_slice::<Value>(&response).unwrap()
         }
     };
-    let denied =
-        query(json!({"id":b_id,"host":format!("127.0.0.1:{b_port}"),"mode":"MANAGE"})).await;
+    let denied = query(json!({"peerId":a_id,"mode":"MANAGE"})).await;
     assert_eq!(denied["errors"][0]["message"], "no_permission");
-    let started = query(json!({"id":b_id,"mode":"MANAGE"})).await;
-    let generation = started["data"]["pairDevice"]["generation"]
-        .as_str()
-        .expect("pairing generation");
-    phase(&a_state, generation, &[PairingPhase::TrustRequired]).await;
-    let trusted = query(json!({"generation":generation,"confirm":true})).await;
+    let started = query(json!({"peerId":b_id,"mode":"MANAGE"})).await;
+    assert_eq!(started["data"]["pairDevice"], true, "{started}");
+    notice(&mut notices, "PAIRING_REQUESTED").await;
+    let body = json!({"query":"mutation($peerId:ID!){respondToPairing(peerId:$peerId,accepted:true)}", "variables":{"peerId":b_id}});
+    let trusted = management_http::exchange(
+        http.post(format!("https://localhost:{a_port}/graphql"))
+            .header("c-id", &browser.client_id),
+        &base64_decode(&browser.token),
+        &body.to_string(),
+        8192,
+    )
+    .await
+    .unwrap();
+    let trusted: Value = plain_libs::serde_json::from_slice(&trusted).unwrap();
     assert!(trusted["errors"].is_null(), "{trusted}");
     let request = confirmation(&mut events).await;
     b.native_management()
@@ -708,7 +742,7 @@ async fn web_management_pairs_by_device_id_and_keeps_the_grant_on_a() {
         .confirm_web_login(request, true)
         .await
         .unwrap();
-    phase(&a_state, generation, &[PairingPhase::Succeeded]).await;
+    notice(&mut notices, "PAIRING_COMPLETED").await;
     let peer = peers::get(&a_state.db, &b_id).unwrap().unwrap();
     let grant = b_state.db.session_get(&a_id).unwrap().unwrap();
     assert!(!peer.token.is_empty());
@@ -735,25 +769,27 @@ async fn web_management_pairs_by_device_id_and_keeps_the_grant_on_a() {
 #[tokio::test]
 async fn configured_password_can_complete_without_manual_approval_when_policy_allows() {
     let (_local_dir, local, _) = server().await;
-    let (_remote_dir, remote, port) =
+    let (_remote_dir, remote, _) =
         server_with_policy(crate::server::PairingApproval::FollowPasswordLogin).await;
     let state = local.runtime_state();
     let other = remote.runtime_state();
+    let peer_id = register_target(&state, &other).await;
+    let mut notices = state.events.subscribe();
     plain_rs::features::prefs::security::set_password_login(&other.prefs, "fixture-password")
         .unwrap();
     other.prefs.set("login_require_approval", false).unwrap();
-    let attempt = pairing_attempts::start(
-        &state,
-        None,
-        Some(format!("127.0.0.1:{port}")),
-        Some(pairing_attempts::Mode::Manage),
-        Some("fixture-password".into()),
-        None,
-        None,
-    )
-    .await
-    .unwrap();
-    phase(&state, &attempt.generation, &[PairingPhase::Succeeded]).await;
+    assert!(
+        pairing_attempts::start(
+            &state,
+            peer_id.clone(),
+            pairing_attempts::Mode::Manage,
+            Some("fixture-password".into()),
+            None
+        )
+        .await
+        .unwrap()
+    );
+    notice(&mut notices, "PAIRING_COMPLETED").await;
     let peer = plain_rs::infrastructure::db::chat_store::peers::get(
         &state.db,
         &other.native_client_id().unwrap(),

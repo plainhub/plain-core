@@ -19,6 +19,15 @@ use plain_rs::infrastructure::host::bridge::Host;
 use plain_libs::serde_json::Value;
 use std::sync::Arc;
 
+#[derive(SimpleObject, Clone, Debug)]
+pub struct Sim {
+    pub id: plain_graphql::ID,
+    pub label: String,
+    pub number: String,
+    #[graphql(name = "subscriptionId")]
+    pub subscription_id: i32,
+}
+
 const READ: AccessFeature = AccessFeature::Sms;
 
 #[derive(Enum, Copy, Clone, Eq, PartialEq, Debug, Default)]
@@ -115,6 +124,23 @@ pub struct SmsQuery;
 
 #[Object]
 impl SmsQuery {
+    async fn sims(&self, ctx: &Context<'_>) -> plain_graphql::Result<Vec<Sim>> {
+        public_gate::require(
+            ctx,
+            ctx.data_unchecked::<Arc<Prefs>>(),
+            &[AccessFeature::PhoneNumber],
+        )?;
+        let facts = ctx.data_unchecked::<Arc<Host>>()
+            .call("systemSimFacts", plain_libs::serde_json::json!({})).await
+            .map_err(plain_graphql::Error::new)?;
+        Ok(crate::graphql::types::facts::rows(&facts, |value| Sim {
+            id: crate::graphql::types::facts::id(value, "id"),
+            label: crate::graphql::types::facts::text(value, "label"),
+            number: crate::graphql::types::facts::text(value, "number"),
+            subscription_id: crate::graphql::types::facts::integer(value, "subscriptionId") as i32,
+        }))
+    }
+
     async fn sms(
         &self,
         ctx: &Context<'_>,

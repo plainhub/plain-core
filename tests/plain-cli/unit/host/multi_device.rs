@@ -10,7 +10,7 @@ struct Node {
     core: Arc<ContentServer>,
     host: tokio::task::JoinHandle<Result<(), String>>,
     native: NativeGraphqlExecutor,
-    pairing_changes: plain_server::graphql::subscriptions::session::SubscriptionSession,
+    pairing_completions: plain_server::graphql::subscriptions::session::SubscriptionSession,
     scope: NativeRequestScope,
     port: u16,
     _directory: plain_libs::temporary::TempDir,
@@ -46,15 +46,15 @@ impl Node {
         let native = core.native_graphql().unwrap();
         let scope = NativeRequestScope::default();
         let subscription_id = native.open_subscriptions(scope.clone()).unwrap();
-        let pairing_changes = native.subscription_session(subscription_id).unwrap();
-        pairing_changes.send(r#"{"type":"subscribe","id":"pairing","payload":{"query":"subscription { pairingChanged }"}}"#).unwrap();
-        let ready: Value = plain_libs::serde_json::from_str(&pairing_changes.read().await.unwrap()).unwrap();
+        let pairing_completions = native.subscription_session(subscription_id).unwrap();
+        pairing_completions.send(r#"{"type":"subscribe","id":"pairing","payload":{"query":"subscription { pairingCompleted { deviceId } }"}}"#).unwrap();
+        let ready: Value = plain_libs::serde_json::from_str(&pairing_completions.read().await.unwrap()).unwrap();
         assert_eq!(ready["payload"]["extensions"]["subscriptionReady"], true);
         Self {
             core,
             host,
             native,
-            pairing_changes,
+            pairing_completions,
             scope,
             port,
             _directory: directory,
@@ -67,33 +67,16 @@ impl Node {
         (&mut self.host).await.unwrap().unwrap();
     }
 
-    async fn paired(&mut self, generation: &str) {
+    async fn paired(&mut self, peer_id: &str) {
         tokio::time::timeout(Duration::from_secs(15), async {
             for _ in 0..128 {
-                let data = query(
-                    &self.native,
-                    "{pairingStates{generation phase error}}",
-                    json!({}),
-                )
-                .await;
-                let state = data["pairingStates"]
-                    .as_array()
-                    .unwrap()
-                    .iter()
-                    .find(|state| state["generation"] == generation)
-                    .unwrap();
-                if state["phase"] == "SUCCEEDED" {
-                    return;
-                }
-                assert_ne!(state["phase"], "FAILED", "{state}");
-                assert_ne!(state["phase"], "CANCELLED", "{state}");
-                self.pairing_changes.read().await.unwrap();
+                let frame: Value = plain_libs::serde_json::from_str(&self.pairing_completions.read().await.unwrap()).unwrap();
+                if frame["payload"]["data"]["pairingCompleted"]["deviceId"] == peer_id { return; }
             }
-            panic!("pairing did not converge");
-        })
-        .await
-        .unwrap();
+            panic!("pairing did not complete");
+        }).await.unwrap();
     }
+
 }
 
 impl Drop for Node {
@@ -129,12 +112,19 @@ async fn native_password_and_approval_pairing_enables_actual_chat_and_preserves_
         json!({}),
     )
     .await;
+    let second_id = second.native.client_id();
+    let remote_state = second.core.runtime();
+    first.core.runtime().nearby_devices.observe(plain_rs::features::discovery::nearby_devices::Device {
+        id:second_id.into(), name:"Fixture".into(), ips:vec!["127.0.0.1".into()], port:second.port,
+        remote_access:Some(true),signature_public_key:plain_libs::utils::base64::base64_encode(
+            &plain_rs::features::services::peers::peer_wire::signing_keypair(&remote_state.prefs).unwrap()[32..]),
+        device_type:plain_rs::features::chat::enums::DeviceType::Computer, version:"1".into(),platform:"fixture".into(),
+        last_seen_at:plain_rs::infrastructure::db::now_iso(),discovery_methods:vec![plain_rs::features::discovery::nearby_devices::DiscoveryMethod::Lan],
+    },true).unwrap();
     let started = query(
         &first.native,
-        r#"mutation($host:String!){pairDevice(input:{
-        host:$host,mode:MANAGE,password:"fixture-password"
-    }){generation}}"#,
-        json!({"host":format!("127.0.0.1:{}", second.port)}),
+        r#"mutation($peerId:ID!){pairDevice(input:{peerId:$peerId,mode:MANAGE,password:"fixture-password"})}"#,
+        json!({"peerId":second_id}),
     )
     .await;
     let request_id = tokio::time::timeout(Duration::from_secs(15), async {
@@ -160,9 +150,8 @@ async fn native_password_and_approval_pairing_enables_actual_chat_and_preserves_
         .confirm_web_login(request_id, true)
         .await
         .unwrap();
-    first
-        .paired(started["pairDevice"]["generation"].as_str().unwrap())
-        .await;
+    assert_eq!(started["pairDevice"], true);
+    first.paired(second_id).await;
     let peers = "{peers{id status key token publicKey}}";
     let first_peers = query(&first.native, peers, json!({})).await;
     let second_peers = query(&second.native, peers, json!({})).await;

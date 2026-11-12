@@ -4,7 +4,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 #[tokio::test]
 async fn management_pairing_with_cli_requires_password_without_second_approval() {
-    use plain_rs::features::services::discovery::pairing_attempts::{self, Mode, PairingPhase};
+    use plain_rs::features::services::discovery::pairing_attempts::{self, Mode};
     use plain_rs::infrastructure::db::chat_store::peers;
 
     let root = plain_libs::temporary::tempdir().unwrap();
@@ -35,49 +35,31 @@ async fn management_pairing_with_cli_requires_password_without_second_approval()
     let remote_state = remote.core.runtime();
     let local_id = state.native_client_id().unwrap();
     let remote_id = remote_state.native_client_id().unwrap();
-    let port = remote.core.http_ports().await.unwrap().0;
-
+    state.nearby_devices.observe(plain_rs::features::discovery::nearby_devices::Device {
+        id:remote_id.clone(),name:"Fixture".into(),ips:vec!["127.0.0.1".into()],
+        port:remote.core.http_ports().await.unwrap().1,remote_access:Some(true),
+        signature_public_key:plain_libs::utils::base64::base64_encode(&plain_rs::features::services::peers::peer_wire::signing_keypair(&remote_state.prefs).unwrap()[32..]),
+        device_type:plain_rs::features::chat::enums::DeviceType::Computer,version:"1".into(),platform:"fixture".into(),
+        last_seen_at:plain_rs::infrastructure::db::now_iso(),discovery_methods:vec![plain_rs::features::discovery::nearby_devices::DiscoveryMethod::Lan],
+    },true).unwrap();
     for (password, expected) in [
-        ("wrong password", PairingPhase::Failed),
-        ("fixture password", PairingPhase::Succeeded),
+        ("wrong password", "PAIRING_FAILED"),
+        ("fixture password", "PAIRING_COMPLETED"),
     ] {
-        let attempt = pairing_attempts::start(
-            state,
-            Some(remote_id.clone()),
-            Some(format!("http://127.0.0.1:{port}")),
-            Some(Mode::Manage),
-            Some(password.into()),
-            None,
-            None,
-        )
-        .await
-        .unwrap();
-        let outcome = tokio::time::timeout(std::time::Duration::from_secs(10), async {
-            loop {
-                let outcome = state
-                    .pairing_runtime
-                    .attempts
-                    .get(&attempt.generation)
-                    .unwrap();
-                if matches!(
-                    outcome.phase,
-                    PairingPhase::Failed
-                        | PairingPhase::Succeeded
-                        | PairingPhase::WaitingConfirmation
-                ) {
-                    break outcome;
-                }
-                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        let mut events = state.events.subscribe();
+        assert!(pairing_attempts::start(state,remote_id.clone(),Mode::Manage,Some(password.into()),None).await.unwrap());
+        let outcome = tokio::time::timeout(std::time::Duration::from_secs(10),async {
+            while let Ok(event) = events.recv().await {
+                if matches!(event.event_type,"PAIRING_COMPLETED"|"PAIRING_FAILED") { return event; }
             }
-        })
-        .await
-        .unwrap();
-        assert_eq!(outcome.phase, expected, "{:?}", outcome.error);
+            panic!("pairing notifications closed")
+        }).await.unwrap();
+        assert_eq!(outcome.event_type,expected,"{}",outcome.payload);
         let session = remote_state.db.session_get(&local_id).unwrap();
         let peer = peers::get(&state.db, &remote_id).unwrap();
         let remote_peer = peers::get(&remote_state.db, &local_id).unwrap();
-        if expected == PairingPhase::Failed {
-            assert_eq!(outcome.error.as_deref(), Some("invalid_password"));
+        if expected == "PAIRING_FAILED" {
+            assert_eq!(plain_libs::serde_json::from_str::<plain_libs::serde_json::Value>(&outcome.payload).unwrap()["error"], "invalid_password");
             assert!(session.is_none());
             assert!(peer.is_none() && remote_peer.is_none());
             continue;

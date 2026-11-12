@@ -1,13 +1,12 @@
-use plain_libs::protocols::http_client;
 use crate::server::ContentServer;
-use plain_graphql::{Request, Variables};
+use plain_graphql::Request;
+use plain_libs::protocols::http_client;
 use plain_rs::features::chat::enums::{DeviceType, PeerStatus};
 use plain_rs::infrastructure::db::DChannel;
 use plain_rs::infrastructure::db::DPeer;
 use plain_rs::infrastructure::db::chat_store::SaveMode;
 use plain_rs::infrastructure::db::chat_store::channels;
 use plain_rs::infrastructure::db::chat_store::peers;
-use plain_libs::serde_json::json;
 use std::sync::Arc;
 
 #[tokio::test]
@@ -47,10 +46,7 @@ async fn native_main_record_queries_preserve_addresses_keys_members_and_checked_
     assert_eq!(data["chatChannels"][0]["version"], 5000000001_i64);
     assert_eq!(data["chatChannels"][0]["key"], "channel-key");
     assert_eq!(data["chatChannels"][0]["members"][0]["peerId"], "peer");
-    let input = json!({"id":peer.id,"name":peer.name,"ip":peer.ip,"key":peer.key,"publicKey":peer.public_key,"status":"PAIRED","port":peer.port,"deviceType":"PHONE","token":peer.token,"createdAt":peer.created_at,"updatedAt":peer.updated_at});
-    let request = || {
-        Request::new("query($expected: PeerRecordInput!) { peerFileUrl(id: \"peer\", expected:$expected, fileId: \"a +?#%\") }").variables(Variables::from_json(json!({"expected":input.clone()})))
-    };
+    let request = || Request::new(r#"{ peerFileUrl(id: "peer", fileId: "a +?#%") }"#);
     let response = native.execute(request()).await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     let data = response.data.into_json().unwrap();
@@ -68,7 +64,7 @@ async fn native_main_record_queries_preserve_addresses_keys_members_and_checked_
     );
     peer.key = plain_libs::utils::base64::base64_encode(&[8; 32]);
     peers::save(&state.db, &[peer], SaveMode::Update).unwrap();
-    assert!(!native.execute(request()).await.errors.is_empty());
+    assert!(native.execute(request()).await.errors.is_empty());
     let response = native
         .execute(Request::new(
             r#"mutation { deletePeer(id:"absent") unpairPeer(id:"absent") }"#,
@@ -183,7 +179,7 @@ async fn remote_requests_cannot_access_or_change_local_login_sessions() {
         .unwrap();
     for document in [
         "{peers{token}}",
-        r#"mutation{pairDevice(input:{host:"127.0.0.1:9443",mode:MANAGE}){generation}}"#,
+        r#"mutation{pairDevice(input:{peerId:"peer",mode:MANAGE})}"#,
     ] {
         let response = crate::graphql::executor::execute_graphql(
             &state.public,
@@ -223,32 +219,4 @@ async fn retired_client_name_mirroring_is_not_available_through_any_main_transpo
         assert!(response.errors[0].message.contains("updatePeerName"));
     }
     core.stop_core().await;
-}
-
-#[test]
-fn peer_record_inputs_reject_unknown_status_and_device_types_during_coercion() {
-    use plain_graphql::InputType;
-    let value = json!({
-        "id":"peer", "name":"Fixture", "ip":"127.0.0.1", "key":"key", "publicKey":"public",
-        "status":"PAIRED", "port":8443, "deviceType":"PHONE", "token":"token",
-        "createdAt":"2026-01-01T00:00:00Z", "updatedAt":"2026-01-01T00:00:00Z"
-    });
-    let parse = |value| {
-        <super::PeerRecordInput as InputType>::parse(Some(
-            plain_graphql::Value::from_json(value).unwrap(),
-        ))
-    };
-    for status in ["PAIRED", "UNPAIRED", "CHANNEL"] {
-        for kind in ["COMPUTER", "PHONE", "TABLET", "TV", "NAS", "OTHER"] {
-            let mut valid = value.clone();
-            valid["status"] = json!(status);
-            valid["deviceType"] = json!(kind);
-            assert!(parse(valid).is_ok(), "{status}/{kind}");
-        }
-    }
-    for field in ["status", "deviceType"] {
-        let mut invalid = value.clone();
-        invalid[field] = json!("FUTURE_VALUE");
-        assert!(parse(invalid).is_err(), "{field}");
-    }
 }

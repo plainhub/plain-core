@@ -41,20 +41,17 @@ impl AppStateSubscriptions {
     ) -> Result<BoxStream<'static, Result<ImageModelsUpdate>>> {
         events::stream(ctx, "IMAGE_MODELS_UPDATED").await
     }
-    async fn pairing_changed(&self, ctx: &Context<'_>) -> Result<BoxStream<'static, Result<bool>>> {
-        events::stream(ctx, "PAIRING_STATE_CHANGED").await
-    }
     async fn pairing_requested(
         &self,
         ctx: &Context<'_>,
     ) -> Result<BoxStream<'static, Result<PairingRequestNotice>>> {
-        events::stream(ctx, "PAIRING_REQUEST_RECEIVED").await
+        events::stream(ctx, "PAIRING_REQUESTED").await
     }
     async fn pairing_completed(
         &self,
         ctx: &Context<'_>,
     ) -> Result<BoxStream<'static, Result<PairingCompletedNotice>>> {
-        events::stream(ctx, "PAIRING_SUCCESS").await
+        events::stream(ctx, "PAIRING_COMPLETED").await
     }
     async fn pairing_started(
         &self,

@@ -8,10 +8,9 @@ use crate::features::peers::pairing::sessions::Target;
 use crate::features::peers::pairing::sessions::Ticket;
 use crate::features::services::discovery::pairing;
 use crate::features::services::discovery::pairing::Device;
-use crate::features::services::discovery::pairing_attempts::PairingPhase;
 use crate::runtime::Runtime as CoreRuntime;
-use serde::Deserialize;
 use plain_libs::serde_json::{Value, json};
+use serde::Deserialize;
 use std::{
     collections::{BTreeMap, HashMap},
     net::IpAddr,
@@ -38,7 +37,11 @@ struct PendingSuccess {
     running: bool,
 }
 impl Runtime {
-    fn check_address(&self, request: &PairingRequest, address: &str) -> plain_libs::anyhow::Result<()> {
+    fn check_address(
+        &self,
+        request: &PairingRequest,
+        address: &str,
+    ) -> plain_libs::anyhow::Result<()> {
         plain_libs::anyhow::ensure!(
             !address.is_empty() && address.len() <= 256,
             "Invalid BLE sender address"
@@ -87,7 +90,6 @@ impl Runtime {
 #[derive(Deserialize)]
 #[serde(tag = "action", rename_all = "camelCase", deny_unknown_fields)]
 pub enum Request {
-    States,
     Start {
         target: Target,
         ips: Vec<String>,
@@ -133,21 +135,8 @@ pub fn event(state: &CoreRuntime, kind: &'static str, value: Value) {
             value.to_string(),
         ));
 }
-pub fn failed(state: &CoreRuntime, target: &Target, error: &str, generation: Option<&str>) {
-    let mut result =
-        json!({"deviceId":target.device_id,"deviceName":target.device_name,"error":error});
-    if let Some(generation) = generation {
-        result["generation"] = json!(generation);
-    }
-    if let Some(generation) = generation {
-        state.pairing_runtime.attempts.transition(
-            state,
-            generation,
-            PairingPhase::Failed,
-            Some(error),
-            None,
-        );
-    }
+pub fn failed(state: &CoreRuntime, target: &Target, error: &str, _generation: Option<&str>) {
+    let result = json!({"deviceId":target.device_id,"deviceName":target.device_name,"error":error});
     event(
         state,
         crate::features::chat::events::WS_PAIRING_FAILED,
@@ -165,7 +154,7 @@ fn canceled(state: &CoreRuntime, value: &Value) {
 pub fn success(state: &CoreRuntime, peer: &Value, ip: &str, request_id: Option<&str>) {
     event(
         state,
-        crate::features::chat::events::WS_PAIRING_SUCCESS,
+        crate::features::chat::events::WS_PAIRING_COMPLETED,
         json!({"deviceId":peer["id"],"deviceName":peer["name"],"ip":ip,"port":peer["port"],"deviceType":peer["device_type"],"requestId":request_id}),
     );
     let (Some(id), Some(key)) = (peer["id"].as_str(), peer["key"].as_str()) else {
@@ -239,13 +228,14 @@ async fn deliver_successes(state: CoreRuntime) {
         .running = false;
 }
 pub(super) async fn local_device(state: &CoreRuntime) -> plain_libs::anyhow::Result<Device> {
-    let reply: crate::features::discovery::nearby_wire::DiscoverReply = plain_libs::serde_json::from_value(
-        crate::features::services::discovery::discovery_advertisement::execute(
-            state,
-            crate::features::services::discovery::discovery_advertisement::Request::Reply {},
-        )
-        .await?,
-    )?;
+    let reply: crate::features::discovery::nearby_wire::DiscoverReply =
+        plain_libs::serde_json::from_value(
+            crate::features::services::discovery::discovery_advertisement::execute(
+                state,
+                crate::features::services::discovery::discovery_advertisement::Request::Reply {},
+            )
+            .await?,
+        )?;
     Ok(Device {
         name: reply.name,
         port: reply.port,
@@ -260,7 +250,6 @@ pub async fn start_device(
     ips: Vec<String>,
     methods: Vec<DiscoveryMethod>,
     generation: Option<String>,
-
 ) -> plain_libs::anyhow::Result<Value> {
     let ble = if methods.iter().any(|method| *method == DiscoveryMethod::Ble)
         && !(methods.iter().any(|method| method.is_lan()) && !ips.is_empty())
@@ -307,7 +296,6 @@ pub async fn respond_device(
 }
 pub async fn execute(state: &CoreRuntime, request: Request) -> plain_libs::anyhow::Result<Value> {
     Ok(match request {
-        Request::States => json!(state.pairing_runtime.attempts.states()),
         Request::Start {
             target,
             ips,
@@ -329,10 +317,7 @@ pub async fn execute(state: &CoreRuntime, request: Request) -> plain_libs::anyho
                 .await?
             } else if methods.iter().any(|m| *m == DiscoveryMethod::Ble) && ble {
                 crate::features::services::discovery::ble_pairing::start(
-                    state,
-                    target,
-                    device,
-                    generation,
+                    state, target, device, generation,
                 )?
             } else {
                 failed(state, &target, "No pairing transport available", None);
@@ -355,33 +340,30 @@ pub async fn execute(state: &CoreRuntime, request: Request) -> plain_libs::anyho
             }
             let result = {
                 let _commit = state.pairing_runtime.commit.lock().unwrap();
-                if generation.as_ref().is_some_and(|g| {
-                    state
-                        .pairing_runtime
-                        .attempts
-                        .get(g)
-                        .is_none_or(|s| s.phase == PairingPhase::Cancelled)
-                }) {
+                if generation
+                    .as_ref()
+                    .is_some_and(|g| state.pairing_runtime.attempts.mode(g).is_none())
+                {
                     return Ok(Value::Null);
                 }
-                pairing::start_generation(
-                    &state.prefs,
-                    &state.pairing,
-                    target,
-                    device,
-                    generation,
-                )?
+                pairing::start_generation(&state.prefs, &state.pairing, target, device, generation)?
             };
             let ticket: Ticket = plain_libs::serde_json::from_value(result["ticket"].clone())?;
-            let request: PairingRequest = plain_libs::serde_json::from_value(result["request"].clone())?;
+            let request: PairingRequest =
+                plain_libs::serde_json::from_value(result["request"].clone())?;
             state
                 .pairing_runtime
                 .confirmations
                 .begin(state, &request, &ticket)?;
+            let verification_code = super::pairing_confirmation::verification_code(&request);
             let message = Message::PairRequest(request.payload);
             let mut sent = false;
             for _ in 0..2 {
-                if !state.pairing_runtime.confirmations.awaiting_response(state, &ticket) {
+                if !state
+                    .pairing_runtime
+                    .confirmations
+                    .awaiting_response(state, &ticket)
+                {
                     break;
                 }
                 sent = nearby_http::send(
@@ -401,17 +383,10 @@ pub async fn execute(state: &CoreRuntime, request: Request) -> plain_libs::anyho
                     .pairing
                     .mark_sent(&ticket.target.device_id, &ticket.generation)
                 {
-                    state.pairing_runtime.attempts.transition(
-                        state,
-                        &ticket.generation,
-                        PairingPhase::Pairing,
-                        None,
-                        None,
-                    );
                     event(
                         state,
                         crate::features::chat::events::WS_PAIRING_STARTED,
-                        json!({"deviceId":ticket.target.device_id,"deviceName":ticket.target.device_name,"generation":ticket.generation}),
+                        json!({"deviceId":ticket.target.device_id,"deviceName":ticket.target.device_name,"verificationCode":verification_code}),
                     );
                 }
                 let state = state.clone();
@@ -459,7 +434,8 @@ pub async fn execute(state: &CoreRuntime, request: Request) -> plain_libs::anyho
             if !value.is_null() {
                 canceled(state, &value);
                 let ticket: Ticket = plain_libs::serde_json::from_value(value["ticket"].clone())?;
-                let cancel: PairingCancel = plain_libs::serde_json::from_value(value["cancel"].clone())?;
+                let cancel: PairingCancel =
+                    plain_libs::serde_json::from_value(value["cancel"].clone())?;
                 if !ticket.target.device_ip.is_empty() {
                     let _ = nearby_http::send(
                         &ticket.target.device_ip,
@@ -485,7 +461,9 @@ pub async fn execute(state: &CoreRuntime, request: Request) -> plain_libs::anyho
             let local_key =
                 crate::features::services::peers::peer_wire::signing_keypair(&state.prefs)?;
             let request = PairingRequest {
-                to_id: state.native_client_id().map_err(plain_libs::anyhow::Error::msg)?,
+                to_id: state
+                    .native_client_id()
+                    .map_err(plain_libs::anyhow::Error::msg)?,
                 target_public_key: plain_libs::utils::base64::base64_encode(&local_key[32..]),
                 from_id: client_id,
                 from_ip: if ble { String::new() } else { address.clone() },
@@ -505,7 +483,10 @@ pub async fn execute(state: &CoreRuntime, request: Request) -> plain_libs::anyho
             };
             let (cached, is_new) = {
                 let _commit = state.pairing_runtime.commit.lock().unwrap();
-                let cached = state.pairing_runtime.confirmations.cached_response(&request)?;
+                let cached = state
+                    .pairing_runtime
+                    .confirmations
+                    .cached_response(&request)?;
                 let is_new = cached.is_none() && state.pairing.receive(&request);
                 (cached, is_new)
             };
@@ -588,13 +569,7 @@ pub async fn execute(state: &CoreRuntime, request: Request) -> plain_libs::anyho
                 .pairing_runtime
                 .confirmations
                 .respond(state, &request, accepted, device)?;
-            send_incoming(
-                state,
-                &request,
-                &target,
-                Message::from(response.clone()),
-            )
-            .await?;
+            send_incoming(state, &request, &target, Message::from(response.clone())).await?;
             json!({"response":response})
         }
     })
@@ -634,10 +609,24 @@ pub async fn handle_nearby_post(
             super::pairing_qr::complete(state, response, remote_ip, client_id.unwrap_or_default())?;
         }
         Message::PairingAccept(response) => {
-            execute(state, Request::Complete { response: PairingReply::Accept(response), sender_ip: remote_ip.to_string() }).await?;
+            execute(
+                state,
+                Request::Complete {
+                    response: PairingReply::Accept(response),
+                    sender_ip: remote_ip.to_string(),
+                },
+            )
+            .await?;
         }
         Message::PairingReject(response) => {
-            execute(state, Request::Complete { response: PairingReply::Reject(response), sender_ip: remote_ip.to_string() }).await?;
+            execute(
+                state,
+                Request::Complete {
+                    response: PairingReply::Reject(response),
+                    sender_ip: remote_ip.to_string(),
+                },
+            )
+            .await?;
         }
         Message::PairCancel(cancel) => {
             execute(state, Request::ReceiveCancel { cancel }).await?;
@@ -646,7 +635,11 @@ pub async fn handle_nearby_post(
     Ok(true)
 }
 
-pub async fn accept_report(state: &CoreRuntime, kind: &str, payload: &str) -> plain_libs::anyhow::Result<bool> {
+pub async fn accept_report(
+    state: &CoreRuntime,
+    kind: &str,
+    payload: &str,
+) -> plain_libs::anyhow::Result<bool> {
     let request = match kind {
         "PAIRING_REQUEST_REPORTED" => {
             #[derive(Deserialize)]

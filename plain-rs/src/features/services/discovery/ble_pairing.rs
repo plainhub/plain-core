@@ -4,12 +4,11 @@ use crate::features::peers::pairing::sessions::Target;
 use crate::features::peers::pairing::sessions::Ticket;
 use crate::features::services::discovery::pairing;
 use crate::features::services::discovery::pairing::Device;
-use crate::features::services::discovery::pairing_attempts::PairingPhase;
 use crate::features::services::discovery::pairing_runtime::event;
 use crate::features::services::discovery::pairing_runtime::failed;
 use crate::runtime::Runtime as CoreRuntime;
-use plain_libs::utils::base64::base64_encode;
 use plain_libs::serde_json::{Value, json};
+use plain_libs::utils::base64::base64_encode;
 use std::{
     collections::HashMap,
     sync::Mutex,
@@ -26,7 +25,6 @@ pub fn start(
     mut target: Target,
     device: Device,
     generation: Option<String>,
-
 ) -> plain_libs::anyhow::Result<Value> {
     let mut jobs = state.ble_pairing.0.lock().unwrap();
     if let Some(ticket) = jobs.get(&target.device_id) {
@@ -47,22 +45,13 @@ pub fn start(
     target.device_ip.clear();
     let value = {
         let _commit = state.pairing_runtime.commit.lock().unwrap();
-        if generation.as_ref().is_some_and(|g| {
-            state
-                .pairing_runtime
-                .attempts
-                .get(g)
-                .is_none_or(|s| s.phase == PairingPhase::Cancelled)
-        }) {
+        if generation
+            .as_ref()
+            .is_some_and(|g| state.pairing_runtime.attempts.mode(g).is_none())
+        {
             return Ok(Value::Null);
         }
-        pairing::start_generation(
-            &state.prefs,
-            &state.pairing,
-            target,
-            device,
-            generation,
-        )?
+        pairing::start_generation(&state.prefs, &state.pairing, target, device, generation)?
     };
     let ticket: Ticket = plain_libs::serde_json::from_value(value["ticket"].clone())?;
     let request = plain_libs::serde_json::from_value(value["request"].clone())?;
@@ -70,6 +59,7 @@ pub fn start(
         .pairing_runtime
         .confirmations
         .begin(state, &request, &ticket)?;
+    let verification_code = super::pairing_confirmation::verification_code(&request);
     let body = Message::PairRequest(request.payload).wire()?;
     let packet = crate::infrastructure::protocols::ble::message(
         request.from_id.as_bytes(),
@@ -81,7 +71,7 @@ pub fn start(
     let state = state.clone();
     let returned = ticket.clone();
     tokio::spawn(async move {
-        let result = run(&state, &ticket, &packet).await;
+        let result = run(&state, &ticket, &packet, &verification_code).await;
         if let Err(Cause::Failed(error)) = result {
             if state
                 .pairing
@@ -128,7 +118,12 @@ async fn host(
         }
     }
 }
-async fn run(state: &CoreRuntime, ticket: &Ticket, packet: &str) -> Result<(), Cause> {
+async fn run(
+    state: &CoreRuntime,
+    ticket: &Ticket,
+    packet: &str,
+    verification_code: &str,
+) -> Result<(), Cause> {
     let facts = json!({"generation":ticket.generation});
     let connect = json!({
         "generation": ticket.generation,
@@ -148,17 +143,10 @@ async fn run(state: &CoreRuntime, ticket: &Ticket, packet: &str) -> Result<(), C
     {
         return Err(Cause::Stopped);
     }
-    state.pairing_runtime.attempts.transition(
-        state,
-        &ticket.generation,
-        PairingPhase::Pairing,
-        None,
-        None,
-    );
     event(
         state,
         WS_PAIRING_STARTED,
-        json!({"deviceId":ticket.target.device_id,"deviceName":ticket.target.device_name,"generation":ticket.generation}),
+        json!({"deviceId":ticket.target.device_id,"deviceName":ticket.target.device_name,"verificationCode":verification_code}),
     );
     let mut last_send = Instant::now();
     loop {
@@ -196,11 +184,17 @@ async fn run(state: &CoreRuntime, ticket: &Ticket, packet: &str) -> Result<(), C
             Err(_) => continue,
         };
         let response = match message {
-            Message::PairingAccept(value) => crate::features::peers::pairing::protocol::PairingReply::Accept(value),
-            Message::PairingReject(value) => crate::features::peers::pairing::protocol::PairingReply::Reject(value),
+            Message::PairingAccept(value) => {
+                crate::features::peers::pairing::protocol::PairingReply::Accept(value)
+            }
+            Message::PairingReject(value) => {
+                crate::features::peers::pairing::protocol::PairingReply::Reject(value)
+            }
             _ => continue,
         };
-        if response.request_id() == crate::features::peers::pairing::protocol::request_id(&ticket.request_signature) {
+        if response.request_id()
+            == crate::features::peers::pairing::protocol::request_id(&ticket.request_signature)
+        {
             match state
                 .pairing_runtime
                 .confirmations

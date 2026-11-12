@@ -1,10 +1,7 @@
 input PairingDeviceInput {
-	id: ID
-	host: String
-	mode: PairingMode
+	peerId: ID!
+	mode: PairingMode!
 	password: String
-	generation: String
-	confirm: Boolean
 }
 
 enum PairingMode {
@@ -12,77 +9,15 @@ enum PairingMode {
 	MANAGE
 }
 
-enum PairingPhase {
-	STARTING
-	PASSWORD_REQUIRED
-	AUTHENTICATING
-	PAIRING
-	TRUST_REQUIRED
-	WAITING_CONFIRMATION
-	COMMITTING
-	SUCCEEDED
-	FAILED
-	CANCELLED
-}
-
-input PairingRequestInput {
-	toId: ID!
-	targetPublicKey: String!
-	fromId: ID!
-	fromName: String!
-	port: Int!
-	deviceType: DeviceType!
-	ecdhPublicKey: String!
-	signaturePublicKey: String!
-	timestamp: Long!
-	ips: [String!]!
-	signature: String!
-	fromIp: String!
-	awareSupported: Boolean!
-}
-
-type PairingState {
-	deviceId: ID
-	generation: String!
-	mode: PairingMode!
-	phase: PairingPhase!
-	error: String
-	verificationCode: String
-	identityChanged: Boolean!
-}
-
-input PeerRecordInput {
-	id: ID!
-	name: String!
-	ip: String!
-	key: String!
-	publicKey: String!
-	status: PeerStatus!
-	port: Int
-	deviceType: DeviceType!
-	token: String!
-	createdAt: Instant!
-	updatedAt: Instant!
-}
-
-type Sim {
-	id: ID!
-	label: String!
-	number: String!
-	subscriptionId: Int!
-}
-
 extend type Mutation {
-	cancelPairing(generation: String!): Boolean!
+	cancelPairing(peerId: ID!): Boolean!
 	deletePeer(id: ID!): Boolean!
-	pairDevice(input: PairingDeviceInput!): PairingState!
-	respondToPairing(input: PairingRequestInput!, accepted: Boolean!): Boolean!
+	pairDevice(input: PairingDeviceInput!): Boolean!
+	respondToPairing(peerId: ID!, accepted: Boolean!): Boolean!
 	unpairPeer(id: ID!): Boolean!
 }
 
 extend type Query {
-	pairingStates: [PairingState!]!
-	peerFileUrl(id: ID!, expected: PeerRecordInput!, fileId: String!): String!
+	peerFileUrl(id: ID!, fileId: String!): String!
 	peers: [Peer!]!
-	sims: [Sim!]!
 }
