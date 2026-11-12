@@ -1096,8 +1096,8 @@ async fn auth_proxy_requires_fresh_confirmation_before_opening_upstream() {
     core.stop_core().await;
 }
 
-#[tokio::test]
-async fn idle_peer_subscription_confirms_before_the_first_command() {
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn idle_peer_subscription_serializes_concurrent_commands_over_tls() {
     use plain_rs::features::services::peers::subscriptions::PeerSubscription;
     use plain_rs::infrastructure::protocols::graphql::PeerSubscriptionTarget;
     let dir = plain_libs::temporary::tempdir().unwrap();
@@ -1167,6 +1167,59 @@ async fn idle_peer_subscription_confirms_before_the_first_command() {
         .unwrap()
         .unwrap();
     let ready: plain_libs::serde_json::Value = plain_libs::serde_json::from_str(&ready).unwrap();
+    assert_eq!(ready["payload"]["extensions"]["subscriptionReady"], true);
+    for batch in 0..4 {
+        let ids = (0..16)
+            .map(|index| format!("concurrent-{batch}-{index}"))
+            .collect::<std::collections::HashSet<_>>();
+        for operation in ["subscribe", "complete"] {
+            let barrier = Arc::new(tokio::sync::Barrier::new(ids.len() + 1));
+            let mut senders = tokio::task::JoinSet::new();
+            for id in &ids {
+                let subscription = subscription.clone();
+                let barrier = barrier.clone();
+                let message = if operation == "subscribe" {
+                    json!({"type":"subscribe","id":id,"payload":{"query":"subscription { accessUpdated }"}})
+                } else {
+                    json!({"type":"complete","id":id})
+                }
+                .to_string();
+                senders.spawn(async move {
+                    barrier.wait().await;
+                    subscription.send(&message).unwrap();
+                });
+            }
+            barrier.wait().await;
+            while let Some(result) = senders.join_next().await {
+                result.unwrap();
+            }
+            if operation == "subscribe" {
+                tokio::time::timeout(Duration::from_secs(10), async {
+                    let mut remaining = ids.clone();
+                    while !remaining.is_empty() {
+                        let message: plain_libs::serde_json::Value =
+                            plain_libs::serde_json::from_str(&subscription.read().await.unwrap())
+                                .unwrap();
+                        assert_eq!(message["type"], "next", "{message}");
+                        assert_eq!(message["payload"]["extensions"]["subscriptionReady"], true);
+                        assert!(
+                            remaining.remove(message["id"].as_str().unwrap()),
+                            "{message}"
+                        );
+                    }
+                })
+                .await
+                .unwrap();
+            }
+        }
+    }
+    subscription.send(r#"{"type":"subscribe","id":"after-concurrent","payload":{"query":"subscription { accessUpdated }"}}"#).unwrap();
+    let ready = tokio::time::timeout(Duration::from_secs(5), subscription.read())
+        .await
+        .unwrap()
+        .unwrap();
+    let ready: plain_libs::serde_json::Value = plain_libs::serde_json::from_str(&ready).unwrap();
+    assert_eq!(ready["id"], "after-concurrent");
     assert_eq!(ready["payload"]["extensions"]["subscriptionReady"], true);
     scope.close();
     subscription.close();
