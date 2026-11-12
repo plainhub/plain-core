@@ -861,12 +861,11 @@ async fn first_password_login_completes_without_owner_approval() {
         let mut headers = plain_libs::axum::http::HeaderMap::new();
         headers.insert("c-id", "first-browser".parse().unwrap());
         let payload = json!({"requestId": plain_rs::features::record_id::generate(), "query":r#"{noteCount(query:"")}"#}).to_string();
-        for (method, path) in [("POST", "/guest_graphql"), ("GET", "/graphql")] {
-            let wrong = plain_rs::infrastructure::transport::http_request::encrypt_raw(
+        for (method, path) in [("POST", "/graphql"), ("POST", "/guest_graphql"), ("GET", "/graphql")] {
+            let wrong = plain_libs::crypto::xchacha_encrypt_raw_with_aad(
                 key,
-                method,
-                path,
                 payload.as_bytes(),
+                &plain_rs::infrastructure::transport::http_request::aad(method, path),
             )
             .unwrap();
             let response = crate::http::graphql::call(
