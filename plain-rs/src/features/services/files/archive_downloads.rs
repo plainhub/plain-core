@@ -40,7 +40,7 @@ fn remote_access_allowed(state: &CoreRuntime) -> bool {
 
 fn decrypt_url_id(state: &CoreRuntime, id: &str) -> Option<String> {
     String::from_utf8(
-        crate::features::services::files::links::decrypt(state, id, "zip-files").ok()?,
+        crate::features::services::files::links::decrypt(state, id, crate::features::files::resource_link::ResourcePurpose::ZipFiles).ok()?,
     )
     .ok()
 }

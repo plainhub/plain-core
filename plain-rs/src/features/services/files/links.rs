@@ -1,4 +1,4 @@
-use crate::features::files::resource_link::{self, ResourceType, Scope};
+use crate::features::files::resource_link::{self, ResourcePurpose, ResourceType, Scope};
 use crate::features::media::catalog_paths::requires_foreground_scan;
 use crate::runtime::Runtime as CoreRuntime;
 use std::path::Path;
@@ -46,7 +46,7 @@ pub(crate) fn key(state: &CoreRuntime, scope: &Scope) -> plain_libs::anyhow::Res
     Ok(key)
 }
 
-pub fn decrypt(state: &CoreRuntime, id: &str, purpose: &str) -> plain_libs::anyhow::Result<Vec<u8>> {
+pub fn decrypt(state: &CoreRuntime, id: &str, purpose: ResourcePurpose) -> plain_libs::anyhow::Result<Vec<u8>> {
     let (scope, payload) = resource_link::parse(id)?;
     plain_libs::anyhow::ensure!(!matches!(scope, Scope::Share(_)), "Invalid request scope");
     resource_link::decrypt(&scope, purpose, &key(state, &scope)?, payload)

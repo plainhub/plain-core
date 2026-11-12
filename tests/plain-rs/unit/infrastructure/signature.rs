@@ -8,7 +8,7 @@ use plain_libs::{
 #[test]
 fn signature_purposes_are_distinct_and_not_interchangeable() {
     let purposes = [
-        SignaturePurpose::WebApprovalResponse,
+        SignaturePurpose::AuthServerHello,
         SignaturePurpose::PairRequest,
         SignaturePurpose::PairingAccept,
         SignaturePurpose::PairingReject,

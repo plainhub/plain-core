@@ -40,18 +40,22 @@ fn response_authentication_binds_key_and_request() {
 }
 
 #[test]
-fn graphql_requests_use_empty_aad_and_only_post() {
-    let body = encrypt(&[7; 32], "/graphql", r#"{"query":"{ payload }"}"#).unwrap();
-    assert!(decrypt_raw(&[7; 32], "POST", "/graphql", &body).is_some());
-    assert!(decrypt_raw(&[7; 32], "GET", "/graphql", &body).is_none());
-    assert!(plain_libs::crypto::xchacha_decrypt_raw(&[7; 32], &body).is_some());
-    let old = plain_libs::crypto::xchacha_encrypt_raw_with_aad(
-        &[7; 32],
-        b"payload",
-        &aad("POST", "/graphql"),
-    )
-    .unwrap();
-    assert!(decrypt_raw(&[7; 32], "POST", "/graphql", &old).is_none());
+fn graphql_requests_bind_the_method_and_endpoint() {
+    let key = [7; 32];
+    for endpoint in ["/graphql", "/guest_graphql", "/peer_graphql"] {
+        let body = encrypt_raw(&key, "POST", endpoint, b"payload").unwrap();
+        assert_eq!(decrypt_raw(&key, "POST", endpoint, &body).unwrap(), b"payload");
+        assert!(plain_libs::crypto::xchacha_decrypt_raw(&key, &body).is_none());
+        for other in ["/graphql", "/guest_graphql", "/peer_graphql"] {
+            if other != endpoint {
+                assert!(decrypt_raw(&key, "POST", other, &body).is_none());
+            }
+        }
+        assert!(encrypt_raw(&key, "GET", endpoint, b"payload").is_none());
+        assert!(decrypt_raw(&key, "GET", endpoint, &body).is_none());
+        let unbound = plain_libs::crypto::xchacha_encrypt_raw(&key, b"payload").unwrap();
+        assert!(decrypt_raw(&key, "POST", endpoint, &unbound).is_none());
+    }
 }
 
 #[test]
@@ -71,22 +75,5 @@ fn main_and_guest_share_the_uuid_json_envelope() {
         assert_ne!(request["requestId"], "caller-value");
         assert_eq!(request["variables"]["text"], "a|b");
         assert_eq!(request["operationName"], "Q");
-    }
-}
-
-#[test]
-fn graphql_crypto_carries_only_the_payload_without_route_metadata() {
-    let key = [7; 32];
-    for endpoint in ["/graphql", "/guest_graphql", "/peer_graphql"] {
-        let body = encrypt_raw(&key, "POST", endpoint, b"payload").unwrap();
-        assert_eq!(
-            plain_libs::crypto::xchacha_decrypt_raw(&key, &body).unwrap(),
-            b"payload"
-        );
-        for other in ["/graphql", "/guest_graphql", "/peer_graphql"] {
-            assert_eq!(decrypt_raw(&key, "POST", other, &body).unwrap(), b"payload");
-        }
-        assert!(encrypt_raw(&key, "GET", endpoint, b"payload").is_none());
-        assert!(decrypt_raw(&key, "GET", endpoint, &body).is_none());
     }
 }

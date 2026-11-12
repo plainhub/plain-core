@@ -53,7 +53,7 @@ async fn encrypted_media_download_resolves_selection_and_preserves_each_basename
         &plain_rs::features::files::resource_link::Scope::Session(
             state.native_client_id().unwrap(),
         ),
-        "zip-files",
+        plain_libs::aad::ResourcePurpose::ZipFiles,
         &plain_libs::utils::base64::base64_decode(&token),
         payload.as_bytes(),
     )

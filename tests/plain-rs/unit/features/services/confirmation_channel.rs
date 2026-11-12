@@ -98,11 +98,31 @@ fn response_signature_has_one_purpose_and_keeps_all_bindings() {
     let bytes = signed_bytes("browser", &base64_encode(&public), &hello, &response);
     assert!(ed25519_verify(&base64_encode(&public), &bytes, &response.signature));
     let payload: plain_libs::serde_json::Value = plain_libs::serde_json::from_slice(&bytes).unwrap();
-    assert_eq!(payload[0], "WEB_APPROVAL_RESPONSE");
+    assert_eq!(payload[0], "AUTH_SERVER_HELLO");
     assert_eq!(payload.as_array().unwrap().len(), 6);
     for index in 0..6 {
         let mut altered = payload.clone();
         altered[index] = json!("substituted");
         assert!(!ed25519_verify(&base64_encode(&public), altered.to_string().as_bytes(), &response.signature));
+    }
+}
+
+#[test]
+fn fixed_login_purpose_separates_confirmation_channels() {
+    let (signing, _) = plain_libs::crypto::ed25519_generate();
+    let (_, request) = Client::start("client").unwrap();
+    let (_, response) = ServerHandshake::start("client", "device", &request, &signing, 100).unwrap();
+    let bytes = transcript("client", &request, &response);
+    let value: plain_libs::serde_json::Value = plain_libs::serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(value[0], "LOGIN_NO_PASSWORD");
+    assert_eq!(value.as_array().unwrap().len(), 5);
+    let channel = Channel::new(&[7; 32], &bytes, 1000);
+    let frame = channel.encrypt_request(b"metadata", 101).unwrap();
+    for purpose in [json!("LOGIN_PASSWORD"), json!("web-approval")] {
+        let altered = String::from_utf8(bytes.clone()).unwrap()
+            .replacen("\"LOGIN_NO_PASSWORD\"", &purpose.to_string(), 1);
+        let other = Channel::new(&[7; 32], altered.as_bytes(), 1000);
+        assert_ne!(channel.api_key(), other.api_key());
+        assert!(other.decrypt_request(&frame, 101).is_err());
     }
 }

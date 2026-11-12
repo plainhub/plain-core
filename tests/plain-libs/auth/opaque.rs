@@ -92,3 +92,15 @@ fn native_client_wrapper_verifies_password_pin_and_derived_outputs() {
         assert_eq!(result.server_public_key, public_key);
     }
 }
+
+#[test]
+fn context_binds_fixed_login_purpose_client_and_server_identity() {
+    let identity = [7; 32];
+    let mut expected = vec![0, 0, 0, 14];
+    expected.extend_from_slice(b"LOGIN_PASSWORD");
+    expected.extend_from_slice(&[0, 0, 0, 6]);
+    expected.extend_from_slice(b"client");
+    expected.extend_from_slice(&[0, 0, 0, 32]);
+    expected.extend_from_slice(&identity);
+    assert_eq!(context("client", &identity), expected);
+}

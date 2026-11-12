@@ -1,7 +1,7 @@
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
 pub enum SignaturePurpose {
-    #[serde(rename = "WEB_APPROVAL_RESPONSE")]
-    WebApprovalResponse,
+    #[serde(rename = "AUTH_SERVER_HELLO")]
+    AuthServerHello,
     #[serde(rename = "PAIR_REQUEST")]
     PairRequest,
     #[serde(rename = "PAIRING_ACCEPT")]

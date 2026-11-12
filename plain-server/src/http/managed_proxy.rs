@@ -10,7 +10,7 @@ use plain_libs::protocols::http_client;
 use plain_rs::{
     features::{
         access::AccessFeature,
-        files::resource_link::{self, Resource, Scope},
+        files::resource_link::{self, Resource, ResourcePurpose, Scope},
         services::{device::access, peers::management_http},
     },
     infrastructure::{db::SessionRow, transport::http_response},
@@ -376,29 +376,22 @@ async fn resource(state: ServerState, target: &str, path: &str, request: Request
         return StatusCode::UNAUTHORIZED.into_response();
     };
     let scope = Scope::Session(id);
-    let purpose = format!("managed:{target}:{path}:{}", parameters.action.as_str());
     let browser_session = (!native).then_some(&session);
-    let plain = browser_session
-        .and_then(|_| resource_link::decrypt(&scope, &purpose, &url_key, payload).ok());
-    let (Some(session), Some(plain)) = (browser_session, plain) else {
-        if path == "fs"
-            && let Ok(reference) = resource_link::decrypt(
-                &scope,
-                &format!("chat-attachment:{target}"),
-                &url_key,
-                payload,
-            )
-        {
-            return attachment::call(
-                &state,
-                target,
-                parameters,
-                &reference,
-                browser_session,
-                request.headers(),
-            )
-            .await;
-        }
+    let Ok(plain) = resource_link::decrypt(&scope, ResourcePurpose::Fs, &url_key, payload) else {
+        return StatusCode::UNAUTHORIZED.into_response();
+    };
+    if path == "fs" && plain.starts_with(b"fsid:") {
+        return attachment::call(
+            &state,
+            target,
+            parameters,
+            &plain,
+            browser_session,
+            request.headers(),
+        )
+        .await;
+    }
+    let Some(session) = browser_session else {
         return StatusCode::UNAUTHORIZED.into_response();
     };
     let Ok(route) = state.managed_proxy.route(&state, target).await else {
@@ -427,7 +420,7 @@ async fn resource(state: ServerState, target: &str, path: &str, request: Request
                     ),
                     "Invalid managed archive selection"
                 );
-                resource_link::encrypt(&scope, "zip-files", &route.url_key, &plain)
+                resource_link::encrypt(&scope, ResourcePurpose::ZipFiles, &route.url_key, &plain)
             })
     } else {
         plain_libs::serde_json::from_slice::<Resource>(&plain)

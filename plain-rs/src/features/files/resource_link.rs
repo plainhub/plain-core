@@ -1,3 +1,4 @@
+pub use plain_libs::aad::ResourcePurpose;
 use plain_libs::anyhow::{Result, ensure};
 use serde::{Deserialize, Serialize};
 
@@ -15,9 +16,9 @@ impl Scope {
         }
     }
 
-    fn aad(&self, purpose: &str) -> Vec<u8> {
+    fn aad(&self, purpose: ResourcePurpose) -> Vec<u8> {
         let (mode, owner) = self.parts();
-        format!("plain-{purpose}-v1\0{mode}\0{owner}").into_bytes()
+        format!("{}\0{mode}\0{owner}", purpose.as_str()).into_bytes()
     }
 }
 
@@ -112,7 +113,7 @@ pub fn parse(envelope: &str) -> Result<(Scope, &str)> {
     Ok((scope, payload))
 }
 
-pub fn encrypt(scope: &Scope, purpose: &str, key: &[u8], plain: &[u8]) -> Result<String> {
+pub fn encrypt(scope: &Scope, purpose: ResourcePurpose, key: &[u8], plain: &[u8]) -> Result<String> {
     let bytes = plain_libs::crypto::xchacha_encrypt_raw_with_aad(key, plain, &scope.aad(purpose))
         .ok_or_else(|| plain_libs::anyhow::anyhow!("Invalid resource key"))?;
     let payload = plain_libs::utils::base64::base64_encode_url_safe(&bytes);
@@ -123,7 +124,7 @@ pub fn encrypt(scope: &Scope, purpose: &str, key: &[u8], plain: &[u8]) -> Result
     Ok(envelope)
 }
 
-pub fn decrypt(scope: &Scope, purpose: &str, key: &[u8], payload: &str) -> Result<Vec<u8>> {
+pub fn decrypt(scope: &Scope, purpose: ResourcePurpose, key: &[u8], payload: &str) -> Result<Vec<u8>> {
     let bytes = plain_libs::utils::base64::base64_decode_checked(payload)?;
     plain_libs::crypto::xchacha_decrypt_raw_with_aad(key, &bytes, &scope.aad(purpose))
         .ok_or_else(|| plain_libs::anyhow::anyhow!("Invalid resource authentication"))
@@ -131,11 +132,11 @@ pub fn decrypt(scope: &Scope, purpose: &str, key: &[u8], payload: &str) -> Resul
 
 pub fn seal(scope: &Scope, key: &[u8], resource: &Resource) -> Result<String> {
     resource.validate(scope)?;
-    encrypt(scope, "fs", key, &plain_libs::serde_json::to_vec(resource)?)
+    encrypt(scope, ResourcePurpose::Fs, key, &plain_libs::serde_json::to_vec(resource)?)
 }
 
 pub fn open(scope: &Scope, key: &[u8], payload: &str) -> Result<Resource> {
-    let resource: Resource = plain_libs::serde_json::from_slice(&decrypt(scope, "fs", key, payload)?)?;
+    let resource: Resource = plain_libs::serde_json::from_slice(&decrypt(scope, ResourcePurpose::Fs, key, payload)?)?;
     resource.validate(scope)?;
     Ok(resource)
 }

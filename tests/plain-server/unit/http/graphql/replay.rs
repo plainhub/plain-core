@@ -96,12 +96,12 @@ async fn malformed_and_unauthed_ids_never_consume_a_valid_request() {
     let plain = request(&plain_rs::features::record_id::generate(), query);
     let key = plain_rs::features::sessions::token_key(&session.token).unwrap();
     let wrong_route =
-        http_request::encrypt_raw(&key, "POST", "/guest_graphql", format!("{}|{}|{{}}", plain_libs::chrono::Utc::now().timestamp_millis(), plain_libs::utils::uuid::Uuid::new_v4()).as_bytes()).unwrap();
+        http_request::encrypt_raw(&key, "POST", "/guest_graphql", plain.as_bytes()).unwrap();
     assert_eq!(
         call(State(state.clone()), headers(&session), wrong_route.into())
             .await
             .status(),
-        StatusCode::BAD_REQUEST
+        StatusCode::UNAUTHORIZED
     );
     let original = seal(&session, &plain);
     let mut tampered = original.to_vec();
@@ -260,10 +260,14 @@ async fn distinct_keys_reject_cross_route_frames_and_signed_envelopes_require_pe
     ];
     let keys: [&[u8]; 3] = [&main_key, &key, &peer_key];
     let routes = ["/graphql", "/guest_graphql", "/peer_graphql"];
-    let frames: Vec<Vec<u8>> = payloads.iter().enumerate().map(|(index, plain)| plain_libs::crypto::xchacha_encrypt_raw(keys[index], plain.as_bytes()).unwrap()).collect();
+    let frames: Vec<Vec<u8>> = payloads.iter().enumerate().map(|(index, plain)| http_request::encrypt_raw(keys[index], "POST", routes[index], plain.as_bytes()).unwrap()).collect();
     for (source, frame) in frames.iter().enumerate() {
         for (target, route) in routes.iter().enumerate() {
-            assert_eq!(http_request::decrypt_raw(keys[source], "POST", route, frame).unwrap(), payloads[source].as_bytes());
+            if source == target {
+                assert_eq!(http_request::decrypt_raw(keys[source], "POST", route, frame).unwrap(), payloads[source].as_bytes());
+            } else {
+                assert!(http_request::decrypt_raw(keys[source], "POST", route, frame).is_none());
+            }
             if source == target { continue; }
             let status = match target {
                 0 => call(State(state.clone()), headers(&session), frame.clone().into()).await.status().as_u16(),
@@ -283,7 +287,7 @@ async fn distinct_keys_reject_cross_route_frames_and_signed_envelopes_require_pe
     // Re-encrypt with the destination key to isolate syntax from key-domain rejection.
     for target in 0..3 {
         let foreign = if target == 2 { &payloads[0] } else { &payloads[2] };
-        let frame = plain_libs::crypto::xchacha_encrypt_raw(keys[target], foreign.as_bytes()).unwrap();
+        let frame = http_request::encrypt_raw(keys[target], "POST", routes[target], foreign.as_bytes()).unwrap();
         let status = match target {
             0 => call(State(state.clone()), headers(&session), frame.into()).await.status().as_u16(),
             1 => execute_guest(&state, &share.id, &frame).await.0,
@@ -291,7 +295,7 @@ async fn distinct_keys_reject_cross_route_frames_and_signed_envelopes_require_pe
         };
         assert!(matches!(status, 400 | 401));
         let old_plain = format!("signature|{}|nonce|{document}", plain_libs::chrono::Utc::now().timestamp_millis());
-        let old = plain_libs::crypto::xchacha_encrypt_raw(keys[target], old_plain.as_bytes()).unwrap();
+        let old = http_request::encrypt_raw(keys[target], "POST", routes[target], old_plain.as_bytes()).unwrap();
         let status = match target {
             0 => call(State(state.clone()), headers(&session), old.into()).await.status().as_u16(),
             1 => execute_guest(&state, &share.id, &old).await.0,

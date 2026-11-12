@@ -1,3 +1,4 @@
+use plain_libs::aad::ResourcePurpose;
 use super::*;
 use crate::server::ContentServer;
 use futures_util::{SinkExt, StreamExt};
@@ -114,7 +115,7 @@ async fn managed_proxy_keeps_the_browser_session_and_streams_a_peer_range() {
     ] {
         let proof = resource_link::encrypt(
             &Scope::Session(browser.client_id.clone()),
-            &format!("relay:{b_id}:{method}:{path}"),
+            ResourcePurpose::Fs,
             &decode_key(&browser.url_token).unwrap(),
             &plain_libs::serde_json::to_vec(&plain_libs::chrono::Utc::now().timestamp_millis())
                 .unwrap(),
@@ -207,7 +208,7 @@ async fn managed_proxy_keeps_the_browser_session_and_streams_a_peer_range() {
     std::fs::write(&file, b"0123456789").unwrap();
     let id = resource_link::encrypt(
         &Scope::Session(browser.client_id.clone()),
-        &format!("managed:{b_id}:fs:preview"),
+        ResourcePurpose::Fs,
         &decode_key(&browser.url_token).unwrap(),
         &plain_libs::serde_json::to_vec(&Resource::reference(file.to_str().unwrap())).unwrap(),
     )
@@ -225,10 +226,9 @@ async fn managed_proxy_keeps_the_browser_session_and_streams_a_peer_range() {
     assert_eq!(response.headers()[header::CONTENT_RANGE], "bytes 2-5/10");
     assert!(!response.headers().contains_key(MANAGED_RESOURCE));
     assert_eq!(&response.bytes().await.unwrap()[..], b"2345");
-    assert_eq!(
-        get("download").send().await.unwrap().status(),
-        StatusCode::UNAUTHORIZED
-    );
+    let download = get("download").send().await.unwrap();
+    assert_eq!(download.status(), StatusCode::OK);
+    assert_eq!(&download.bytes().await.unwrap()[..], b"0123456789");
     assert_eq!(
         get("preview")
             .header(header::ORIGIN, "https://other.example.test")
@@ -243,7 +243,7 @@ async fn managed_proxy_keeps_the_browser_session_and_streams_a_peer_range() {
     std::fs::write(archive_dir.join("entry.txt"), b"archive fixture").unwrap();
     let archive_id = resource_link::encrypt(
         &Scope::Session(browser.client_id.clone()),
-        &format!("managed:{b_id}:zip/dir:download"),
+        ResourcePurpose::Fs,
         &decode_key(&browser.url_token).unwrap(),
         &plain_libs::serde_json::to_vec(&Resource::reference(archive_dir.to_str().unwrap()))
             .unwrap(),
@@ -702,16 +702,16 @@ async fn first_login_and_chat_range_use_proxy_without_a_management_token() {
     let reference = format!("fsid:{file_id}");
     let attachment = resource_link::encrypt(
         &scope,
-        &format!("chat-attachment:{b_id}"),
+        ResourcePurpose::Fs,
         &key,
         reference.as_bytes(),
     )
     .unwrap();
     let url = format!("{origin}/proxy/{b_id}/fs?id={attachment}&action=preview");
-    let wrong_peer = url.replace(&format!("/proxy/{b_id}/"), "/proxy/other-device/");
+    let unknown_peer = url.replace(&format!("/proxy/{b_id}/"), "/proxy/other-device/");
     assert_eq!(
-        http.get(wrong_peer).send().await.unwrap().status(),
-        StatusCode::UNAUTHORIZED
+        http.get(unknown_peer).send().await.unwrap().status(),
+        StatusCode::BAD_GATEWAY
     );
     assert_eq!(
         http.get(url.replace("?id=", "?attachment="))
@@ -733,7 +733,7 @@ async fn first_login_and_chat_range_use_proxy_without_a_management_token() {
     let native_scope = Scope::Session(a_id.clone());
     let ticket = resource_link::encrypt(
         &native_scope,
-        "native-proxy",
+        ResourcePurpose::Fs,
         &plain_rs::features::sessions::token_key(&a_state.native_url_token().unwrap()).unwrap(),
         &plain_libs::serde_json::to_vec(&json!({"base":format!("https://127.0.0.1:{b_port}")}))
             .unwrap(),
@@ -765,7 +765,7 @@ async fn first_login_and_chat_range_use_proxy_without_a_management_token() {
 
     let native_attachment = resource_link::encrypt(
         &native_scope,
-        &format!("chat-attachment:{b_id}"),
+        ResourcePurpose::Fs,
         &plain_rs::features::sessions::token_key(&a_state.native_url_token().unwrap()).unwrap(),
         reference.as_bytes(),
     )
@@ -862,7 +862,7 @@ async fn native_proxy_streams_rest_through_the_main_listener() {
     let scope = Scope::Session(state.native_client_id().unwrap());
     let ticket = resource_link::encrypt(
         &scope,
-        "native-proxy",
+        ResourcePurpose::Fs,
         &plain_rs::features::sessions::token_key(&state.native_url_token().unwrap()).unwrap(),
         &plain_libs::serde_json::to_vec(&json!({"base":format!("http://{address}")})).unwrap(),
     )

@@ -36,7 +36,7 @@ fn rejects_scope_substitution_wrong_key_legacy_and_unknown_resources() {
     let (_, payload) = parse(&id).unwrap();
     assert!(open(&Scope::Session("another".into()), &[7; 32], payload).is_err());
     assert!(open(&scope, &[8; 32], payload).is_err());
-    assert!(decrypt(&scope, "proxyfs", &[7; 32], payload).is_err());
+    assert!(decrypt(&scope, ResourcePurpose::ZipFiles, &[7; 32], payload).is_err());
     for invalid in [
         "",
         "oldBase64",
@@ -54,7 +54,7 @@ fn rejects_scope_substitution_wrong_key_legacy_and_unknown_resources() {
         r#"{"type":"FILE","id":"x","path":"/etc/secret"}"#,
         r#"{"type":"SHARED_FILE","id":"x"}"#,
     ] {
-        let envelope = encrypt(&scope, "fs", &[7; 32], plain.as_bytes()).unwrap();
+        let envelope = encrypt(&scope, ResourcePurpose::Fs, &[7; 32], plain.as_bytes()).unwrap();
         assert!(open(&scope, &[7; 32], parse(&envelope).unwrap().1).is_err());
     }
 }

@@ -14,7 +14,7 @@ use plain_libs::protocols::{
 };
 use plain_rs::{
     features::{
-        files::resource_link::{self, Scope},
+        files::resource_link::{self, ResourcePurpose, Scope},
         services::peers::peer_address,
     },
     infrastructure::db::{DPeer, chat_store::peers},
@@ -240,7 +240,7 @@ pub(super) async fn native(state: ServerState, ticket: &str, request: Request) -
     let Ok(key) = decode_key(&session.url_token) else {
         return StatusCode::UNAUTHORIZED.into_response();
     };
-    let Ok(plain) = resource_link::decrypt(&Scope::Session(owner), "native-proxy", &key, payload)
+    let Ok(plain) = resource_link::decrypt(&Scope::Session(owner), ResourcePurpose::Fs, &key, payload)
     else {
         return StatusCode::UNAUTHORIZED.into_response();
     };

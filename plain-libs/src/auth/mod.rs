@@ -1,3 +1,4 @@
+use crate::aad::{AadPurpose, LoginPurpose};
 use opaque_ke::argon2::{Algorithm, Argon2, Params, Version};
 use opaque_ke::{CipherSuite, Ristretto255, TripleDh};
 use sha2::{Digest, Sha256, Sha512};
@@ -21,7 +22,7 @@ pub fn ksf() -> Argon2<'static> {
 
 pub fn context(client_id: &str, server_key: &[u8]) -> Vec<u8> {
     let mut out = Vec::new();
-    for part in [b"web-login".as_slice(), client_id.as_bytes(), server_key] {
+    for part in [LoginPurpose::Password.as_str().as_bytes(), client_id.as_bytes(), server_key] {
         out.extend_from_slice(
             &u32::try_from(part.len())
                 .expect("context length")
@@ -43,9 +44,9 @@ pub fn api_key(session_key: &[u8], context: &[u8]) -> [u8; 32] {
 
 pub fn auth_aad(context: &[u8], response: bool) -> Vec<u8> {
     let mut aad = if response {
-        b"auth-response".to_vec()
+        AadPurpose::AuthResponse.as_str().as_bytes().to_vec()
     } else {
-        b"auth-request".to_vec()
+        AadPurpose::AuthRequest.as_str().as_bytes().to_vec()
     };
     aad.extend_from_slice(&Sha256::digest(context));
     aad

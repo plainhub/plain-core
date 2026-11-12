@@ -1,17 +1,17 @@
 {
   "clientId": "fixture-browser",
-  "clientPrivate": "hUuNuYiJyTiqdGx8gq7qL/lSwGZ+E1TNZdBTfB5Ocws=",
-  "fingerprint": "7d3cc59dacd5671db639444f99e87af812c6c5835132bd5120dce2ac2b5b08e4",
-  "key": "OdMnP0jvvANjlKme7qlapLDYlO3mkinP/wBJKEJGYNI=",
+  "clientPrivate": "cdCxuWO5FeK32Hd7cYLEoQd2XUSc1T0FhbTUToPMe14=",
+  "fingerprint": "ad3ce33898b6ad21f63d717c3900baa72794eac39eddfff6c2f532d117060e0c",
+  "key": "maqwBvACUtrLzUXiWm1hV/JMatYvPzCZzc5ls0FbQCQ=",
   "request": {
-    "publicKey": "BDLwiWoTbNUz3hP/GfeXOjEbbid59ioQjMPtzixM+RbhmpviycDF3yzKyfJFN8swqetUWhizJcCOc0GNPGDQdYk="
+    "publicKey": "BNa9BVMQqeS9GamB8EGul7AdIaaNdDTE1dNp9GgtNDv7wnMQ70sJRTJcQOig3o6a9LIbO/HFd5nT8dFGiCqoORM="
   },
   "response": {
     "deviceId": "fixture-device",
     "expiresAt": 1700000300000,
-    "serverPublicKey": "BLJnH9IAQHD+9v42eWMkDYB/4xdTIuWxpUDUBL0ZqEbdYs/JxcAh+eYOvtTezYipjjT3/7EniGc5DplIZaD9pJw=",
-    "signature": "OBSyOodzqVHplzxGLlO2DWfcZu0cne/sA2Bx+x8JV96Ib3eA+aMAFZR7k/ehZbp26taLk7Qw8EdKh+CzOXIbCQ=="
+    "serverPublicKey": "BIECiaGgwDMPTYPU/7QgAaomPxcN1p1h6m2uUTe7fWLBDA4k97Km85xbzm82K2H5CS6NjY/0UYzOpIJKz9elPf0=",
+    "signature": "O6v3461SiYp2crne26ycdPB56D5OVZcHbMcizKbt8/ciQH3V1aPIFD+vyXnSeXEI/aPB4/iDoN8TRdB0wvJMAw=="
   },
-  "serverIdentity": "mFeMHLQfSmKcnS/r4G/1P36PXcfEfDtfrWo/ZUv1mFE=",
-  "signedPayload": "[\"WEB_APPROVAL_RESPONSE\",\"fixture-device\",\"mFeMHLQfSmKcnS/r4G/1P36PXcfEfDtfrWo/ZUv1mFE=\",\"fixture-browser\",{\"publicKey\":\"BDLwiWoTbNUz3hP/GfeXOjEbbid59ioQjMPtzixM+RbhmpviycDF3yzKyfJFN8swqetUWhizJcCOc0GNPGDQdYk=\"},{\"deviceId\":\"fixture-device\",\"serverPublicKey\":\"BLJnH9IAQHD+9v42eWMkDYB/4xdTIuWxpUDUBL0ZqEbdYs/JxcAh+eYOvtTezYipjjT3/7EniGc5DplIZaD9pJw=\",\"expiresAt\":1700000300000}]"
+  "serverIdentity": "7vTC1lO+Q/rqeCsw5zmeQ0EfmH8iJ7rFt92ezg+g6iY=",
+  "signedPayload": "[\"AUTH_SERVER_HELLO\",\"fixture-device\",\"7vTC1lO+Q/rqeCsw5zmeQ0EfmH8iJ7rFt92ezg+g6iY=\",\"fixture-browser\",{\"publicKey\":\"BNa9BVMQqeS9GamB8EGul7AdIaaNdDTE1dNp9GgtNDv7wnMQ70sJRTJcQOig3o6a9LIbO/HFd5nT8dFGiCqoORM=\"},{\"deviceId\":\"fixture-device\",\"serverPublicKey\":\"BIECiaGgwDMPTYPU/7QgAaomPxcN1p1h6m2uUTe7fWLBDA4k97Km85xbzm82K2H5CS6NjY/0UYzOpIJKz9elPf0=\",\"expiresAt\":1700000300000}]"
 }

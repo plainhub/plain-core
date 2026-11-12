@@ -1,3 +1,4 @@
+pub mod aad;
 #[cfg(feature = "http-runtime")]
 #[macro_use]
 mod tuples;

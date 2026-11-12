@@ -1,3 +1,4 @@
+use plain_libs::aad::{AadPurpose, LoginPurpose};
 use crate::infrastructure::signature::SignaturePurpose;
 use plain_libs::anyhow::{Result, ensure};
 use hmac::{Hmac, KeyInit, Mac};
@@ -10,7 +11,6 @@ use serde::{Deserialize, Serialize};
 use plain_libs::serde_json::json;
 use sha2::{Digest, Sha256};
 
-const DOMAIN: &str = "web-approval";
 const LIFETIME_MS: u64 = 300_000;
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -48,7 +48,7 @@ fn response_bytes(response: &ServerHello) -> String {
 fn signed_bytes(cid: &str, public: &str, request: &ClientHello, response: &ServerHello) -> Vec<u8> {
     format!(
         "[{},{},{},{},{},{}]",
-        json!(SignaturePurpose::WebApprovalResponse),
+        json!(SignaturePurpose::AuthServerHello),
         json!(response.device_id),
         json!(public),
         json!(cid),
@@ -60,7 +60,7 @@ fn signed_bytes(cid: &str, public: &str, request: &ClientHello, response: &Serve
 fn transcript(cid: &str, request: &ClientHello, response: &ServerHello) -> Vec<u8> {
     format!(
         "[{},{},{},{},{}]",
-        json!(DOMAIN),
+        json!(LoginPurpose::NoPassword.as_str()),
         json!(cid),
         json!(response.device_id),
         request_value(request),
@@ -200,9 +200,9 @@ impl Channel {
     }
     fn aad(&self, response: bool) -> Vec<u8> {
         let mut a = if response {
-            b"auth-response".to_vec()
+            AadPurpose::AuthResponse.as_str().as_bytes().to_vec()
         } else {
-            b"auth-request".to_vec()
+            AadPurpose::AuthRequest.as_str().as_bytes().to_vec()
         };
         a.extend(self.hash);
         a

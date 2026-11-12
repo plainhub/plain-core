@@ -1,3 +1,4 @@
+use plain_libs::aad::AadPurpose;
 use plain_libs::crypto::xchacha_decrypt_raw_with_aad;
 use plain_libs::crypto::xchacha_encrypt_raw_with_aad;
 use sha2::{Digest, Sha256};
@@ -11,7 +12,7 @@ fn fields(values: &[&[u8]]) -> Option<Vec<u8>> {
     Some(encoded)
 }
 fn init_aad(client: &str, path: &str) -> Option<Vec<u8>> {
-    fields(&[b"plain-ws-init", path.as_bytes(), client.as_bytes()])
+    fields(&[AadPurpose::WsInit.as_str().as_bytes(), path.as_bytes(), client.as_bytes()])
 }
 pub fn seal_init(key: &[u8], client: &str, path: &str, plain: &[u8]) -> Option<Vec<u8>> {
     xchacha_encrypt_raw_with_aad(key, plain, &init_aad(client, path)?)
@@ -21,7 +22,7 @@ pub fn open_init(key: &[u8], client: &str, path: &str, frame: &[u8]) -> Option<V
 }
 fn ack_aad(client: &str, path: &str, init: &[u8]) -> Option<Vec<u8>> {
     fields(&[
-        b"plain-ws-ack",
+        AadPurpose::WsAck.as_str().as_bytes(),
         path.as_bytes(),
         client.as_bytes(),
         &Sha256::digest(init),
@@ -75,7 +76,7 @@ impl Stream {
             (Role::Client, true) | (Role::Server, false)
         );
         fields(&[
-            b"plain-ws-frame",
+            AadPurpose::WsFrame.as_str().as_bytes(),
             self.path.as_bytes(),
             self.client.as_bytes(),
             &self.binding,

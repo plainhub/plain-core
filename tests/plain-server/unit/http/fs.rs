@@ -504,7 +504,7 @@ async fn fs_foreground_thumbnail_is_local_and_does_not_enable_passive_reads() {
     let session = plain_rs::features::services::sessions::create(&state, "reader".into()).unwrap();
     let remote = resource_link::encrypt(
         &Scope::Session(session.client_id),
-        "fs",
+        plain_libs::aad::ResourcePurpose::Fs,
         &plain_libs::utils::base64::base64_decode(&session.url_token),
         &plain_libs::serde_json::to_vec(&foreground).unwrap(),
     )

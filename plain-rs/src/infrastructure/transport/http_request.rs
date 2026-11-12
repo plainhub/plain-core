@@ -1,30 +1,25 @@
-/// REST request binding uses the logical destination, also across proxy/BLE/Aware.
+use plain_libs::aad::AadPurpose;
+
+/// Request binding uses the logical destination across HTTP, proxy, BLE and Aware.
 pub fn aad(method: &str, endpoint: &str) -> Vec<u8> {
-    let mut aad = b"http-request\0".to_vec();
+    let mut aad = AadPurpose::HttpRequest.as_str().as_bytes().to_vec();
+    aad.push(0);
     aad.extend_from_slice(method.as_bytes());
     aad.push(0);
     aad.extend_from_slice(endpoint.as_bytes());
     aad
 }
 pub fn encrypt_raw(key: &[u8], method: &str, endpoint: &str, payload: &[u8]) -> Option<Vec<u8>> {
-    if matches!(endpoint, "/graphql" | "/guest_graphql" | "/peer_graphql") {
-        if method != "POST" {
-            return None;
-        }
-        plain_libs::crypto::xchacha_encrypt_raw(key, payload)
-    } else {
-        plain_libs::crypto::xchacha_encrypt_raw_with_aad(key, payload, &aad(method, endpoint))
+    if matches!(endpoint, "/graphql" | "/guest_graphql" | "/peer_graphql") && method != "POST" {
+        return None;
     }
+    plain_libs::crypto::xchacha_encrypt_raw_with_aad(key, payload, &aad(method, endpoint))
 }
 pub fn decrypt_raw(key: &[u8], method: &str, endpoint: &str, payload: &[u8]) -> Option<Vec<u8>> {
-    if matches!(endpoint, "/graphql" | "/guest_graphql" | "/peer_graphql") {
-        if method != "POST" {
-            return None;
-        }
-        plain_libs::crypto::xchacha_decrypt_raw(key, payload)
-    } else {
-        plain_libs::crypto::xchacha_decrypt_raw_with_aad(key, payload, &aad(method, endpoint))
+    if matches!(endpoint, "/graphql" | "/guest_graphql" | "/peer_graphql") && method != "POST" {
+        return None;
     }
+    plain_libs::crypto::xchacha_decrypt_raw_with_aad(key, payload, &aad(method, endpoint))
 }
 pub fn encrypt(key: &[u8], endpoint: &str, payload: &str) -> Result<Vec<u8>, &'static str> {
     let body = if matches!(endpoint, "/graphql" | "/guest_graphql") {
