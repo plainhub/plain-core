@@ -85,7 +85,24 @@ fn exports_browser_interop_vector() {
         .unwrap();
     assert_eq!(verified.api_key(), server.api_key());
     if let Ok(path) = std::env::var("PLAIN_WEB_APPROVAL_VECTOR") {
-        let vector = json!({"clientId":"fixture-browser","clientPrivate":base64_encode(&private),"serverIdentity":base64_encode(&public),"request":request,"response":response,"fingerprint":server.context,"key":base64_encode(&server.api_key())});
+        let vector = json!({"signedPayload":String::from_utf8(signed_bytes("fixture-browser", &base64_encode(&public), &request, &response)).unwrap(),"clientId":"fixture-browser","clientPrivate":base64_encode(&private),"serverIdentity":base64_encode(&public),"request":request,"response":response,"fingerprint":server.context,"key":base64_encode(&server.api_key())});
         std::fs::write(path, plain_libs::serde_json::to_vec_pretty(&vector).unwrap()).unwrap();
+    }
+}
+
+#[test]
+fn response_signature_has_one_purpose_and_keeps_all_bindings() {
+    let (signing, public) = plain_libs::crypto::ed25519_generate();
+    let (_, hello) = Client::start("browser").unwrap();
+    let (_, response) = ServerHandshake::start("browser", "device", &hello, &signing, 100).unwrap();
+    let bytes = signed_bytes("browser", &base64_encode(&public), &hello, &response);
+    assert!(ed25519_verify(&base64_encode(&public), &bytes, &response.signature));
+    let payload: plain_libs::serde_json::Value = plain_libs::serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(payload[0], "WEB_APPROVAL_RESPONSE");
+    assert_eq!(payload.as_array().unwrap().len(), 6);
+    for index in 0..6 {
+        let mut altered = payload.clone();
+        altered[index] = json!("substituted");
+        assert!(!ed25519_verify(&base64_encode(&public), altered.to_string().as_bytes(), &response.signature));
     }
 }

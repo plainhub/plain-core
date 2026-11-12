@@ -1,16 +1,17 @@
 {
   "clientId": "fixture-browser",
-  "clientPrivate": "asgvKoKV0jeV7afNZNUrfLLGKIA0JKuN6kBrFOLwXQE=",
-  "fingerprint": "e01aa292bb3ce21d09af8dd3e23da85edfe33f0c88b41f1b675a7d0257f966bc",
-  "key": "PUUhh7AldyqyUNtthzQDaOkruF3/o2yUIxbgv79i+8A=",
+  "clientPrivate": "hUuNuYiJyTiqdGx8gq7qL/lSwGZ+E1TNZdBTfB5Ocws=",
+  "fingerprint": "7d3cc59dacd5671db639444f99e87af812c6c5835132bd5120dce2ac2b5b08e4",
+  "key": "OdMnP0jvvANjlKme7qlapLDYlO3mkinP/wBJKEJGYNI=",
   "request": {
-    "publicKey": "BAvwuy+D/ZP8iJ5YZSeLK7Cv1jGlmTxAqxEuT85b0liHDnB4kgViNVosbkZ6B7FWlvKLP2tMK0vjc4wCKlPkQBQ="
+    "publicKey": "BDLwiWoTbNUz3hP/GfeXOjEbbid59ioQjMPtzixM+RbhmpviycDF3yzKyfJFN8swqetUWhizJcCOc0GNPGDQdYk="
   },
   "response": {
     "deviceId": "fixture-device",
     "expiresAt": 1700000300000,
-    "serverPublicKey": "BDVs94y9WwggO8JYzo2Fp28c81xMKTLtFEYSEIvWc5N+UPccBrCYO0gvyUtqhJ6nw9o2sce6Zz08CxwEesfTxyw=",
-    "signature": "YBvhBvFSW3txSiqB3RmriXcLumau4oAv/djQiH0XusZtIeBVxNjwsC2dntvMCjbU+pNYRXdl4lBPZdn5S0N/AA=="
+    "serverPublicKey": "BLJnH9IAQHD+9v42eWMkDYB/4xdTIuWxpUDUBL0ZqEbdYs/JxcAh+eYOvtTezYipjjT3/7EniGc5DplIZaD9pJw=",
+    "signature": "OBSyOodzqVHplzxGLlO2DWfcZu0cne/sA2Bx+x8JV96Ib3eA+aMAFZR7k/ehZbp26taLk7Qw8EdKh+CzOXIbCQ=="
   },
-  "serverIdentity": "x0hC4opMe/lVF4ve1ovfuZ1o89ilPR3FtCdlPtcWReU="
+  "serverIdentity": "mFeMHLQfSmKcnS/r4G/1P36PXcfEfDtfrWo/ZUv1mFE=",
+  "signedPayload": "[\"WEB_APPROVAL_RESPONSE\",\"fixture-device\",\"mFeMHLQfSmKcnS/r4G/1P36PXcfEfDtfrWo/ZUv1mFE=\",\"fixture-browser\",{\"publicKey\":\"BDLwiWoTbNUz3hP/GfeXOjEbbid59ioQjMPtzixM+RbhmpviycDF3yzKyfJFN8swqetUWhizJcCOc0GNPGDQdYk=\"},{\"deviceId\":\"fixture-device\",\"serverPublicKey\":\"BLJnH9IAQHD+9v42eWMkDYB/4xdTIuWxpUDUBL0ZqEbdYs/JxcAh+eYOvtTezYipjjT3/7EniGc5DplIZaD9pJw=\",\"expiresAt\":1700000300000}]"
 }

@@ -57,6 +57,15 @@ async fn init_advertises_the_running_https_port_instead_of_the_preference() {
         let payload: plain_libs::serde_json::Value =
             plain_libs::serde_json::from_slice(&response.bytes().await.unwrap()).unwrap();
         assert_eq!(payload["httpsPort"], https);
+        let public = payload["signaturePublicKey"].as_str().unwrap();
+        let signature = payload["tlsCertificateSignature"].as_str().unwrap();
+        let pin = payload["tlsCertificateSha256"].as_str().unwrap();
+        let proof = json!(["PEER_TLS_CERTIFICATE", pin]).to_string();
+        assert!(plain_libs::crypto::ed25519_verify(public, proof.as_bytes(), signature));
+        for altered in [json!(["PEER_STATUS", pin]), json!(["PEER_TLS_CERTIFICATE", "other-pin"])] {
+            assert!(!plain_libs::crypto::ed25519_verify(public, altered.to_string().as_bytes(), signature));
+        }
+
         assert_eq!(payload["authenticated"], false);
     }
     core.stop_public().await;

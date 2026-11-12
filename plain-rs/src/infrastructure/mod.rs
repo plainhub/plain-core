@@ -25,6 +25,8 @@ pub mod logs;
 
 pub mod platform;
 
+pub mod signature;
+
 #[cfg(any(feature = "ble", feature = "mdns", feature = "crypto"))]
 pub mod protocols;
 

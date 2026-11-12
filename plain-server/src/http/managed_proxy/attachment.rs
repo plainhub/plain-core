@@ -97,7 +97,7 @@ async fn route(state: &ServerState, target: &str) -> Result<Arc<Route>> {
             reply["tlsCertificateSignature"].as_str(),
         ) {
             (Some(pin), Some(signature)) => {
-                let proof = format!("plain-peer-tls-v1:{pin}");
+                let proof = plain_libs::serde_json::json!([plain_rs::infrastructure::signature::SignaturePurpose::PeerTlsCertificate, pin]).to_string();
                 ensure!(
                     plain_libs::crypto::ed25519_verify(
                         &peer.public_key,

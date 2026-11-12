@@ -6,21 +6,19 @@ use plain_libs::crypto::ed25519_sign;
 use plain_libs::crypto::ed25519_verify;
 use plain_libs::utils::base64::base64_encode;
 
-/// Verify the canonical payload format matches plain-app's
-/// `channelMessagePayload`: `"$channelId|$version|$action|$target"`.
 #[test]
-fn payload_format_matches_android() {
+fn payload_has_purpose_and_typed_fields() {
     assert_eq!(
         channel_message_payload("ch_abc", 3, ChannelSystemMessageAction::Invite, "peer_xyz"),
-        "ch_abc|3|INVITE|peer_xyz"
+        r#"["CHANNEL_MEMBERSHIP","ch_abc",3,"INVITE","peer_xyz"]"#
     );
     assert_eq!(
         channel_message_payload("ch_abc", 5, ChannelSystemMessageAction::Update, ""),
-        "ch_abc|5|UPDATE|"
+        r#"["CHANNEL_MEMBERSHIP","ch_abc",5,"UPDATE",""]"#
     );
     assert_eq!(
         channel_message_payload("ch_abc", 9, ChannelSystemMessageAction::Kick, ""),
-        "ch_abc|9|KICK|"
+        r#"["CHANNEL_MEMBERSHIP","ch_abc",9,"KICK",""]"#
     );
 }
 

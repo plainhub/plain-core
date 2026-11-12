@@ -8,24 +8,20 @@
 //! data classes exactly.
 
 use serde::{Deserialize, Serialize};
+use crate::infrastructure::signature::SignaturePurpose;
 
 use crate::features::chat::enums::ChannelSystemMessageAction;
 use crate::features::chat::enums::DeviceType;
 use crate::features::chat::enums::MemberStatus;
 
 /// Build the canonical signature payload for a channel system message.
-/// Mirrors plain-app `channelMessagePayload(channelId, version, action, target)`:
-/// `"$channelId|$version|$action|$target"`.
-///
-/// `target` is the peer id being invited/kicked, or an empty string for
-/// `update` and broadcast `kick`.
 pub fn channel_message_payload(
     channel_id: &str,
     version: i64,
     action: ChannelSystemMessageAction,
     target: &str,
 ) -> String {
-    format!("{channel_id}|{version}|{action}|{target}")
+    plain_libs::serde_json::json!([SignaturePurpose::ChannelMembership, channel_id, version, action, target]).to_string()
 }
 
 // ── ChannelMember ─────────────────────────────────────────────────────────

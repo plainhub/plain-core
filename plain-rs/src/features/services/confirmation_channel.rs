@@ -1,3 +1,4 @@
+use crate::infrastructure::signature::SignaturePurpose;
 use plain_libs::anyhow::{Result, ensure};
 use hmac::{Hmac, KeyInit, Mac};
 use plain_libs::crypto::{
@@ -46,8 +47,8 @@ fn response_bytes(response: &ServerHello) -> String {
 }
 fn signed_bytes(cid: &str, public: &str, request: &ClientHello, response: &ServerHello) -> Vec<u8> {
     format!(
-        "[{},\"responder\",{},{},\"initiator\",{},{},{}]",
-        json!(DOMAIN),
+        "[{},{},{},{},{},{}]",
+        json!(SignaturePurpose::WebApprovalResponse),
         json!(response.device_id),
         json!(public),
         json!(cid),

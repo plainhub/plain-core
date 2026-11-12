@@ -73,7 +73,7 @@ pub(crate) async fn init(
     if let Some(server) = state.public_server.lock().await.as_ref() {
         result["httpsPort"] = json!(server.listeners.https_port);
         let pin = &server.tls_certificate_sha256;
-        let proof = format!("plain-peer-tls-v1:{pin}");
+        let proof = plain_libs::serde_json::json!([plain_rs::infrastructure::signature::SignaturePurpose::PeerTlsCertificate, pin]).to_string();
         result["tlsCertificateSha256"] = json!(pin);
         result["tlsCertificateSignature"] =
             json!(plain_libs::crypto::ed25519_sign(&pair, proof.as_bytes()));
