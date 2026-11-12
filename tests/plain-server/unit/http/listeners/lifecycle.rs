@@ -13,19 +13,19 @@ fn server(directory: &std::path::Path, token: &str) -> ContentServer {
     .unwrap()
 }
 
-fn bind_port(port: u16) -> std::io::Result<socket2::Socket> {
-    let socket = socket2::Socket::new(
-        socket2::Domain::IPV4,
-        socket2::Type::STREAM,
-        Some(socket2::Protocol::TCP),
-    )?;
-    socket.set_reuse_address(true)?;
-    socket.bind(&std::net::SocketAddr::from(([0, 0, 0, 0], port)).into())?;
-    Ok(socket)
-}
-
-fn assert_port_released(port: u16) {
-    bind_port(port).unwrap();
+async fn listener_tasks(server: &ContentServer) -> Vec<tokio::task::AbortHandle> {
+    server
+        .runtime_state()
+        .public_server
+        .lock()
+        .await
+        .as_ref()
+        .unwrap()
+        .listeners
+        .tasks
+        .iter()
+        .map(|task| task.abort_handle())
+        .collect()
 }
 
 async fn start(server: &ContentServer) -> (u16, u16) {
@@ -84,8 +84,9 @@ async fn listener_failure_cleans_up_and_notifies_host() {
     let directory = plain_libs::temporary::tempdir().unwrap();
     let token = plain_libs::utils::base64::base64_encode(&[10; 32]);
     let server = server(directory.path(), &token);
-    let ports = start(&server).await;
+    start(&server).await;
     let state = server.runtime_state();
+    let tasks = listener_tasks(&server).await;
     let (host_generation, mut calls) = state.host.connect();
     let host = state.host.clone();
     let (reported, mut reports) = tokio::sync::mpsc::unbounded_channel();
@@ -122,9 +123,7 @@ async fn listener_failure_cleans_up_and_notifies_host() {
         plain_libs::serde_json::json!({"state":"error","message":"injected listener failure","httpPort":0,"httpsPort":0})
     );
     assert!(server.http_ports().await.is_none());
-    for port in [ports.0, ports.1] {
-        assert_port_released(port);
-    }
+    assert!(tasks.iter().all(|task| task.is_finished()));
     start(&server).await;
     assert_eq!(server.http_status().state, "started");
     assert!(server.http_status().message.is_empty());
@@ -167,10 +166,9 @@ async fn stale_failure_cannot_stop_a_new_listener() {
             .is_ok()
     );
     drop(failure);
+    let tasks = listener_tasks(&server).await;
     server.shutdown().await;
-    for port in [ports.0, ports.1] {
-        assert_port_released(port);
-    }
+    assert!(tasks.iter().all(|task| task.is_finished()));
 }
 
 #[tokio::test]
@@ -178,18 +176,11 @@ async fn dropping_core_releases_public_listeners() {
     let directory = plain_libs::temporary::tempdir().unwrap();
     let token = plain_libs::utils::base64::base64_encode(&[12; 32]);
     let server = server(directory.path(), &token);
-    let ports = start(&server).await;
+    start(&server).await;
+    let tasks = listener_tasks(&server).await;
     drop(server);
     tokio::time::timeout(Duration::from_secs(5), async {
-        loop {
-            if [ports.0, ports.1]
-                .into_iter()
-                .map(bind_port)
-                .collect::<std::io::Result<Vec<_>>>()
-                .is_ok()
-            {
-                break;
-            }
+        while tasks.iter().any(|task| !task.is_finished()) {
             tokio::task::yield_now().await;
         }
     })

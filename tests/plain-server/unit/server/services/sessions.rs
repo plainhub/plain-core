@@ -10,6 +10,9 @@ use plain_libs::serde_json::Value;
 use plain_libs::serde_json::json;
 use std::sync::Arc;
 
+const BROWSER_ID: &str = "c1810f83-b876-5996-9c1b-f4b328cb5d6c";
+const PHONE_ID: &str = "706c6169-1414-8000-8000-000000000001";
+
 fn fixture() -> (plain_libs::temporary::TempDir, ContentServer) {
     let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs =
@@ -20,7 +23,7 @@ fn fixture() -> (plain_libs::temporary::TempDir, ContentServer) {
     plain_rs::features::prefs::security::set_entry(&prefs, "password", plain_libs::serde_json::json!("secret"))
         .unwrap();
     prefs.set("password_type", "NONE").unwrap();
-    prefs.set("client_id", "phone").unwrap();
+    prefs.set("client_id", PHONE_ID).unwrap();
     let (private, _public) = plain_libs::crypto::ed25519_generate();
     prefs
         .set(
@@ -45,13 +48,13 @@ fn offer(
     plain_rs::features::services::confirmation_channel::Channel,
 ) {
     use plain_rs::features::services::confirmation_channel::{Client, ServerHandshake};
-    let (login, hello) = Client::start("browser").unwrap();
+    let (login, hello) = Client::start(BROWSER_ID).unwrap();
     let signing =
         plain_rs::features::services::peers::peer_wire::signing_keypair(&state.prefs).unwrap();
     let now = plain_libs::chrono::Utc::now().timestamp_millis() as u64;
     let device_id = state.native_client_id().unwrap();
     let (channel, response) =
-        ServerHandshake::start("browser", &device_id, &hello, &signing, now).unwrap();
+        ServerHandshake::start(BROWSER_ID, &device_id, &hello, &signing, now).unwrap();
     let keys = login
         .accept(
             &response,
@@ -65,7 +68,7 @@ fn offer(
     let frame = keys.encrypt_request(&frame, now).unwrap();
     (
         ws_login::Request::Issue {
-            client_id: "browser".into(),
+            client_id: BROWSER_ID.into(),
             client_ip: "192.0.2.1".into(),
             frame: plain_libs::utils::base64::base64_encode(&frame),
             channel: ws_login::LoginChannel::Confirmation(channel),
@@ -84,7 +87,7 @@ async fn passwordless_web_login_persists_credentials_and_executes_encrypted_grap
         let result = ws_login::execute(&state, request).await.unwrap();
         let issued = if approval {
             assert_eq!(result["status"], "PENDING");
-            assert!(state.db.session_get("browser").unwrap().is_none());
+            assert!(state.db.session_get(BROWSER_ID).unwrap().is_none());
             ws_login::execute(
                 &state,
                 ws_login::Request::Complete {
@@ -100,14 +103,14 @@ async fn passwordless_web_login_persists_credentials_and_executes_encrypted_grap
             plain_libs::utils::base64::base64_encode(&shared),
             issued["token"]
         );
-        let row = state.db.session_get("browser").unwrap().unwrap();
+        let row = state.db.session_get(BROWSER_ID).unwrap().unwrap();
         assert_eq!(row.r#type, plain_rs::features::sessions::SessionType::Login);
         assert_eq!(
             plain_rs::infrastructure::db::Db::open(
                 &plain_rs::infrastructure::data_paths::DataPaths::new(dir.path()).database()
             )
             .unwrap()
-            .session_get("browser")
+            .session_get(BROWSER_ID)
             .unwrap()
             .unwrap()
             .token,
@@ -127,7 +130,7 @@ async fn passwordless_web_login_persists_credentials_and_executes_encrypted_grap
         assert!(issued["response"].get("ecdhPublicKey").is_none());
         assert!(issued["response"].get("signature").is_none());
         let mut headers = HeaderMap::new();
-        headers.insert("c-id", "browser".parse().unwrap());
+        headers.insert("c-id", BROWSER_ID.parse().unwrap());
         let encrypted = plain_rs::infrastructure::transport::http_request::encrypt(
             &shared,
             "/graphql",
@@ -168,7 +171,7 @@ async fn confirmation_is_once_only_and_cancel_or_revoke_prevents_issuance() {
         .await
         .unwrap();
     assert_eq!(pending["status"], "PENDING");
-    assert!(state.db.session_get("browser").unwrap().is_none());
+    assert!(state.db.session_get(BROWSER_ID).unwrap().is_none());
     let id = pending["requestId"].as_str().unwrap().to_owned();
     ws_login::execute(
         &state,
@@ -199,7 +202,7 @@ async fn confirmation_is_once_only_and_cancel_or_revoke_prevents_issuance() {
             .await
             .unwrap();
         } else {
-            delete(&state, "browser").unwrap();
+            delete(&state, BROWSER_ID).unwrap();
         }
         assert!(
             ws_login::execute(&state, ws_login::Request::Complete { request_id: id })
@@ -266,7 +269,7 @@ async fn native_management_public_auth_and_revoke_share_one_database_without_hos
             .iter()
             .map(|session| session.client_id.as_str())
             .collect::<Vec<_>>(),
-        vec!["phone"]
+        vec![PHONE_ID]
     );
     let unauthorized = state.public.execute("{ sessions { clientId } }").await;
     assert!(!unauthorized.errors.is_empty());
@@ -295,7 +298,7 @@ async fn login_pairing_and_init_preserve_rust_state_without_revealing_passwords(
     .await
     .unwrap();
     assert_eq!(issued["response"]["chatPaired"], true);
-    let paired = state.db.get_peer_by_id("browser").unwrap();
+    let paired = state.db.get_peer_by_id(BROWSER_ID).unwrap();
     use sha2::Digest;
     let expected = sha2::Sha256::digest(
         [
@@ -311,9 +314,9 @@ async fn login_pairing_and_init_preserve_rust_state_without_revealing_passwords(
     assert_eq!(paired.name, "Desktop");
     // Changing the login mode must not revoke the already approved API session.
     state.prefs.set("password_type", "FIXED").unwrap();
-    let token = key(&state.db, "browser").unwrap().unwrap();
+    let token = key(&state.db, BROWSER_ID).unwrap().unwrap();
     let mut headers = HeaderMap::new();
-    headers.insert("c-id", "browser".parse().unwrap());
+    headers.insert("c-id", BROWSER_ID.parse().unwrap());
     let response = crate::http::init::init(
         State(state.clone()),
         plain_libs::axum::extract::ConnectInfo("127.0.0.1:1".parse().unwrap()),

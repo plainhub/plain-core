@@ -16,7 +16,7 @@ fn public_fixture() -> (
         plain_rs::features::prefs::Prefs::load(&directory.path().join("prefs.json")).unwrap(),
     );
     prefs.set("remote_access", true).unwrap();
-    prefs.set("client_id", "screen-fixture").unwrap();
+    prefs.set("client_id", "706c6169-1414-8000-8000-000000000004").unwrap();
     let core = ContentServer::start(
         directory.path(),
         &plain_libs::utils::base64::base64_encode(&[4; 32]),

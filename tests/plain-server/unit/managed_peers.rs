@@ -156,19 +156,21 @@ async fn cancelling_an_owner_interrupts_pending_route_resolution() {
 #[cfg(feature = "http_transport")]
 #[tokio::test]
 async fn native_queries_and_subscriptions_share_a_pinned_route_without_a_local_listener() {
+    const LOCAL_ID: &str = "706c6169-1414-8000-8000-000000000002";
+    const REMOTE_ID: &str = "706c6169-1414-8000-8000-000000000003";
     let dir = plain_libs::temporary::tempdir().unwrap();
-    let local = start(&dir.path().join("local"), "local");
-    let remote = start(&dir.path().join("remote"), "remote");
+    let local = start(&dir.path().join("local"), LOCAL_ID);
+    let remote = start(&dir.path().join("remote"), REMOTE_ID);
     assert_eq!(local.port, 0);
     let (cert, key) = plain_libs::tls::generate_pem(&["localhost".into()]).unwrap();
     let (_, port) = remote.start_public(0, 0, cert, key).await.unwrap();
     let state = local.runtime_state();
     let remote_state = remote.runtime_state();
-    let mut session = sessions::create(&remote_state, "local".into()).unwrap();
-    session.client_id = "local".into();
+    let mut session = sessions::create(&remote_state, LOCAL_ID.into()).unwrap();
+    session.client_id = LOCAL_ID.into();
     session.r#type = plain_rs::features::sessions::SessionType::Login;
     remote_state.db.session_save(&session).unwrap();
-    let mut peer = peer("remote");
+    let mut peer = peer(REMOTE_ID);
     peer.port = Some(port);
     peer.token = session.token;
     peers::save(&state.db, &[peer.clone()], SaveMode::Insert).unwrap();
@@ -176,7 +178,7 @@ async fn native_queries_and_subscriptions_share_a_pinned_route_without_a_local_l
     let request = || Request::new("{ app { clientId } }");
     let response = executor
         .execute_peer_scoped(
-            "remote",
+            REMOTE_ID,
             request(),
             Default::default(),
             std::time::Duration::from_secs(30),
@@ -186,7 +188,7 @@ async fn native_queries_and_subscriptions_share_a_pinned_route_without_a_local_l
     assert!(response.errors.is_empty(), "{response:?}");
     assert_eq!(
         plain_libs::serde_json::to_value(response).unwrap()["data"]["app"]["clientId"],
-        "remote"
+        REMOTE_ID
     );
     let mut wrong_target = peer.clone();
     wrong_target.id = "different-peer".into();
@@ -206,7 +208,7 @@ async fn native_queries_and_subscriptions_share_a_pinned_route_without_a_local_l
     let route = state
         .managed_proxy
         .peers
-        .route(&state, "remote")
+        .route(&state, REMOTE_ID)
         .await
         .unwrap();
     assert_eq!(
@@ -225,13 +227,13 @@ async fn native_queries_and_subscriptions_share_a_pinned_route_without_a_local_l
     let again = state
         .managed_proxy
         .peers
-        .route(&state, "remote")
+        .route(&state, REMOTE_ID)
         .await
         .unwrap();
     assert!(Arc::ptr_eq(&route, &again));
     let scope = NativeRequestScope::default();
     let handle = executor
-        .open_managed_peer_subscriptions("remote", scope.clone())
+        .open_managed_peer_subscriptions(REMOTE_ID, scope.clone())
         .await
         .unwrap();
     let subscription = executor.subscription_session(handle).unwrap();
@@ -250,7 +252,7 @@ async fn native_queries_and_subscriptions_share_a_pinned_route_without_a_local_l
         &state
             .managed_proxy
             .peers
-            .route(&state, "remote")
+            .route(&state, REMOTE_ID)
             .await
             .unwrap()
     ));
@@ -272,7 +274,7 @@ async fn native_queries_and_subscriptions_share_a_pinned_route_without_a_local_l
     let socket_handle = sockets
         .open(
             crate::native::sockets::SocketKind::ImageEditor,
-            Some("remote".into()),
+            Some(REMOTE_ID.into()),
             Default::default(),
         )
         .unwrap();
@@ -325,14 +327,14 @@ async fn native_queries_and_subscriptions_share_a_pinned_route_without_a_local_l
         .routes
         .lock()
         .unwrap()
-        .get("remote")
+        .get(REMOTE_ID)
         .unwrap()
         .clone();
     *slot.lock().await = Some(wrong_route);
     assert!(
         executor
             .execute_peer_scoped(
-                "remote",
+                REMOTE_ID,
                 request(),
                 Default::default(),
                 std::time::Duration::from_secs(30)
@@ -341,7 +343,7 @@ async fn native_queries_and_subscriptions_share_a_pinned_route_without_a_local_l
             .is_err()
     );
     let rejected_handle = executor
-        .open_managed_peer_subscriptions("remote", Default::default())
+        .open_managed_peer_subscriptions(REMOTE_ID, Default::default())
         .await
         .unwrap();
     let rejected = executor.subscription_session(rejected_handle).unwrap();
@@ -355,7 +357,7 @@ async fn native_queries_and_subscriptions_share_a_pinned_route_without_a_local_l
     let rejected_socket = sockets
         .open(
             crate::native::sockets::SocketKind::ImageEditor,
-            Some("remote".into()),
+            Some(REMOTE_ID.into()),
             Default::default(),
         )
         .unwrap();
@@ -368,12 +370,12 @@ async fn native_queries_and_subscriptions_share_a_pinned_route_without_a_local_l
     );
     executor.close_subscriptions(rejected_handle);
     *slot.lock().await = Some(route.clone());
-    peers::unpair(&state.db, "remote").unwrap();
+    peers::unpair(&state.db, REMOTE_ID).unwrap();
     assert!(route.check_current(&state).is_err());
     assert!(
         executor
             .execute_peer_scoped(
-                "remote",
+                REMOTE_ID,
                 request(),
                 Default::default(),
                 std::time::Duration::from_secs(30)
