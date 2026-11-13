@@ -19,7 +19,6 @@ pub use crate::infrastructure::events::WS_PAIRING_COMPLETED;
 pub const WS_PAIRING_CANCELLED: &'static str = "PAIRING_CANCELED";
 pub const WS_PAIRING_STARTED: &'static str = "PAIRING_STARTED";
 pub const WS_PAIRING_FAILED: &'static str = "PAIRING_FAILED";
-pub const WS_NEARBY_DEVICE_FOUND: &'static str = "NEARBY_DEVICE_FOUND";
 pub const WS_CHANNEL_INVITE_RECEIVED: &'static str = "CHANNEL_INVITE_RECEIVED";
 
 #[derive(Clone, Debug)]

@@ -263,15 +263,6 @@ pub const EVENTS: &[EventSpec] = &[
         capability: None,
     },
     EventSpec {
-        field: "nearbyDevicesChanged",
-        event: "NEARBY_DEVICES_UPDATED",
-        aliases: &["NEARBY_DEVICE_FOUND", "NEARBY_DEVICE_UNREACHABLE"],
-        invalidation: true,
-        selection: "",
-        access: &[],
-        capability: None,
-    },
-    EventSpec {
         field: "downloadsChanged",
         event: "DOWNLOAD_PROGRESS",
         aliases: &[],

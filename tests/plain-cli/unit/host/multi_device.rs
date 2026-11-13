@@ -120,7 +120,7 @@ async fn native_password_and_approval_pairing_enables_actual_chat_and_preserves_
             &plain_rs::features::services::peers::peer_wire::signing_keypair(&remote_state.prefs).unwrap()[32..]),
         device_type:plain_rs::features::chat::enums::DeviceType::Computer, version:"1".into(),platform:"fixture".into(),
         last_seen_at:plain_rs::infrastructure::db::now_iso(),discovery_methods:vec![plain_rs::features::discovery::nearby_devices::DiscoveryMethod::Lan],
-    },true).unwrap();
+    }).unwrap();
     let started = query(
         &first.native,
         r#"mutation($peerId:ID!){pairPeer(input:{peerId:$peerId,mode:MANAGE,password:"fixture-password"})}"#,

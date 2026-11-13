@@ -81,7 +81,6 @@ impl WsEvent {
                 | "IMAGE_INDEX_UPDATED"
                 | "IMAGE_MODELS_UPDATED"
                 | "PREFS_UPDATED"
-                | "NEARBY_DEVICES_UPDATED"
         )
     }
 
@@ -153,7 +152,6 @@ mod tests;
 
 pub const WS_DEVICE_NAME_UPDATED: &str = "DEVICE_NAME_UPDATED";
 
-pub const WS_NEARBY_DEVICE_UNREACHABLE: &str = "NEARBY_DEVICE_UNREACHABLE";
 
 pub const WS_NEARBY_DISCOVERY_STARTED: &str = "NEARBY_DISCOVERY_STARTED";
 

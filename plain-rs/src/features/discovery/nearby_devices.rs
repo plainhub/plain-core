@@ -87,7 +87,6 @@ struct Entry {
     generation: String,
     seen: Instant,
     age: Duration,
-    emitted: Option<Instant>,
 }
 #[derive(Default)]
 struct State {
@@ -169,7 +168,6 @@ impl Devices {
                         generation: plain_libs::utils::uuid::Uuid::new_v4().into_string(),
                         seen: now,
                         age: Duration::from_secs(age),
-                        emitted: None,
                     },
                 );
             }
@@ -177,19 +175,16 @@ impl Devices {
         }
         Ok(())
     }
-    pub fn observe(&self, device: Device, visible: bool) -> Result<bool> {
-        self.observe_at(device, Instant::now(), visible)
+    pub fn observe(&self, device: Device) -> Result<()> {
+        self.observe_at(device, Instant::now())
     }
     #[cfg(test)]
-    pub(crate) fn seen_at(&self, device: Device, now: Instant) -> Result<bool> {
-        self.observe_at(device, now, true)
+    pub(crate) fn seen_at(&self, device: Device, now: Instant) -> Result<()> {
+        self.observe_at(device, now)
     }
-    fn observe_at(&self, mut device: Device, now: Instant, visible: bool) -> Result<bool> {
+    fn observe_at(&self, mut device: Device, now: Instant) -> Result<()> {
         device.validate()?;
         let mut s = self.0.lock().unwrap();
-        let emitted = s.entries.get(&device.id).and_then(|e| e.emitted);
-        let emit = visible
-            && emitted.is_none_or(|t| now.saturating_duration_since(t) >= Duration::from_secs(1));
         if let Some(old) = s.entries.get(&device.id) {
             let mut ips = old.device.ips.clone();
             for ip in &device.ips {
@@ -231,11 +226,10 @@ impl Devices {
                 generation: plain_libs::utils::uuid::Uuid::new_v4().into_string(),
                 seen: now,
                 age: Duration::ZERO,
-                emitted: if emit { Some(now) } else { emitted },
             },
         );
         s.revision += 1;
-        Ok(emit)
+        Ok(())
     }
     pub fn contains(&self, id: &str) -> bool {
         self.0.lock().unwrap().entries.contains_key(id)

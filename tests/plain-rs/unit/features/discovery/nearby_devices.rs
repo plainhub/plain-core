@@ -15,32 +15,16 @@ fn device(id: &str, method: DiscoveryMethod) -> Device {
     }
 }
 #[test]
-fn merges_methods_and_ips_with_monotonic_event_throttle() {
+fn merges_methods_and_ips_across_repeated_observations() {
     let devices = Devices::default();
     let t = Instant::now();
-    assert!(
-        devices
-            .seen_at(device("one", DiscoveryMethod::Ble), t)
-            .unwrap()
-    );
+    devices.seen_at(device("one", DiscoveryMethod::Ble), t).unwrap();
     let mut next = device("one", DiscoveryMethod::Lan);
     next.ips.push("10.0.0.2".into());
-    assert!(
-        !devices
-            .seen_at(next.clone(), t + Duration::from_millis(999))
-            .unwrap()
-    );
-    assert!(devices.seen_at(next, t + Duration::from_secs(1)).unwrap());
-    assert!(
-        !devices
-            .observe_at(device("two", DiscoveryMethod::Lan), t, false)
-            .unwrap()
-    );
-    assert!(
-        devices
-            .seen_at(device("two", DiscoveryMethod::Lan), t)
-            .unwrap()
-    );
+    devices.seen_at(next.clone(), t + Duration::from_millis(999)).unwrap();
+    devices.seen_at(next, t + Duration::from_secs(1)).unwrap();
+    devices.observe_at(device("two", DiscoveryMethod::Lan), t).unwrap();
+    devices.seen_at(device("two", DiscoveryMethod::Lan), t).unwrap();
     devices.forget("two");
     let snapshot = devices.snapshot();
     assert_eq!(snapshot.devices.len(), 1);

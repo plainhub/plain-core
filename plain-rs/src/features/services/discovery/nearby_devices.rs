@@ -3,14 +3,6 @@ use crate::infrastructure::db::chat_store;
 use crate::infrastructure::events::WsEvent;
 use crate::runtime::Runtime as CoreRuntime;
 use plain_libs::serde_json::json;
-pub const EVENT_UPDATED: &'static str = "NEARBY_DEVICES_UPDATED";
-
-fn publish(state: &CoreRuntime) {
-    let _ = state.events.send(WsEvent::broadcast(
-        EVENT_UPDATED,
-        json!({"revision":state.nearby_devices.snapshot().revision}).to_string(),
-    ));
-}
 #[derive(Clone)]
 pub struct Context {
     pub db: std::sync::Arc<crate::infrastructure::db::Db>,
@@ -65,26 +57,7 @@ impl Context {
                 .iter()
                 .any(|d| d.id == device.id)
         {
-            let id = device.id.clone();
-            let emit = self.devices.observe(device, visible)?;
-            let _ = self.events.send(WsEvent::broadcast(
-                EVENT_UPDATED,
-                json!({"revision":self.devices.snapshot().revision}).to_string(),
-            ));
-            if visible && emit {
-                let snapshot = snapshot(&self.db, &self.devices)?;
-                if let Some(device) = snapshot["devices"]
-                    .as_array()
-                    .unwrap()
-                    .iter()
-                    .find(|device| device["id"] == id)
-                {
-                    let _ = self.events.send(WsEvent::broadcast(
-                        crate::features::chat::events::WS_NEARBY_DEVICE_FOUND,
-                        device.to_string(),
-                    ));
-                }
-            }
+            self.devices.observe(device)?;
         }
         Ok(true)
     }
@@ -134,7 +107,6 @@ pub async fn sweep(state: &CoreRuntime) -> plain_libs::anyhow::Result<()> {
         });
     }
     let interfaces = crate::infrastructure::transport::lan::local_interfaces();
-    let mut changed = false;
     for chunk in stale.chunks(4) {
         if !state.nearby_devices.active() {
             break;
@@ -151,11 +123,8 @@ pub async fn sweep(state: &CoreRuntime) -> plain_libs::anyhow::Result<()> {
         }))
         .await;
         for (probe, alive) in results {
-            changed |= state.nearby_devices.verified(&state.db, probe, alive)?;
+            state.nearby_devices.verified(&state.db, probe, alive)?;
         }
-    }
-    if changed {
-        publish(state);
     }
     Ok(())
 }

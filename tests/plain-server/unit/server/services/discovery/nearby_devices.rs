@@ -111,22 +111,13 @@ async fn rust_sweep_keeps_lan_probes_independent_of_bluetooth_pause() {
         plain_libs::serde_json::from_str::<plain_libs::serde_json::Value>(&peer_update.payload).unwrap(),
         json!({"id":"live"})
     );
-    let invalidation = events.recv().await.unwrap();
-    assert_eq!(invalidation.event_type, EVENT_UPDATED);
-    let first = events.recv().await.unwrap();
-    assert_eq!(
-        first.event_type,
-        plain_rs::features::chat::events::WS_NEARBY_DEVICE_FOUND
-    );
-    let public: plain_libs::serde_json::Value = plain_libs::serde_json::from_str(&first.payload).unwrap();
+    let public = snapshot["devices"].as_array().unwrap().iter().find(|row| row["id"] == "live").unwrap();
     assert_eq!(public["id"], "live");
     assert_eq!(public["status"], "PAIRED");
     assert!(public.get("key").is_none());
     Context::from(&state)
         .seen(fixture("live", 2443), true, false)
         .unwrap();
-    let next = events.recv().await.unwrap();
-    assert_eq!(next.event_type, EVENT_UPDATED);
     assert!(events.try_recv().is_err());
     listeners.shutdown().await;
     server.shutdown().await;

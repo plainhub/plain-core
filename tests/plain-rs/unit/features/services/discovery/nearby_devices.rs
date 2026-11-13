@@ -3,7 +3,7 @@ use crate::features::discovery::nearby_devices::Device;
 use plain_libs::serde_json::json;
 
 #[tokio::test]
-async fn nearby_invalidation_and_public_device_payloads_have_distinct_contracts() {
+async fn nearby_rows_are_polled_without_discovery_events() {
     let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs = std::sync::Arc::new(
         crate::features::prefs::Prefs::load(&dir.path().join("prefs.json")).unwrap(),
@@ -33,17 +33,8 @@ async fn nearby_invalidation_and_public_device_payloads_have_distinct_contracts(
     Context::from(&state)
         .seen(device.clone(), true, false)
         .unwrap();
-    let invalidation = events.recv().await.unwrap();
-    assert_eq!(invalidation.event_type, EVENT_UPDATED);
-    let notice: plain_libs::serde_json::Value = plain_libs::serde_json::from_str(&invalidation.payload).unwrap();
-    assert!(notice["revision"].is_u64());
-    assert!(notice.get("id").is_none());
-    let public = events.recv().await.unwrap();
-    assert_eq!(
-        public.event_type,
-        crate::features::chat::events::WS_NEARBY_DEVICE_FOUND
-    );
-    let row: plain_libs::serde_json::Value = plain_libs::serde_json::from_str(&public.payload).unwrap();
+    let current = snapshot(&state.db, &state.nearby_devices).unwrap();
+    let row = &current["devices"][0];
     assert_eq!(row["id"], device.id);
     assert_eq!(row["name"], device.name);
     assert_eq!(row["status"], "UNPAIRED");
@@ -53,7 +44,6 @@ async fn nearby_invalidation_and_public_device_payloads_have_distinct_contracts(
     snapshot(&state.db, &state.nearby_devices).unwrap();
     assert!(events.try_recv().is_err());
     Context::from(&state).seen(device, true, false).unwrap();
-    assert_eq!(events.recv().await.unwrap().event_type, EVENT_UPDATED);
     assert!(events.try_recv().is_err());
     server.shutdown().await;
 }

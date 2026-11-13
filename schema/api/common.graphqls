@@ -228,7 +228,6 @@ type Subscription {
 	prefsChanged: Boolean!
 	peersChanged: Boolean!
 	channelsChanged: ChannelChange!
-	nearbyDevicesChanged: Boolean!
 	downloadsChanged: Boolean!
 	imageModelsUpdated: ImageModelsUpdate!
 	pairingRequested: PairingRequestNotice!

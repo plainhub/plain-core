@@ -9,7 +9,7 @@
 //! Rust worker:     pop -> host.call("bleScanRead", {clientId, scan})
 //!                       -> bleScans.reply(...)  (identity-checked)
 //!                       -> nearby_devices::Context::seen(...)
-//!                       -> emit WS_NEARBY_DEVICE_FOUND
+//!                       -> update the nearby device cache
 //! ```
 //!
 //! The App's scan loop therefore never decides *when* to do a GATT read and
@@ -82,10 +82,6 @@ pub async fn seen(state: &CoreRuntime, id: &str, client_id: &str) -> plain_libs:
     Ok(step)
 }
 
-/// Performs one scheduled read: ask the App to do the GATT DISCOVER, hand the
-/// payload back to the scan state machine for identity checking, then publish
-/// the device so the App list updates over `NEARBY_DEVICES_UPDATED` /
-/// `WS_NEARBY_DEVICE_FOUND`.
 async fn run(state: CoreRuntime, pending: Pending) {
     if *state.stop.borrow() {
         return;

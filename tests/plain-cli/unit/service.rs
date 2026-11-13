@@ -41,7 +41,7 @@ async fn management_pairing_with_cli_requires_password_without_second_approval()
         signature_public_key:plain_libs::utils::base64::base64_encode(&plain_rs::features::services::peers::peer_wire::signing_keypair(&remote_state.prefs).unwrap()[32..]),
         device_type:plain_rs::features::chat::enums::DeviceType::Computer,version:"1".into(),platform:"fixture".into(),
         last_seen_at:plain_rs::infrastructure::db::now_iso(),discovery_methods:vec![plain_rs::features::discovery::nearby_devices::DiscoveryMethod::Lan],
-    },true).unwrap();
+    }).unwrap();
     for (password, expected) in [
         ("wrong password", "PAIRING_FAILED"),
         ("fixture password", "PAIRING_COMPLETED"),
