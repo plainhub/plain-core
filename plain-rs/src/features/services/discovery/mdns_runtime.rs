@@ -10,7 +10,6 @@ use std::sync::{
     Arc, Mutex, RwLock,
     atomic::{AtomicBool, AtomicU64, Ordering},
 };
-const WS_MDNS_UPDATED: &'static str = "MDNS_UPDATED";
 #[cfg(any(test, feature = "test-seams"))]
 pub static TEST_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 static OWNER: Mutex<Option<String>> = Mutex::new(None);
@@ -118,17 +117,6 @@ impl Session {
         } else {
             self.browser.stop();
         }
-        let _ = self
-            .context
-            .events
-            .send(crate::infrastructure::events::WsEvent::broadcast(
-                if active {
-                    "NEARBY_DISCOVERY_STARTED"
-                } else {
-                    "NEARBY_DISCOVERY_STOPPED"
-                },
-                "{}".into(),
-            ));
         Ok(active)
     }
 }
@@ -192,16 +180,6 @@ impl Runtime {
         Ok(())
     }
 
-    fn emit(&self, context: &Context, peer: Option<&str>, online: bool) {
-        let revision = self.revision.fetch_add(1, Ordering::SeqCst) + 1;
-        let _ = context
-            .events
-            .send(crate::infrastructure::events::WsEvent::broadcast(
-                WS_MDNS_UPDATED,
-                json!({"runtimeId":self.id,"revision":revision,"peerId":peer,"online":online})
-                    .to_string(),
-            ));
-    }
     pub fn browse_resident(&self) {
         if let Some(session) = self.session.lock().unwrap().as_ref() {
             session.browser.send_ptr_query();
@@ -323,7 +301,7 @@ impl Runtime {
                             ));
                         let _=status_events.send(crate::infrastructure::events::WsEvent::broadcast("PEER_CONNECTIONS_UPDATED",json!({"runtimeId":status.connections.snapshot(&status_db)["runtimeId"]}).to_string()));
                     }
-                    runtime.emit(&observer, Some(&id), visible.load(Ordering::SeqCst));
+                    runtime.revision.fetch_add(1, Ordering::SeqCst);
                 }
                 Ok(false) => {}
                 Err(error) => log::warn!("mDNS observation: {error}"),
@@ -398,11 +376,7 @@ impl Runtime {
                                             json!({"id":id,"online":true}).to_string(),
                                         ));
                                 }
-                                runtime.emit(
-                                    &system_observer,
-                                    Some(&id),
-                                    system_visible.load(Ordering::SeqCst),
-                                );
+                                runtime.revision.fetch_add(1, Ordering::SeqCst);
                             }
                             Ok(false) => {}
                             Err(error) => log::warn!("system DNS-SD observation: {error}"),
@@ -537,7 +511,7 @@ impl Runtime {
                 }
                 Request::Snapshot {} => unreachable!(),
             }
-            self.emit(&session.context, None, false);
+            self.revision.fetch_add(1, Ordering::SeqCst);
         }
         let mut snapshot = self.snapshot();
         snapshot["started"] = json!(started);
@@ -556,7 +530,7 @@ impl Runtime {
             match session.set_scanning(false) {
                 Ok(_) => {
                     session.manual_scanning = false;
-                    runtime.emit(&session.context, None, false);
+                    runtime.revision.fetch_add(1, Ordering::SeqCst);
                 }
                 Err(error) => log::warn!("Discovery timeout: {error}"),
             }

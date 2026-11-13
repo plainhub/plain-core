@@ -77,8 +77,7 @@ impl WsEvent {
     pub fn is_internal(&self) -> bool {
         matches!(
             self.event_type,
-            "MDNS_UPDATED"
-                | "PEER_CONNECTIONS_UPDATED"
+            "PEER_CONNECTIONS_UPDATED"
                 | "IMAGE_INDEX_UPDATED"
                 | "IMAGE_MODELS_UPDATED"
                 | "PREFS_UPDATED"

@@ -132,15 +132,14 @@ async fn receiver_starts_without_http_and_retries_when_platform_permissions_chan
     Runtime::host_connected(state.clone(), generation).await;
     assert_eq!(state.mdns.snapshot()["receiver"], false);
     granted.store(true, Ordering::SeqCst);
-    let mut events = state.events.subscribe();
     state.mdns.permissions_changed(state.clone());
     tokio::task::yield_now().await;
     tokio::time::advance(std::time::Duration::from_millis(800)).await;
-    tokio::time::timeout(std::time::Duration::from_secs(1), async {
-        while events.recv().await.unwrap().event_type != WS_MDNS_UPDATED {}
-    })
-    .await
-    .unwrap();
+    let pending = state.mdns.network_restart.lock().unwrap().take().unwrap();
+    tokio::time::timeout(std::time::Duration::from_secs(1), pending)
+        .await
+        .unwrap()
+        .unwrap();
     let snapshot = state.mdns.snapshot();
     assert_eq!(snapshot["receiver"], true);
     assert_eq!(snapshot["published"], false);

@@ -20,9 +20,6 @@ impl AppStateSubscriptions {
     ) -> Result<BoxStream<'static, Result<ChannelChange>>> {
         events::stream(ctx, "CHANNELS_UPDATED").await
     }
-    async fn mdns_changed(&self, ctx: &Context<'_>) -> Result<BoxStream<'static, Result<bool>>> {
-        events::stream(ctx, "MDNS_UPDATED").await
-    }
     async fn nearby_devices_changed(
         &self,
         ctx: &Context<'_>,
