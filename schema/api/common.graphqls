@@ -18,24 +18,6 @@ type Audio implements MediaItem {
 	tags: [Tag!]!
 }
 
-type ChannelChange {
-	changed: Boolean!
-	invite: ChannelInvite
-	cancel: ChannelInviteCancellation
-}
-
-type ChannelInvite {
-	channelId: ID!
-	channelName: String!
-	ownerPeerId: ID!
-	ownerPeerName: String!
-}
-
-type ChannelInviteCancellation {
-	channelId: ID!
-	ownerPeerId: ID!
-}
-
 type ClipboardChange {
 	text: String!
 	sensitive: Boolean!
@@ -52,7 +34,6 @@ enum DeviceType {
 }
 
 type Doc implements MediaItem {
-	durationMs: Long!
 	id: ID!
 	title: String!
 	path: String!
@@ -218,7 +199,6 @@ type SmsSendResult {
 type Subscription {
 	prefsChanged: Boolean!
 	peersChanged: Boolean!
-	channelsChanged: ChannelChange!
 	downloadsChanged: Boolean!
 	imageModelsUpdated: ImageModelsUpdate!
 	pairingRequested: PairingRequestNotice!

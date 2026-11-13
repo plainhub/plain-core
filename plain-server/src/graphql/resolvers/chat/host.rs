@@ -59,6 +59,7 @@ pub struct ChatTextEdit {
 pub struct ChatHostMutation;
 #[Object]
 impl ChatHostMutation {
+    /// Send the same ChatItem.content JSON to one or more peer:<id> or channel:<id> targets.
     async fn send_chat_items(
         &self,
         ctx: &Context<'_>,

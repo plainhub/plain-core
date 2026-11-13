@@ -38,10 +38,6 @@ type FeedError {
 	detail: String!
 }
 
-type FeedPreview {
-	title: String!
-}
-
 type FeedSyncState {
 	feedId: ID!
 	taskId: ID!
@@ -76,7 +72,7 @@ extend type Query {
 	feedEntry(id: ID!): FeedEntry
 	feedEntryCount(query: String!): Int!
 	feedEntryCounts: [FeedEntryCount!]!
-	feedPreview(url: String!): FeedPreview!
 	feedSyncStates: [FeedSyncState!]!
 	feeds: [Feed!]!
+	fetchFeedTitle(url: String!): String!
 }

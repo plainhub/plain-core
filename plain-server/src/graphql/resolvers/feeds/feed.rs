@@ -15,11 +15,6 @@ use plain_rs::infrastructure::db::notes_feeds::FeedRow;
 type GqlResult<T> = plain_graphql::Result<T>;
 
 #[derive(SimpleObject, Clone)]
-pub struct FeedPreview {
-    pub title: String,
-}
-
-#[derive(SimpleObject, Clone)]
 pub struct FeedError {
     pub code: String,
     pub detail: String,
@@ -136,10 +131,8 @@ pub struct FeedQuery;
 
 #[Object]
 impl FeedQuery {
-    async fn feed_preview(&self, ctx: &Context<'_>, url: String) -> GqlResult<FeedPreview> {
-        Ok(FeedPreview {
-            title: feeds::preview_title(ctx.data::<Arc<Db>>()?, &url).await?,
-        })
+    async fn fetch_feed_title(&self, ctx: &Context<'_>, url: String) -> GqlResult<String> {
+        Ok(feeds::preview_title(ctx.data::<Arc<Db>>()?, &url).await?)
     }
     fn feed_sync_states(&self, ctx: &Context<'_>) -> GqlResult<Vec<feeds::FeedSyncState>> {
         Ok(sync_service(ctx)?.states())

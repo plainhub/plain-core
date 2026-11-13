@@ -47,7 +47,7 @@ async fn public_events_read_the_core_database_without_host_or_legacy_store() {
 }
 
 #[tokio::test]
-async fn public_disk_and_hostname_commands_reach_the_registered_provider() {
+async fn public_disk_commands_reach_the_registered_provider() {
     let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::server::ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state();
@@ -72,34 +72,13 @@ async fn public_disk_and_hostname_commands_reach_the_registered_provider() {
             plain_libs::serde_json::json!({"id":request["id"],"error":"format refused"}),
         )
         .unwrap();
-        let request = requests.recv().await.unwrap();
-        assert_eq!(
-            request["method"],
-            plain_rs::infrastructure::host::commands::SYSTEM_HOSTNAME_SET
-        );
-        assert_eq!(request["params"]["name"], "my-server");
-        host.reply(
-            generation,
-            plain_libs::serde_json::json!({"id":request["id"],"result":true}),
-        )
-        .unwrap();
     });
     let executor = core.native_graphql().unwrap();
     let result = executor
         .execute("mutation { formatDisk(path:\"/dev/example\") }".into())
         .await;
     assert_eq!(result.errors[0].message, "format refused");
-    let result = executor
-        .execute("mutation { setHostname(name:\" My_Server \") }".into())
-        .await;
-    assert!(result.errors.is_empty(), "{:?}", result.errors);
-    assert_eq!(result.data.into_json().unwrap()["setHostname"], true);
     provider.await.unwrap();
-    let rows = state.db.audit_events(0, 10, None).unwrap();
-    assert!(
-        rows.iter()
-            .any(|row| row.r#type == "set_hostname" && row.message == "my-server")
-    );
     core.stop_core().await;
 }
 
@@ -158,15 +137,6 @@ async fn unsupported_platform_operations_only_read_capabilities_and_leave_state_
         assert!(state.db.audit_events(0, 10, None).unwrap().is_empty());
         core.stop_core().await;
     }
-}
-
-#[test]
-fn hostname_sanitization_is_shared() {
-    assert_eq!(
-        plain_libs::utils::hostname::platform_hostname("  Foo_. Bar-- "),
-        "foo-bar"
-    );
-    assert_eq!(plain_libs::utils::hostname::platform_hostname("!.."), "");
 }
 
 #[tokio::test]

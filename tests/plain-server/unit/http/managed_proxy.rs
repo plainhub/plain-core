@@ -430,8 +430,8 @@ async fn managed_proxy_keeps_the_browser_session_and_streams_a_peer_range() {
 async fn first_login_and_chat_range_use_proxy_without_a_management_token() {
     use plain_rs::features::{prefs::security, services::peers::peer_wire};
     let dir = plain_libs::temporary::tempdir().unwrap();
-    let a = start(&dir.path().join("a"), "device-a");
-    let b = start(&dir.path().join("b"), "device-b");
+    let a = start(&dir.path().join("a"), "706c6169-0000-8000-8000-000000000052");
+    let b = start(&dir.path().join("b"), "706c6169-0000-8000-8000-000000000053");
     let (a_cert, a_key) = plain_libs::tls::generate_pem(&["localhost".into()]).unwrap();
     let (a_http, a_port) = a.start_public(0, 0, a_cert.clone(), a_key).await.unwrap();
     let (b_cert, b_key) = plain_libs::tls::generate_pem(&["localhost".into()]).unwrap();
@@ -440,7 +440,7 @@ async fn first_login_and_chat_range_use_proxy_without_a_management_token() {
     let b_state = b.runtime_state();
     let b_id = b_state.native_client_id().unwrap();
     let a_id = a_state.native_client_id().unwrap();
-    let browser = login(&a_state, "browser");
+    let browser = login(&a_state, "706c6169-0000-8000-8000-000000000051");
     security::configure_password_login(&b_state.prefs).unwrap();
     security::set_password_login(&b_state.prefs, "fixture-password").unwrap();
     let pair = peer_wire::signing_keypair(&b_state.prefs).unwrap();
@@ -635,7 +635,7 @@ async fn first_login_and_chat_range_use_proxy_without_a_management_token() {
             ),
         )
         .unwrap();
-    let login_key = plain_libs::auth::api_key(&finish.session_key[..], &context);
+    let login_key = plain_libs::auth::api_key(finish.session_key.as_slice(), &context);
     let request = json!({"appName":"Fixture", "appVersion":"1", "osName":"Fixture", "osVersion":"1"});
     let encrypted = plain_libs::crypto::xchacha_encrypt_raw_with_aad(
         &login_key,
@@ -670,7 +670,7 @@ async fn first_login_and_chat_range_use_proxy_without_a_management_token() {
             .unwrap()
             .is_some()
     );
-    assert!(a_state.db.session_get("browser").unwrap().is_some());
+    assert!(a_state.db.session_get(&browser.client_id).unwrap().is_some());
     assert!(
         peers::get(&a_state.db, &b_id)
             .unwrap()

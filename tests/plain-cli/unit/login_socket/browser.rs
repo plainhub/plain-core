@@ -93,9 +93,9 @@ async fn local_approval_socket_controls_real_passwordless_browser_sessions() {
     let service = Service::start(&core).await.unwrap().unwrap();
     for allowed in [false, true] {
         let client_id = if allowed {
-            "local-approved"
+            "cde8c665-b21e-430b-800c-6bcf7283aa89"
         } else {
-            "local-denied"
+            "4b2d0aa0-e57d-49d2-a76e-6815f2daab31"
         };
         let (mut socket, channel) = browser_login(&core, port, client_id).await;
         let page = requests(directory.path(), None).await.unwrap();

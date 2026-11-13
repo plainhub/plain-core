@@ -1,44 +1,3 @@
-enum ChannelMemberStatus {
-	JOINED
-	PENDING
-}
-
-type ChatChannel {
-	actions: ChatChannelActions!
-	id: ID!
-	ownerId: ID!
-	name: String!
-	members: [ChatChannelMember!]!
-	"""
-	Monotonically increasing mutation counter; receivers ignore channel
-	updates whose version is not greater than their local copy.
-	"""
-	version: Long!
-	status: ChatChannelStatus!
-	createdAt: Instant!
-	updatedAt: Instant!
-	key: String!
-}
-
-type ChatChannelActions {
-	isOwner: Boolean!
-	canRename: Boolean!
-	canManageMembers: Boolean!
-	canLeave: Boolean!
-	canDelete: Boolean!
-}
-
-type ChatChannelMember {
-	peerId: ID!
-	status: ChannelMemberStatus!
-}
-
-enum ChatChannelStatus {
-	JOINED
-	LEFT
-	KICKED
-}
-
 type ChatConversation {
 	id: ID!
 	chat: ChatItem!
@@ -90,11 +49,6 @@ type ChatTextEdit {
 }
 
 extend type Mutation {
-	acceptChatChannelInvite(id: ID!): Boolean!
-	addChatChannelMember(id: ID!, peerId: ID!): ChatChannel!
-	createChatChannel(name: String!): ChatChannel!
-	declineChatChannelInvite(id: ID!): Boolean!
-	deleteChatChannel(id: ID!): Boolean!
 	"""
 	Always true: an id that is already gone is the state the caller asked
 	for, and the contract has no way to say "nothing was there".
@@ -104,21 +58,16 @@ extend type Mutation {
 	deliverChatItem(id: ID!, recipients: [ID!]): ChatItem!
 	editChatText(id: ID!, text: String!): ChatTextEdit!
 	forwardChatItems(id: ID!, targets: [String!]!): [ChatItem!]!
-	leaveChatChannel(id: ID!): Boolean!
-	removeChatChannelMember(id: ID!, peerId: ID!): ChatChannel!
 	retryChatItem(id: ID!): ChatItem!
 	"""
-	Send to `peer:<id>` or `channel:<id>`; `content` uses the `ChatItem.content` JSON envelope.
+	Send the same ChatItem.content JSON to one or more peer:<id> or channel:<id> targets.
 	"""
-	sendChatItem(target: String!, content: String!): [ChatItem!]!
 	sendChatItems(targets: [String!]!, content: String!): [ChatItem!]!
 	sendFolderShare(targets: [String!]!, path: String!, name: String!, expiresAt: Instant): [ChatItem!]!
 	sendShare(targets: [String!]!, shareId: ID!): [ChatItem!]!
-	updateChatChannel(id: ID!, name: String!): ChatChannel!
 }
 
 extend type Query {
-	chatChannels: [ChatChannel!]!
 	chatConversations: [ChatConversation!]!
 	chatCount(query: String!): Int!
 	chatItem(id: ID!): ChatItem

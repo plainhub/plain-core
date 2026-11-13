@@ -30,7 +30,7 @@ fn audio(db: &Db, id: &str, title: &str, artist: &str) {
 }
 
 async fn query(schema: &PublicSchema, text: &str, offset: i32, limit: i32) -> Value {
-    let response = schema.execute(plain_graphql::Request::new("query($query: String!, $offset: Int!, $limit: Int!) { mediaPlayHistory(query: $query, offset: $offset, limit: $limit) { mediaId positionMs playCount media { id title path } } }")
+    let response = schema.execute(plain_graphql::Request::new("query($query: String!, $offset: Int!, $limit: Int!) { mediaPlayHistory(query: $query, offset: $offset, limit: $limit) { mediaId mediaType positionMs playCount media { id title path } } }")
         .variables(plain_graphql::Variables::from_json(json!({"query":text,"offset":offset,"limit":limit})))
         .data(RequestOrigin::Remote)).await;
     plain_libs::serde_json::to_value(response).unwrap()
@@ -79,6 +79,7 @@ async fn history_filters_current_metadata_before_paging_and_skips_missing_media(
     assert!(updated["errors"].is_null(), "{updated}");
     let row = &updated["data"]["mediaPlayHistory"][0];
     assert_eq!(row["media"]["title"], "Updated");
+    assert_eq!(row["mediaType"], "AUDIO");
     assert_eq!(row["positionMs"], 123);
     assert_eq!(row["playCount"], 1);
     assert_eq!(

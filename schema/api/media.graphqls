@@ -41,11 +41,16 @@ interface MediaItem {
 
 type MediaPlayHistory {
 	mediaId: ID!
-	mediaType: MediaDataType!
+	mediaType: PlaybackType!
 	positionMs: Long!
 	playCount: Long!
 	playedAt: Instant!
 	media: MediaItem!
+}
+
+enum PlaybackType {
+	AUDIO
+	VIDEO
 }
 
 type ScanProgress {
@@ -72,9 +77,9 @@ extend type Mutation {
 	pauseMediaScan: Boolean!
 	rebuildFileIndexVolume(id: ID!): Boolean!
 	rebuildMediaIndex(root: String!): Boolean!
-	recordMediaPlay(mediaId: ID!, type: MediaDataType!, positionMs: Long!): Boolean!
+	recordMediaPlay(mediaId: ID!, type: PlaybackType!, positionMs: Long!): Boolean!
 	resumeMediaScan: Boolean!
-	saveMediaPlayProgress(mediaId: ID!, type: MediaDataType!, positionMs: Long!): Boolean!
+	saveMediaPlayProgress(mediaId: ID!, type: PlaybackType!, positionMs: Long!): Boolean!
 	setFileIndexVolume(id: ID!, indexMode: IndexMode!, includedDirs: [String!]!, excludedDirs: [String!]!): Boolean!
 	stopMediaScan: Boolean!
 }

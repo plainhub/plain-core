@@ -358,7 +358,17 @@ pub(super) fn files(sdl: &str) -> BTreeMap<String, String> {
             })
             .unwrap();
         let name = declaration.split_whitespace().nth(1).unwrap_or_default();
-        if matches!(name, "Query" | "Mutation") && declaration.starts_with("type ") {
+        if name == "Subscription" && declaration.starts_with("type ") {
+            let (channel, common): (Vec<_>, Vec<_>) = block
+                .lines()
+                .partition(|line| line.trim_start().starts_with("channelsChanged:"));
+            assert_eq!(channel.len(), 1, "missing channelsChanged subscription");
+            roots
+                .entry(("chat_channel".into(), name.into()))
+                .or_default()
+                .push(("channelsChanged".into(), channel[0].into()));
+            files.entry("common".into()).or_default().push(common.join("\n") + "\n");
+        } else if matches!(name, "Query" | "Mutation") && declaration.starts_with("type ") {
             let mut pending = Vec::new();
             let mut description = false;
             for line in block
@@ -383,6 +393,22 @@ pub(super) fn files(sdl: &str) -> BTreeMap<String, String> {
                     let group = owners
                         .remove(&(name.into(), field.clone()))
                         .unwrap_or_else(|| panic!("missing owner {name}.{field}"));
+                    let group = if matches!(
+                        field.as_str(),
+                        "chatChannels"
+                            | "acceptChatChannelInvite"
+                            | "addChatChannelMember"
+                            | "createChatChannel"
+                            | "declineChatChannelInvite"
+                            | "deleteChatChannel"
+                            | "leaveChatChannel"
+                            | "removeChatChannelMember"
+                            | "updateChatChannel"
+                    ) {
+                        "chat_channel".into()
+                    } else {
+                        group
+                    };
                     roots
                         .entry((group, name.into()))
                         .or_default()
@@ -392,12 +418,17 @@ pub(super) fn files(sdl: &str) -> BTreeMap<String, String> {
             }
             assert!(pending.iter().all(|line| line.trim().is_empty()));
         } else {
-            let group = types
-                .get(name)
-                .filter(|groups| groups.len() == 1)
-                .and_then(|groups| groups.first())
-                .map(String::as_str)
-                .unwrap_or("common");
+            let group = match name {
+                "ChannelChange" | "ChannelInvite" | "ChannelInviteCancellation"
+                | "ChannelMemberStatus" | "ChatChannel" | "ChatChannelActions"
+                | "ChatChannelMember" | "ChatChannelStatus" => "chat_channel",
+                _ => types
+                    .get(name)
+                    .filter(|groups| groups.len() == 1)
+                    .and_then(|groups| groups.first())
+                    .map(String::as_str)
+                    .unwrap_or("common"),
+            };
             files.entry(group.into()).or_default().push(block);
         }
     }
@@ -408,7 +439,7 @@ pub(super) fn files(sdl: &str) -> BTreeMap<String, String> {
     let mut defined = BTreeSet::new();
     for ((group, root), mut fields) in roots {
         fields.sort_by(|a, b| a.0.cmp(&b.0));
-        let prefix = if defined.insert(root.clone()) {
+        let prefix = if root != "Subscription" && defined.insert(root.clone()) {
             "type"
         } else {
             "extend type"

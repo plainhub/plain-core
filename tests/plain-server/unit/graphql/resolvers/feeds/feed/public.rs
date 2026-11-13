@@ -453,14 +453,14 @@ async fn preview_and_atomic_patch_use_main_schema_without_host_calls() {
     });
     let response = query(
         &schema,
-        &format!("query {{ feedPreview(url: {}) {{ title }} }}", json!(url)),
+        &format!("query {{ fetchFeedTitle(url: {}) }}", json!(url)),
     )
     .await;
     assert!(
         response["errors"].as_array().is_none_or(Vec::is_empty),
         "{response}"
     );
-    assert_eq!(response["data"]["feedPreview"]["title"], "Preview & title");
+    assert_eq!(response["data"]["fetchFeedTitle"], "Preview & title");
     assert!(database(&schema).feeds_list().unwrap().is_empty());
     tokio::time::timeout(std::time::Duration::from_secs(5), responder)
         .await

@@ -34,3 +34,12 @@ fn parser_rejects_other_prefixes_versions_variants_and_legacy_ids() {
         assert!(parse(value).is_none(), "{value}");
     }
 }
+
+#[test]
+fn public_client_ids_accept_uuid_versions_and_reject_labels() {
+    assert!(is_valid("706c6169-27a3-827c-b1aa-35dc51fa8c45"));
+    assert!(is_valid("00000000-0000-4000-8000-000000000001"));
+    for invalid in ["", "wasm-client", "00000000000040008000000000000001", "not-a-uuid--------------------------"] {
+        assert!(!is_valid(invalid));
+    }
+}

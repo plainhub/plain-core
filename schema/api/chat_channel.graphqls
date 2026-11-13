@@ -1,0 +1,77 @@
+type ChannelChange {
+	changed: Boolean!
+	invite: ChannelInvite
+	cancel: ChannelInviteCancellation
+}
+
+type ChannelInvite {
+	channelId: ID!
+	channelName: String!
+	ownerPeerId: ID!
+	ownerPeerName: String!
+}
+
+type ChannelInviteCancellation {
+	channelId: ID!
+	ownerPeerId: ID!
+}
+
+enum ChannelMemberStatus {
+	JOINED
+	PENDING
+}
+
+type ChatChannel {
+	actions: ChatChannelActions!
+	id: ID!
+	ownerId: ID!
+	name: String!
+	members: [ChatChannelMember!]!
+	"""
+	Monotonically increasing mutation counter; receivers ignore channel
+	updates whose version is not greater than their local copy.
+	"""
+	version: Long!
+	status: ChatChannelStatus!
+	createdAt: Instant!
+	updatedAt: Instant!
+	key: String!
+}
+
+type ChatChannelActions {
+	isOwner: Boolean!
+	canRename: Boolean!
+	canManageMembers: Boolean!
+	canLeave: Boolean!
+	canDelete: Boolean!
+}
+
+type ChatChannelMember {
+	peerId: ID!
+	status: ChannelMemberStatus!
+}
+
+enum ChatChannelStatus {
+	JOINED
+	LEFT
+	KICKED
+}
+
+extend type Mutation {
+	acceptChatChannelInvite(id: ID!): Boolean!
+	addChatChannelMember(id: ID!, peerId: ID!): ChatChannel!
+	createChatChannel(name: String!): ChatChannel!
+	declineChatChannelInvite(id: ID!): Boolean!
+	deleteChatChannel(id: ID!): Boolean!
+	leaveChatChannel(id: ID!): Boolean!
+	removeChatChannelMember(id: ID!, peerId: ID!): ChatChannel!
+	updateChatChannel(id: ID!, name: String!): ChatChannel!
+}
+
+extend type Query {
+	chatChannels: [ChatChannel!]!
+}
+
+extend type Subscription {
+	channelsChanged: ChannelChange!
+}

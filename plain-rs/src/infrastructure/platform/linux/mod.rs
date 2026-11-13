@@ -7,8 +7,6 @@ pub mod mounts;
 pub mod disks;
 
 #[cfg(all(feature = "linux-platform", unix))]
-pub mod hostname;
-#[cfg(all(feature = "linux-platform", unix))]
 pub mod install;
 
 #[cfg(feature = "linux-system")]

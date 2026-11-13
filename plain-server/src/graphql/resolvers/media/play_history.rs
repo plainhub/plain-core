@@ -1,27 +1,41 @@
 use super::{
     item::MediaItem,
     public::{library_rows, prefs},
-    types::MediaDataType,
 };
 use crate::graphql::resolvers::audio::public::audio_from_facts;
 use crate::graphql::resolvers::common::content_common::instant;
 use crate::graphql::resolvers::videos::public::video_from_facts;
 use crate::http::auth::public_gate;
-use plain_graphql::{Context, ID, Object, Result, SimpleObject};
+use plain_graphql::{Context, Enum, ID, Object, Result, SimpleObject};
 
 use plain_libs::utils::search_dsl;
-use plain_rs::features::media::play_history;
+use plain_rs::features::{enums::DataType, media::play_history};
 use plain_rs::features::prefs::settings::FileSortBy;
 use plain_rs::infrastructure::db::Db;
 use plain_rs::infrastructure::types::Instant;
 use plain_rs::infrastructure::types::Long;
 use std::{collections::HashMap, sync::Arc};
 
+#[derive(Enum, Copy, Clone, Eq, PartialEq, Debug)]
+pub enum PlaybackType {
+    Audio,
+    Video,
+}
+
+impl PlaybackType {
+    fn data_type(self) -> DataType {
+        match self {
+            Self::Audio => DataType::Audio,
+            Self::Video => DataType::Video,
+        }
+    }
+}
+
 #[derive(SimpleObject)]
 pub struct MediaPlayHistory {
     #[graphql(name = "mediaId")]
     file_id: ID,
-    media_type: MediaDataType,
+    media_type: PlaybackType,
     position_ms: Long,
     play_count: Long,
     played_at: Instant,
@@ -40,7 +54,7 @@ impl MediaPlayHistoryQuery {
         offset: i32,
         limit: i32,
     ) -> Result<Vec<MediaPlayHistory>> {
-        let allowed: Vec<_> = [MediaDataType::AUDIO, MediaDataType::VIDEO]
+        let allowed: Vec<_> = [PlaybackType::Audio, PlaybackType::Video]
             .into_iter()
             .filter(|kind| {
                 public_gate::is_local(ctx)
@@ -96,9 +110,8 @@ impl MediaPlayHistoryQuery {
                         continue;
                     }
                     let item = match kind {
-                        MediaDataType::AUDIO => MediaItem::Audio(audio_from_facts(&row)),
-                        MediaDataType::VIDEO => MediaItem::Video(video_from_facts(&row)),
-                        _ => unreachable!(),
+                        PlaybackType::Audio => MediaItem::Audio(audio_from_facts(&row)),
+                        PlaybackType::Video => MediaItem::Video(video_from_facts(&row)),
                     };
                     media.insert(crate::graphql::types::facts::text(&row, "id"), (kind, item));
                 }
@@ -137,7 +150,7 @@ impl MediaPlayHistoryMutation {
         &self,
         ctx: &Context<'_>,
         #[graphql(name = "mediaId")] file_id: ID,
-        r#type: MediaDataType,
+        r#type: PlaybackType,
         position_ms: Long,
     ) -> Result<bool> {
         public_gate::require(
@@ -150,7 +163,7 @@ impl MediaPlayHistoryMutation {
             play_history::record(&db, r#type.data_type(), file_id.as_str(), position_ms.0)
         })
         .await??;
-        if r#type == MediaDataType::AUDIO {
+        if r#type == PlaybackType::Audio {
             plain_rs::features::services::audio::reports::publish_library_updated(
                 ctx.data::<Arc<plain_rs::infrastructure::host::bridge::Host>>()?,
             );
@@ -162,7 +175,7 @@ impl MediaPlayHistoryMutation {
         &self,
         ctx: &Context<'_>,
         #[graphql(name = "mediaId")] file_id: ID,
-        r#type: MediaDataType,
+        r#type: PlaybackType,
         position_ms: Long,
     ) -> Result<bool> {
         public_gate::require(

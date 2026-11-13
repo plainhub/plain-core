@@ -7,9 +7,9 @@
 //! platform could not fill in.
 
 use plain_graphql::{Context, ID};
+use plain_libs::serde_json::Value;
 use plain_rs::infrastructure::host::bridge::Host;
 use plain_rs::infrastructure::types::Instant;
-use plain_libs::serde_json::Value;
 use std::sync::Arc;
 
 /// One host round trip returning a JSON array of facts.
@@ -23,7 +23,8 @@ pub(crate) async fn host_json(
         .call(method, params)
         .await
         .map_err(|error| plain_graphql::Error::new(error))?;
-    plain_libs::serde_json::from_value(facts).map_err(|error| plain_graphql::Error::new(error.to_string()))
+    plain_libs::serde_json::from_value(facts)
+        .map_err(|error| plain_graphql::Error::new(error.to_string()))
 }
 
 pub(crate) async fn provider_params(

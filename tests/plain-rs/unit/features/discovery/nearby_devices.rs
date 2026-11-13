@@ -179,7 +179,6 @@ fn device_types_preserve_wire_names_and_cache_values() {
 fn discovery_methods_keep_supported_wire_values_and_reject_unknown_values() {
     for (method, wire, lan) in [
         (DiscoveryMethod::Lan, "LAN", true),
-        (DiscoveryMethod::DnsSd, "DNS_SD", true),
         (DiscoveryMethod::Ble, "BLE", false),
         (DiscoveryMethod::Qr, "QR", false),
     ] {

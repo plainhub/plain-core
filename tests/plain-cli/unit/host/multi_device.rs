@@ -232,9 +232,9 @@ async fn native_password_and_approval_pairing_enables_actual_chat_and_preserves_
     first.native.close_subscriptions(remote_handle);
     let content =
         json!({"type":"TEXT","value":{"text":"accepted native pairing message"}}).to_string();
-    let sent = query(&first.native, "mutation($target:String!,$content:String!){sendChatItem(target:$target,content:$content){id status}}",
-        json!({"target":format!("peer:{second_id}"),"content":content})).await;
-    assert_eq!(sent["sendChatItem"][0]["status"], "SENT");
+    let sent = query(&first.native, "mutation($targets:[String!]!,$content:String!){sendChatItems(targets:$targets,content:$content){id status}}",
+        json!({"targets":[format!("peer:{second_id}")],"content":content})).await;
+    assert_eq!(sent["sendChatItems"][0]["status"], "SENT");
     let received = query(&second.native, "query($target:String!){chatItems(target:$target,query:\"\",offset:0,limit:10){fromId toId content}}",
         json!({"target":format!("peer:{first_id}")})).await;
     assert_eq!(

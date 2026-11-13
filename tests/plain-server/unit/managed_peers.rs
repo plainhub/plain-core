@@ -244,7 +244,8 @@ async fn native_queries_and_subscriptions_share_a_pinned_route_without_a_local_l
         .unwrap()
         .unwrap();
     assert_eq!(
-        plain_libs::serde_json::from_str::<plain_libs::serde_json::Value>(&ready).unwrap()["payload"]["extensions"]["subscriptionReady"],
+        plain_libs::serde_json::from_str::<plain_libs::serde_json::Value>(&ready).unwrap()["payload"]
+            ["extensions"]["subscriptionReady"],
         true
     );
     assert!(Arc::ptr_eq(
@@ -507,7 +508,8 @@ async fn native_request_budgets_outlive_shared_timeouts_and_cancel_without_retry
             }
         }),
     );
-    let upstream = tokio::spawn(async move { plain_libs::axum::serve(listener, router).await.unwrap() });
+    let upstream =
+        tokio::spawn(async move { plain_libs::axum::serve(listener, router).await.unwrap() });
     let route = Arc::new(PeerRoute {
         peer,
         base: http_client::Url::parse(&format!("http://{address}")).unwrap(),

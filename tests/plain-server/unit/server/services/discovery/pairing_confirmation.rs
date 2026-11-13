@@ -90,10 +90,10 @@ async fn scanner_sends_only_the_response_and_both_tls_peers_save_the_same_key() 
     );
 
     let native = remote_server.native_graphql().unwrap();
-    let parsed = native.execute(plain_graphql::Request::new("query($code:String!){parsePairingCode(code:$code){id}}")
+    let parsed = native.execute(plain_graphql::Request::new("query($code:String!){parsePairingQrCode(code:$code){id}}")
         .variables(plain_graphql::Variables::from_json(plain_libs::serde_json::json!({"code":qr.payload})))).await;
     assert!(parsed.errors.is_empty(), "{:?}", parsed.errors);
-    assert_eq!(parsed.data.into_json().unwrap()["parsePairingCode"]["id"], "display");
+    assert_eq!(parsed.data.into_json().unwrap()["parsePairingQrCode"]["id"], "display");
     for _ in 0..2 {
         let mut notices = remote.events.subscribe();
         let response = native.execute(plain_graphql::Request::new(r#"mutation{pairPeer(input:{peerId:"display",mode:CHAT})}"#)).await;

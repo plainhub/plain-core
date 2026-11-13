@@ -1,7 +1,7 @@
-use plain_libs::protocols::http_client;
 use super::*;
 use crate::features::chat::enums::DeviceType;
 use crate::infrastructure::db::chat_store::SaveMode;
+use plain_libs::protocols::http_client;
 use plain_libs::serde_json::json;
 
 #[test]
@@ -19,7 +19,11 @@ fn peer() -> DPeer {
     peer
 }
 
-async fn fixture() -> (plain_libs::temporary::TempDir, crate::test_runtime::Core, CoreRuntime) {
+async fn fixture() -> (
+    plain_libs::temporary::TempDir,
+    crate::test_runtime::Core,
+    CoreRuntime,
+) {
     let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::test_runtime::Core::open_with_cache(
         &directory.path().join("data"),

@@ -108,7 +108,7 @@ pub(super) async fn run(
             state,
             peer_id,
             &target.target.device_name,
-            base.host_str().unwrap_or_default().trim_matches(&['[', ']'][..]),
+            base.host_str().unwrap_or_default(),
             target.device_type,
             &digest,
             changed,
@@ -345,7 +345,7 @@ fn check_identity(expected_id: &str, expected_key: &str, id: &str, key: &str) ->
     Ok(())
 }
 fn verify_response(response: &Value, expected: &str) -> Result<String> {
-    let id = text(response, "clientId")?;
+    let id = text(response, "deviceId")?;
     ensure!(
         !id.is_empty() && id.len() <= 256 && (expected.is_empty() || expected == id),
         "peer_identity_changed"

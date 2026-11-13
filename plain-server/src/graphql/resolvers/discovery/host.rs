@@ -9,7 +9,7 @@ pub struct DiscoveryHostQuery;
 
 #[Object]
 impl DiscoveryHostQuery {
-    fn parse_pairing_code(&self, ctx: &Context<'_>, code: String) -> Option<NearbyDevice> {
+    fn parse_pairing_qr_code(&self, ctx: &Context<'_>, code: String) -> Option<NearbyDevice> {
         ctx.data::<ServerState>().ok()?.pairing_runtime.qr.remember(&code)
             .ok().map(NearbyDevice::from_snapshot_device)
     }

@@ -154,22 +154,6 @@ pub struct ChatMutation;
 
 #[Object]
 impl ChatMutation {
-    /// Send to `peer:<id>` or `channel:<id>`; `content` uses the `ChatItem.content` JSON envelope.
-    async fn send_chat_item(
-        &self,
-        ctx: &Context<'_>,
-        target: String,
-        content: String,
-    ) -> plain_graphql::Result<Vec<ChatItem>> {
-        let row = plain_rs::features::services::chat::chat_actions::send(
-            ctx.data::<crate::server::ServerState>()?,
-            &target,
-            &content,
-        )
-        .await?;
-        Ok(vec![item(&row)])
-    }
-
     /// Always true: an id that is already gone is the state the caller asked
     /// for, and the contract has no way to say "nothing was there".
     fn delete_chat_item(

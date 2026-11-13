@@ -41,7 +41,6 @@ enum EventType {
 type Mutation {
 	clearAppCache: Boolean!
 	formatDisk(path: String!): Boolean!
-	setHostname(name: String!): Boolean!
 	setMountAlias(id: ID!, alias: String!): Boolean!
 }
 

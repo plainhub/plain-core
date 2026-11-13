@@ -10,6 +10,10 @@ pub fn generate() -> String {
     Uuid::from_bytes(bytes).into_string()
 }
 
+pub fn is_valid(value: &str) -> bool {
+    value.len() == 36 && Uuid::parse_str(value).is_ok_and(|id| id.into_string() == value)
+}
+
 pub fn parse(value: &str) -> Option<Uuid> {
     let uuid = Uuid::parse_str(value).ok()?;
     let bytes = uuid.as_bytes();

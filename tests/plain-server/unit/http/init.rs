@@ -8,7 +8,7 @@ async fn fixed_password_without_a_secret_never_advertises_remote_setup() {
     state.prefs.set("password_type", "FIXED").unwrap();
     state.prefs.remove("password").unwrap();
     let mut headers = HeaderMap::new();
-    headers.insert("c-id", "first-browser".parse().unwrap());
+    headers.insert("c-id", "c1810f83-b876-5996-9c1b-f4b328cb5d6c".parse().unwrap());
     let response = init(
         State(state),
         ConnectInfo("127.0.0.1:1234".parse().unwrap()),
@@ -48,7 +48,7 @@ async fn init_advertises_the_running_https_port_instead_of_the_preference() {
     for (scheme, port) in [("http", http), ("https", https)] {
         let response = client
             .post(format!("{scheme}://localhost:{port}/init"))
-            .header("c-id", "browser")
+            .header("c-id", "c114813c-e148-549b-b727-514269ebd033")
             .body(Vec::new())
             .send()
             .await
@@ -70,7 +70,7 @@ async fn init_advertises_the_running_https_port_instead_of_the_preference() {
     }
     core.stop_public().await;
     let mut headers = HeaderMap::new();
-    headers.insert("c-id", "browser".parse().unwrap());
+    headers.insert("c-id", "c114813c-e148-549b-b727-514269ebd033".parse().unwrap());
     let response = init(
         State(state),
         ConnectInfo("127.0.0.1:1234".parse().unwrap()),
@@ -102,7 +102,7 @@ async fn init_requires_a_client_id_and_returns_forbidden_when_access_is_disabled
     );
     state.prefs.set("remote_access", false).unwrap();
     let mut headers = HeaderMap::new();
-    headers.insert("c-id", "web-client".parse().unwrap());
+    headers.insert("c-id", "8407a845-18e8-58be-b39d-48d613ba89db".parse().unwrap());
     assert_eq!(
         init(State(state), remote, headers, Bytes::new())
             .await
@@ -186,7 +186,7 @@ async fn unauthenticated_init_never_returns_or_rotates_passwords_and_reports_exp
                 .unwrap(),
         ] {
             let mut headers = HeaderMap::new();
-            headers.insert("c-id", "browser".parse().unwrap());
+            headers.insert("c-id", "c114813c-e148-549b-b727-514269ebd033".parse().unwrap());
             let response = init(
                 State(state.clone()),
                 ConnectInfo("127.0.0.1:1234".parse().unwrap()),
@@ -228,7 +228,7 @@ async fn unauthenticated_init_never_returns_or_rotates_passwords_and_reports_exp
             before
         );
         assert!(events.try_recv().is_err());
-        assert!(state.db.session_get("browser").unwrap().is_none());
+        assert!(state.db.session_get("c114813c-e148-549b-b727-514269ebd033").unwrap().is_none());
     }
     core.stop_core().await;
 }
@@ -262,5 +262,17 @@ async fn removed_password_setup_route_cannot_initialize_or_replace_a_password() 
             assert_eq!(state.prefs.entries(), before);
         }
     }
+    core.stop_core().await;
+}
+
+#[tokio::test]
+async fn init_rejects_non_uuid_client_ids() {
+    let directory = plain_libs::temporary::tempdir().unwrap();
+    let core = crate::server::ContentServer::open(directory.path()).unwrap();
+    let state = core.runtime_state();
+    let mut headers = HeaderMap::new();
+    headers.insert("c-id", "wasm-client".parse().unwrap());
+    let response = init(State(state), ConnectInfo("127.0.0.1:1234".parse().unwrap()), headers, Bytes::new()).await;
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     core.stop_core().await;
 }

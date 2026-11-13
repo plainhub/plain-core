@@ -1,7 +1,7 @@
 use super::*;
 #[test]
 fn authenticated_completion_requires_expected_identity_and_pair_permission() {
-    let mut response = json!({"clientId":"peer","status":"COMPLETED","chatPaired":true});
+    let mut response = json!({"deviceId":"peer","status":"COMPLETED","chatPaired":true});
     assert_eq!(verify_response(&response, "peer").unwrap(), "peer");
     assert!(verify_response(&response, "other").is_err());
     response["chatPaired"] = json!(false);

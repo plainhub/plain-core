@@ -6,7 +6,6 @@ pub(super) fn handles(method: &str) -> bool {
     matches!(
         method,
         "systemRelaunchApp"
-            | plain_rs::infrastructure::host::commands::SYSTEM_HOSTNAME_SET
             | plain_rs::infrastructure::host::commands::SYSTEM_DISK_FORMAT
     )
 }
@@ -21,17 +20,6 @@ pub(super) async fn dispatch(
             tokio::task::spawn_blocking(
                 plain_rs::infrastructure::platform::linux::install::service::restart,
             )
-            .await
-            .map_err(|error| error.to_string())?
-            .map_err(|error| error.to_string())?;
-            Ok(Value::Bool(true))
-        }
-        plain_rs::infrastructure::host::commands::SYSTEM_HOSTNAME_SET => {
-            let request: plain_rs::infrastructure::host::commands::HostnameRequest =
-                plain_libs::serde_json::from_value(params).map_err(|error| error.to_string())?;
-            tokio::task::spawn_blocking(move || {
-                plain_rs::infrastructure::platform::linux::hostname::set(&request.name)
-            })
             .await
             .map_err(|error| error.to_string())?
             .map_err(|error| error.to_string())?;

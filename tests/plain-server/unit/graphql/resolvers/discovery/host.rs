@@ -95,20 +95,20 @@ async fn pairing_code_query_returns_a_lan_ready_model_without_starting_discovery
     ).unwrap();
     let encoded = plain_libs::serde_json::to_string(&display.payload).unwrap();
     let response = native.execute(plain_graphql::Request::new(format!(
-        "{{ parsePairingCode(code: {encoded}) {{ id name port deviceType discoveryMethods }} }}"
+        "{{ parsePairingQrCode(code: {encoded}) {{ id name port deviceType discoveryMethods }} }}"
     ))).await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     assert_eq!(
-        response.data.into_json().unwrap()["parsePairingCode"],
+        response.data.into_json().unwrap()["parsePairingQrCode"],
         plain_libs::serde_json::json!({"id":"fixture","name":"Device","port":8443,"deviceType":"COMPUTER","discoveryMethods":["LAN","QR"]})
     );
     let response = native
         .execute(plain_graphql::Request::new(
-            "{ parsePairingCode(code: \"ordinary text\") { id } }",
+            "{ parsePairingQrCode(code: \"ordinary text\") { id } }",
         ))
         .await;
     assert!(response.errors.is_empty());
-    assert!(response.data.into_json().unwrap()["parsePairingCode"].is_null());
+    assert!(response.data.into_json().unwrap()["parsePairingQrCode"].is_null());
     assert!(!core.runtime_state().host.connected());
     core.shutdown().await;
 }

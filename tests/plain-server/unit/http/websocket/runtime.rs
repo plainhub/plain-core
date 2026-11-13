@@ -3,11 +3,14 @@ use plain_libs::protocols::http_client;
 use plain_rs::infrastructure::protocols::websocket as wire;
 #[test]
 fn websocket_query_has_no_client_selected_login_mode() {
-    let params: Params = plain_libs::serde_json::from_value(json!({"cid": "browser"})).unwrap();
-    assert_eq!(params.cid, "browser");
+    let params: Params = plain_libs::serde_json::from_value(
+        json!({"cid": "f785d26d-e295-4abf-9179-573c235a60d7"}),
+    )
+    .unwrap();
+    assert_eq!(params.cid, "f785d26d-e295-4abf-9179-573c235a60d7");
     for auth in ["1", "2"] {
         assert!(
-            plain_libs::serde_json::from_value::<Params>(json!({"cid": "browser", "auth": auth}))
+            plain_libs::serde_json::from_value::<Params>(json!({"cid": "f785d26d-e295-4abf-9179-573c235a60d7", "auth": auth}))
                 .is_err()
         );
     }
@@ -66,7 +69,7 @@ fn touch_frames_keep_endianness_order_cancel_and_the_reserved_stream_id() {
     }
 }
 #[test]
-fn rejecting_confirmation_retains_the_legacy_retry_close_code() {
+fn rejecting_confirmation_closes_with_policy_violation() {
     let runtime = Runtime::default();
     let (outgoing, _) = mpsc::channel(1);
     let (closing, receiver) = tokio::sync::watch::channel(None);
@@ -83,7 +86,7 @@ fn rejecting_confirmation_retains_the_legacy_retry_close_code() {
         },
     );
     runtime.reject("request");
-    assert_eq!(*receiver.borrow(), Some((1013, "rejected")));
+    assert_eq!(*receiver.borrow(), Some((1008, "rejected")));
 }
 
 #[cfg(feature = "http_transport")]
@@ -136,7 +139,10 @@ async fn auth_confirmation_uses_host_callbacks_and_returns_the_hosts_decision_to
     });
     let (cert_pem, cert_key) = plain_libs::tls::generate_pem(&["localhost".into()]).unwrap();
     let (port, _) = server.start_public(0, 0, cert_pem, cert_key).await.unwrap();
-    for (cid, allowed) in [("rejected-browser", false), ("accepted-browser", true)] {
+    for (cid, allowed) in [
+        ("9b152c58-e090-4a43-9513-08c362b6c163", false),
+        ("dbca4dbb-6f37-4bdd-bd01-07cc84040fd7", true),
+    ] {
         let (mut socket, _) = plain_libs::tokio_tungstenite::connect_async(format!(
             "ws://127.0.0.1:{port}/auth?cid={cid}"
         ))
@@ -210,7 +216,7 @@ async fn auth_confirmation_uses_host_callbacks_and_returns_the_hosts_decision_to
             let ClientMessage::Close(Some(frame)) = response else {
                 panic!("expected rejected close frame")
             };
-            assert_eq!(u16::from(frame.code), 1013);
+            assert_eq!(u16::from(frame.code), 1008);
             assert_eq!(frame.reason, "rejected");
             assert!(
                 server
@@ -267,7 +273,7 @@ async fn malformed_login_frames_exhaust_the_ip_limit_before_decryption_despite_r
     state.prefs.set("password_type", "FIXED").unwrap();
     state.prefs.set("login_require_approval", false).unwrap();
     for attempt in 0..7 {
-        let cid = format!("login-limit-{attempt}");
+        let cid = format!("14343bd4-7091-43ed-b1e5-{attempt:012x}");
         let (mut socket, _) = plain_libs::tokio_tungstenite::connect_async(format!(
             "ws://127.0.0.1:{}/auth?cid={cid}",
             core.port
@@ -323,7 +329,7 @@ async fn malformed_login_frames_exhaust_the_ip_limit_before_decryption_despite_r
                 assert!(state.db.session_get(&cid).unwrap().is_some());
             } else {
                 assert!(
-                    matches!(response, ClientMessage::Close(Some(frame)) if frame.reason == "invalid_password")
+                    matches!(response, ClientMessage::Close(Some(frame)) if frame.reason == "invalid_login_request")
                 );
                 assert!(state.db.session_get(&cid).unwrap().is_none());
             }
@@ -970,7 +976,7 @@ async fn password_keys(
         )
         .unwrap();
     PasswordKeys {
-        key: plain_libs::auth::api_key(&finish.session_key[..], &context),
+        key: plain_libs::auth::api_key(finish.session_key.as_slice(), &context),
         context,
         ke3: finish.message.serialize().to_vec(),
     }

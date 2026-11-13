@@ -157,7 +157,7 @@ async fn bluetooth_pause_does_not_preserve_stale_lan_devices() {
             platform: "test".into(),
             last_seen_at: "1970-01-01T00:00:00.000Z".into(),
             remote_access: None,
-        signature_public_key: String::new(),
+            signature_public_key: String::new(),
             discovery_methods: methods,
         };
         chat_store::nearby::save(&state.db, &device.cache()).unwrap();

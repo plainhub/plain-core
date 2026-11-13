@@ -22,15 +22,6 @@ pub async fn deliver(state: &CoreRuntime, row: DChat) -> Result<DChat> {
         .chat
         .ok_or_else(|| plain_libs::anyhow::anyhow!("Message removed"))
 }
-pub async fn send(state: &CoreRuntime, target: &str, content: &str) -> Result<DChat> {
-    let (to, channel) = message_target::parse(target)?;
-    let (content, _imports) = prepare_content(state, content)?;
-    let row = crate::features::chat::messages::message_lifecycle::create(
-        &state.db, &to, &channel, &content,
-    )?;
-    committed(state, &row, events::WS_MESSAGE_CREATED);
-    deliver(state, row).await
-}
 pub async fn send_many(
     state: &CoreRuntime,
     targets: Vec<String>,

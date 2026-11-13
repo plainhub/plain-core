@@ -1,3 +1,4 @@
+use crate::http::auth::ws_login::LoginError;
 use crate::server::ServerState;
 use futures_util::{SinkExt, StreamExt};
 use plain_libs::axum::{
@@ -21,6 +22,7 @@ use tokio::sync::mpsc;
 const MAX_UNAUTHENTICATED_CONNECTIONS: usize = 128;
 const MAX_UNAUTHENTICATED_CONNECTIONS_PER_IP: usize = 5;
 const INITIAL_MESSAGE_TIMEOUT: Duration = Duration::from_secs(10);
+const LOGIN_HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(60);
 
 pub(crate) struct Runtime {
     pub(crate) native_sockets: Arc<crate::native::sockets::Sessions>,
@@ -151,9 +153,9 @@ impl Runtime {
         Ok(())
     }
     pub(crate) fn reject(&self, request_id: &str) {
-        self.fail_login(request_id, "rejected");
+        self.fail_login(request_id, 1008, "rejected");
     }
-    pub(crate) fn fail_login(&self, request_id: &str, reason: &'static str) {
+    pub(crate) fn fail_login(&self, request_id: &str, code: u16, reason: &'static str) {
         if let Some(c) = self
             .connections
             .lock()
@@ -161,7 +163,7 @@ impl Runtime {
             .values()
             .find(|c| c.pending.as_deref() == Some(request_id))
         {
-            let _ = c.closing.send(Some((1013, reason)));
+            let _ = c.closing.send(Some((code, reason)));
         }
     }
 }
@@ -236,9 +238,9 @@ async fn run(
 ) {
     let mut permit = Some(permit);
     let mut cancel_reason = "cancelled";
-    if !enabled(&state) || params.cid.is_empty() {
-        let reason = if params.cid.is_empty() {
-            "`cid` is missing"
+    if !enabled(&state) || !plain_rs::features::client_identity::is_valid(&params.cid) {
+        let reason = if !plain_rs::features::client_identity::is_valid(&params.cid) {
+            "invalid_login_request"
         } else {
             "remote_access_disabled"
         };
@@ -278,7 +280,7 @@ async fn run(
     let mut receiver = channel.subscribe(&state);
     let mut pending: Option<String> = None;
     enum LoginHandshake {
-        AwaitingCommitment,
+        AwaitingHello,
         Opaque {
             login: plain_libs::auth::server::Login,
             context: Vec<u8>,
@@ -288,7 +290,7 @@ async fn run(
         Ready(confirmation_channel::Channel),
         Submitted,
     }
-    let mut handshake = LoginHandshake::AwaitingCommitment;
+    let mut handshake = LoginHandshake::AwaitingHello;
     let initial_deadline = tokio::time::sleep(INITIAL_MESSAGE_TIMEOUT);
     tokio::pin!(initial_deadline);
     let deadline = tokio::time::sleep(Duration::from_secs(300));
@@ -315,7 +317,7 @@ async fn run(
                         }
                         let accepted = (|| -> plain_libs::anyhow::Result<_> {
                             match std::mem::replace(&mut handshake, LoginHandshake::Submitted) {
-                                LoginHandshake::AwaitingCommitment => {
+                                LoginHandshake::AwaitingHello => {
                                     let password_type = plain_rs::features::prefs::security::password_type(&state.prefs)?;
                                     plain_libs::anyhow::ensure!(password_type == PasswordType::None, "invalid_login_request");
                                     plain_libs::anyhow::ensure!(enabled(&state), "remote_access_disabled");
@@ -333,6 +335,7 @@ async fn run(
                                         &signing,
                                         now,
                                     )?;
+                                    initial_deadline.as_mut().reset(tokio::time::Instant::now() + LOGIN_HANDSHAKE_TIMEOUT);
                                     handshake = LoginHandshake::Ready(pending);
                                     Ok(Some(response))
                                 }
@@ -343,8 +346,8 @@ async fn run(
                             Ok(Some(response)) => { if socket.send(Message::Text(plain_libs::serde_json::to_string(&response).unwrap().into())).await.is_err() { break; } }
                             Ok(None) => {}
                             Err(error) => {
-                                let reason = if error.to_string() == "too_many_login_attempts" { "too_many_login_attempts" } else { "invalid_login_request" };
-                                let _ = socket.send(login_failure(&state, &params.cid, 1008, reason)).await;
+                                let failure = LoginError::from_error(&error);
+                                let _ = socket.send(login_failure(&state, &params.cid, failure.close_code(), failure.reason())).await;
                                 break;
                             }
                         }
@@ -361,7 +364,7 @@ async fn run(
                         use crate::http::auth::ws_login::{LoginChannel, OpaqueChannel};
                         use plain_rs::features::prefs::security;
                         match previous {
-                            LoginHandshake::AwaitingCommitment => {
+                            LoginHandshake::AwaitingHello => {
                                 plain_libs::anyhow::ensure!(security::password_type(&state.prefs)? == PasswordType::Fixed, "invalid_login_request");
                                 let credential = security::password_credential(&state.prefs)?.ok_or_else(|| plain_libs::anyhow::anyhow!("password_setup_required"))?;
                                 let signing = security::signing_keypair(&state.prefs)?;
@@ -370,6 +373,7 @@ async fn run(
                                 let setup = plain_libs::utils::base64::base64_decode_checked(&credential.setup)?;
                                 let record = plain_libs::utils::base64::base64_decode_checked(&credential.record)?;
                                 let (login, response) = plain_libs::auth::server::start(&setup, &record, &frame, &context, &identity).map_err(|_| plain_libs::anyhow::anyhow!("invalid_password"))?;
+                                initial_deadline.as_mut().reset(tokio::time::Instant::now() + LOGIN_HANDSHAKE_TIMEOUT);
                                 handshake = LoginHandshake::Opaque { login, context, credential, created: std::time::Instant::now() };
                                 Ok(Err(response))
                             }
@@ -379,19 +383,19 @@ async fn run(
                                 plain_libs::anyhow::ensure!(frame.len() > length, "invalid_password");
                                 let session = login.finish(&frame[..length]).map_err(|_| plain_libs::anyhow::anyhow!("invalid_password"))?;
                                 let key = plain_libs::auth::api_key(&session, &context);
-                                Ok(Ok((LoginChannel::Opaque(OpaqueChannel { key, context, credential, created }), frame[length..].to_vec(), true)))
+                                Ok(Ok((LoginChannel::Opaque(OpaqueChannel { key, context, credential, created }), frame[length..].to_vec())))
                             }
-                            LoginHandshake::Ready(channel) => Ok(Ok((LoginChannel::Confirmation(channel), frame.to_vec(), false))),
+                            LoginHandshake::Ready(channel) => Ok(Ok((LoginChannel::Confirmation(channel), frame.to_vec()))),
                             _ => plain_libs::anyhow::bail!("invalid_login_request"),
                         }
                     })();
-                    let (channel, frame, password_login) = match resolved {
+                    let (channel, frame) = match resolved {
                         Ok(Err(response)) => {
                             if socket.send(Message::Binary(response.into())).await.is_err() { break; }
                             continue;
                         }
                         Ok(Ok(ready)) => ready,
-                        Err(_) => { let _ = socket.send(login_failure(&state, &params.cid, 1008, "invalid_password")).await; break; }
+                        Err(error) => { let failure = LoginError::from_error(&error); let _ = socket.send(login_failure(&state, &params.cid, failure.close_code(), failure.reason())).await; break; }
                     };
                     let request = crate::http::auth::ws_login::Request::Issue {
                         client_id: params.cid.clone(),
@@ -415,8 +419,8 @@ async fn run(
                             continue;
                         },
                         Err(error) => {
-                            let reason = match error.to_string().as_str() { "too_many_login_attempts" => "too_many_login_attempts", "remote_access_disabled" => "remote_access_disabled", "login_expired" => "login_expired", _ if password_login => "invalid_password", _ => "invalid_login_request" };
-                            let _ = socket.send(close(1013,reason)).await;
+                            let failure = LoginError::from_error(&error);
+                            let _ = socket.send(close(failure.close_code(), failure.reason())).await;
                             break;
                         }
                     }

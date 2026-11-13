@@ -18,7 +18,6 @@ use crate::graphql::resolvers::media::public::row;
 #[derive(SimpleObject, Clone, Debug)]
 #[graphql(complex)]
 pub struct Doc {
-    pub duration_ms: Long,
     #[graphql(getter = true)]
     pub id: plain_graphql::ID,
     #[graphql(getter = true)]
@@ -89,7 +88,6 @@ impl DocsQuery {
         Ok(rows(&items, |item| {
             let row = row(item);
             Doc {
-                duration_ms: Long(crate::graphql::types::facts::integer(item, "durationMs")),
                 id: row.id.into(),
                 title: row.title,
                 // Derived from the path, exactly as plain-app's lazy

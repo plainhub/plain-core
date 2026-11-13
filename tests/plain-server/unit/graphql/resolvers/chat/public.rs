@@ -243,8 +243,8 @@ async fn sending_persists_and_emits_without_native_business_callbacks() {
     let (_dir, server) = chat_fixture();
     let state = server.runtime_state();
     let mut events = state.events.subscribe();
-    let sent = channel_query(&state, r#"mutation { sendChatItem(target: "peer:local", content: "{\"type\":\"TEXT\",\"value\":{\"text\":\"hello\"}}") { id fromId toId channelId status } }"#).await;
-    let rows = sent["data"]["sendChatItem"].as_array().unwrap();
+    let sent = channel_query(&state, r#"mutation { sendChatItems(targets:["peer:local"], content: "{\"type\":\"TEXT\",\"value\":{\"text\":\"hello\"}}") { id fromId toId channelId status } }"#).await;
+    let rows = sent["data"]["sendChatItems"].as_array().unwrap();
     assert_eq!(rows.len(), 1, "{sent}");
     assert!(rows[0]["channelId"].is_null(), "{sent}");
     assert!(

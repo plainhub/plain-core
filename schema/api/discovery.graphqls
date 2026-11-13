@@ -1,6 +1,5 @@
 enum DiscoveryMethod {
 	LAN
-	DNS_SD
 	BLE
 	QR
 }
@@ -76,5 +75,5 @@ extend type Query {
 	isDiscovering: Boolean!
 	mdnsState: MdnsState!
 	nearbyDevices: [NearbyDevice!]!
-	parsePairingCode(code: String!): NearbyDevice
+	parsePairingQrCode(code: String!): NearbyDevice
 }

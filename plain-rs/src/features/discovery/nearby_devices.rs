@@ -11,14 +11,13 @@ use std::{
 #[cfg_attr(feature = "graphql", derive(plain_graphql::Enum))]
 pub enum DiscoveryMethod {
     Lan,
-    DnsSd,
     Ble,
     Qr,
 }
 
 impl DiscoveryMethod {
     pub fn is_lan(self) -> bool {
-        matches!(self, Self::Lan | Self::DnsSd)
+        matches!(self, Self::Lan)
     }
 }
 

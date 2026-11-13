@@ -20,7 +20,7 @@ pub(crate) async fn init(
         .get("c-id")
         .and_then(|value| value.to_str().ok())
         .unwrap_or_default();
-    if client_id.is_empty() {
+    if !plain_rs::features::client_identity::is_valid(client_id) {
         return StatusCode::BAD_REQUEST.into_response();
     }
     if !state.prefs.get_or("remote_access", true) {

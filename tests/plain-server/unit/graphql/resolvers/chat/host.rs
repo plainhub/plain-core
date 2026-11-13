@@ -28,12 +28,12 @@ async fn local_messages_edit_forward_and_clear_through_native_executor() {
     let mut events = state.events.subscribe();
     let result = execute(
         &server,
-        r#"mutation { sendChatItem(target:"peer:local", content:"{\"type\":\"TEXT\",\"value\":{\"text\":\"original\"}}") {id status content} }"#
+        r#"mutation { sendChatItems(targets:["peer:local"], content:"{\"type\":\"TEXT\",\"value\":{\"text\":\"original\"}}") {id status content} }"#
             .into(),
     )
     .await;
-    let id = result["sendChatItem"][0]["id"].as_str().unwrap();
-    assert_eq!(result["sendChatItem"][0]["status"], "SENT");
+    let id = result["sendChatItems"][0]["id"].as_str().unwrap();
+    assert_eq!(result["sendChatItems"][0]["status"], "SENT");
     assert_eq!(
         events.recv().await.unwrap().event_type,
         plain_rs::features::chat::events::WS_MESSAGE_CREATED
@@ -112,12 +112,12 @@ async fn prepared_files_retain_metadata_and_message_owners_after_import_cleanup(
     let first = execute(
         &server,
         format!(
-            r#"mutation {{ sendChatItem(target:"peer:local", content:{}) {{id content status}} }}"#,
+            r#"mutation {{ sendChatItems(targets:["peer:local"], content:{}) {{id content status}} }}"#,
             json!(content)
         ),
     )
     .await;
-    let id = first["sendChatItem"][0]["id"].as_str().unwrap();
+    let id = first["sendChatItems"][0]["id"].as_str().unwrap();
     execute(
         &server,
         format!(
@@ -131,7 +131,7 @@ async fn prepared_files_retain_metadata_and_message_owners_after_import_cleanup(
         format!(r#"mutation {{ forwardChatItems(id:{}, targets:["peer:local","peer:local"]) {{id content}} }}"#, json!(id)),
     ).await;
     for row in forwarded["forwardChatItems"].as_array().unwrap() {
-        assert_eq!(row["content"], first["sendChatItem"][0]["content"]);
+        assert_eq!(row["content"], first["sendChatItems"][0]["content"]);
     }
     store.release(file.id.clone()).await.unwrap();
     assert_eq!(
@@ -139,7 +139,7 @@ async fn prepared_files_retain_metadata_and_message_owners_after_import_cleanup(
         4
     );
     let saved: Value =
-        plain_libs::serde_json::from_str(first["sendChatItem"][0]["content"].as_str().unwrap()).unwrap();
+        plain_libs::serde_json::from_str(first["sendChatItems"][0]["content"].as_str().unwrap()).unwrap();
     assert_eq!(saved["value"]["items"][0]["width"], 12);
     assert_eq!(saved["value"]["items"][0]["durationMs"], 56);
     execute(
@@ -158,19 +158,19 @@ async fn long_text_files_and_invalid_targets_use_the_same_message_lifecycle() {
     let result = execute(
         &server,
         format!(
-            r#"mutation {{sendChatItem(target:"peer:local", content:{}) {{content}}}}"#,
+            r#"mutation {{sendChatItems(targets:["peer:local"], content:{}) {{content}}}}"#,
             json!(json!({"type":"TEXT","value":{"text":text}}).to_string())
         ),
     )
     .await;
     let content: Value =
-        plain_libs::serde_json::from_str(result["sendChatItem"][0]["content"].as_str().unwrap()).unwrap();
+        plain_libs::serde_json::from_str(result["sendChatItems"][0]["content"].as_str().unwrap()).unwrap();
     assert_eq!(content["type"], "FILES");
     assert_eq!(content["value"]["items"][0]["size"], text.len());
     let rejected = server
         .graphql_executor()
         .execute(Request::new(
-            r#"mutation { sendChatItem(target:"channel:", content:"{\"type\":\"TEXT\",\"value\":{\"text\":\"bad\"}}") {id} }"#,
+            r#"mutation { sendChatItems(targets:["channel:"], content:"{\"type\":\"TEXT\",\"value\":{\"text\":\"bad\"}}") {id} }"#,
         ))
         .await;
     assert!(!rejected.errors.is_empty());
@@ -267,10 +267,10 @@ async fn batch_forward_uses_current_content_and_owns_each_creation_event() {
     let state = server.runtime_state();
     let source = execute(
         &server,
-        r#"mutation { sendChatItem(target:"peer:local", content:"{\"type\":\"TEXT\",\"value\":{\"text\":\"old\"}}") {id} }"#.into(),
+        r#"mutation { sendChatItems(targets:["peer:local"], content:"{\"type\":\"TEXT\",\"value\":{\"text\":\"old\"}}") {id} }"#.into(),
     )
     .await;
-    let id = source["sendChatItem"][0]["id"].as_str().unwrap();
+    let id = source["sendChatItems"][0]["id"].as_str().unwrap();
     execute(
         &server,
         format!(

@@ -110,35 +110,6 @@ impl PlatformMutation {
         Ok(true)
     }
 
-    async fn set_hostname(&self, ctx: &Context<'_>, name: String) -> Result<bool> {
-        let name = plain_libs::utils::hostname::platform_hostname(&name);
-        if name.is_empty() {
-            return Err("device_name_invalid".into());
-        }
-        let state = ctx.data::<ServerState>()?;
-        let value = state
-            .host
-            .call(
-                plain_rs::infrastructure::host::commands::SYSTEM_HOSTNAME_SET,
-                plain_libs::serde_json::to_value(plain_rs::infrastructure::host::commands::HostnameRequest {
-                    name: name.clone(),
-                })?,
-            )
-            .await
-            .map_err(plain_graphql::Error::new)?;
-        if value != plain_libs::serde_json::Value::Bool(true) {
-            return Err("Hostname update failed".into());
-        }
-        state.db.audit_event_add(
-            "set_hostname",
-            &name,
-            ctx.data_opt::<String>()
-                .map(String::as_str)
-                .filter(|client_id| !client_id.is_empty()),
-        )?;
-        Ok(true)
-    }
-
     fn set_mount_alias(
         &self,
         ctx: &Context<'_>,
