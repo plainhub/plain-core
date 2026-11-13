@@ -197,7 +197,6 @@ type Peer {
 
 type PeerAddress {
 	bestIp: String!
-	name: String!
 	baseUrl: String!
 	apiUrl: String!
 	statusWsUrl: String!

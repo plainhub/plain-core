@@ -23,14 +23,15 @@ async fn main_peer_records_and_file_urls_use_current_addresses_without_host()
     .unwrap();
     let (_generation, mut requests) = state.host.connect();
     let native = server.native_graphql().unwrap();
-    let response = native.execute(r#"{fixture:peers{ip address{bestIp name baseUrl apiUrl statusWsUrl}} peers{ip address{bestIp name baseUrl apiUrl statusWsUrl}}}"#.into()).await;
+    let response = native.execute(r#"{fixture:peers{name ip address{bestIp baseUrl apiUrl statusWsUrl}} peers{name ip address{bestIp baseUrl apiUrl statusWsUrl}}}"#.into()).await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     let rows = response.data.into_json().unwrap();
     let row = &rows["fixture"][0];
+    assert_eq!(row["name"], " ");
     assert_eq!(row["ip"], "bad, 127.0.0.1");
     assert_eq!(
         row["address"],
-        json!({"bestIp":"127.0.0.1","name":"127.0.0.1","baseUrl":"https://127.0.0.1","apiUrl":"https://127.0.0.1/peer_graphql","statusWsUrl":"wss://127.0.0.1/status"})
+        json!({"bestIp":"127.0.0.1","baseUrl":"https://127.0.0.1","apiUrl":"https://127.0.0.1/peer_graphql","statusWsUrl":"wss://127.0.0.1/status"})
     );
     assert_eq!(rows["peers"][0], *row);
     let file_id = "id +/?#&中文%";

@@ -5,7 +5,6 @@ use serde::{Serialize, Serializer};
 #[serde(rename_all = "camelCase")]
 pub struct Address {
     pub best_ip: String,
-    pub name: String,
     pub base_url: String,
     pub api_url: String,
     pub status_ws_url: String,
@@ -34,11 +33,6 @@ pub fn address_with_interfaces(
         .map(|port| plain_libs::utils::http_url::build_url("https", &ip, port, ""))
         .unwrap_or_default();
     Address {
-        name: if peer.name.trim().is_empty() {
-            ip.clone()
-        } else {
-            peer.name.clone()
-        },
         api_url: if base_url.is_empty() {
             String::new()
         } else {

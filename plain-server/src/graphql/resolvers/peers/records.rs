@@ -5,7 +5,6 @@ use serde::Deserialize;
 #[serde(rename_all = "camelCase")]
 pub struct PeerAddress {
     best_ip: String,
-    name: String,
     base_url: String,
     api_url: String,
     status_ws_url: String,
@@ -14,7 +13,6 @@ impl From<plain_rs::features::services::peers::peer_address::Address> for PeerAd
     fn from(value: plain_rs::features::services::peers::peer_address::Address) -> Self {
         Self {
             best_ip: value.best_ip,
-            name: value.name,
             base_url: value.base_url,
             api_url: value.api_url,
             status_ws_url: value.status_ws_url,

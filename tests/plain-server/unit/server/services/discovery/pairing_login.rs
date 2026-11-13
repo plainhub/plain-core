@@ -142,7 +142,6 @@ async fn register_target(state: &ServerState, remote: &ServerState) -> String {
                     plain_rs::features::discovery::nearby_devices::DiscoveryMethod::Lan,
                 ],
             },
-            true,
         )
         .unwrap();
     id
