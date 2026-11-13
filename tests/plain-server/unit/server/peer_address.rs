@@ -3,7 +3,7 @@ use plain_rs::features::services::peers::peer_address::*;
 use plain_rs::infrastructure::db::DPeer;
 use plain_libs::serde_json::json;
 #[tokio::test]
-async fn main_peer_records_and_file_urls_use_current_addresses_and_reject_stale_identity_without_host()
+async fn main_peer_records_and_file_urls_use_current_addresses_without_host()
  {
     let dir = plain_libs::temporary::tempdir().unwrap();
     let server = crate::server::ContentServer::open(dir.path()).unwrap();
@@ -36,12 +36,12 @@ async fn main_peer_records_and_file_urls_use_current_addresses_and_reject_stale_
     let file_id = "id +/?#&中文%";
     async fn file(
         server: &crate::server::ContentServer,
-        expected: &DPeer,
         id: &str,
     ) -> plain_graphql::Response {
-        server.native_graphql().unwrap().execute(plain_graphql::Request::new(r#"query($expected:PeerRecordInput!,$file:String!){peerFileUrl(id:"fixture",expected:$expected,fileId:$file)}"#).variables(plain_graphql::Variables::from_json(json!({"expected":{"id":expected.id,"name":expected.name,"ip":expected.ip,"key":expected.key,"publicKey":expected.public_key,"status":expected.status,"port":expected.port,"deviceType":expected.device_type,"token":expected.token,"createdAt":expected.created_at,"updatedAt":expected.updated_at},"file":id})))).await
+        server.native_graphql().unwrap().execute(plain_graphql::Request::new(r#"query($file:String!){peerFileUrl(peerId:"fixture",fileId:$file)}"#)
+            .variables(plain_graphql::Variables::from_json(json!({"file":id})))).await
     }
-    let response = file(&server, &peer, file_id).await;
+    let response = file(&server, file_id).await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     let data = response.data.into_json().unwrap();
     let parsed = http_client::Url::parse(data["peerFileUrl"].as_str().unwrap()).unwrap();
@@ -54,7 +54,6 @@ async fn main_peer_records_and_file_urls_use_current_addresses_and_reject_stale_
             ("action".into(), "download".into())
         ]
     );
-    let old = peer.clone();
     peer.ip = "::1".into();
     peer.port = Some(2443);
     plain_rs::infrastructure::db::chat_store::peers::save(
@@ -63,16 +62,16 @@ async fn main_peer_records_and_file_urls_use_current_addresses_and_reject_stale_
         plain_rs::infrastructure::db::chat_store::SaveMode::Update,
     )
     .unwrap();
-    assert_eq!(
-        file(&server, &old, file_id).await.errors[0].message,
-        "Peer changed"
-    );
+    let response = file(&server, file_id).await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    let url = response.data.into_json().unwrap()["peerFileUrl"].as_str().unwrap().to_owned();
+    assert!(url.starts_with("https://[::1]:2443/fs?"), "{url}");
     let current = address(&peer);
     assert_eq!(current.api_url, "https://[::1]:2443/peer_graphql");
     assert_eq!(current.status_ws_url, "wss://[::1]:2443/status");
     plain_rs::infrastructure::db::chat_store::peers::delete(&state.db, &[peer.id.clone()]).unwrap();
     assert_eq!(
-        file(&server, &peer, file_id).await.errors[0].message,
+        file(&server, file_id).await.errors[0].message,
         "Peer removed"
     );
     assert!(requests.try_recv().is_err());
