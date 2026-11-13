@@ -17,9 +17,11 @@ function sharedDbSource() {
     })
 }
 
-export function generateDatabaseSql() {
-  const src = sharedDbSource().map((path) => readFileSync(path, 'utf8')).join('\n')
-  const stmts = [...src.matchAll(/(CREATE (?:VIRTUAL TABLE|TABLE|UNIQUE INDEX|INDEX) IF NOT EXISTS [\s\S]*?;|CREATE TRIGGER IF NOT EXISTS [\s\S]*?\nEND;)/g)].map((m) =>
+export function schemaStatements(src) {
+  const literals = [...src.matchAll(/r(#+)?"([\s\S]*?)"\1|"((?:\\[\s\S]|[^"\\])*)"/g)]
+    .map((match) => match[2] ?? match[3].replace(/\\(["\\])/g, '$1'))
+    .join('\n')
+  return [...literals.matchAll(/(CREATE (?:VIRTUAL TABLE|TABLE|UNIQUE INDEX|INDEX) IF NOT EXISTS [\s\S]*?;|CREATE TRIGGER IF NOT EXISTS [\s\S]*?\nEND;)/g)].map((m) =>
     m[1]
       .split('\n')
       .map((l) => l.trimEnd())
@@ -28,6 +30,10 @@ export function generateDatabaseSql() {
       .join('\n')
       .trim(),
   )
+}
+
+export function generateDatabaseSql() {
+  const stmts = sharedDbSource().flatMap((path) => schemaStatements(readFileSync(path, 'utf8')))
   const schemaSource = readFileSync(join(ROOT, 'plain-rs/src/infrastructure/db/schema/mod.rs'), 'utf8')
   const version = schemaSource.match(/const VERSION: i32 = (\d+);/)[1]
   const header = [
