@@ -51,6 +51,17 @@ impl DataType {
         }
     }
 
+    /// Convert an existing numeric storage kind to its domain type.
+    pub fn from_kind(kind: i32) -> Option<Self> {
+        [
+            Self::Default, Self::Audio, Self::Video, Self::Image, Self::Sms, Self::Contact,
+            Self::Note, Self::FeedEntry, Self::Call, Self::Package, Self::File, Self::AppFile,
+            Self::Doc,
+        ]
+        .into_iter()
+        .find(|value| value.kind() == kind)
+    }
+
     /// Media index type filter — "audio" / "video" / "image" / "doc";
     /// `None` for domains the media index does not cover.
     pub fn media_type_str(self) -> Option<&'static str> {

@@ -18,6 +18,20 @@ fn data_type_kind_matches_plain_app_ordinals() {
 }
 
 #[test]
+fn data_type_storage_kinds_decode_without_changing_existing_values() {
+    for (kind, expected) in [
+        (0, DataType::Default), (1, DataType::Audio), (2, DataType::Video),
+        (3, DataType::Image), (4, DataType::Sms), (5, DataType::Contact),
+        (6, DataType::Note), (7, DataType::FeedEntry), (8, DataType::Call),
+        (21, DataType::Package), (22, DataType::File), (23, DataType::AppFile),
+        (24, DataType::Doc),
+    ] {
+        assert_eq!(DataType::from_kind(kind), Some(expected));
+    }
+    assert_eq!(DataType::from_kind(9), None);
+}
+
+#[test]
 fn data_type_media_type_str_covers_media_domains_only() {
     assert_eq!(DataType::Audio.media_type_str(), Some("audio"));
     assert_eq!(DataType::Video.media_type_str(), Some("video"));

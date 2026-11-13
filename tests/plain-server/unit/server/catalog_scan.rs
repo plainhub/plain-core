@@ -618,7 +618,7 @@ async fn nomedia_reclassification_preserves_file_identity_and_user_state() {
     let event = events.try_recv().unwrap();
     assert_eq!(
         event.event_type,
-        plain_rs::infrastructure::events::MEDIA_LIBRARY_UPDATED
+        plain_rs::infrastructure::events::MEDIA_UPDATED
     );
     assert!(
         plain_rs::features::services::files::catalog_events::includes(

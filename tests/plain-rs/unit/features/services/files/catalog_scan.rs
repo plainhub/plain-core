@@ -690,14 +690,14 @@ async fn native_catalog_records_and_removal_publish_one_typed_change_per_batch()
     let event = events.try_recv().unwrap();
     assert_eq!(
         event.event_type,
-        crate::infrastructure::events::MEDIA_LIBRARY_UPDATED
+        crate::infrastructure::events::MEDIA_UPDATED
     );
-    assert_eq!(event.payload, r#"{"types":[1]}"#);
+    assert_eq!(event.payload, r#"{"types":["AUDIO"]}"#);
     assert!(events.try_recv().is_err());
     assert_eq!(catalog.forget_path(path.to_str().unwrap()).unwrap(), 1);
     assert_eq!(
         events.try_recv().unwrap().event_type,
-        crate::infrastructure::events::MEDIA_LIBRARY_UPDATED
+        crate::infrastructure::events::MEDIA_UPDATED
     );
     assert!(events.try_recv().is_err());
     assert_eq!(catalog.forget_path(path.to_str().unwrap()).unwrap(), 0);
@@ -1455,7 +1455,7 @@ async fn directory_scan_batches_records_and_reconciles_unseen_rows() {
     assert!(excluded.exists() && hidden.exists() && outside.exists());
     let mut catalog_updates = 0;
     while let Ok(event) = events.try_recv() {
-        if event.event_type == crate::infrastructure::events::MEDIA_LIBRARY_UPDATED {
+        if event.event_type == crate::infrastructure::events::MEDIA_UPDATED {
             catalog_updates += 1;
         }
     }

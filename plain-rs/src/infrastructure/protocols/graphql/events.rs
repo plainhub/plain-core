@@ -145,8 +145,8 @@ pub const EVENTS: &[EventSpec] = &[
         capability: None,
     },
     EventSpec {
-        field: "mediaLibraryUpdated",
-        event: "MEDIA_LIBRARY_UPDATED",
+        field: "mediaUpdated",
+        event: "MEDIA_UPDATED",
         aliases: &[],
         invalidation: false,
         selection: "{ types }",

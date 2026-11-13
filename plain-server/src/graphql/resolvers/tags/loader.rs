@@ -90,12 +90,7 @@ impl TagsLoader {
                             id: relation.target_key,
                         })
                         .or_default()
-                        .push(Tag {
-                            id: tag.id.clone().into(),
-                            name: tag.name.clone(),
-                            r#type: tag.kind,
-                            count: tag.count,
-                        });
+                        .push(Tag::from_row(tag)?);
                 }
             }
         }

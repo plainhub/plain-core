@@ -98,23 +98,25 @@ fn content_kinds_keep_plain_apps_ordinals() {
 async fn a_created_tag_reads_back_with_its_kind_implied_not_stored() {
     let (_dir, schema) = fixture();
     let response = schema
-        .execute(r#"mutation { createTag(type:IMAGE, name:"holiday") { id name count } }"#)
+        .execute(r#"mutation { createTag(type:IMAGE, name:"holiday") { id name type count } }"#)
         .await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     let created = response.data.into_json().unwrap();
     let id = created["createTag"]["id"].as_str().unwrap().to_string();
     assert_eq!(created["createTag"]["name"], "holiday");
     assert_eq!(created["createTag"]["count"], 0);
+    assert_eq!(created["createTag"]["type"], "IMAGE");
 
     let response = schema
         .execute(&format!(
-            r#"query {{ tags(type:IMAGE) {{ id name count }} audio: tags(type:AUDIO) {{ id }} }}"#
+            r#"query {{ tags(type:IMAGE) {{ id name type count }} audio: tags(type:AUDIO) {{ id }} }}"#
         ))
         .await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     let data = response.data.into_json().unwrap();
     assert_eq!(data["tags"].as_array().unwrap().len(), 1);
     assert_eq!(data["tags"][0]["id"], id.as_str());
+    assert_eq!(data["tags"][0]["type"], "IMAGE");
     // The kind filter is real: an audio list does not see an image tag.
     assert_eq!(data["audio"], json!([]));
 }

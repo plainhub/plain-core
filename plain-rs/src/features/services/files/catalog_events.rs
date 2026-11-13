@@ -1,4 +1,5 @@
-use crate::infrastructure::events::MEDIA_LIBRARY_UPDATED;
+use crate::features::enums::DataType;
+use crate::infrastructure::events::MEDIA_UPDATED;
 use crate::infrastructure::events::WsEvent;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
@@ -7,11 +8,11 @@ use tokio::sync::broadcast;
 #[derive(Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 struct Change {
-    types: Vec<i32>,
+    types: Vec<DataType>,
 }
 
-pub fn includes(payload: &str, kind: crate::features::enums::DataType) -> bool {
-    plain_libs::serde_json::from_str::<Change>(payload).is_ok_and(|change| change.types.contains(&kind.kind()))
+pub fn includes(payload: &str, kind: DataType) -> bool {
+    plain_libs::serde_json::from_str::<Change>(payload).is_ok_and(|change| change.types.contains(&kind))
 }
 
 pub fn publish(events: &broadcast::Sender<WsEvent>, types: impl IntoIterator<Item = i32>) {
@@ -19,10 +20,11 @@ pub fn publish(events: &broadcast::Sender<WsEvent>, types: impl IntoIterator<Ite
         .into_iter()
         .collect::<BTreeSet<_>>()
         .into_iter()
+        .filter_map(DataType::from_kind)
         .collect::<Vec<_>>();
     if !types.is_empty() {
         let _ = events.send(WsEvent::broadcast(
-            MEDIA_LIBRARY_UPDATED,
+            MEDIA_UPDATED,
             plain_libs::serde_json::to_string(&Change { types }).unwrap(),
         ));
     }

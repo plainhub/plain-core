@@ -103,8 +103,8 @@ A scalar that can represent any JSON value.
 """
 scalar JSON
 
-type LibraryChange {
-	types: [Int!]!
+type MediaChange {
+	types: [DataType!]!
 }
 
 scalar Long
@@ -223,7 +223,7 @@ type Subscription {
 	messagesCreated: [ChatItem!]!
 	messagesUpdated: [ChatItem!]!
 	messagesDeleted: String!
-	mediaLibraryUpdated: LibraryChange!
+	mediaUpdated: MediaChange!
 	mediaScanProgress: ScanProgress!
 	bookmarksUpdated: [Bookmark!]!
 	feedsFetched: FeedSyncChange!
@@ -238,7 +238,7 @@ type Subscription {
 type Tag {
 	id: ID!
 	name: String!
-	type: Int!
+	type: DataType!
 	count: Int!
 }
 

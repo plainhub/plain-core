@@ -48,7 +48,7 @@ async fn scanning_with_300_http_requests_and_page_changes_preserves_the_encrypte
         graphql::open_ack(&key, &client, "/graphql", &init, &ack).unwrap();
         let mut cipher = graphql::Stream::new("/graphql", &client, &init, &ack, Role::Client).unwrap();
         socket.send(ClientMessage::Binary(cipher.encode(&[], &key).unwrap().into())).await.unwrap();
-        for (id, query) in [("scan", "subscription { mediaScanProgress { indexed state } }"), ("media", "subscription { mediaLibraryUpdated { types } }")] {
+        for (id, query) in [("scan", "subscription { mediaScanProgress { indexed state } }"), ("media", "subscription { mediaUpdated { types } }")] {
             let frame = cipher.encode(json!({"type":"subscribe","id":id,"payload":{"query":query}}).to_string().as_bytes(), &key).unwrap();
             socket.send(ClientMessage::Binary(frame.into())).await.unwrap();
         }
@@ -69,7 +69,7 @@ async fn scanning_with_300_http_requests_and_page_changes_preserves_the_encrypte
             let message: Value = plain_libs::serde_json::from_slice(&cipher.decode(&frame, &key).unwrap()).unwrap();
             assert_eq!(message["type"], "next", "{message}");
             first_scan |= message["payload"]["data"]["mediaScanProgress"].is_object();
-            first_media |= message["payload"]["data"]["mediaLibraryUpdated"].is_object();
+            first_media |= message["payload"]["data"]["mediaUpdated"]["types"] == json!(["AUDIO", "IMAGE"]);
         }
         fs_burst_and_page_cancellation(&server, &mut socket, &mut cipher, &key, &client).await;
         for index in 1..1000 {

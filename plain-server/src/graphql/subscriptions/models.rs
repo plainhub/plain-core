@@ -1,5 +1,6 @@
 use plain_graphql::{ID, SimpleObject};
 
+use plain_rs::features::enums::DataType;
 use plain_rs::infrastructure::types::{Instant, Long};
 use serde::Deserialize;
 
@@ -8,8 +9,8 @@ pub struct MirrorState {
     pub running: bool,
 }
 #[derive(SimpleObject, Deserialize)]
-pub struct LibraryChange {
-    pub types: Vec<i32>,
+pub struct MediaChange {
+    pub types: Vec<DataType>,
 }
 #[derive(SimpleObject, Deserialize)]
 #[serde(rename_all = "camelCase")]

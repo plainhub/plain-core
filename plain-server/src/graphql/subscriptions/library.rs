@@ -1,5 +1,5 @@
 use super::events;
-use super::models::{FeedSyncChange, LibraryChange, UploadMergeResult};
+use super::models::{FeedSyncChange, MediaChange, UploadMergeResult};
 use crate::graphql::resolvers::bookmarks::bookmark_types::Bookmark;
 use crate::graphql::resolvers::media::types::ScanProgress;
 use futures_util::stream::BoxStream;
@@ -9,11 +9,11 @@ use plain_graphql::{Context, Result, Subscription};
 pub struct LibrarySubscriptions;
 #[Subscription]
 impl LibrarySubscriptions {
-    async fn media_library_updated(
+    async fn media_updated(
         &self,
         ctx: &Context<'_>,
-    ) -> Result<BoxStream<'static, Result<LibraryChange>>> {
-        events::stream(ctx, "MEDIA_LIBRARY_UPDATED").await
+    ) -> Result<BoxStream<'static, Result<MediaChange>>> {
+        events::stream(ctx, plain_rs::infrastructure::events::MEDIA_UPDATED).await
     }
     async fn media_scan_progress(
         &self,

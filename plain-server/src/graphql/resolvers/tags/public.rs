@@ -6,7 +6,6 @@ pub use plain_rs::features::enums::DataType;
 use plain_rs::features::services::capabilities;
 use plain_rs::features::tags;
 use plain_rs::infrastructure::db::Db;
-use plain_rs::infrastructure::db::TagRow;
 use plain_rs::infrastructure::host::bridge::Host;
 use plain_libs::serde_json::json;
 use std::sync::Arc;
@@ -18,11 +17,11 @@ pub struct TagsQuery;
 impl TagsQuery {
     fn tags(&self, ctx: &Context<'_>, r#type: DataType) -> plain_graphql::Result<Vec<Tag>> {
         let db = db(ctx);
-        Ok(tags::tags_by_type(db, r#type.kind())
+        tags::tags_by_type(db, r#type.kind())
             .map_err(failed)?
             .iter()
-            .map(tag)
-            .collect())
+            .map(Tag::from_row)
+            .collect()
     }
 
     fn tag_relations(
@@ -64,7 +63,7 @@ impl TagsMutation {
         name: String,
     ) -> plain_graphql::Result<Tag> {
         let row = tags::create_tag(db(ctx), r#type.kind(), &name).map_err(failed)?;
-        Ok(tag(&row))
+        Tag::from_row(&row)
     }
 
     fn update_tag(
@@ -74,9 +73,8 @@ impl TagsMutation {
         name: String,
     ) -> plain_graphql::Result<Tag> {
         let row = tags::update_tag(db(ctx), id.as_str(), &name).map_err(failed)?;
-        row.as_ref()
-            .map(tag)
-            .ok_or_else(|| plain_graphql::Error::new(format!("Tag {} not found", id.as_str())))
+        let row = row.ok_or_else(|| plain_graphql::Error::new(format!("Tag {} not found", id.as_str())))?;
+        Tag::from_row(&row)
     }
 
     fn delete_tag(&self, ctx: &Context<'_>, id: plain_graphql::ID) -> plain_graphql::Result<bool> {
@@ -245,15 +243,6 @@ fn data_type_name(kind: DataType) -> &'static str {
         DataType::File => "FILE",
         DataType::AppFile => "APP_FILE",
         DataType::Doc => "DOC",
-    }
-}
-
-fn tag(row: &TagRow) -> Tag {
-    Tag {
-        id: plain_graphql::ID::from(row.id.clone()),
-        name: row.name.clone(),
-        r#type: row.kind,
-        count: row.count,
     }
 }
 

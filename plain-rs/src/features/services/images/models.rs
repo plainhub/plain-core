@@ -557,7 +557,7 @@ impl Runtime {
                     _ = stop.changed() => break,
                     event = catalog_events.recv() => match event {
                         Ok(event) if event.event_type == "IMAGE_INDEX_UPDATED" => runtime.publish(),
-                        Ok(event) if event.event_type == crate::infrastructure::events::MEDIA_LIBRARY_UPDATED && crate::features::services::files::catalog_events::includes(&event.payload, crate::features::enums::DataType::Image) => runtime.catalog_changed(),
+                        Ok(event) if event.event_type == crate::infrastructure::events::MEDIA_UPDATED && crate::features::services::files::catalog_events::includes(&event.payload, crate::features::enums::DataType::Image) => runtime.catalog_changed(),
                         Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => { runtime.catalog_changed(); runtime.publish(); },
                         Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
                         _ => continue,

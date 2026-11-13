@@ -36,12 +36,12 @@ async fn deleting_an_indexed_image_publishes_its_library_type_and_preserves_its_
     );
     let mut changes = Vec::new();
     while let Ok(event) = events.try_recv() {
-        if event.event_type == crate::infrastructure::events::MEDIA_LIBRARY_UPDATED {
+        if event.event_type == crate::infrastructure::events::MEDIA_UPDATED {
             changes.push(plain_libs::serde_json::from_str::<plain_libs::serde_json::Value>(&event.payload).unwrap());
         }
     }
     assert!(
-        changes.contains(&plain_libs::serde_json::json!({"types":[3]})),
+        changes.contains(&plain_libs::serde_json::json!({"types":["IMAGE"]})),
         "{changes:?}"
     );
     assert!(!selected.exists());

@@ -31,7 +31,7 @@ async fn native_events_enforce_direction_and_reconcile_lag() {
         "IMAGE_INDEX_ERROR_REPORTED",
         "NETWORK_CHANGED",
         "AUDIO_LIBRARY_UPDATED",
-        plain_rs::infrastructure::events::MEDIA_LIBRARY_UPDATED,
+        plain_rs::infrastructure::events::MEDIA_UPDATED,
         "HTTP_SERVER_STATE_CHANGED",
         "MEDIA_ACTION_FINISHED",
         "MEDIA_CATALOG_CHANGED",
