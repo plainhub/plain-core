@@ -169,8 +169,6 @@ extend type Mutation {
 	requestAccess(feature: AccessFeature!): Boolean!
 	revokeSession(clientId: String!): Boolean!
 	setTempValue(key: String!, value: String!): KeyValuePair!
-	startDiscovery: Boolean!
-	stopDiscovery: Boolean!
 	"""
 	Renaming the device also re-publishes the mDNS advertisement, so a
 	client that waits for the new name to appear does see it.
@@ -194,11 +192,5 @@ extend type Query {
 	appLogs(query: String!, offset: Int!, limit: Int!): [String!]!
 	deviceInfo: DeviceInfo!
 	deviceStatus: DeviceStatus!
-	"""
-	Whether the mDNS advertiser is currently scanning. Starting and
-	stopping are commands, not state, so they report success rather
-	than a snapshot the caller would have to re-read.
-	"""
-	isDiscovering: Boolean!
 	sessions: [Session!]!
 }

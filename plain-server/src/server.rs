@@ -82,11 +82,7 @@ impl ContentServer {
         scope: &plain_rs::infrastructure::host::request_scope::NativeRequestScope,
     ) -> Result<(), String> {
         scope.close();
-        self.state
-            .mdns
-            .release_native_scope(scope)
-            .await
-            .map_err(|error| error.to_string())
+        Ok(())
     }
 
     pub fn native_management(&self) -> Result<crate::native::management::NativeManagement, String> {

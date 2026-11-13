@@ -141,7 +141,7 @@ async fn first_chat_pairing_requires_a_scanned_request() {
     let (_dir, schema) = fixture();
     let paired = query(
         &schema,
-        r#"mutation { pairDevice(input: { peerId: "peer-9", mode: CHAT }) }"#,
+        r#"mutation { pairPeer(input: { peerId: "peer-9", mode: CHAT }) }"#,
     )
     .await;
     assert!(
@@ -174,8 +174,8 @@ async fn cancelling_and_unpairing_both_acknowledge() {
             r#"mutation { cancelPairing(peerId: "peer-9") }"#,
             "cancelPairing",
         ),
-        (r#"mutation { unpairPeer(id: "peer-1") }"#, "unpairPeer"),
-        (r#"mutation { deletePeer(id: "peer-1") }"#, "deletePeer"),
+        (r#"mutation { unpairPeer(peerId: "peer-1") }"#, "unpairPeer"),
+        (r#"mutation { deletePeer(peerId: "peer-1") }"#, "deletePeer"),
     ] {
         let result = query(&schema, document).await;
         assert!(
@@ -206,7 +206,7 @@ async fn unsupported_transport_does_not_call_native_pairing() {
     let mut events = schema.state.events.subscribe();
     let paired = query(
         &schema,
-        r#"mutation { pairDevice(input: { peerId: "no-route", mode: CHAT }) }"#,
+        r#"mutation { pairPeer(input: { peerId: "no-route", mode: CHAT }) }"#,
     )
     .await;
     assert!(
@@ -230,7 +230,7 @@ async fn pairing_rejects_caller_supplied_discovery_metadata() {
     let (_dir, schema) = fixture();
     let result = query(
         &schema,
-        r#"mutation { pairDevice(input: { peerId: "peer-invalid", mode: CHAT, lastSeen: "invalid-time" }) }"#,
+        r#"mutation { pairPeer(input: { peerId: "peer-invalid", mode: CHAT, lastSeen: "invalid-time" }) }"#,
     )
     .await;
     assert!(

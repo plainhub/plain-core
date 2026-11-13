@@ -1,4 +1,4 @@
-input PairingDeviceInput {
+input PairPeerInput {
 	peerId: ID!
 	mode: PairingMode!
 	password: String
@@ -11,13 +11,13 @@ enum PairingMode {
 
 extend type Mutation {
 	cancelPairing(peerId: ID!): Boolean!
-	deletePeer(id: ID!): Boolean!
-	pairDevice(input: PairingDeviceInput!): Boolean!
+	deletePeer(peerId: ID!): Boolean!
+	pairPeer(input: PairPeerInput!): Boolean!
 	respondToPairing(peerId: ID!, accepted: Boolean!): Boolean!
-	unpairPeer(id: ID!): Boolean!
+	unpairPeer(peerId: ID!): Boolean!
 }
 
 extend type Query {
-	peerFileUrl(id: ID!, fileId: String!): String!
+	peerFileUrl(peerId: ID!, fileId: String!): String!
 	peers: [Peer!]!
 }

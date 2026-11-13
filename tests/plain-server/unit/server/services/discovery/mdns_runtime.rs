@@ -147,14 +147,14 @@ async fn authenticated_runtime_preserves_radio_modes_and_releases_global_owner()
     execute(&state, Request::Stop {}).await;
     assert_eq!(
         state.mdns.snapshot()["scanning"],
-        true,
-        "Debug leases must keep scanning independently of manual stop"
+        false,
+        "Explicit stop must stop scanning even with debug sessions"
     );
     crate::native::management::NativeManagement::new(state.clone())
         .release_mdns_debug_session(debug_a.to_string())
         .await
         .unwrap();
-    assert_eq!(state.mdns.snapshot()["scanning"], true);
+    assert_eq!(state.mdns.snapshot()["scanning"], false);
     crate::native::management::NativeManagement::new(state.clone())
         .release_mdns_debug_session(debug_b.to_string())
         .await
@@ -177,71 +177,28 @@ async fn authenticated_runtime_preserves_radio_modes_and_releases_global_owner()
         true,
         "Debug page disposal must preserve manual discovery"
     );
-    let first = plain_libs::utils::uuid::Uuid::new_v4();
-    let second = plain_libs::utils::uuid::Uuid::new_v4();
-    execute(
-        &state,
-        Request::Acquire {
-            token: first,
-            owner: "remote:first".into(),
-        },
-    )
-    .await;
-    execute(
-        &state,
-        Request::Acquire {
-            token: second,
-            owner: "remote:second".into(),
-        },
-    )
-    .await;
-    execute(&state, Request::Stop {}).await;
+    tokio::time::pause();
+    execute(&state, Request::Start {}).await;
+    tokio::time::advance(std::time::Duration::from_secs(299)).await;
+    tokio::task::yield_now().await;
     assert_eq!(state.mdns.snapshot()["scanning"], true);
-    let subscription = state
-        .subscription_sessions
-        .open(
-            state.clone(),
-            crate::graphql::executor::RequestContext::authenticated_remote(
-                state.clone(),
-                "first".into(),
-            ),
-            "first".into(),
-            Some(vec![1; 32]),
-            plain_rs::infrastructure::host::request_scope::NativeRequestScope::default(),
-        )
-        .unwrap();
-    subscription.mark_online().unwrap();
-    state
-        .mdns
-        .release_discovery_client(&state, "first")
-        .await
-        .unwrap();
-    assert_eq!(state.mdns.snapshot()["scanning"], true);
-    crate::native::management::NativeManagement::new(state.clone())
-        .acquire_mdns_debug_session(debug_a.to_string())
-        .await
-        .unwrap();
-    execute(
-        &state,
-        Request::Release {
-            token: second,
-            owner: "remote:second".into(),
-        },
-    )
-    .await;
-    assert_eq!(state.mdns.snapshot()["scanning"], true);
-    crate::native::management::NativeManagement::new(state.clone())
-        .release_mdns_debug_session(debug_a.to_string())
-        .await
-        .unwrap();
-    assert_eq!(state.mdns.snapshot()["scanning"], true);
-    state.subscription_sessions.close(subscription.id);
-    state
-        .mdns
-        .release_discovery_client(&state, "first")
-        .await
-        .unwrap();
+    tokio::time::advance(std::time::Duration::from_millis(1001)).await;
+    tokio::task::yield_now().await;
     assert_eq!(state.mdns.snapshot()["scanning"], false);
+    assert_eq!(state.mdns.snapshot()["running"], true);
+    execute(&state, Request::Start {}).await;
+    tokio::time::advance(std::time::Duration::from_secs(200)).await;
+    execute(&state, Request::Start {}).await;
+    tokio::time::advance(std::time::Duration::from_secs(100)).await;
+    tokio::task::yield_now().await;
+    assert_eq!(state.mdns.snapshot()["scanning"], true);
+    tokio::time::advance(std::time::Duration::from_millis(200001)).await;
+    tokio::task::yield_now().await;
+    assert_eq!(state.mdns.snapshot()["scanning"], false);
+    execute(&state, Request::Start {}).await;
+    execute(&state, Request::Stop {}).await;
+    assert_eq!(state.mdns.snapshot()["scanning"], false);
+    tokio::time::resume();
     state.host.disconnect(generation);
     responder.abort();
     acquired.store(false, Ordering::SeqCst);

@@ -83,7 +83,6 @@ struct Session {
     published: bool,
     manual_scanning: bool,
     debug_sessions: std::collections::HashSet<plain_libs::utils::uuid::Uuid>,
-    discovery_sessions: crate::features::discovery::sessions::DiscoverySessions,
     owner: Option<OwnerLease>,
 }
 impl Drop for Session {
@@ -139,6 +138,7 @@ pub struct Runtime {
     operation: tokio::sync::Mutex<()>,
     revision: AtomicU64,
     network_restart: Mutex<Option<tokio::task::JoinHandle<()>>>,
+    scan_timeout: Mutex<Option<tokio::task::JoinHandle<()>>>,
     #[cfg(any(test, feature = "test-seams"))]
     pub full_snapshot_count: AtomicU64,
 }
@@ -150,6 +150,7 @@ impl Default for Runtime {
             operation: tokio::sync::Mutex::new(()),
             revision: AtomicU64::new(0),
             network_restart: Mutex::new(None),
+            scan_timeout: Mutex::new(None),
             #[cfg(any(test, feature = "test-seams"))]
             full_snapshot_count: AtomicU64::new(0),
         }
@@ -158,8 +159,6 @@ impl Default for Runtime {
 #[derive(Deserialize)]
 #[serde(tag = "action", rename_all = "camelCase", deny_unknown_fields)]
 pub enum Request {
-    Acquire { token: plain_libs::utils::uuid::Uuid, owner: String },
-    Release { token: plain_libs::utils::uuid::Uuid, owner: String },
     Receiver {},
     Start {},
     Stop {},
@@ -423,7 +422,6 @@ impl Runtime {
             published: false,
             manual_scanning: false,
             debug_sessions: std::collections::HashSet::new(),
-            discovery_sessions: Default::default(),
             owner: Some(owner),
         });
         host_responder::ensure_started(&hostname.read().unwrap());
@@ -437,7 +435,6 @@ impl Runtime {
         if matches!(
             request,
             Request::Stop {}
-                | Request::Release { .. }
                 | Request::Unpublish {}
                 | Request::Restart {}
                 | Request::Update {}
@@ -459,7 +456,6 @@ impl Runtime {
         if !matches!(
             request,
             Request::Stop {}
-                | Request::Release { .. }
                 | Request::Unpublish {}
                 | Request::DebugStop { .. }
         ) {
@@ -483,22 +479,6 @@ impl Runtime {
             let mut guard = self.session.lock().unwrap();
             let session = guard.as_mut().unwrap();
             match request {
-                Request::Acquire { token, owner } => {
-                    let mut sessions = session.discovery_sessions.clone();
-                    sessions.acquire(&owner, token)?;
-                    started = session.set_scanning(true)?;
-                    session.discovery_sessions = sessions;
-                }
-                Request::Release { token, owner } => {
-                    let mut sessions = session.discovery_sessions.clone();
-                    sessions.release(&owner, token)?;
-                    session.set_scanning(
-                        session.manual_scanning
-                            || !session.debug_sessions.is_empty()
-                            || sessions.active(),
-                    )?;
-                    session.discovery_sessions = sessions;
-                }
                 Request::Receiver {} => {}
                 Request::DebugStart { token } => {
                     let token = plain_libs::utils::uuid::Uuid::parse_str(&token)?;
@@ -513,14 +493,11 @@ impl Runtime {
                 }
                 Request::DebugStop { token } => {
                     let token = plain_libs::utils::uuid::Uuid::parse_str(&token)?;
-                    session.set_scanning(
-                        session.manual_scanning
-                            || session.discovery_sessions.active()
-                            || session
-                                .debug_sessions
-                                .iter()
-                                .any(|existing| existing != &token),
-                    )?;
+                    if !session.manual_scanning
+                        && !session.debug_sessions.iter().any(|existing| existing != &token)
+                    {
+                        session.set_scanning(false)?;
+                    }
                     session.debug_sessions.remove(&token);
                     crate::infrastructure::protocols::mdns::packet_capture::set_enabled(
                         !session.debug_sessions.is_empty(),
@@ -529,11 +506,11 @@ impl Runtime {
                 Request::Start {} => {
                     started = session.set_scanning(true)?;
                     session.manual_scanning = true;
+                    self.schedule_scan_timeout();
                 }
                 Request::Stop {} => {
-                    session.set_scanning(
-                        !session.debug_sessions.is_empty() || session.discovery_sessions.active(),
-                    )?;
+                    session.set_scanning(false)?;
+                    self.cancel_scan_timeout();
                     session.manual_scanning = false;
                 }
                 Request::Restart {} => {
@@ -566,41 +543,30 @@ impl Runtime {
         snapshot["started"] = json!(started);
         Ok(snapshot)
     }
-    fn release_discovery_owner_locked(&self, owner: &str) -> Result<()> {
-        let mut guard = self.session.lock().unwrap();
-        let Some(session) = guard.as_mut() else {
-            return Ok(());
-        };
-        let mut sessions = session.discovery_sessions.clone();
-        if !sessions.release_owner(owner) {
-            return Ok(());
-        }
-        session.set_scanning(
-            session.manual_scanning || !session.debug_sessions.is_empty() || sessions.active(),
-        )?;
-        session.discovery_sessions = sessions;
-        self.emit(&session.context, None, false);
-        Ok(())
+    fn schedule_scan_timeout(self: &Arc<Self>) {
+        self.cancel_scan_timeout();
+        let runtime = Arc::downgrade(self);
+        let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(300);
+        *self.scan_timeout.lock().unwrap() = Some(tokio::spawn(async move {
+            tokio::time::sleep_until(deadline).await;
+            let Some(runtime) = runtime.upgrade() else { return };
+            let _operation = runtime.operation.lock().await;
+            let mut guard = runtime.session.lock().unwrap();
+            let Some(session) = guard.as_mut() else { return };
+            match session.set_scanning(false) {
+                Ok(_) => {
+                    session.manual_scanning = false;
+                    runtime.emit(&session.context, None, false);
+                }
+                Err(error) => log::warn!("Discovery timeout: {error}"),
+            }
+        }));
     }
 
-    pub async fn release_native_scope(
-        &self,
-        scope: &crate::infrastructure::host::request_scope::NativeRequestScope,
-    ) -> Result<()> {
-        let _operation = self.operation.lock().await;
-        self.release_discovery_owner_locked(&format!("native:{}", scope.id()))
-    }
-
-    pub async fn release_discovery_client(
-        &self,
-        state: &CoreRuntime,
-        client_id: &str,
-    ) -> Result<()> {
-        let _operation = self.operation.lock().await;
-        if state.clients.contains(client_id) {
-            return Ok(());
+    fn cancel_scan_timeout(&self) {
+        if let Some(task) = self.scan_timeout.lock().unwrap().take() {
+            task.abort();
         }
-        self.release_discovery_owner_locked(&remote_discovery_owner(client_id))
     }
 
     pub async fn host_connected(state: CoreRuntime, generation: u64) {
@@ -689,6 +655,7 @@ impl Runtime {
     pub async fn close(&self, host: &crate::infrastructure::host::bridge::Host) {
         self.cancel_network_restart();
         let _operation = self.operation.lock().await;
+        self.cancel_scan_timeout();
         let mut session = self.session.lock().unwrap().take();
         let owner = session.as_mut().and_then(|session| session.owner.take());
         drop(session);
@@ -714,10 +681,6 @@ fn browser_services(
     #[cfg(target_os = "macos")]
     services.extend(session.system_browser.snapshot());
     services
-}
-
-pub fn remote_discovery_owner(client_id: &str) -> String {
-    format!("remote:{client_id}")
 }
 
 #[cfg(test)]

@@ -1,6 +1,5 @@
 use crate::graphql::resolvers::app::types::Capability;
 use crate::graphql::types::KeyValuePair;
-use crate::graphql::types::facts::flag;
 use plain_graphql::{ComplexObject, Context, Object, SimpleObject};
 
 use plain_rs::features::access::AccessFeature;
@@ -266,14 +265,6 @@ impl DeviceQuery {
             .to_string_lossy()
             .into_owned())
     }
-
-    /// Whether the mDNS advertiser is currently scanning. Starting and
-    /// stopping are commands, not state, so they report success rather
-    /// than a snapshot the caller would have to re-read.
-    fn is_discovering(&self, ctx: &Context<'_>) -> plain_graphql::Result<bool> {
-        let facts = ctx.data::<crate::server::ServerState>()?.mdns.snapshot();
-        Ok(flag(&facts, "scanning"))
-    }
 }
 
 #[derive(Default)]
@@ -365,24 +356,6 @@ impl DeviceMutation {
                 device_name: Some(name),
                 ..Default::default()
             },
-        )
-        .await?;
-        Ok(true)
-    }
-
-    async fn start_discovery(&self, ctx: &Context<'_>) -> plain_graphql::Result<bool> {
-        plain_rs::features::services::discovery::mdns_runtime::control(
-            ctx.data::<crate::server::ServerState>()?,
-            plain_rs::features::services::discovery::mdns_runtime::Request::Start {},
-        )
-        .await?;
-        Ok(true)
-    }
-
-    async fn stop_discovery(&self, ctx: &Context<'_>) -> plain_graphql::Result<bool> {
-        plain_rs::features::services::discovery::mdns_runtime::control(
-            ctx.data::<crate::server::ServerState>()?,
-            plain_rs::features::services::discovery::mdns_runtime::Request::Stop {},
         )
         .await?;
         Ok(true)

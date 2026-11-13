@@ -68,11 +68,12 @@ type NearbyDevice {
 }
 
 extend type Mutation {
-	acquireDiscovery(token: ID!): Boolean!
-	releaseDiscovery(token: ID!): Boolean!
+	startDiscovery: Boolean!
+	stopDiscovery: Boolean!
 }
 
 extend type Query {
+	isDiscovering: Boolean!
 	mdnsState: MdnsState!
 	nearbyDevices: [NearbyDevice!]!
 	parsePairingCode(code: String!): NearbyDevice

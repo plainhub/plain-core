@@ -164,13 +164,6 @@ async fn run(mut socket: WebSocket, state: ServerState, client: String) {
                 Ok::<_, String>(())
             }.await;
             state.subscription_sessions.close(session.id);
-            if let Err(error) = state
-                .mdns
-                .release_discovery_client(&state, session.client_id())
-                .await
-            {
-                log::warn!("Discovery client cleanup: {error}");
-            }
             result
         }
         Err(error) => Err(error),

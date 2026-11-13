@@ -563,13 +563,13 @@ async fn remote_rejection_and_native_scope_closure_do_not_save_credentials() {
         .unwrap()
         .execute_scoped(
             plain_graphql::Request::new(format!(
-                "mutation {{ pairDevice(input: {{ peerId: \"{peer_id}\", mode: MANAGE }}) }}"
+                "mutation {{ pairPeer(input: {{ peerId: \"{peer_id}\", mode: MANAGE }}) }}"
             )),
             scope.clone(),
         )
         .await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
-    assert_eq!(response.data.into_json().unwrap()["pairDevice"], true);
+    assert_eq!(response.data.into_json().unwrap()["pairPeer"], true);
     notice(&mut notices, "PAIRING_REQUESTED").await;
     scope.close();
     notice(&mut notices, "PAIRING_CANCELED").await;
@@ -703,7 +703,7 @@ async fn web_management_pairs_by_device_id_and_keeps_the_grant_on_a() {
         let id = browser.client_id.clone();
         async move {
             let body = json!({
-                "query":"mutation($input: PairingDeviceInput!) { pairDevice(input: $input) }",
+                "query":"mutation($input: PairPeerInput!) { pairPeer(input: $input) }",
                 "variables":{"input":input},
             });
             let response = management_http::exchange(
@@ -722,7 +722,7 @@ async fn web_management_pairs_by_device_id_and_keeps_the_grant_on_a() {
     let denied = query(json!({"peerId":a_id,"mode":"MANAGE"})).await;
     assert_eq!(denied["errors"][0]["message"], "no_permission");
     let started = query(json!({"peerId":b_id,"mode":"MANAGE"})).await;
-    assert_eq!(started["data"]["pairDevice"], true, "{started}");
+    assert_eq!(started["data"]["pairPeer"], true, "{started}");
     notice(&mut notices, "PAIRING_REQUESTED").await;
     let body = json!({"query":"mutation($peerId:ID!){respondToPairing(peerId:$peerId,accepted:true)}", "variables":{"peerId":b_id}});
     let trusted = management_http::exchange(

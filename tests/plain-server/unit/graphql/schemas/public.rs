@@ -184,7 +184,7 @@ fn public_schema_exposes_the_contract_it_has_to_serve() {
     assert!(!playback.contains("currentPath"));
     assert!(sdl.contains("lastSeen: Instant!"));
     let pairing_input = sdl
-        .split("input PairingDeviceInput {")
+        .split("input PairPeerInput {")
         .nth(1)
         .unwrap()
         .split('}')
@@ -357,11 +357,11 @@ fn public_schema_exposes_the_contract_it_has_to_serve() {
         "declineChatChannelInvite(id: ID!): Boolean!",
         "peers: [Peer!]!",
         "sims: [Sim!]!",
-        "pairDevice(input: PairingDeviceInput!): Boolean!",
+        "pairPeer(input: PairPeerInput!): Boolean!",
         "cancelPairing(peerId: ID!): Boolean!",
         "respondToPairing(peerId: ID!, accepted: Boolean!): Boolean!",
-        "deletePeer(id: ID!): Boolean!",
-        "unpairPeer(id: ID!): Boolean!",
+        "deletePeer(peerId: ID!): Boolean!",
+        "unpairPeer(peerId: ID!): Boolean!",
     ] {
         assert!(sdl.contains(field), "missing {field}");
     }
@@ -936,10 +936,10 @@ fn pairing_commands_have_no_public_ui_state_or_client_record_snapshots() {
     for name in ["PairingState", "PairingPhase", "PairingRequestInput", "PeerRecordInput", "pairingStates", "pairingChanged"] {
         assert!(!sdl.contains(name), "obsolete pairing contract: {name}");
     }
-    let input = sdl.split("input PairingDeviceInput {").nth(1).unwrap().split('}').next().unwrap();
+    let input = sdl.split("input PairPeerInput {").nth(1).unwrap().split('}').next().unwrap();
     assert!(input.contains("peerId: ID!"));
     assert!(input.contains("mode: PairingMode!"));
     assert!(input.contains("password: String"));
     assert_eq!(input.lines().filter(|line| line.contains(':')).count(),3);
-    assert!(sdl.contains("peerFileUrl(id: ID!, fileId: String!): String!"));
+    assert!(sdl.contains("peerFileUrl(peerId: ID!, fileId: String!): String!"));
 }

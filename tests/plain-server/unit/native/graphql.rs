@@ -30,10 +30,7 @@ async fn closed_native_page_cancels_its_pending_main_schema_request_before_radio
         async move {
             executor
                 .execute_scoped(
-                    Request::new(format!(
-                        r#"mutation{{acquireDiscovery(token:"{}")}}"#,
-                        plain_libs::utils::uuid::Uuid::new_v4()
-                    )),
+                    Request::new("mutation { startDiscovery }"),
                     scope,
                 )
                 .await
@@ -221,10 +218,7 @@ async fn pending_multicast_requests_remain_independent_until_permission_is_grant
     let (first_generation, mut first_requests) = first_state.host.connect();
     let (second_generation, mut second_requests) = second_state.host.connect();
     let acquire = || {
-        Request::new(format!(
-            r#"mutation{{acquireDiscovery(token:"{}")}}"#,
-            plain_libs::utils::uuid::Uuid::new_v4()
-        ))
+        Request::new("mutation { startDiscovery }")
     };
     let first_scope = NativeRequestScope::default();
     let first_executor = first.native_graphql().unwrap();

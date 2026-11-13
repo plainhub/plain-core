@@ -46,7 +46,7 @@ async fn native_main_record_queries_preserve_addresses_keys_members_and_checked_
     assert_eq!(data["chatChannels"][0]["version"], 5000000001_i64);
     assert_eq!(data["chatChannels"][0]["key"], "channel-key");
     assert_eq!(data["chatChannels"][0]["members"][0]["peerId"], "peer");
-    let request = || Request::new(r#"{ peerFileUrl(id: "peer", fileId: "a +?#%") }"#);
+    let request = || Request::new(r#"{ peerFileUrl(peerId: "peer", fileId: "a +?#%") }"#);
     let response = native.execute(request()).await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     let data = response.data.into_json().unwrap();
@@ -67,7 +67,7 @@ async fn native_main_record_queries_preserve_addresses_keys_members_and_checked_
     assert!(native.execute(request()).await.errors.is_empty());
     let response = native
         .execute(Request::new(
-            r#"mutation { deletePeer(id:"absent") unpairPeer(id:"absent") }"#,
+            r#"mutation { deletePeer(peerId:"absent") unpairPeer(peerId:"absent") }"#,
         ))
         .await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
@@ -179,7 +179,7 @@ async fn remote_requests_cannot_access_or_change_local_login_sessions() {
         .unwrap();
     for document in [
         "{peers{token}}",
-        r#"mutation{pairDevice(input:{peerId:"peer",mode:MANAGE})}"#,
+        r#"mutation{pairPeer(input:{peerId:"peer",mode:MANAGE})}"#,
     ] {
         let response = crate::graphql::executor::execute_graphql(
             &state.public,

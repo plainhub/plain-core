@@ -123,7 +123,7 @@ async fn native_password_and_approval_pairing_enables_actual_chat_and_preserves_
     },true).unwrap();
     let started = query(
         &first.native,
-        r#"mutation($peerId:ID!){pairDevice(input:{peerId:$peerId,mode:MANAGE,password:"fixture-password"})}"#,
+        r#"mutation($peerId:ID!){pairPeer(input:{peerId:$peerId,mode:MANAGE,password:"fixture-password"})}"#,
         json!({"peerId":second_id}),
     )
     .await;
@@ -150,7 +150,7 @@ async fn native_password_and_approval_pairing_enables_actual_chat_and_preserves_
         .confirm_web_login(request_id, true)
         .await
         .unwrap();
-    assert_eq!(started["pairDevice"], true);
+    assert_eq!(started["pairPeer"], true);
     first.paired(second_id).await;
     let peers = "{peers{id status key token publicKey}}";
     let first_peers = query(&first.native, peers, json!({})).await;

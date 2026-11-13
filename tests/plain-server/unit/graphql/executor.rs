@@ -195,13 +195,13 @@ async fn backup_uses_native_management_and_has_no_remote_graphql_entry() {
 #[test]
 fn runtime_controls_and_viewer_exports_do_not_trigger_generic_content_refreshes() {
     for document in [
-        r#"mutation{acquireDiscovery(token:"token") releaseDiscovery(token:"token")}"#,
-        "mutation{...Control} fragment Control on Mutation{alias:releaseDiscovery(token:\"token\")}",
+        r#"mutation{startDiscovery stopDiscovery}"#,
+        "mutation{...Control} fragment Control on Mutation{alias:stopDiscovery}",
     ] {
         assert!(!content_changes(&Request::new(document)), "{document}");
     }
     assert!(content_changes(&Request::new(
-        "mutation{releaseDiscovery(token:\"token\") createNote}"
+        "mutation{stopDiscovery createNote}"
     )));
 }
 

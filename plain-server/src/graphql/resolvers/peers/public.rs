@@ -66,7 +66,7 @@ impl Peer {
 }
 
 #[derive(InputObject, Clone)]
-pub struct PairingDeviceInput {
+pub struct PairPeerInput {
     pub peer_id: plain_graphql::ID,
     pub mode: PairingMode,
     pub password: Option<String>,
@@ -130,10 +130,10 @@ pub struct PeersMutation;
 
 #[Object]
 impl PeersMutation {
-    async fn pair_device(
+    async fn pair_peer(
         &self,
         ctx: &Context<'_>,
-        input: PairingDeviceInput,
+        input: PairPeerInput,
     ) -> plain_graphql::Result<bool> {
         let core = ctx.data::<crate::server::ServerState>()?;
         if input.mode == PairingMode::Manage && !crate::http::auth::public_gate::is_local(ctx) {
@@ -208,11 +208,11 @@ impl PeersMutation {
     async fn delete_peer(
         &self,
         ctx: &Context<'_>,
-        id: plain_graphql::ID,
+        peer_id: plain_graphql::ID,
     ) -> plain_graphql::Result<bool> {
         crate::graphql::resolvers::peers::actions::remove(
             ctx.data::<crate::server::ServerState>()?,
-            id.as_str(),
+            peer_id.as_str(),
         )
         .await?;
         Ok(true)
@@ -221,11 +221,11 @@ impl PeersMutation {
     async fn unpair_peer(
         &self,
         ctx: &Context<'_>,
-        id: plain_graphql::ID,
+        peer_id: plain_graphql::ID,
     ) -> plain_graphql::Result<bool> {
         crate::graphql::resolvers::peers::actions::unpair(
             ctx.data::<crate::server::ServerState>()?,
-            id.as_str(),
+            peer_id.as_str(),
         )
         .await?;
         Ok(true)
