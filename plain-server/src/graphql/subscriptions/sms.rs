@@ -7,7 +7,7 @@ use plain_graphql::{Context, Result, Subscription};
 pub struct SmsSubscriptions;
 #[Subscription]
 impl SmsSubscriptions {
-    async fn sms_provider_changed(
+    async fn sms_changed(
         &self,
         ctx: &Context<'_>,
     ) -> Result<BoxStream<'static, Result<Option<SmsProviderChange>>>> {

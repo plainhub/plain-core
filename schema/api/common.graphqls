@@ -229,7 +229,7 @@ type Subscription {
 	feedsFetched: FeedSyncChange!
 	uploadMergeResult: UploadMergeResult!
 	fileSearchResults(root: String!, query: String!, offset: Int!, limit: Int!, sortBy: FileSortBy!): FileSearchResults!
-	smsProviderChanged: SmsProviderChange
+	smsChanged: SmsProviderChange
 	smsSendResult: SmsSendResult!
 	mmsSendResult: MmsSendResult!
 	mmsSent: String!

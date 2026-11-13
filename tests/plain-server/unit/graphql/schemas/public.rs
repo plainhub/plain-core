@@ -786,7 +786,7 @@ async fn deployed_schema_exposes_platform_fields_and_subscriptions_on_every_host
         (
             "subscriptionType",
             &[
-                "smsProviderChanged",
+                "smsChanged",
                 "smsSendResult",
                 "mmsSendResult",
                 "mmsSent",
@@ -813,7 +813,7 @@ async fn deployed_schema_exposes_platform_fields_and_subscriptions_on_every_host
         assert!(names.contains(&name), "type {name} missing");
     }
     for field in [
-        "smsProviderChanged",
+        "smsChanged",
         "smsSendResult",
         "mmsSendResult",
         "mmsSent",

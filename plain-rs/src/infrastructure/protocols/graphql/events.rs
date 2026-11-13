@@ -196,7 +196,7 @@ pub const EVENTS: &[EventSpec] = &[
         capability: None,
     },
     EventSpec {
-        field: "smsProviderChanged",
+        field: "smsChanged",
         event: "SMS_PROVIDER_CHANGED",
         aliases: &[],
         invalidation: false,
