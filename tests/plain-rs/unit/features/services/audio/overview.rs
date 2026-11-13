@@ -1,6 +1,6 @@
 use super::*;
 use crate::infrastructure::host::bridge::Host;
-use plain_libs::serde_json::json;
+use plain_libs::serde_json::{Value, json};
 
 #[tokio::test]
 async fn sdk_summary_batches_the_full_catalog_without_metadata_or_per_row_host_calls() {

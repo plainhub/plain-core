@@ -120,19 +120,27 @@ async fn native_report_http_search_delete_and_restart_share_one_clipboard() {
     let (server, token, prefs) = start(&dir);
     let bridge = server.host_events().unwrap();
     let mut events = server.runtime_state().core.events.subscribe();
-    for _ in 0..15 {
+    let mut initialized = false;
+    while !initialized {
         let request = bridge.next_request().await.unwrap();
-        bridge
-            .reply(json!({"id":request["id"],"result":null}))
-            .unwrap();
+        initialized = request["method"] == "networkInterfacesChanged";
+        bridge.reply(json!({"id":request["id"],"result":null})).unwrap();
     }
     let payload = json!({"text": "100%_ 🌍", "sensitive": true}).to_string();
     bridge
         .publish_text("CLIPBOARD_REPORTED", payload.clone())
         .await
         .unwrap();
-    let callback = bridge.next_request().await.unwrap();
-    assert_eq!(callback["method"], "clipboardHistoryRefresh");
+    let callback = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        while let Some(request) = bridge.next_request().await {
+            if request["method"] == "clipboardHistoryRefresh" {
+                return request;
+            }
+            assert_eq!(request["method"], "mdnsMulticast");
+            bridge.reply(json!({"id":request["id"],"result":true})).unwrap();
+        }
+        panic!("Host disconnected before clipboard refresh");
+    }).await.unwrap();
     bridge
         .reply(json!({"id":callback["id"],"result":null}))
         .unwrap();

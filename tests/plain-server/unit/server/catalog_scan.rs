@@ -626,7 +626,7 @@ async fn nomedia_reclassification_preserves_file_identity_and_user_state() {
             DataType::Audio
         )
     );
-    assert!(
+    assert!(!
         plain_rs::features::services::files::catalog_events::includes(
             &event.payload,
             DataType::File

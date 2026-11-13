@@ -445,7 +445,7 @@ fn public_schema_exposes_the_contract_it_has_to_serve() {
     }
     assert_eq!(
         tag_fields,
-        ["id: ID!", "name: String!", "type: Int!", "count: Int!"],
+        ["id: ID!", "name: String!", "type: DataType!", "count: Int!"],
         "shared Tag shape drifted:\n{}",
         sdl.split("type Tag {")
             .nth(1)

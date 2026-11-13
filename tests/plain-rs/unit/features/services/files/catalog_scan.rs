@@ -1454,15 +1454,27 @@ async fn directory_scan_batches_records_and_reconciles_unseen_rows() {
     assert!(state.db.file(&outside_id).unwrap().is_some());
     assert!(excluded.exists() && hidden.exists() && outside.exists());
     let mut catalog_updates = 0;
+    let mut recorded_counts = std::collections::BTreeSet::new();
     while let Ok(event) = events.try_recv() {
         if event.event_type == crate::infrastructure::events::MEDIA_UPDATED {
             catalog_updates += 1;
         }
+        if event.event_type == crate::infrastructure::events::MEDIA_SCAN_PROGRESS {
+            let payload: plain_libs::serde_json::Value = plain_libs::serde_json::from_str(&event.payload).unwrap();
+            let count = payload["indexed"].as_u64().unwrap() as usize;
+            if count > 0 {
+                recorded_counts.insert(count);
+            }
+        }
     }
-    assert_eq!(
-        catalog_updates, 4,
-        "Three record batches and one deletion batch"
-    );
+    assert_eq!(catalog_updates, 0, "Ordinary file scans do not invalidate media libraries");
+    let counts = recorded_counts.into_iter().collect::<Vec<_>>();
+    assert_eq!(counts.len(), 3);
+    for (index, count) in counts.iter().take(2).enumerate() {
+        let paths = SCAN_BATCH_SIZE * (index + 1);
+        assert!((paths - 1..=paths).contains(count), "The repository directory consumes one path slot without increasing the file count");
+    }
+    assert_eq!(counts[2], SCAN_BATCH_SIZE * 2 + 1);
     state.db.with_conn(|conn| {
         let (records, generations): (i64, i64) = conn.query_row("SELECT COUNT(*),COUNT(DISTINCT last_seen_scan_id) FROM files WHERE last_seen_scan_id IS NOT NULL", [], |row| Ok((row.get(0)?, row.get(1)?)))?;
         assert_eq!(records, (SCAN_BATCH_SIZE * 2 + 2) as i64);

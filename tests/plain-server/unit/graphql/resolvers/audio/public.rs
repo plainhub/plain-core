@@ -1163,6 +1163,73 @@ async fn playlist_cover_queries_are_optional_batched_and_scoped_to_one_playlist(
 }
 
 #[tokio::test]
+async fn merged_playlist_reads_preserve_cover_candidates_without_extra_sql_work() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    let (_dir, schema) = fixture_with(GRANTED, |method, _| panic!("unexpected host call {method}"));
+    let db = database(&schema);
+    db.use_platform_audio_catalog().unwrap();
+    let mut ids = Vec::new();
+    for index in 0..20 {
+        let row = domain::create_playlist(db, &format!("Playlist {index:02}")).unwrap();
+        ids.push(row.id);
+    }
+    db.with_conn(|conn| {
+        for (index, id) in ids.iter().enumerate() {
+            for order in 0..40 {
+                let track_id = format!("track-{index}-{order}");
+                conn.execute("INSERT INTO platform_audio_media(file_id,path,title,artist,duration_ms,album_id) VALUES(?1,?2,'Track','Artist',1000,?3)", plain_libs::rusqlite::params![track_id, format!("/{track_id}.mp3"), format!("album-{}", order % 10)]).unwrap();
+                conn.execute("INSERT INTO audio_playlist_items(id,playlist_id,file_id,sort_order,added_at) VALUES(?1,?2,?1,?3,'2026-01-01T00:00:00Z')", plain_libs::rusqlite::params![track_id, id, order]).unwrap();
+            }
+        }
+    });
+    let service = schema.data::<Arc<AudioService>>().unwrap().remote();
+    let warm = query(&schema, "{ audioPlaylists { id } }").await;
+    assert!(warm["errors"].is_null(), "{warm}");
+    let steps = Arc::new(AtomicUsize::new(0));
+    db.with_conn(|conn| {
+        let steps = steps.clone();
+        conn.progress_handler(1, Some(move || {
+            steps.fetch_add(1, Ordering::Relaxed);
+            false
+        })).unwrap();
+    });
+    service.run(|db, _| domain::playlists(db)).await.unwrap();
+    let batch_ids = ids.clone();
+    let expected = service.run(move |db, _| {
+        plain_rs::features::media::audio::playlist_covers::playlist_covers(db, &batch_ids)
+    }).await.unwrap();
+    let old_list_steps = steps.swap(0, Ordering::Relaxed);
+    let merged = query(&schema, "{ audioPlaylists { id coverAlbums { albumId trackCount candidatePaths } } }").await;
+    assert!(merged["errors"].is_null(), "{merged}");
+    let new_list_steps = steps.swap(0, Ordering::Relaxed);
+    assert!(new_list_steps <= old_list_steps, "list SQL work increased: {old_list_steps} -> {new_list_steps}");
+    for covers in &expected {
+        assert_eq!(covers.albums.len(), 8);
+        let actual = merged["data"]["audioPlaylists"].as_array().unwrap().iter().find(|row| row["id"] == covers.id).unwrap();
+        let albums = covers.albums.iter().map(|album| {
+            assert_eq!(album.track_count, 4);
+            assert_eq!(album.candidate_paths.len(), 3);
+            json!({"albumId":album.album_id,"trackCount":album.track_count,"candidatePaths":album.candidate_paths})
+        }).collect::<Vec<_>>();
+        assert_eq!(actual["coverAlbums"], json!(albums));
+    }
+    service.run(|db, _| domain::playlists(db)).await.unwrap();
+    let selected = ids[0].clone();
+    service.run(move |db, _| {
+        plain_rs::features::media::audio::playlist_covers::playlist_covers(db, &[selected])
+    }).await.unwrap();
+    let old_detail_steps = steps.swap(0, Ordering::Relaxed);
+    let detail = query(&schema, &format!(r#"{{ audioPlaylist(id:"{}") {{ id name itemCount coverAlbums {{ albumId trackCount candidatePaths }} }} }}"#, ids[0])).await;
+    assert!(detail["errors"].is_null(), "{detail}");
+    let new_detail_steps = steps.swap(0, Ordering::Relaxed);
+    assert!(new_detail_steps <= old_detail_steps, "detail SQL work increased: {old_detail_steps} -> {new_detail_steps}");
+    let list = merged["data"]["audioPlaylists"].as_array().unwrap().iter().find(|row| row["id"] == ids[0]).unwrap();
+    assert_eq!(detail["data"]["audioPlaylist"]["coverAlbums"], list["coverAlbums"]);
+    eprintln!("playlist SQL progress steps: list {old_list_steps} -> {new_list_steps}; detail {old_detail_steps} -> {new_detail_steps}");
+}
+
+#[tokio::test]
 async fn playlist_cover_fields_preserve_audio_access_checks() {
     let (_dir, schema) = fixture_with("[]", |method, _| panic!("unexpected host call {method}"));
     let playlist = domain::create_playlist(database(&schema), "Denied").unwrap();

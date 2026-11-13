@@ -97,7 +97,7 @@ async fn explicit_message_retry_root_probes_open_transport_and_sends_original_ro
                 .unwrap();
         }
     });
-    let automatic = deliver(&state, &original.id, None)
+    let automatic = deliver(&state, &original.id)
         .await
         .unwrap()
         .chat
