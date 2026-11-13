@@ -1,5 +1,6 @@
 use crate::features::peers::pairing::{
     peer_store::{self, Facts},
+    prefer_sender_ip,
     protocol::{PairingAccept, PairingReply, PairingRequest},
     sessions::{RESPONSE_TIMEOUT, Target, Ticket},
 };
@@ -77,9 +78,7 @@ pub(super) fn save_peer(
     let peer = peer_store::save_confirmed(&state.db, facts, previous_identity, true)?;
     pairing_runtime::success(
         state,
-        &plain_libs::serde_json::to_value(crate::features::services::peers::peer_address::view(
-            &peer,
-        ))?,
+        &plain_libs::serde_json::to_value(&peer)?,
         ip,
         request_id,
     );
@@ -212,14 +211,12 @@ impl Confirmations {
                 let shared = ecdh
                     .compute_shared_key(&base64_decode(&request.payload.ecdh_public_key))
                     .ok_or_else(|| plain_libs::anyhow::anyhow!("Invalid pairing key"))?;
-                let mut ips = vec![target.device_ip.clone()];
-                ips.extend(request.payload.ips.clone());
                 save_peer(
                     state,
                     Facts {
                         id: request.from_id.clone(),
                         name: request.payload.from_name.clone(),
-                        ips,
+                        ip: prefer_sender_ip(&request.payload.ips, &target.device_ip),
                         port: request.payload.port,
                         device_type: request.payload.device_type,
                         key: base64_encode(&chat_key(&shared, &e.request, accepted)),
@@ -310,14 +307,12 @@ impl Confirmations {
                         &base64_decode(&response.ecdh_public_key),
                     )
                     .ok_or_else(|| plain_libs::anyhow::anyhow!("Invalid pairing key"))?;
-                let mut ips = vec![sender_ip.to_owned()];
-                ips.extend(response.ips.clone());
                 *pending = Some((
                     response.signature.clone(),
                     Facts {
                         id: ticket.target.device_id.clone(),
                         name: ticket.target.device_name.clone(),
-                        ips,
+                        ip: prefer_sender_ip(&response.ips, sender_ip),
                         port: response.port,
                         device_type: response.device_type,
                         key: base64_encode(&chat_key(&shared, &e.request, response)),

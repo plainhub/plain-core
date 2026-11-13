@@ -3,7 +3,7 @@ fn facts() -> Facts {
     Facts {
         id: "peer".into(),
         name: "name ' 中文".into(),
-        ips: vec!["127.0.0.1".into(), "".into(), "127.0.0.1".into()],
+        ip: "127.0.0.1".into(),
         port: 2443,
         device_type: DeviceType::Phone,
         key: plain_libs::utils::base64::base64_encode(&[1; 32]),

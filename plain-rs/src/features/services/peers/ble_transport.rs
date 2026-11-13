@@ -25,7 +25,7 @@ impl Runtime {
         let request = plain_libs::serde_json::json!({
             "request": plain_libs::utils::base64::base64_encode(&bytes),
             "clientId": peer.id,
-            "peer": crate::features::services::peers::peer_address::view(peer),
+            "peer": peer,
         });
         let mut stop = state.stop.clone();
         let wait = state.host.call_wait("peerTransportBleExchange", request);
@@ -57,7 +57,11 @@ impl Runtime {
         ble::Request::decode(&bytes).unwrap()
     }
     /// Builds the host reply body for a given encoded response.
-    pub fn reply_for_test(&self, _params: &plain_libs::serde_json::Value, bytes: Vec<u8>) -> plain_libs::serde_json::Value {
+    pub fn reply_for_test(
+        &self,
+        _params: &plain_libs::serde_json::Value,
+        bytes: Vec<u8>,
+    ) -> plain_libs::serde_json::Value {
         plain_libs::serde_json::json!({
             "response": plain_libs::utils::base64::base64_encode(&bytes),
         })
@@ -67,7 +71,11 @@ impl Runtime {
 #[cfg(any(test, feature = "test-seams"))]
 use crate::infrastructure::protocols::ble::Request;
 #[cfg(any(test, feature = "test-seams"))]
-pub fn test_peer_wire(runtime: &Runtime, params: &plain_libs::serde_json::Value, key: &[u8]) -> String {
+pub fn test_peer_wire(
+    runtime: &Runtime,
+    params: &plain_libs::serde_json::Value,
+    key: &[u8],
+) -> String {
     let Request::PeerGraphql { body, .. } = runtime.request_for_test(params) else {
         panic!("Expected peer request")
     };

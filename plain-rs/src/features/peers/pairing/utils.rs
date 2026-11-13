@@ -13,19 +13,15 @@ pub fn timestamp_ok(ts: i64) -> bool {
     now_ms().abs_diff(ts) <= MAX_TIMESTAMP_DIFF_MS as u64
 }
 
-/// Candidate-IP list for a paired peer: the socket sender IP first, then
-/// the advertised IPs (deduplicated, sender excluded).
 pub fn prefer_sender_ip(ips: &[String], sender_ip: &str) -> String {
-    let mut all = Vec::with_capacity(ips.len() + 1);
-    if !sender_ip.is_empty() {
-        all.push(sender_ip.to_string());
+    if sender_ip.is_empty() {
+        ips.iter()
+            .find(|ip| !ip.is_empty())
+            .cloned()
+            .unwrap_or_default()
+    } else {
+        sender_ip.to_owned()
     }
-    for ip in ips {
-        if !ip.is_empty() && ip != sender_ip && !all.contains(ip) {
-            all.push(ip.clone());
-        }
-    }
-    all.join(",")
 }
 
 /// Private (RFC 1918) non-loopback IPv4 addresses of this host, for the

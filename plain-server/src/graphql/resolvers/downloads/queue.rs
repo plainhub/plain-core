@@ -100,7 +100,6 @@ fn snapshot(
     value: plain_libs::serde_json::Value,
     online: &std::collections::HashSet<&str>,
 ) -> plain_graphql::Result<ChatDownloadQueue> {
-    let local = plain_rs::infrastructure::transport::lan::local_interfaces();
     let receipt: QueueReceipt = plain_libs::serde_json::from_value(value)?;
     Ok(ChatDownloadQueue {
         runtime_id: receipt.runtime_id,
@@ -115,7 +114,7 @@ fn snapshot(
                     file: task.file.try_into()?,
                     peer: {
                         let connected = online.contains(task.peer.id.as_str());
-                        Peer::from_record(task.peer, connected, &local)
+                        Peer::from_record(task.peer, connected)
                     },
                     status: task.status,
                     error: task.error,

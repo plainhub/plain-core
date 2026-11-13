@@ -47,7 +47,7 @@ fn pairing_target(state: &ServerState, target: &str) -> Result<PairingTarget, St
     }
     let peer = peers::get(&state.db, target).map_err(|_| StatusCode::BAD_GATEWAY)?;
     let base = if let Some(peer) = &peer {
-        http_client::Url::parse(&peer_address::address(peer).base_url)
+        http_client::Url::parse(&peer.base_url().ok_or(StatusCode::NOT_FOUND)?)
             .map_err(plain_libs::anyhow::Error::from)
     } else {
         plain_rs::features::services::discovery::pairing_attempts::nearby_management_address(
@@ -201,7 +201,7 @@ fn native_peer(
         Ok(_) => return Err(StatusCode::NOT_FOUND),
         Err(_) => return Err(StatusCode::BAD_GATEWAY),
     };
-    http_client::Url::parse(&peer_address::address(&peer).base_url)
+    http_client::Url::parse(&peer.base_url().ok_or(StatusCode::BAD_GATEWAY)?)
         .map_err(|_| StatusCode::BAD_GATEWAY)
 }
 
@@ -240,7 +240,8 @@ pub(super) async fn native(state: ServerState, ticket: &str, request: Request) -
     let Ok(key) = decode_key(&session.url_token) else {
         return StatusCode::UNAUTHORIZED.into_response();
     };
-    let Ok(plain) = resource_link::decrypt(&Scope::Session(owner), ResourcePurpose::Fs, &key, payload)
+    let Ok(plain) =
+        resource_link::decrypt(&Scope::Session(owner), ResourcePurpose::Fs, &key, payload)
     else {
         return StatusCode::UNAUTHORIZED.into_response();
     };

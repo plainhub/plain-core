@@ -84,7 +84,7 @@ pub fn unpair(db: &Db, id: &str) -> Result<bool> {
 pub fn discovered(
     db: &Db,
     id: &str,
-    ips: &[String],
+    ip: &str,
     port: u16,
     name: &str,
     device_type: crate::features::chat::enums::DeviceType,
@@ -104,7 +104,6 @@ pub fn discovered(
         if peer.status != crate::features::chat::enums::PeerStatus::Paired {
             return Ok(None);
         }
-        let ip = ips.join(",");
         if peer.ip == ip
             && peer.port == Some(port)
             && peer.name == name

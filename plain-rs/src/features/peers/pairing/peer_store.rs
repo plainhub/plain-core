@@ -11,7 +11,7 @@ use plain_libs::rusqlite::{OptionalExtension, params};
 pub struct Facts {
     pub id: String,
     pub name: String,
-    pub ips: Vec<String>,
+    pub ip: String,
     pub port: u16,
     pub device_type: DeviceType,
     pub key: String,
@@ -47,7 +47,7 @@ pub fn save_confirmed(
         let new = existing.is_none();
         let mut peer = existing.unwrap_or_else(|| DPeer::new(&facts.id, &facts.name, "", Some(facts.port), facts.device_type));
         peer.name = facts.name;
-        peer.ip = crate::features::peers::pairing::prefer_sender_ip(&facts.ips, "");
+        peer.ip = facts.ip;
         peer.port = Some(facts.port);
         peer.device_type = facts.device_type;
         peer.key = facts.key;

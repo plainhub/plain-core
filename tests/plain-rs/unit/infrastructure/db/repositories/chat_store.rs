@@ -80,7 +80,8 @@ fn checked_chat_storage_is_atomic_literal_and_preserves_unrelated_conversations_
         latest: false,
         count_only: false,
     };
-    let rows: Vec<DChat> = plain_libs::serde_json::from_value(messages::list(&db, &filter).unwrap()).unwrap();
+    let rows: Vec<DChat> =
+        plain_libs::serde_json::from_value(messages::list(&db, &filter).unwrap()).unwrap();
     assert_eq!(rows[0].id, "two");
     filter.limit = None;
     filter.text = "%_".into();
@@ -178,11 +179,11 @@ fn discovery_refreshes_only_paired_peers_and_preserves_identity_and_unrelated_ro
         DeviceType::Computer,
     );
     peers::save(&db, &[paired.clone(), unpaired.clone()], SaveMode::Insert).unwrap();
-    let ips = vec!["192.0.2.9".into(), "2001:db8::9".into()];
-    let updated = peers::discovered(&db, "paired", &ips, 8443, "renamed", DeviceType::Tablet)
+    let ip = "192.0.2.9";
+    let updated = peers::discovered(&db, "paired", ip, 8443, "renamed", DeviceType::Tablet)
         .unwrap()
         .unwrap();
-    assert_eq!(updated.ip, "192.0.2.9,2001:db8::9");
+    assert_eq!(updated.ip, "192.0.2.9");
     assert_eq!(updated.port, Some(8443));
     assert_eq!(updated.name, "renamed");
     assert_eq!(updated.device_type, DeviceType::Tablet);
@@ -190,28 +191,21 @@ fn discovery_refreshes_only_paired_peers_and_preserves_identity_and_unrelated_ro
     assert_eq!(updated.public_key, paired.public_key);
     db.with_conn(|connection| connection.execute_batch("CREATE TRIGGER reject_repeat_discovery BEFORE UPDATE ON peers BEGIN SELECT RAISE(ABORT,'unexpected repeated update'); END;")).unwrap();
     assert!(
-        peers::discovered(&db, "paired", &ips, 8443, "renamed", DeviceType::Tablet)
+        peers::discovered(&db, "paired", ip, 8443, "renamed", DeviceType::Tablet)
             .unwrap()
             .is_none()
     );
     assert!(
-        peers::discovered(
-            &db,
-            "unpaired",
-            &ips,
-            8443,
-            "unexpected",
-            DeviceType::Tablet
-        )
-        .unwrap()
-        .is_none()
+        peers::discovered(&db, "unpaired", ip, 8443, "unexpected", DeviceType::Tablet)
+            .unwrap()
+            .is_none()
     );
     let unchanged = peers::get(&db, "unpaired").unwrap().unwrap();
     assert_eq!(unchanged.ip, unpaired.ip);
     assert_eq!(unchanged.port, unpaired.port);
     assert_eq!(unchanged.name, unpaired.name);
     assert!(
-        peers::discovered(&db, "unknown", &ips, 8443, "unknown", DeviceType::Phone)
+        peers::discovered(&db, "unknown", ip, 8443, "unknown", DeviceType::Phone)
             .unwrap()
             .is_none()
     );

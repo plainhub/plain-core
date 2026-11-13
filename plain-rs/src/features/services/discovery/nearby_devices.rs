@@ -21,7 +21,12 @@ impl From<&CoreRuntime> for Context {
     }
 }
 impl Context {
-    pub fn seen(&self, device: Device, visible: bool, resident: bool) -> plain_libs::anyhow::Result<bool> {
+    pub fn seen(
+        &self,
+        device: Device,
+        visible: bool,
+        resident: bool,
+    ) -> plain_libs::anyhow::Result<bool> {
         if device.id
             == self
                 .prefs
@@ -36,7 +41,7 @@ impl Context {
             if chat_store::peers::discovered(
                 &self.db,
                 &device.id,
-                &device.ips,
+                &crate::features::peers::pairing::prefer_sender_ip(&device.ips, ""),
                 device.port,
                 &device.name,
                 device.device_type,
@@ -97,7 +102,11 @@ pub async fn sweep(state: &CoreRuntime) -> plain_libs::anyhow::Result<()> {
         .call("nearbyScanFacts", json!({}))
         .await
         .map_err(plain_libs::anyhow::Error::msg)?;
-    if facts.get("paused").and_then(plain_libs::serde_json::Value::as_bool) != Some(false) {
+    if facts
+        .get("paused")
+        .and_then(plain_libs::serde_json::Value::as_bool)
+        != Some(false)
+    {
         stale.retain(|probe| {
             probe
                 .device

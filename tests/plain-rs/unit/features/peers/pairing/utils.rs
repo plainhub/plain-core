@@ -11,14 +11,15 @@ fn timestamp_ok_within_5min() {
 }
 
 #[test]
-fn prefer_sender_ip_puts_sender_first_and_dedupes() {
+fn prefer_sender_ip_returns_one_address() {
     let ips = vec![
-        "10.0.0.2".to_string(),
-        "10.0.0.2".to_string(),
+        "192.0.2.2".to_string(),
+        "192.0.2.2".to_string(),
         "".to_string(),
     ];
-    assert_eq!(prefer_sender_ip(&ips, "10.0.0.3"), "10.0.0.3,10.0.0.2");
+    assert_eq!(prefer_sender_ip(&ips, "192.0.2.3"), "192.0.2.3");
     // Sender already in the list → listed once, first.
-    assert_eq!(prefer_sender_ip(&ips, "10.0.0.2"), "10.0.0.2");
+    assert_eq!(prefer_sender_ip(&ips, "192.0.2.2"), "192.0.2.2");
+    assert_eq!(prefer_sender_ip(&ips, ""), "192.0.2.2");
     assert_eq!(prefer_sender_ip(&[], ""), "");
 }

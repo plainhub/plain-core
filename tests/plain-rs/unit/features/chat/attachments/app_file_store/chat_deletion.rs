@@ -161,17 +161,10 @@ fn discovery_and_unpair_update_only_owned_fields_and_require_paired_peer() {
     peer.key = "current-key".into();
     peer.token = "session".into();
     peers::save(&db, &[peer], SaveMode::Insert).unwrap();
-    let refreshed = peers::discovered(
-        &db,
-        "peer",
-        &["127.0.0.1".into(), "::1".into()],
-        443,
-        "new",
-        DeviceType::Computer,
-    )
-    .unwrap()
-    .unwrap();
-    assert_eq!(refreshed.ip, "127.0.0.1,::1");
+    let refreshed = peers::discovered(&db, "peer", "127.0.0.1", 443, "new", DeviceType::Computer)
+        .unwrap()
+        .unwrap();
+    assert_eq!(refreshed.ip, "127.0.0.1");
     assert_eq!(refreshed.name, "new");
     assert_eq!(refreshed.key, "current-key");
     assert_eq!(refreshed.token, "session");
@@ -181,7 +174,7 @@ fn discovery_and_unpair_update_only_owned_fields_and_require_paired_peer() {
     assert_eq!(unpaired.key, "current-key");
     assert!(unpaired.token.is_empty());
     assert!(
-        peers::discovered(&db, "peer", &[], 1, "stale", DeviceType::Phone)
+        peers::discovered(&db, "peer", "", 1, "stale", DeviceType::Phone)
             .unwrap()
             .is_none()
     );

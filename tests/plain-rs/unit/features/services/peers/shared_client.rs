@@ -160,7 +160,7 @@ async fn discovery_retry_rereads_peer_address_and_late_response_cannot_replace_c
     };
     tokio::time::sleep(Duration::from_millis(100)).await;
     let mut peer = peer;
-    peer.ip = "invalid,127.0.0.1".into();
+    peer.ip = "127.0.0.1".into();
     peer.port = Some(port);
     peers::save(&state.db, &[peer], SaveMode::Update).unwrap();
     let result = tokio::time::timeout(Duration::from_secs(5), task)

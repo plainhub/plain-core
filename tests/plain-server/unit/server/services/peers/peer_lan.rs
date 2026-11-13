@@ -1,11 +1,11 @@
 use crate::server::ContentServer;
+use plain_libs::serde_json::json;
 use plain_rs::features::chat::enums::DeviceType;
 use plain_rs::features::chat::enums::PeerStatus;
 use plain_rs::features::services::peers::peer_lan::*;
 use plain_rs::infrastructure::db::DPeer;
 use plain_rs::infrastructure::db::chat_store::SaveMode;
 use plain_rs::infrastructure::db::chat_store::peers;
-use plain_libs::serde_json::json;
 use std::sync::Arc;
 fn root(
     id: &str,
@@ -32,7 +32,7 @@ fn root(
     (dir, server, kp.to_vec(), token)
 }
 fn peer(id: &str, port: u16, pk: &[u8]) -> DPeer {
-    let mut peer = DPeer::new(id, id, "invalid,127.0.0.1", Some(port), DeviceType::Phone);
+    let mut peer = DPeer::new(id, id, "127.0.0.1", Some(port), DeviceType::Phone);
     peer.status = PeerStatus::Paired;
     peer.key = plain_libs::utils::base64::base64_encode(&[7; 32]);
     peer.public_key = plain_libs::utils::base64::base64_encode(pk);

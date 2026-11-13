@@ -197,7 +197,7 @@ impl Outgoing {
             .get::<String>(crate::features::prefs::pref_keys::CLIENT_ID)?
             .filter(|id| !id.is_empty())
             .ok_or_else(|| plain_libs::anyhow::anyhow!("Missing identity"))?;
-        let selected_ip = peer.best_ip();
+        let selected_ip = peer.ip.clone();
         let url = plain_libs::utils::build_url::build_url(
             "wss",
             &selected_ip,
@@ -215,8 +215,7 @@ impl Outgoing {
             current.is_paired()
                 && fingerprint(&current) == fingerprint(peer)
                 && current.ip == peer.ip
-                && current.port == peer.port
-                && current.best_ip() == selected_ip,
+                && current.port == peer.port,
             "Peer changed"
         );
         ensure!(
@@ -255,12 +254,7 @@ impl Outgoing {
         })
         .await??;
         ensure!(self.current(epoch), "Status runtime stopped");
-        ensure!(
-            crate::features::services::peers::peer_address::current(&state.db, &peer.id, peer)?
-                .best_ip()
-                == selected_ip,
-            "Peer address changed"
-        );
+        crate::features::services::peers::peer_address::current(&state.db, &peer.id, peer)?;
         let (lease, changed) = state
             .peer_status
             .connections
@@ -276,7 +270,7 @@ impl Outgoing {
         let mut tick = tokio::time::interval(Duration::from_secs(1));
         loop {
             tokio::select! {
-                _=tick.tick()=>ensure!(state.peer_status.connections.valid(&state.db,&lease) && peer.best_ip()==selected_ip && state.prefs.get::<String>(crate::features::prefs::pref_keys::CLIENT_ID)?.as_deref()==Some(&actor),"Peer changed"),
+                _=tick.tick()=>ensure!(state.peer_status.connections.valid(&state.db,&lease) && state.prefs.get::<String>(crate::features::prefs::pref_keys::CLIENT_ID)?.as_deref()==Some(&actor),"Peer changed"),
                 frame=socket.next()=>match frame {
                     Some(Ok(plain_libs::tokio_tungstenite::tungstenite::Message::Binary(frame))) => ensure!(stream.decode(&frame, &key).is_some(), "Invalid status frame"),
                     Some(Ok(plain_libs::tokio_tungstenite::tungstenite::Message::Ping(_) | plain_libs::tokio_tungstenite::tungstenite::Message::Pong(_))) => {},

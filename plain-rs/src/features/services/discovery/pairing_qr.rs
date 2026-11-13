@@ -7,6 +7,7 @@ use crate::features::{
     peers::pairing::{
         now_ms,
         peer_store::Facts,
+        prefer_sender_ip,
         protocol::{PairingAccept, PairingRequest, PairingRequestPayload},
         sessions::RESPONSE_TIMEOUT,
     },
@@ -210,9 +211,7 @@ fn prepare_response(
     let facts = Facts {
         id: request.from_id.clone(),
         name: request.payload.from_name.clone(),
-        ips: std::iter::once(address.to_owned())
-            .chain(request.payload.ips.clone())
-            .collect(),
+        ip: prefer_sender_ip(&request.payload.ips, address),
         port: request.payload.port,
         device_type: request.payload.device_type,
         key: base64_encode(&chat_key(&shared, request, &response)),
@@ -250,9 +249,7 @@ fn commit_scanned(state: &Runtime, request: &PairingRequest, address: &str) -> R
             .ok_or_else(|| plain_libs::anyhow::anyhow!("Peer removed"))?;
         super::pairing_runtime::success(
             state,
-            &plain_libs::serde_json::to_value(
-                crate::features::services::peers::peer_address::view(&peer),
-            )?,
+            &plain_libs::serde_json::to_value(&peer)?,
             address,
             None,
         );
@@ -306,9 +303,7 @@ pub(super) fn complete(
         Facts {
             id: sender.to_owned(),
             name: name.to_owned(),
-            ips: std::iter::once(address.clone())
-                .chain(response.ips.clone())
-                .collect(),
+            ip: prefer_sender_ip(&response.ips, &address),
             port: response.port,
             device_type: response.device_type,
             key: base64_encode(&chat_key(&shared, request, &response)),

@@ -34,14 +34,13 @@ async fn native_main_record_queries_preserve_addresses_keys_members_and_checked_
     channel.version = 5000000001;
     channels::save(&state.db, &[channel], SaveMode::Insert).unwrap();
     let native = server.native_graphql().unwrap();
-    let response=native.execute(Request::new(r#"{ peers { id key address { bestIp baseUrl apiUrl statusWsUrl } } chatChannels { key ownerId members { peerId status } version } }"#)).await;
+    let response=native.execute(Request::new(r#"{ peers { id ip port key } chatChannels { key ownerId members { peerId status } version } }"#)).await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     let data = response.data.into_json().unwrap();
     assert_eq!(data["peers"][0]["key"], peer.key);
-    assert_eq!(
-        data["peers"][0]["address"]["baseUrl"],
-        "https://127.0.0.1:8443"
-    );
+    assert_eq!(data["peers"][0]["ip"], "127.0.0.1");
+    assert_eq!(data["peers"][0]["port"], 8443);
+    assert!(data["peers"][0].get("address").is_none());
     assert_eq!(data["peers"].as_array().unwrap().len(), 1);
     assert_eq!(data["chatChannels"][0]["version"], 5000000001_i64);
     assert_eq!(data["chatChannels"][0]["key"], "channel-key");
@@ -94,8 +93,7 @@ async fn main_login_and_logout_preserve_pairing_and_live_proxy_addresses() {
     let resolve = |id: &str| {
         plain_rs::infrastructure::db::chat_store::peers::get(&state.db, id)
             .unwrap()
-            .map(|peer| plain_rs::features::services::peers::peer_address::address(&peer).base_url)
-            .filter(|url| !url.is_empty())
+            .and_then(|peer| peer.base_url())
     };
     assert_eq!(resolve("peer-a"), None);
     state

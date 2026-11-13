@@ -414,16 +414,12 @@ async fn issue(state: &ServerState, request: &Pending) -> plain_libs::anyhow::Re
         let peer = &request.request["peer"];
         let mut material = b"chat-pairing".to_vec();
         material.extend(&shared);
-        let mut ips = vec![request.client_ip.clone()];
-        if let Some(extra) = peer["ips"].as_array() {
-            ips.extend(extra.iter().filter_map(Value::as_str).map(str::to_owned));
-        }
         plain_rs::features::peers::pairing::peer_store::save(
             &state.db,
             plain_rs::features::peers::pairing::peer_store::Facts {
                 id: request.client_id.clone(),
                 name: text(peer, "deviceName"),
-                ips,
+                ip: request.client_ip.clone(),
                 port: peer["port"].as_u64().unwrap() as u16,
                 device_type: plain_libs::serde_json::from_value(peer["deviceType"].clone())?,
                 key: plain_libs::utils::base64::base64_encode(&Sha256::digest(&material)),

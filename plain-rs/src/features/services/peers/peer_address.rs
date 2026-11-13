@@ -1,61 +1,5 @@
-use plain_libs::protocols::http_client;
 use crate::infrastructure::db::DPeer;
-use serde::{Serialize, Serializer};
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Address {
-    pub best_ip: String,
-    pub base_url: String,
-    pub api_url: String,
-    pub status_ws_url: String,
-}
-#[derive(Serialize)]
-pub struct View<'a> {
-    #[serde(flatten)]
-    peer: &'a DPeer,
-    address: Address,
-}
-pub fn address(peer: &DPeer) -> Address {
-    address_with_interfaces(
-        peer,
-        &crate::infrastructure::transport::lan::local_interfaces(),
-    )
-}
-pub fn address_with_interfaces(
-    peer: &DPeer,
-    local: &[crate::infrastructure::transport::lan::Interface],
-) -> Address {
-    let ip = peer.best_ip_with_interfaces(local);
-    let base_url = peer
-        .port
-        .filter(|port| *port > 0)
-        .filter(|_| !ip.is_empty())
-        .map(|port| plain_libs::utils::http_url::build_url("https", &ip, port, ""))
-        .unwrap_or_default();
-    Address {
-        api_url: if base_url.is_empty() {
-            String::new()
-        } else {
-            format!("{base_url}/peer_graphql")
-        },
-        status_ws_url: if base_url.is_empty() {
-            String::new()
-        } else {
-            base_url.replacen("https", "wss", 1) + "/status"
-        },
-        best_ip: ip,
-        base_url,
-    }
-}
-pub fn view(peer: &DPeer) -> View<'_> {
-    View {
-        peer,
-        address: address(peer),
-    }
-}
-pub fn serialize_view<S: Serializer>(peer: &DPeer, serializer: S) -> Result<S::Ok, S::Error> {
-    view(peer).serialize(serializer)
-}
+use plain_libs::protocols::http_client;
 pub fn current(
     db: &crate::infrastructure::db::Db,
     id: &str,
@@ -98,6 +42,3 @@ pub fn download_url(peer: &DPeer, file_id: &str) -> plain_libs::anyhow::Result<S
         );
     Ok(url.to_string())
 }
-#[cfg(test)]
-#[path = "../../../../../tests/plain-rs/unit/features/services/peers/peer_address.rs"]
-mod tests;

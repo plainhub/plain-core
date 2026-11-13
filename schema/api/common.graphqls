@@ -192,14 +192,6 @@ type Peer {
 	key: String!
 	publicKey: String!
 	token: String!
-	address: PeerAddress
-}
-
-type PeerAddress {
-	bestIp: String!
-	baseUrl: String!
-	apiUrl: String!
-	statusWsUrl: String!
 }
 
 enum PeerStatus {

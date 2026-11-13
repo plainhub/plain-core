@@ -76,14 +76,20 @@ async fn route(state: &ServerState, target: &str) -> Result<Arc<Route>> {
     }) {
         return Ok(route.clone());
     }
-    let base = http_client::Url::parse(&peer_address::address(&peer).base_url)?;
+    let base = http_client::Url::parse(
+        &peer
+            .base_url()
+            .ok_or_else(|| plain_libs::anyhow::anyhow!("No peer address"))?,
+    )?;
     let response = state
         .lan
         .client
         .post(base.join("/init")?)
         .header(
             "c-id",
-            state.native_client_id().map_err(plain_libs::anyhow::Error::msg)?,
+            state
+                .native_client_id()
+                .map_err(plain_libs::anyhow::Error::msg)?,
         )
         .timeout(Duration::from_secs(5))
         .send()
@@ -97,7 +103,11 @@ async fn route(state: &ServerState, target: &str) -> Result<Arc<Route>> {
             reply["tlsCertificateSignature"].as_str(),
         ) {
             (Some(pin), Some(signature)) => {
-                let proof = plain_libs::serde_json::json!([plain_rs::infrastructure::signature::SignaturePurpose::PeerTlsCertificate, pin]).to_string();
+                let proof = plain_libs::serde_json::json!([
+                    plain_rs::infrastructure::signature::SignaturePurpose::PeerTlsCertificate,
+                    pin
+                ])
+                .to_string();
                 ensure!(
                     plain_libs::crypto::ed25519_verify(
                         &peer.public_key,

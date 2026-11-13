@@ -152,7 +152,10 @@ impl PeerSubscription {
         let mut changed = self.state.db.peer_changes();
         let key = plain_libs::utils::base64::base64_decode(&self.peer.token);
         let mut url = http_client::Url::parse(
-            &crate::features::services::peers::peer_address::address(&self.peer).base_url,
+            &self
+                .peer
+                .base_url()
+                .ok_or_else(|| anyhow!("No peer address"))?,
         )?;
         url.set_scheme("wss")
             .map_err(|_| anyhow!("Invalid management address"))?;

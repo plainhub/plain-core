@@ -80,9 +80,7 @@ pub(super) async fn run(
             peer.name = name.into();
             crate::features::services::discovery::pairing_runtime::success(
                 state,
-                &plain_libs::serde_json::to_value(
-                    crate::features::services::peers::peer_address::view(&peer),
-                )?,
+                &plain_libs::serde_json::to_value(&peer)?,
                 &peer.ip,
                 None,
             );
@@ -110,7 +108,7 @@ pub(super) async fn run(
             state,
             peer_id,
             &target.target.device_name,
-            base.host_str().unwrap_or_default(),
+            base.host_str().unwrap_or_default().trim_matches(&['[', ']'][..]),
             target.device_type,
             &digest,
             changed,
@@ -310,7 +308,7 @@ pub(super) async fn run(
         .login_peer_confirmed(
             &remote_id,
             text(&metadata, "deviceName")?,
-            &target.ips.join(","),
+            base.host_str().unwrap_or_default().trim_matches(&['[', ']'][..]),
             port,
             device_type,
             &token,
@@ -326,9 +324,7 @@ pub(super) async fn run(
     if let Some(peer) = crate::infrastructure::db::chat_store::peers::get(&state.db, &remote_id)? {
         crate::features::services::discovery::pairing_runtime::success(
             state,
-            &plain_libs::serde_json::to_value(
-                crate::features::services::peers::peer_address::view(&peer),
-            )?,
+            &plain_libs::serde_json::to_value(&peer)?,
             &peer.ip,
             None,
         );

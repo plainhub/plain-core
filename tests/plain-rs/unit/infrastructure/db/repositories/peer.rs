@@ -170,15 +170,8 @@ fn update_peer_name_renames_only() {
 }
 
 #[test]
-fn peer_url_helpers_use_best_ip_and_port() {
-    let mut peer = DPeer::new(
-        "p1",
-        "p1",
-        "203.0.113.7,203.0.113.8",
-        Some(8443),
-        DeviceType::Nas,
-    );
-    assert_eq!(peer.best_ip(), "203.0.113.7");
+fn peer_url_helpers_use_single_ip_and_port() {
+    let mut peer = DPeer::new("p1", "p1", "203.0.113.7", Some(8443), DeviceType::Nas);
     assert_eq!(peer.base_url().unwrap(), "https://203.0.113.7:8443");
     assert_eq!(
         peer.peer_graphql_url().unwrap(),
@@ -192,6 +185,10 @@ fn peer_url_helpers_use_best_ip_and_port() {
     peer.port = Some(443);
     peer.ip = "203.0.113.7".to_string();
     assert_eq!(peer.base_url().unwrap(), "https://203.0.113.7");
+    peer.ip = "::1".into();
+    assert_eq!(peer.base_url().unwrap(), "https://[::1]");
+    peer.ip = "device.example".into();
+    assert_eq!(peer.base_url().unwrap(), "https://device.example");
 }
 
 #[test]

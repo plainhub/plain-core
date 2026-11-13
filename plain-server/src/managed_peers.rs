@@ -4,11 +4,11 @@ pub(crate) mod upload;
 use crate::server::ServerState;
 use plain_libs::anyhow::{Result, anyhow, ensure};
 use plain_libs::protocols::http_client;
+use plain_libs::serde_json::json;
 use plain_rs::{
     features::services::peers::{management_http, peer_address},
     infrastructure::db::{DPeer, chat_store::peers},
 };
-use plain_libs::serde_json::json;
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
@@ -43,7 +43,9 @@ impl ManagedPeerRoutes {
                 peer.is_paired() && !peer.public_key.is_empty() && !peer.token.is_empty()
             })
             .ok_or_else(|| anyhow!("Managed device unavailable"))?;
-        let client_id = state.native_client_id().map_err(plain_libs::anyhow::Error::msg)?;
+        let client_id = state
+            .native_client_id()
+            .map_err(plain_libs::anyhow::Error::msg)?;
         ensure!(target != client_id, "Invalid managed target");
         let slot = self
             .routes
@@ -62,7 +64,11 @@ impl ManagedPeerRoutes {
         }) {
             return Ok(route.clone());
         }
-        let base = http_client::Url::parse(&peer_address::address(&peer).base_url)?;
+        let base = http_client::Url::parse(
+            &peer
+                .base_url()
+                .ok_or_else(|| plain_libs::anyhow::anyhow!("No peer address"))?,
+        )?;
         let key = decode_key(&peer.token)?;
         let data = management_http::query(
             state,

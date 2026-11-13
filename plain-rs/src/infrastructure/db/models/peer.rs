@@ -44,28 +44,9 @@ impl DPeer {
         self.status == PeerStatus::Paired
     }
 
-    pub fn best_ip(&self) -> String {
-        self.best_ip_with_interfaces(&crate::infrastructure::transport::lan::local_interfaces())
-    }
-
-    pub fn best_ip_with_interfaces(
-        &self,
-        local: &[crate::infrastructure::transport::lan::Interface],
-    ) -> String {
-        let ips = self
-            .ip
-            .split(',')
-            .map(str::trim)
-            .filter(|ip| !ip.is_empty())
-            .map(str::to_string)
-            .collect::<Vec<_>>();
-        crate::infrastructure::transport::lan::best_host(&ips, local)
-    }
-
     pub fn base_url(&self) -> Option<String> {
         let port = self.port.filter(|port| *port > 0)?;
-        let ip = self.best_ip();
-        (!ip.is_empty()).then(|| build_url("https", &ip, port, ""))
+        (!self.ip.is_empty()).then(|| build_url("https", &self.ip, port, ""))
     }
 
     pub fn peer_graphql_url(&self) -> Option<String> {

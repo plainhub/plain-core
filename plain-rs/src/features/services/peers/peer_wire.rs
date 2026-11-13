@@ -7,8 +7,8 @@ use crate::infrastructure::transport::contract::START_AWARE;
 use crate::infrastructure::transport::contract::chat_item_request;
 use crate::infrastructure::transport::contract::signed_request;
 use plain_libs::anyhow::{Result, bail};
-use serde::{Deserialize, Serialize};
 use plain_libs::serde_json::json;
+use serde::{Deserialize, Serialize};
 #[derive(Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase", deny_unknown_fields)]
 pub enum Operation {
@@ -18,7 +18,6 @@ pub enum Operation {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Prepared {
-    #[serde(serialize_with = "crate::features::services::peers::peer_address::serialize_view")]
     pub peer: DPeer,
     pub body: String,
     pub key: String,

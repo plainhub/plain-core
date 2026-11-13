@@ -189,17 +189,11 @@ async fn desired(
     let state = state.clone();
     let actor = actor.to_owned();
     tokio::task::spawn_blocking(move || -> Result<(Vec<DPeer>, HashMap<String, Identity>)> {
-        let interfaces = crate::infrastructure::transport::lan::local_interfaces();
         let peers = peers::all(&state.db)?;
         let wanted = peers
             .iter()
             .filter_map(|peer| {
-                let address =
-                    crate::features::services::peers::peer_address::address_with_interfaces(
-                        peer,
-                        &interfaces,
-                    );
-                identity(peer, &actor, &address.base_url)
+                identity(peer, &actor, &peer.base_url().unwrap_or_default())
                     .map(|identity| (peer.id.clone(), identity))
             })
             .collect();

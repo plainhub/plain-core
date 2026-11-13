@@ -19,30 +19,6 @@ fn add(
         }
     }
 }
-fn add_addresses(
-    links: &mut Vec<Link>,
-    seen: &mut HashSet<(String, u16)>,
-    ips: &str,
-    port: u16,
-    card: &Card,
-) {
-    let mut ips: Vec<String> = ips
-        .split(',')
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .map(str::to_owned)
-        .collect();
-    let best = crate::infrastructure::transport::lan::best(
-        &ips,
-        &crate::infrastructure::transport::lan::local_interfaces(),
-    );
-    if !best.is_empty() {
-        add(links, seen, &best, port, card);
-    }
-    for ip in ips.drain(..) {
-        add(links, seen, &ip, port, card);
-    }
-}
 fn candidates(state: &CoreRuntime, card: &Card, discovered: bool) -> Result<Vec<Link>> {
     let mut links = vec![];
     let mut seen = HashSet::new();
@@ -58,7 +34,7 @@ fn candidates(state: &CoreRuntime, card: &Card, discovered: bool) -> Result<Vec<
             add(&mut links, &mut seen, &local.ip.to_string(), port, card);
         }
     }
-    add_addresses(
+    add(
         &mut links,
         &mut seen,
         &card.peer_info.ip,
@@ -69,7 +45,7 @@ fn candidates(state: &CoreRuntime, card: &Card, discovered: bool) -> Result<Vec<
         crate::infrastructure::db::chat_store::peers::get(&state.db, &card.peer_info.id)?
     {
         if let Some(port) = peer.port {
-            add_addresses(&mut links, &mut seen, &peer.ip, port, card);
+            add(&mut links, &mut seen, &peer.ip, port, card);
         }
     }
     if discovered {

@@ -1,24 +1,3 @@
-use plain_graphql::SimpleObject;
-use serde::Deserialize;
-
-#[derive(SimpleObject, Deserialize, Clone, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct PeerAddress {
-    best_ip: String,
-    base_url: String,
-    api_url: String,
-    status_ws_url: String,
-}
-impl From<plain_rs::features::services::peers::peer_address::Address> for PeerAddress {
-    fn from(value: plain_rs::features::services::peers::peer_address::Address) -> Self {
-        Self {
-            best_ip: value.best_ip,
-            base_url: value.base_url,
-            api_url: value.api_url,
-            status_ws_url: value.status_ws_url,
-        }
-    }
-}
 #[derive(Default)]
 pub struct PeerRecordQuery;
 #[plain_graphql::Object]

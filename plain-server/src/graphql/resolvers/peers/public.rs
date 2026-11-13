@@ -27,23 +27,12 @@ pub struct Peer {
     pub public_key: String,
     #[graphql(guard = "crate::http::auth::public_gate::LocalOwner")]
     pub token: String,
-    pub address: Option<super::records::PeerAddress>,
 }
 
 impl Peer {
-    pub(crate) fn from_record(
-        row: plain_rs::infrastructure::db::DPeer,
-        online: bool,
-        local: &[plain_rs::infrastructure::transport::lan::Interface],
-    ) -> Self {
+    pub(crate) fn from_record(row: plain_rs::infrastructure::db::DPeer, online: bool) -> Self {
         let managed = row.is_paired() && !row.token.is_empty();
         Self {
-            address: Some(
-                plain_rs::features::services::peers::peer_address::address_with_interfaces(
-                    &row, local,
-                )
-                .into(),
-            ),
             key: row.key,
             public_key: row.public_key,
             token: row.token,
@@ -94,7 +83,6 @@ impl PeersQuery {
     fn peers(&self, ctx: &Context<'_>) -> plain_graphql::Result<Vec<Peer>> {
         let state = ctx.data::<crate::server::ServerState>()?;
         let rows = plain_rs::infrastructure::db::chat_store::peers::all(&state.db)?;
-        let local = plain_rs::infrastructure::transport::lan::local_interfaces();
         let connections = state.peer_status.connections.snapshot_peers(&rows);
         let online = connections["online"]
             .as_array()
@@ -106,7 +94,7 @@ impl PeersQuery {
             .into_iter()
             .map(|row| {
                 let connected = online.contains(row.id.as_str());
-                Peer::from_record(row, connected, &local)
+                Peer::from_record(row, connected)
             })
             .collect())
     }
