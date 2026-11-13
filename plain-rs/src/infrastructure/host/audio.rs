@@ -1,22 +1,4 @@
-use crate::infrastructure::host::bridge::Host;
-use serde::{Deserialize, Serialize};
-
-pub const PLAYBACK_STATE: &str = "systemAudioPlaybackState";
-
-#[derive(Deserialize, Serialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct AudioPlaybackFacts {
-    pub is_playing: bool,
-    pub position_ms: i64,
-}
-
-impl Host {
-    pub async fn audio_playback_facts(&self) -> Result<AudioPlaybackFacts, String> {
-        let value = self.call(PLAYBACK_STATE, plain_libs::serde_json::json!({})).await?;
-        plain_libs::serde_json::from_value(value)
-            .map_err(|error| format!("Invalid audio playback facts: {error}"))
-    }
-}
+use serde::Deserialize;
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]

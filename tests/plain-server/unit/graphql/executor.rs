@@ -206,13 +206,6 @@ fn runtime_controls_and_viewer_exports_do_not_trigger_generic_content_refreshes(
 }
 
 #[test]
-fn versioned_audio_selection_owns_its_content_notification() {
-    assert!(!content_changes(&Request::new(
-        r#"mutation { advanceAudioSelection(action:NEXT,expectedPath:"song",expectedRevision:1) { revision } }"#
-    )));
-}
-
-#[test]
 fn playback_fact_reports_do_not_trigger_generic_content_refresh() {
     assert!(!content_changes(&Request::new(
         r#"mutation { saveMediaPlayProgress(mediaId:"song",type:AUDIO,positionMs:0) }"#

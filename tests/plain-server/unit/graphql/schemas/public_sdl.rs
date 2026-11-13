@@ -259,7 +259,6 @@ pub(super) fn files(sdl: &str) -> BTreeMap<String, String> {
     group!(
         "Mutation",
         "audio",
-        resolvers::audio::commands::AudioCommandsMutation,
         resolvers::audio::public::AudioMutation
     );
     group!(

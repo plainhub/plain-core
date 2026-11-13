@@ -1,31 +1,21 @@
 use crate::features::enums::DataType;
 use crate::features::media::audio::overview;
 use crate::features::media::audio::overview::Accumulator;
-use crate::features::media::audio::overview::Overview;
+use crate::features::media::audio::overview::Artist;
 use crate::features::prefs::settings::FileSortBy;
 use crate::features::services::files::catalog::MediaCatalog;
 use crate::infrastructure::db::Db;
-use plain_libs::serde_json::Value;
 use std::sync::Arc;
 
 const PAGE_SIZE: u32 = 512;
 
-pub async fn read(db: Arc<Db>, catalog: MediaCatalog) -> Result<Overview<Value>, String> {
+pub async fn read(db: Arc<Db>, catalog: MediaCatalog) -> Result<Vec<Artist>, String> {
     if let MediaCatalog::Native(source) = &catalog {
         let source = source.clone();
-        return tokio::task::spawn_blocking(move || {
-            let summary = overview::native(&source).map_err(|error| error.to_string())?;
-            Ok(Overview {
-                artists: summary.artists,
-                recent_items: summary
-                    .recent_items
-                    .iter()
-                    .map(crate::features::services::files::media_catalog_facts::row_facts)
-                    .collect::<Result<_, _>>()?,
-            })
-        })
-        .await
-        .map_err(|error| error.to_string())?;
+        return tokio::task::spawn_blocking(move || overview::native(&source))
+            .await
+            .map_err(|error| error.to_string())?
+            .map_err(|error| error.to_string());
     }
     for _ in 0..3 {
         if let Some(summary) = platform_read(db.clone(), &catalog).await? {
@@ -38,7 +28,7 @@ pub async fn read(db: Arc<Db>, catalog: MediaCatalog) -> Result<Overview<Value>,
 async fn platform_read(
     db: Arc<Db>,
     catalog: &MediaCatalog,
-) -> Result<Option<Overview<Value>>, String> {
+) -> Result<Option<Vec<Artist>>, String> {
     let history = tokio::task::spawn_blocking(move || overview::history(&db))
         .await
         .map_err(|error| error.to_string())?
@@ -63,16 +53,12 @@ async fn platform_read(
             return Err("audio catalog page exceeds requested limit".into());
         }
         for row in page.rows {
-            let id = row["id"].as_str().unwrap_or_default().to_owned();
-            let path = row["path"].as_str().unwrap_or_default().to_owned();
-            let artist = row["artist"].as_str().unwrap_or_default().to_owned();
-            let created = row["createdAt"]
-                .as_str()
-                .and_then(|value| plain_libs::chrono::DateTime::parse_from_rfc3339(value).ok())
-                .map(|value| value.timestamp_millis())
-                .unwrap_or_default();
             summary
-                .push(&id, &artist, &path, created, row)
+                .push(
+                    row["id"].as_str().unwrap_or_default(),
+                    row["artist"].as_str().unwrap_or_default(),
+                    row["path"].as_str().unwrap_or_default(),
+                )
                 .map_err(|error| error.to_string())?;
         }
         if count < PAGE_SIZE {

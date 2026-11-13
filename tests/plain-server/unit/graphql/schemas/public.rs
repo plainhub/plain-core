@@ -124,7 +124,17 @@ fn public_schema_exposes_the_contract_it_has_to_serve() {
         "imageModelsState:",
         "onlineClientIds:",
         "activePeerTransfers:",
-        "selectAudio(",
+        "playAudio(",
+        "audioPlayTrack(",
+        "advanceAudioSelection(",
+        "type AudioSelection {",
+        "audioOverview:",
+        "type AudioOverview {",
+        "enum AudioSelectionAction {",
+        "audioPlayPath(",
+        "type AudioPlaybackState {",
+        "audioCommand(",
+        "enum AudioCommandAction",
         "mediaIds(",
         "pauseSharedDownload(",
         "resumeSharedDownload(",
@@ -237,7 +247,6 @@ fn public_schema_exposes_the_contract_it_has_to_serve() {
     for obsolete in ["id:", "host:", "generation:", "confirm:", "name:", "ips:", "lastSeen:", "deviceType:"] {
         assert!(!pairing_input.contains(obsolete));
     }
-    assert!(sdl.contains("enum AudioCommandAction {"));
     assert!(!sdl.contains("enum MediaAction {"));
     assert!(!sdl.contains("fetchBookmarkMetadata("));
     assert!(sdl.contains("faviconUrl: String"));
@@ -363,7 +372,9 @@ fn public_schema_exposes_the_contract_it_has_to_serve() {
         "recordMediaPlay(mediaId: ID!, type: PlaybackType!, positionMs: Long!): Boolean!",
         "saveMediaPlayProgress(mediaId: ID!, type: PlaybackType!, positionMs: Long!): Boolean!",
         "mediaPlayHistory(query: String!, offset: Int!, limit: Int!): [MediaPlayHistory!]!",
-        "playAudio(mediaId: ID!): AudioItem!",
+        "selectAudio(mediaId: ID!): AudioItem!",
+        "audioArtists: [AudioArtist!]!",
+        "selectAudioByPath(path: String!): AudioItem!",
         "updateAudioPlayMode(mode: MediaPlayMode!): Boolean!",
         "clearAudioQueue: Boolean!",
         "removeAudioFromQueue(mediaId: ID!): Boolean!",

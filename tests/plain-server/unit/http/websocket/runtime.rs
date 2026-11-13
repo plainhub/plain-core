@@ -646,9 +646,6 @@ async fn saturated_host_recovers_online_clients_without_counting_native_sessions
     let feeds = host.next_request().await.unwrap();
     assert_eq!(feeds["method"], "feedSyncChanged");
     host.reply(json!({"id":feeds["id"],"result":null})).unwrap();
-    let audio = host.next_request().await.unwrap();
-    assert_eq!(audio["method"], "audioPlaybackRefresh");
-    host.reply(json!({"id":audio["id"],"result":null})).unwrap();
     let library = host.next_request().await.unwrap();
     assert_eq!(library["method"], "audioLibraryRefresh");
     host.reply(json!({"id":library["id"],"result":null}))

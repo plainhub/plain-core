@@ -186,7 +186,6 @@ pub(crate) fn content_changes(request: &Request) -> bool {
                             field.node.name.node.as_str(),
                             "setClipboard"
                                 | "deleteClipboardItems"
-                                | "advanceAudioSelection"
                                 | "saveMediaPlayProgress"
                                 | "sendChatItems"
                                 | "forwardChatItems"

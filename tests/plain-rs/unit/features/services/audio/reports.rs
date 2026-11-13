@@ -78,7 +78,7 @@ async fn completion_fact_dispatches_once_and_never_rebroadcasts_the_platform_eve
 }
 
 #[tokio::test]
-async fn an_acknowledged_start_notifies_the_library_once_without_echoing_the_sdk_fact() {
+async fn a_direct_host_start_notifies_the_library_once_without_echoing_the_sdk_fact() {
     let dir = plain_libs::temporary::tempdir().unwrap();
     let server = ContentServer::start(
         dir.path(),
@@ -100,9 +100,13 @@ async fn an_acknowledged_start_notifies_the_library_once_without_echoing_the_sdk
             false,
         )
         .unwrap();
-    let playback = playback::prepare_track(&state.db, &AudioTrack::from_path_stem("one")).unwrap();
-    playback::loaded(&state.db, "one", playback.revision).unwrap();
     let (generation, mut requests) = state.host.connect();
+    state
+        .audio
+        .run_playback(|db, _| playback::prepare_track(db, &AudioTrack::from_path_stem("one")))
+        .await
+        .unwrap();
+    let playback = playback::snapshot(&state.db).unwrap();
     let mut events = state.events.subscribe();
     let payload = json!({"path":"one","revision":playback.revision}).to_string();
     accept(&state, generation, "AUDIO_STARTED_REPORTED", &payload)

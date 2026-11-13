@@ -1,7 +1,7 @@
 use super::*;
 
 #[test]
-fn statistics_cover_the_full_catalog_and_resolve_live_history_before_fallback() {
+fn artist_statistics_cover_the_full_catalog_and_ignore_missing_tracks() {
     let mut summary = Accumulator::new(vec![
         History {
             id: "missing".into(),
@@ -29,13 +29,12 @@ fn statistics_cover_the_full_catalog_and_resolve_live_history_before_fallback() 
             _ => "B",
         };
         summary
-            .push(&i.to_string(), artist, &format!("/{i}"), i, i)
+            .push(&i.to_string(), artist, &format!("/{i}"))
             .unwrap();
     }
     let result = summary.finish();
-    assert_eq!(result.recent_items, [1005, 2, 1001]);
     assert_eq!(
-        result.artists,
+        result,
         vec![
             Artist {
                 name: "B".into(),
@@ -54,34 +53,9 @@ fn statistics_cover_the_full_catalog_and_resolve_live_history_before_fallback() 
 }
 
 #[test]
-fn deleted_history_falls_back_to_latest_added_with_stable_ties() {
-    let mut summary = Accumulator::new(vec![History {
-        id: "missing".into(),
-        play_count: 3,
-    }])
-    .unwrap();
-    for i in 0..12 {
-        summary
-            .push(&i.to_string(), " ", &format!("/{i}"), 50, i)
-            .unwrap();
-    }
-    summary.push("new", " ", "/new", 60, 12).unwrap();
-    let result = summary.finish();
-    assert!(result.artists.is_empty());
-    assert_eq!(result.recent_items, [12, 0, 1, 2, 3, 4, 5, 6]);
-    assert!(
-        Accumulator::<usize>::new(vec![])
-            .unwrap()
-            .finish()
-            .recent_items
-            .is_empty()
-    );
-}
-
-#[test]
 fn duplicate_rows_negative_counts_and_count_overflow_are_errors() {
     assert!(
-        Accumulator::<()>::new(vec![History {
+        Accumulator::new(vec![History {
             id: "id".into(),
             play_count: -1
         }])
@@ -98,54 +72,10 @@ fn duplicate_rows_negative_counts_and_count_overflow_are_errors() {
         },
     ])
     .unwrap();
-    summary.push("one", "Artist", "/one", 0, ()).unwrap();
-    assert!(summary.push("one", "Artist", "/one", 0, ()).is_err());
-    assert!(summary.push("two", "Artist", "/two", 0, ()).is_err());
-    assert!(summary.push("", "Artist", "/missing", 0, ()).is_err());
-}
-
-#[test]
-fn streaming_does_not_retain_all_full_track_payloads() {
-    use std::{cell::Cell, rc::Rc};
-    struct Payload(Rc<Cell<usize>>);
-    impl Clone for Payload {
-        fn clone(&self) -> Self {
-            self.0.set(self.0.get() + 1);
-            Self(self.0.clone())
-        }
-    }
-    impl Drop for Payload {
-        fn drop(&mut self) {
-            self.0.set(self.0.get() - 1);
-        }
-    }
-    let live = Rc::new(Cell::new(0));
-    let mut summary = Accumulator::new(
-        (0..1100)
-            .map(|i| History {
-                id: i.to_string(),
-                play_count: 1,
-            })
-            .collect(),
-    )
-    .unwrap();
-    for i in 0..1100 {
-        live.set(live.get() + 1);
-        summary
-            .push(
-                &i.to_string(),
-                "Artist",
-                &format!("/{i}"),
-                i,
-                Payload(live.clone()),
-            )
-            .unwrap();
-        assert!(live.get() <= 16, "retained {} payloads", live.get());
-    }
-    let result = summary.finish();
-    assert_eq!(live.get(), 8);
-    drop(result);
-    assert_eq!(live.get(), 0);
+    summary.push("one", "Artist", "/one").unwrap();
+    assert!(summary.push("one", "Artist", "/one").is_err());
+    assert!(summary.push("two", "Artist", "/two").is_err());
+    assert!(summary.push("", "Artist", "/missing").is_err());
 }
 
 fn insert_native_audio(
@@ -201,16 +131,15 @@ fn native_history_and_catalog_share_one_snapshot_during_external_writes() {
         }))
     });
     let before = native(&db).unwrap();
-    assert_eq!(before.artists.len(), 1);
-    assert_eq!(before.artists[0].name, "Old Artist");
-    assert_eq!(before.artists[0].item_count, 2);
-    assert_eq!(before.artists[0].play_count, 5);
-    assert_eq!(before.recent_items[0].artist, "Old Artist");
+    assert_eq!(before.len(), 1);
+    assert_eq!(before[0].name, "Old Artist");
+    assert_eq!(before[0].item_count, 2);
+    assert_eq!(before[0].play_count, 5);
     let after = native(&db).unwrap();
-    assert_eq!(after.artists.len(), 1);
-    assert_eq!(after.artists[0].name, "New Artist");
-    assert_eq!(after.artists[0].item_count, 2);
-    assert_eq!(after.artists[0].play_count, 99);
+    assert_eq!(after.len(), 1);
+    assert_eq!(after[0].name, "New Artist");
+    assert_eq!(after[0].item_count, 2);
+    assert_eq!(after[0].play_count, 99);
 }
 
 #[test]
@@ -240,7 +169,6 @@ fn native_scan_covers_more_than_a_page_and_excludes_trash_and_other_media() {
     let summary = native(&db).unwrap();
     assert_eq!(
         summary
-            .artists
             .iter()
             .map(|artist| artist.item_count)
             .sum::<i32>(),
@@ -248,20 +176,7 @@ fn native_scan_covers_more_than_a_page_and_excludes_trash_and_other_media() {
     );
     assert!(
         !summary
-            .artists
             .iter()
             .any(|artist| artist.name == "Excluded")
-    );
-    assert_eq!(summary.recent_items.len(), 1);
-    assert_eq!(summary.recent_items[0].id, "1");
-    db.with_conn(|connection| connection.execute("DELETE FROM media_play_history", []))
-        .unwrap();
-    let fallback = native(&db).unwrap();
-    assert_eq!(fallback.recent_items.len(), 8);
-    assert!(
-        fallback
-            .recent_items
-            .iter()
-            .all(|row| row.path.starts_with("/track-"))
     );
 }

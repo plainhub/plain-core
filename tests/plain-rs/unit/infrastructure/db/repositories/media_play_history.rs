@@ -57,9 +57,9 @@ fn normalized_audio_reads_live_catalog_metadata_and_keeps_video_history() {
         "Updated"
     );
     assert_eq!(
-        crate::features::media::audio::overview::native(&db)
+        db.media_file_by_path(crate::features::enums::DataType::Audio, &track.path)
             .unwrap()
-            .recent_items[0]
+            .unwrap()
             .title,
         "Updated"
     );

@@ -11,18 +11,6 @@ type AudioArtist {
 	samplePath: String!
 }
 
-enum AudioCommandAction {
-	PLAY
-	PAUSE
-	SEEK
-	NEXT
-	PREVIOUS
-	COMPLETED
-	CLEAR
-	RESTART
-	SET_SPEED
-}
-
 type AudioItem {
 	mediaId: ID
 	title: String!
@@ -31,50 +19,18 @@ type AudioItem {
 	durationMs: Long!
 }
 
-type AudioOverview {
-	artists: [AudioArtist!]!
-	recentItems: [Audio!]!
-}
-
 type AudioPlayback {
-	revision: Long!
 	mediaId: ID
 	path: String
-	mode: MediaPlayMode!
-	isPlaying: Boolean!
-	positionMs: Long!
-}
-
-type AudioPlaybackState {
-	path: String!
-	positionMs: Long!
-	revision: Long!
 }
 
 type AudioPlaylist {
 	id: ID!
 	name: String!
 	itemCount: Int!
+	coverAlbums: [AudioAlbumCover!]!
 	createdAt: Instant!
 	updatedAt: Instant!
-}
-
-type AudioPlaylistCovers {
-	id: ID!
-	albums: [AudioAlbumCover!]!
-}
-
-type AudioSelection {
-	track: AudioItem
-	path: String!
-	positionMs: Long!
-	revision: Long!
-}
-
-enum AudioSelectionAction {
-	NEXT
-	PREVIOUS
-	COMPLETED
 }
 
 enum MediaPlayMode {
@@ -86,31 +42,28 @@ enum MediaPlayMode {
 extend type Mutation {
 	addAudioPlaylistItems(id: ID!, query: String!): Boolean!
 	addAudioToQueue(query: String!): Boolean!
-	advanceAudioSelection(action: AudioSelectionAction!, expectedPath: String!, expectedRevision: Long!, shuffle: Boolean! = false): AudioSelection
-	audioCommand(action: AudioCommandAction!, positionMs: Long!, speed: Float!): AudioPlaybackState!
-	audioPlayPath(path: String!): AudioPlaybackState!
-	audioPlayTrack(mediaId: ID!): AudioPlaybackState!
 	cacheAudioCover(path: String!): String
 	clearAudioQueue: Boolean!
 	createAudioPlaylist(name: String!): AudioPlaylist!
 	deleteAudioPlaylist(id: ID!): Boolean!
-	playAudio(mediaId: ID!): AudioItem!
 	removeAudioFromQueue(mediaId: ID!): Boolean!
 	removeAudioPlaylistItem(id: ID!, query: String!): ActionResult!
 	reorderAudioQueue(mediaIds: [ID!]!): Boolean!
 	replaceAudioQueue(query: String!, sortBy: FileSortBy!, shuffle: Boolean!): AudioItem
+	selectAudio(mediaId: ID!): AudioItem!
+	selectAudioByPath(path: String!): AudioItem!
 	updateAudioPlayMode(mode: MediaPlayMode!): Boolean!
 	updateAudioPlaylist(id: ID!, name: String!): AudioPlaylist!
 }
 
 extend type Query {
+	audioArtists: [AudioArtist!]!
 	audioCount(query: String!): Int!
 	audioLyrics(mediaId: ID!): String
 	audioLyricsByPath(path: String!): String
 	audioMetadata(path: String!): AudioItem!
-	audioOverview: AudioOverview!
 	audioPlayback: AudioPlayback!
-	audioPlaylistCovers(ids: [ID!]!): [AudioPlaylistCovers!]!
+	audioPlaylist(id: ID!): AudioPlaylist
 	audioPlaylistItemCount(id: ID!, query: String!): Int!
 	audioPlaylistItems(id: ID!, query: String!, offset: Int!, limit: Int!): [AudioItem!]!
 	audioPlaylists: [AudioPlaylist!]!

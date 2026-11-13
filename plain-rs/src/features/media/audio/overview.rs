@@ -3,8 +3,6 @@ use crate::infrastructure::error::DomainError;
 use crate::infrastructure::error::DomainResult;
 use std::collections::{BTreeMap, HashMap, HashSet};
 
-const RECENT_LIMIT: usize = 8;
-
 pub struct History {
     pub id: String,
     pub play_count: i64,
@@ -28,7 +26,7 @@ fn history_from_connection(conn: &plain_libs::rusqlite::Connection) -> DomainRes
         .collect::<plain_libs::rusqlite::Result<Vec<_>>>()?)
 }
 
-pub fn native(db: &Db) -> DomainResult<Overview<crate::infrastructure::db::MediaFileRow>> {
+pub fn native(db: &Db) -> DomainResult<Vec<Artist>> {
     db.with_conn(|connection| {
         let transaction = connection.unchecked_transaction()?;
         let mut summary = Accumulator::new(history_from_connection(&transaction)?)?;
@@ -38,19 +36,15 @@ pub fn native(db: &Db) -> DomainResult<Overview<crate::infrastructure::db::Media
             if let Some(callback) = callback { callback(); }
         });
         {
-            let mut statement = transaction.prepare(&format!(
-                "SELECT {} FROM file_catalog WHERE data_type=1 AND trashed=0 AND missing=0 AND indexed=1 AND is_available=1 ORDER BY title COLLATE NOCASE ASC,id",
-                crate::infrastructure::db::media_file::COLUMNS,
-            ))?;
+            let mut statement = transaction.prepare(
+                "SELECT id,artist,path FROM file_catalog WHERE data_type=1 AND trashed=0 AND missing=0 AND indexed=1 AND is_available=1 ORDER BY title COLLATE NOCASE ASC,id",
+            )?;
             let mut rows = statement.query([])?;
             while let Some(row) = rows.next()? {
-                let row = crate::infrastructure::db::media_file::from_row(row)?;
-                let created_ms = plain_libs::chrono::DateTime::parse_from_rfc3339(&row.created_at)
-                    .map_or(0, |time| time.timestamp_millis());
-                let id = row.id.clone();
-                let artist = row.artist.clone();
-                let path = row.path.clone();
-                summary.push(&id, &artist, &path, created_ms, row)?;
+                let id: String = row.get(0)?;
+                let artist: String = row.get(1)?;
+                let path: String = row.get(2)?;
+                summary.push(&id, &artist, &path)?;
             }
         }
         transaction.commit()?;
@@ -71,20 +65,13 @@ pub struct Artist {
     pub sample_path: String,
 }
 
-pub struct Overview<T> {
-    pub artists: Vec<Artist>,
-    pub recent_items: Vec<T>,
-}
-
-pub struct Accumulator<T> {
-    history: HashMap<String, (usize, i64)>,
+pub struct Accumulator {
+    history: HashMap<String, i64>,
     seen: HashSet<String>,
     artists: BTreeMap<String, Artist>,
-    recent: Vec<(usize, T)>,
-    newest: Vec<(i64, T)>,
 }
 
-impl<T: Clone> Accumulator<T> {
+impl Accumulator {
     pub fn new(history: Vec<History>) -> DomainResult<Self> {
         if history.iter().any(|item| item.play_count < 0) {
             return Err(DomainError::Other("negative audio play count".into()));
@@ -92,24 +79,14 @@ impl<T: Clone> Accumulator<T> {
         Ok(Self {
             history: history
                 .into_iter()
-                .enumerate()
-                .map(|(rank, item)| (item.id, (rank, item.play_count)))
+                .map(|item| (item.id, item.play_count))
                 .collect(),
             seen: HashSet::new(),
             artists: BTreeMap::new(),
-            recent: Vec::new(),
-            newest: Vec::new(),
         })
     }
 
-    pub fn push(
-        &mut self,
-        id: &str,
-        name: &str,
-        path: &str,
-        created_ms: i64,
-        value: T,
-    ) -> DomainResult<()> {
+    pub fn push(&mut self, id: &str, name: &str, path: &str) -> DomainResult<()> {
         if id.is_empty() || path.is_empty() {
             return Err(DomainError::Other("audio catalog identity required".into()));
         }
@@ -136,44 +113,20 @@ impl<T: Clone> Accumulator<T> {
                 .ok_or_else(|| DomainError::Other("audio item count overflow".into()))?;
             artist.play_count = artist
                 .play_count
-                .checked_add(history.map(|(_, count)| count).unwrap_or(0))
+                .checked_add(history.unwrap_or(0))
                 .ok_or_else(|| DomainError::Other("audio play count overflow".into()))?;
-        }
-        if let Some((rank, _)) = history {
-            if self.recent.len() < RECENT_LIMIT
-                || self.recent.last().is_some_and(|last| rank < last.0)
-            {
-                self.recent.push((rank, value.clone()));
-                self.recent.sort_by_key(|item| item.0);
-                self.recent.truncate(RECENT_LIMIT);
-            }
-        }
-        if self.newest.len() < RECENT_LIMIT
-            || self.newest.last().is_some_and(|last| created_ms > last.0)
-        {
-            self.newest.push((created_ms, value));
-            self.newest.sort_by(|a, b| b.0.cmp(&a.0));
-            self.newest.truncate(RECENT_LIMIT);
         }
         Ok(())
     }
 
-    pub fn finish(self) -> Overview<T> {
+    pub fn finish(self) -> Vec<Artist> {
         let mut artists = self.artists.into_values().collect::<Vec<_>>();
         artists.sort_by(|a, b| {
             b.play_count
                 .cmp(&a.play_count)
                 .then_with(|| a.name.cmp(&b.name))
         });
-        let recent_items = if self.recent.is_empty() {
-            self.newest.into_iter().map(|(_, value)| value).collect()
-        } else {
-            self.recent.into_iter().map(|(_, value)| value).collect()
-        };
-        Overview {
-            artists,
-            recent_items,
-        }
+        artists
     }
 }
 

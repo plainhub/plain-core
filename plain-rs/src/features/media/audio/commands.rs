@@ -8,8 +8,6 @@ use crate::infrastructure::error::DomainError;
 use crate::infrastructure::error::DomainResult;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-#[cfg_attr(feature = "graphql", derive(plain_graphql::Enum))]
-#[cfg_attr(feature = "graphql", graphql(name = "AudioCommandAction"))]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum Action {
     Play,
@@ -42,42 +40,6 @@ pub struct EngineReport {
 pub trait Engine {
     fn metadata(&mut self, path: &str) -> DomainResult<AudioTrack>;
     fn execute(&mut self, command: &EngineCommand) -> DomainResult<EngineReport>;
-}
-pub fn play_track(
-    db: &Db,
-    prefs: &Prefs,
-    engine: &mut impl Engine,
-    track: AudioTrack,
-) -> DomainResult<Playback> {
-    if track.path.trim().is_empty() || track.duration_ms < 0 {
-        return Err(DomainError::Other("invalid audio track".into()));
-    }
-    let playback = audio_playback::prepare_track(db, &track)?;
-    dispatch(
-        db,
-        prefs,
-        engine,
-        Action::Play,
-        Some(track),
-        playback,
-        None,
-        true,
-    )
-}
-pub fn play_path(
-    db: &Db,
-    prefs: &Prefs,
-    engine: &mut impl Engine,
-    path: &str,
-) -> DomainResult<Playback> {
-    if path.trim().is_empty() {
-        return Err(DomainError::Other("empty audio path".into()));
-    }
-    let track = engine.metadata(path)?;
-    if track.path != path {
-        return Err(DomainError::Other("audio metadata path mismatch".into()));
-    }
-    play_track(db, prefs, engine, track)
 }
 pub fn command(
     db: &Db,

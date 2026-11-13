@@ -38,8 +38,7 @@ async fn sdk_summary_batches_the_full_catalog_without_metadata_or_per_row_host_c
     let summary = read(db.clone(), MediaCatalog::Platform { db, host })
         .await
         .unwrap();
-    assert_eq!(summary.artists[0].item_count, 1025);
-    assert_eq!(summary.recent_items.len(), 8);
+    assert_eq!(summary[0].item_count, 1025);
     assert_eq!(worker.await.unwrap(), [0, 512, 1024]);
 }
 
@@ -70,7 +69,7 @@ async fn malformed_or_repeated_catalog_pages_fail_instead_of_returning_partial_t
 }
 
 #[tokio::test]
-async fn native_summary_streams_the_full_database_and_projects_selected_rows_only() {
+async fn native_summary_streams_the_full_database() {
     let directory = plain_libs::temporary::tempdir().unwrap();
     let db = Arc::new(Db::open(&directory.path().join("db")).unwrap());
     db.with_conn(|connection| connection.execute_batch(
@@ -80,16 +79,8 @@ async fn native_summary_streams_the_full_database_and_projects_selected_rows_onl
          INSERT INTO media_play_history(media_type,file_id,position_ms,play_count,played_at) VALUES(1,'1100',0,7,'2026-01-02T00:00:00Z');"
     )).unwrap();
     let summary = read(db.clone(), MediaCatalog::Native(db)).await.unwrap();
-    assert_eq!(summary.artists[0].item_count, 1100);
-    assert_eq!(summary.artists[0].play_count, 7);
-    assert_eq!(summary.recent_items.len(), 1);
-    let recent = &summary.recent_items[0];
-    assert_eq!(recent["id"], "1100");
-    assert_eq!(recent["path"], "/music/1099.mp3");
-    assert_eq!(recent["albumId"], "album");
-    assert_eq!(recent["durationMs"], 456);
-    assert_eq!(recent["bucketId"], "/music");
-    assert_eq!(recent["isFavorite"], true);
+    assert_eq!(summary[0].item_count, 1100);
+    assert_eq!(summary[0].play_count, 7);
 }
 
 fn sdk_row(id: usize, artist: &str) -> Value {
@@ -138,10 +129,9 @@ async fn sdk_changed_page_is_discarded_and_summary_restarts_from_zero() {
     let summary = read(db.clone(), MediaCatalog::Platform { db, host })
         .await
         .unwrap();
-    assert_eq!(summary.artists.len(), 1);
-    assert_eq!(summary.artists[0].name, "Current");
-    assert_eq!(summary.artists[0].item_count, 1);
-    assert_eq!(summary.recent_items[0]["id"], "999");
+    assert_eq!(summary.len(), 1);
+    assert_eq!(summary[0].name, "Current");
+    assert_eq!(summary[0].item_count, 1);
     worker.await.unwrap();
 }
 

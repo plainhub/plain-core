@@ -15,6 +15,9 @@ pub struct PlaylistCovers {
 }
 
 pub fn playlist_covers(db: &Db, ids: &[String]) -> DomainResult<Vec<PlaylistCovers>> {
+    if ids.is_empty() {
+        return Ok(Vec::new());
+    }
     Ok(db.with_conn(|conn| {
         let mut statement = conn.prepare(
             "WITH tracks AS (

@@ -51,7 +51,6 @@ impl HostEvents {
             state.update_checks.download.notify_snapshot(&state.host)?;
             state.cast.notify_snapshot(&state.host)?;
             state.feeds.notify_snapshot()?;
-            state.host.notify("audioPlaybackRefresh", json!({}))?;
             state.host.notify("audioLibraryRefresh", json!({}))?;
             state.host.notify("networkInterfacesChanged", json!({}))
         })();

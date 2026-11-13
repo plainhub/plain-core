@@ -224,7 +224,7 @@ fn buffered_start_survives_pause_resume_and_seek_but_not_track_replacement() {
 }
 
 #[test]
-fn progress_reports_do_not_count_plays_and_only_loaded_revisions_can_start() {
+fn progress_does_not_count_plays_and_the_current_host_start_is_recorded_once() {
     let db = Db::open(std::path::Path::new(":memory:")).unwrap();
     let track = audio_queue::AudioTrack::from_path_stem("one");
     register_audio(&db, &track);
@@ -235,8 +235,6 @@ fn progress_reports_do_not_count_plays_and_only_loaded_revisions_can_start() {
             .unwrap()
             .is_empty()
     );
-    assert!(!started(&db, &track, selected.revision).unwrap());
-    loaded(&db, &track.path, selected.revision).unwrap();
     assert!(started(&db, &track, selected.revision).unwrap());
     assert!(!started(&db, &track, selected.revision).unwrap());
     assert!(report(&db, &track.path, selected.revision, 456).unwrap());
@@ -262,8 +260,6 @@ fn new_selection_rejects_buffered_native_start_even_for_the_same_path() {
     loaded(&db, &track.path, first.revision).unwrap();
     let replacement = prepare_track(&db, &track).unwrap();
     assert!(!started(&db, &track, first.revision).unwrap());
-    assert!(!started(&db, &track, replacement.revision).unwrap());
-    loaded(&db, &track.path, replacement.revision).unwrap();
     assert!(started(&db, &track, replacement.revision).unwrap());
     assert!(!started(&db, &track, first.revision).unwrap());
     assert_eq!(

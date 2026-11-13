@@ -90,10 +90,9 @@ pub fn started(
         return Err(DomainError::Other("invalid playback start".into()));
     }
     db.audio_transaction(|tx, state| {
-        if state.playback.path != track.path
-            || state.load_revision != revision
-            || state.started_revision == revision
-        {
+        let loaded = state.load_revision == revision
+            || (state.load_revision < 0 && state.playback.revision == revision);
+        if state.playback.path != track.path || !loaded || state.started_revision == revision {
             return Ok(false);
         }
         record_started(tx, state, track, revision)?;

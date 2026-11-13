@@ -101,7 +101,6 @@ pub struct Mutation(
     crate::graphql::resolvers::shares::client::SharedClientMutation,
     crate::graphql::resolvers::files::trash::TrashMutation,
     crate::graphql::resolvers::casting::sender::DlnaSenderMutation,
-    crate::graphql::resolvers::audio::commands::AudioCommandsMutation,
     crate::graphql::resolvers::chat::host::ChatHostMutation,
     crate::graphql::resolvers::files::tasks::FileTaskMutation,
     crate::graphql::resolvers::media::play_history::MediaPlayHistoryMutation,

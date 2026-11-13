@@ -369,19 +369,18 @@ async fn audio_queue_uses_the_registered_host_and_keeps_unindexed_playback_tempo
     let runtime = Arc::new(Host::new(core.clone(), Vec::new()));
     let runner = tokio::spawn(runtime.run());
     let executor = core.native_graphql().unwrap();
-    let response=executor.execute(format!(r#"mutation {{ addAudioToQueue(query:"ids:{id}") playAudio(mediaId:"{id}") {{ mediaId path }} }}"#).into()).await;
+    let response=executor.execute(format!(r#"mutation {{ addAudioToQueue(query:"ids:{id}") selectAudio(mediaId:"{id}") {{ mediaId path }} }}"#).into()).await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     assert_eq!(
-        response.data.into_json().unwrap()["playAudio"]["mediaId"],
+        response.data.into_json().unwrap()["selectAudio"]["mediaId"],
         id
     );
-    let response=executor.execute("{ audioQueueItemCount audioQueueItems(query:\"\",offset:0,limit:200) { mediaId } audioPlayback { mediaId isPlaying } }".into()).await;
+    let response=executor.execute("{ audioQueueItemCount audioQueueItems(query:\"\",offset:0,limit:200) { mediaId } audioPlayback { mediaId path } }".into()).await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     let page = response.data.into_json().unwrap();
     assert_eq!(page["audioQueueItemCount"], 1);
     assert_eq!(page["audioQueueItems"][0]["mediaId"], id);
     assert_eq!(page["audioPlayback"]["mediaId"], id);
-    assert_eq!(page["audioPlayback"]["isPlaying"], false);
     let response = executor
         .execute(format!(r#"mutation {{ removeAudioFromQueue(mediaId:"{id}") }}"#).into())
         .await;
@@ -389,24 +388,22 @@ async fn audio_queue_uses_the_registered_host_and_keeps_unindexed_playback_tempo
     let response = executor
         .execute(
             format!(
-                r#"mutation {{ audioPlayPath(path:{}) {{ path }} }}"#,
+                r#"mutation {{ selectAudioByPath(path:{}) {{ mediaId path }} }}"#,
                 plain_libs::serde_json::to_string(&raw.to_string_lossy()).unwrap()
             )
             .into(),
         )
         .await;
-    assert_eq!(response.errors.len(), 1, "{:?}", response.errors);
-    assert_eq!(
-        response.errors[0].message,
-        "Native audio playback is unavailable"
-    );
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    let selected = response.data.into_json().unwrap();
+    assert!(selected["selectAudioByPath"]["mediaId"].is_null());
+    assert_eq!(selected["selectAudioByPath"]["path"], raw.to_string_lossy().as_ref());
     let response = executor
-        .execute("{ audioPlayback {mediaId path isPlaying} }".into())
+        .execute("{ audioPlayback {mediaId path} }".into())
         .await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     let result = response.data.into_json().unwrap();
     assert!(result["audioPlayback"]["mediaId"].is_null());
-    assert_eq!(result["audioPlayback"]["isPlaying"], false);
     assert_eq!(
         result["audioPlayback"]["path"],
         raw.to_string_lossy().as_ref()

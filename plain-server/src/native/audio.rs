@@ -1,6 +1,4 @@
 use crate::server::ServerState;
-use plain_rs::infrastructure::host::audio::AudioPlaybackFacts;
-use plain_rs::infrastructure::host::audio::PLAYBACK_STATE;
 use plain_libs::serde_json::{Value, json};
 
 #[derive(Clone)]
@@ -17,11 +15,6 @@ impl NativeAudio {
         self.state.native_client_id()?;
         let method = method.to_owned();
         tokio::task::spawn_blocking(move || match method.as_str() {
-            PLAYBACK_STATE => plain_libs::serde_json::to_value(AudioPlaybackFacts {
-                is_playing: false,
-                position_ms: 0,
-            })
-            .map_err(|error| error.to_string()),
             "audioEngineCommand" => command(params),
             _ => Err("Unsupported audio host method".into()),
         })
@@ -43,5 +36,5 @@ fn command(params: Value) -> Result<Value, String> {
 }
 
 pub fn handles(method: &str) -> bool {
-    matches!(method, PLAYBACK_STATE | "audioEngineCommand")
+    method == "audioEngineCommand"
 }

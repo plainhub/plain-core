@@ -23,6 +23,12 @@ impl Engine for Fake {
         })
     }
 }
+fn start_path(db: &Db, prefs: &Prefs, engine: &mut Fake, path: &str) -> DomainResult<Playback> {
+    let track = engine.metadata(path)?;
+    let playback = audio_playback::prepare_track(db, &track)?;
+    dispatch(db, prefs, engine, Action::Play, Some(track), playback, None, true)
+}
+
 #[test]
 fn commands_preserve_resume_and_repeat_one_only_applies_to_completion() {
     let dir = plain_libs::temporary::tempdir().unwrap();
@@ -39,7 +45,7 @@ fn commands_preserve_resume_and_repeat_one_only_applies_to_completion() {
             AudioTrack::from_path_stem("two"),
         ],
     );
-    play_path(&db, &prefs, &mut engine, "one").unwrap();
+    start_path(&db, &prefs, &mut engine, "one").unwrap();
     audio_queue::enqueue(&db, &[AudioTrack::from_path_stem("two")], false).unwrap();
     command(&db, &prefs, &mut engine, Action::Seek, 3_000_000_123, 1.0).unwrap();
     command(&db, &prefs, &mut engine, Action::Pause, 0, 1.0).unwrap();
@@ -78,7 +84,7 @@ fn restarting_the_core_plays_the_remembered_track_from_zero() {
             AudioTrack::from_path_stem("two"),
         ],
     );
-    play_path(&db, &prefs, &mut engine, "one").unwrap();
+    start_path(&db, &prefs, &mut engine, "one").unwrap();
     audio_queue::enqueue(&db, &[AudioTrack::from_path_stem("two")], false).unwrap();
     command(&db, &prefs, &mut engine, Action::Next, 0, 1.0).unwrap();
     command(&db, &prefs, &mut engine, Action::Seek, 123_456, 1.0).unwrap();
@@ -110,7 +116,7 @@ fn path_playback_is_temporary_and_never_enqueues_or_fabricates_an_id() {
         commands: vec![],
         fail: false,
     };
-    let playback = play_path(&db, &prefs, &mut engine, "/unindexed.mp3").unwrap();
+    let playback = start_path(&db, &prefs, &mut engine, "/unindexed.mp3").unwrap();
     assert_eq!(playback.path, "/unindexed.mp3");
     assert_eq!(db.audio_current_file_id(), None);
     assert_eq!(audio_queue::queue_total(&db).unwrap(), 0);
@@ -142,7 +148,7 @@ fn completion_checks_path_revision_and_duplicates_before_advancing_the_queue() {
             AudioTrack::from_path_stem("two"),
         ],
     );
-    let first = play_path(&db, &prefs, &mut engine, "one").unwrap();
+    let first = start_path(&db, &prefs, &mut engine, "one").unwrap();
     audio_queue::enqueue(&db, &[AudioTrack::from_path_stem("two")], false).unwrap();
     let seeked = command(&db, &prefs, &mut engine, Action::Seek, 4000, 1.0).unwrap();
     let calls = engine.commands.len();

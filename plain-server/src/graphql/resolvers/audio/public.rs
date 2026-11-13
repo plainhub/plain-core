@@ -9,7 +9,6 @@ use plain_rs::features::media::audio::queue::AudioTrack;
 use plain_rs::features::prefs::settings::FileSortBy;
 use plain_rs::features::services::audio::host::Audio as AudioService;
 use plain_rs::infrastructure::db::Playlist;
-use plain_rs::infrastructure::host::audio::AudioPlaybackFacts;
 use plain_rs::infrastructure::host::bridge::Host;
 use plain_rs::infrastructure::types::Instant;
 use plain_rs::infrastructure::types::Long;
@@ -107,6 +106,7 @@ pub struct AudioPlaylist {
     pub name: String,
     #[graphql(name = "itemCount")]
     pub item_count: i32,
+    pub cover_albums: Vec<AudioAlbumCover>,
     #[graphql(name = "createdAt")]
     pub created_at: Instant,
     #[graphql(name = "updatedAt")]
@@ -121,22 +121,10 @@ pub struct AudioAlbumCover {
 }
 
 #[derive(SimpleObject, Clone, Debug)]
-pub struct AudioPlaylistCovers {
-    pub id: plain_graphql::ID,
-    pub albums: Vec<AudioAlbumCover>,
-}
-
-#[derive(SimpleObject, Clone, Debug)]
 pub struct AudioPlayback {
-    pub revision: Long,
     #[graphql(name = "mediaId")]
     pub file_id: Option<plain_graphql::ID>,
     pub path: Option<String>,
-    pub mode: MediaPlayMode,
-    #[graphql(name = "isPlaying")]
-    pub is_playing: bool,
-    #[graphql(name = "positionMs")]
-    pub position_ms: Long,
 }
 
 #[derive(SimpleObject, Clone, Debug)]
@@ -147,46 +135,28 @@ pub struct AudioArtist {
     pub sample_path: String,
 }
 
-#[derive(SimpleObject, Clone, Debug)]
-pub struct AudioOverview {
-    pub artists: Vec<AudioArtist>,
-    pub recent_items: Vec<Audio>,
-}
-
 #[derive(Default)]
 pub struct AudioQuery;
 
 #[Object]
 impl AudioQuery {
-    async fn audio_overview(&self, ctx: &Context<'_>) -> plain_graphql::Result<AudioOverview> {
+    async fn audio_artists(&self, ctx: &Context<'_>) -> plain_graphql::Result<Vec<AudioArtist>> {
         public_gate::require(ctx, prefs(ctx), &[FEATURE])?;
-        let mut summary = plain_rs::features::services::audio::overview::read(
+        let artists = plain_rs::features::services::audio::overview::read(
             ctx.data::<Arc<plain_rs::infrastructure::db::Db>>()?.clone(),
-            crate::graphql::resolvers::media::public::catalog(
-                ctx,
-                plain_rs::features::enums::DataType::Audio,
-            )
-            .await?,
+            crate::graphql::resolvers::media::public::catalog(ctx, DataType::Audio).await?,
         )
         .await
         .map_err(plain_graphql::Error::new)?;
-        ctx.data::<Arc<plain_rs::features::services::files::duration_updates::Runtime>>()?
-            .enrich(DataType::Audio, &mut summary.recent_items)
-            .await
-            .map_err(plain_graphql::Error::new)?;
-        Ok(AudioOverview {
-            artists: summary
-                .artists
-                .into_iter()
-                .map(|artist| AudioArtist {
-                    name: artist.name,
-                    item_count: artist.item_count,
-                    play_count: Long(artist.play_count),
-                    sample_path: artist.sample_path,
-                })
-                .collect(),
-            recent_items: summary.recent_items.iter().map(audio_from_facts).collect(),
-        })
+        Ok(artists
+            .into_iter()
+            .map(|artist| AudioArtist {
+                name: artist.name,
+                item_count: artist.item_count,
+                play_count: Long(artist.play_count),
+                sample_path: artist.sample_path,
+            })
+            .collect())
     }
 
     async fn audio_metadata(
@@ -286,12 +256,36 @@ impl AudioQuery {
         &self,
         ctx: &Context<'_>,
     ) -> plain_graphql::Result<Vec<AudioPlaylist>> {
-        Ok(audio(ctx)?
-            .run(|db, _| domain::playlists(db))
-            .await?
-            .into_iter()
-            .map(|(row, count)| playlist(row, count))
-            .collect::<plain_graphql::Result<Vec<_>>>()?)
+        let include_covers = ctx.look_ahead().field("coverAlbums").exists();
+        if include_covers {
+            public_gate::require(ctx, prefs(ctx), &[FEATURE])?;
+        }
+        let (rows, covers) = audio(ctx)?
+            .run(move |db, _| {
+                let rows = domain::playlists(db)?;
+                let ids = rows.iter()
+                    .filter(|(_, count)| include_covers && *count > 0)
+                    .map(|(row, _)| row.id.clone())
+                    .collect::<Vec<_>>();
+                let covers = plain_rs::features::media::audio::playlist_covers::playlist_covers(db, &ids)?;
+                Ok((rows, covers))
+            })
+            .await?;
+        let mut covers = covers.into_iter()
+            .map(|row| (row.id, row.albums))
+            .collect::<std::collections::HashMap<_, _>>();
+        rows.into_iter().map(|(row, count)| {
+            let albums = covers.remove(&row.id).unwrap_or_default();
+            playlist(row, count, albums)
+        }).collect()
+    }
+
+    async fn audio_playlist(
+        &self,
+        ctx: &Context<'_>,
+        id: plain_graphql::ID,
+    ) -> plain_graphql::Result<Option<AudioPlaylist>> {
+        read_playlist(ctx, id.to_string()).await
     }
 
     async fn audio_playlist_items(
@@ -318,34 +312,6 @@ impl AudioQuery {
             .collect())
     }
 
-    async fn audio_playlist_covers(
-        &self,
-        ctx: &Context<'_>,
-        ids: Vec<plain_graphql::ID>,
-    ) -> plain_graphql::Result<Vec<AudioPlaylistCovers>> {
-        public_gate::require(ctx, prefs(ctx), &[FEATURE])?;
-        let ids = ids.into_iter().map(|id| id.to_string()).collect::<Vec<_>>();
-        Ok(audio(ctx)?
-            .run(move |db, _| {
-                plain_rs::features::media::audio::playlist_covers::playlist_covers(db, &ids)
-            })
-            .await?
-            .into_iter()
-            .map(|row| AudioPlaylistCovers {
-                id: row.id.into(),
-                albums: row
-                    .albums
-                    .into_iter()
-                    .map(|album| AudioAlbumCover {
-                        album_id: album.album_id.into(),
-                        track_count: album.track_count,
-                        candidate_paths: album.candidate_paths,
-                    })
-                    .collect(),
-            })
-            .collect())
-    }
-
     async fn audio_playlist_item_count(
         &self,
         ctx: &Context<'_>,
@@ -367,25 +333,9 @@ impl AudioQuery {
                 ))
             })
             .await?;
-        let mode = domain::play_mode(prefs(ctx))?;
-        let player = if is_local(ctx) {
-            ctx.data_unchecked::<Arc<Host>>()
-                .audio_playback_facts()
-                .await
-                .map_err(plain_graphql::Error::new)?
-        } else {
-            AudioPlaybackFacts {
-                is_playing: false,
-                position_ms: current.position_ms,
-            }
-        };
         Ok(AudioPlayback {
-            revision: Long(current.revision),
             file_id: file_id.map(Into::into),
             path: Some(current.path).filter(|path| !path.is_empty()),
-            mode,
-            is_playing: player.is_playing,
-            position_ms: Long(player.position_ms),
         })
     }
 }
@@ -408,19 +358,38 @@ impl AudioMutation {
             .map(|path| path.to_string_lossy().into_owned()))
     }
 
-    async fn play_audio(
+    async fn select_audio(
         &self,
         ctx: &Context<'_>,
         #[graphql(name = "mediaId")] file_id: plain_graphql::ID,
     ) -> plain_graphql::Result<AudioItem> {
-        let track = audio(ctx)?
+        let (track, selection) = audio(ctx)?
             .run(move |db, lib| {
                 lib.cache_ids(&[file_id.to_string()])?;
                 let track = domain::track_by_id(db, file_id.as_str())?;
-                plain_rs::features::media::audio::playback::prepare_track(db, &track)?;
-                Ok(track)
+                let selection = plain_rs::features::media::audio::playback::prepare_track(db, &track)?;
+                Ok((track, selection))
             })
             .await?;
+        stage_audio_selection(ctx, selection).await?;
+        Ok(item(track))
+    }
+
+    async fn select_audio_by_path(
+        &self,
+        ctx: &Context<'_>,
+        path: String,
+    ) -> plain_graphql::Result<AudioItem> {
+        use plain_rs::features::media::audio::commands::Engine;
+        public_gate::require(ctx, prefs(ctx), &[FEATURE])?;
+        let (track, selection) = audio(ctx)?
+            .run(move |db, library| {
+                let track = library.metadata(&path)?;
+                let selection = plain_rs::features::media::audio::playback::prepare_track(db, &track)?;
+                Ok((track, selection))
+            })
+            .await?;
+        stage_audio_selection(ctx, selection).await?;
         Ok(item(track))
     }
 
@@ -564,7 +533,7 @@ impl AudioMutation {
         let row = audio(ctx)?
             .run(move |db, _| domain::create_playlist(db, &name))
             .await?;
-        playlist(row, 0)
+        playlist(row, 0, Vec::new())
     }
 
     async fn update_audio_playlist(
@@ -580,19 +549,9 @@ impl AudioMutation {
                 move |db, _| domain::rename_playlist(db, &key, &name)
             })
             .await?;
-        let row = audio(ctx)?
-            .run({
-                let key = key.clone();
-                move |db, _| domain::playlist_by_id(db, &key)
-            })
-            .await?
-            .ok_or_else(|| {
-                plain_graphql::Error::new(format!("Playlist {key} not found after update"))
-            })?;
-        let count = audio(ctx)?
-            .run(move |db, _| domain::playlist_item_count(db, &key))
-            .await?;
-        playlist(row, count)
+        read_playlist(ctx, key.clone()).await?.ok_or_else(|| {
+            plain_graphql::Error::new(format!("Playlist {key} not found after update"))
+        })
     }
 
     async fn delete_audio_playlist(
@@ -735,14 +694,59 @@ fn playlist_item(row: plain_rs::infrastructure::db::PlaylistItem) -> AudioItem {
     }
 }
 
-fn playlist(row: Playlist, count: usize) -> plain_graphql::Result<AudioPlaylist> {
+async fn read_playlist(ctx: &Context<'_>, id: String) -> plain_graphql::Result<Option<AudioPlaylist>> {
+    let include_covers = ctx.look_ahead().field("coverAlbums").exists();
+    if include_covers {
+        public_gate::require(ctx, prefs(ctx), &[FEATURE])?;
+    }
+    let result = audio(ctx)?.run(move |db, _| {
+        let Some(row) = domain::playlist_by_id(db, &id)? else {
+            return Ok(None);
+        };
+        let count = domain::playlist_item_count(db, &id)?;
+        let covers = if include_covers && count > 0 {
+            plain_rs::features::media::audio::playlist_covers::playlist_covers(db, &[id])?
+                .remove(0).albums
+        } else {
+            Vec::new()
+        };
+        Ok(Some((row, count, covers)))
+    }).await?;
+    result.map(|(row, count, covers)| playlist(row, count, covers)).transpose()
+}
+
+fn playlist(
+    row: Playlist,
+    count: usize,
+    albums: Vec<plain_rs::features::media::audio::playlist_covers::AlbumCover>,
+) -> plain_graphql::Result<AudioPlaylist> {
     Ok(AudioPlaylist {
         id: row.id.into(),
         name: row.name,
         item_count: count.try_into()?,
+        cover_albums: albums.into_iter().map(|album| AudioAlbumCover {
+            album_id: album.album_id.into(),
+            track_count: album.track_count,
+            candidate_paths: album.candidate_paths,
+        }).collect(),
         created_at: crate::graphql::resolvers::common::content_common::instant(&row.created_at)?,
         updated_at: crate::graphql::resolvers::common::content_common::instant(&row.updated_at)?,
     })
+}
+
+async fn stage_audio_selection(
+    ctx: &Context<'_>,
+    selection: plain_rs::features::media::audio::playback::Playback,
+) -> plain_graphql::Result<()> {
+    let host = ctx.data::<Arc<Host>>()?;
+    if is_local(ctx) && host.connected() {
+        let params = plain_libs::serde_json::to_value(selection)
+            .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
+        host.call("audioPlaybackRefresh", params)
+            .await
+            .map_err(plain_graphql::Error::new)?;
+    }
+    Ok(())
 }
 
 pub(crate) fn is_local(ctx: &Context<'_>) -> bool {
