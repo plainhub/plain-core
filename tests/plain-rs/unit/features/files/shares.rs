@@ -13,16 +13,30 @@ fn fixture() -> (plain_libs::temporary::TempDir, Arc<Service>) {
 }
 fn create(service: &Service, paths: Vec<PathBuf>) -> ShareRow {
     service
-        .create(
-            "share".into(),
-            paths.iter().map(|p| p.to_str().unwrap().into()).collect(),
-            true,
-            None,
-        )
+        .create(crate::features::files::shares::Input {
+            name: "share".into(),
+            password: String::new(),
+            data: (paths
+                .iter()
+                .map(|p| p.to_str().unwrap().to_owned())
+                .collect::<Vec<String>>())
+            .into_iter()
+            .map(|path: String| {
+                let path = std::path::PathBuf::from(path);
+                crate::features::files::shares::SharePath {
+                    virtual_path: format!("/{}", path.file_name().unwrap().to_str().unwrap()),
+                    real_path: path.to_str().unwrap().into(),
+                    is_dir: path.is_dir(),
+                }
+            })
+            .collect(),
+            read_only: true,
+            expires_at: None,
+        })
         .unwrap()
 }
 #[test]
-fn generated_url_token_is_unique_and_32_bytes() {
+fn generated_url_tokens_have_32_bytes_without_a_uniqueness_constraint() {
     let (dir, s) = fixture();
     let root = dir.path().join("docs");
     std::fs::create_dir(&root).unwrap();
@@ -34,7 +48,14 @@ fn generated_url_token_is_unique_and_32_bytes() {
             .len(),
         32
     );
-    assert_ne!(a.url_token, b.url_token);
+    let mut same_token = b.clone();
+    same_token.id = "same-token-share".into();
+    same_token.url_token = a.url_token.clone();
+    assert!(s.db.share_insert(&same_token).unwrap());
+    assert_eq!(
+        s.db.share_get(&same_token.id).unwrap().unwrap().url_token,
+        a.url_token
+    );
 }
 
 #[test]
@@ -114,7 +135,7 @@ fn roots_traversal_and_files() {
     std::fs::write(root.join("a.jpg"), b"synthetic").unwrap();
     let file = dir.path().join("single.txt");
     std::fs::write(&file, b"text").unwrap();
-    let row = create(&s, vec![root.clone(), root.clone(), file.clone()]);
+    let row = create(&s, vec![root.clone(), file.clone()]);
     assert_eq!(Service::roots(&row).unwrap().len(), 2);
     assert_eq!(
         s.resolve(&row.id, "photos/./a.jpg", true).unwrap(),
@@ -137,14 +158,14 @@ fn roots_traversal_and_files() {
     assert!(s.resolve(&row.id, "single.txt", true).unwrap().is_some());
 }
 #[test]
-fn file_roots_resolve_by_name_or_default_without_allowing_traversal() {
+fn file_roots_resolve_by_virtual_path_without_allowing_traversal() {
     let (dir, s) = fixture();
     let file = dir.path().join("single.txt");
     std::fs::write(&file, b"text").unwrap();
     std::fs::write(dir.path().join("outside.txt"), b"private").unwrap();
     let row = create(&s, vec![file.clone()]);
     let expected = std::fs::canonicalize(file).unwrap();
-    for path in ["", "/", "single.txt", "/single.txt", "single.txt/"] {
+    for path in ["single.txt", "/single.txt", "single.txt/"] {
         assert_eq!(
             s.resolve(&row.id, path, true).unwrap().as_deref(),
             expected.to_str(),
@@ -184,12 +205,23 @@ fn duplicate_names_are_rejected_without_persisting() {
     std::fs::create_dir_all(&a).unwrap();
     std::fs::create_dir_all(&b).unwrap();
     assert!(
-        s.create(
-            "x".into(),
-            vec![a.to_str().unwrap().into(), b.to_str().unwrap().into()],
-            true,
-            None
-        )
+        s.create(crate::features::files::shares::Input {
+            name: "x".into(),
+            password: String::new(),
+            data: (vec![a.to_str().unwrap().into(), b.to_str().unwrap().into()])
+                .into_iter()
+                .map(|path: String| {
+                    let path = std::path::PathBuf::from(path);
+                    crate::features::files::shares::SharePath {
+                        virtual_path: format!("/{}", path.file_name().unwrap().to_str().unwrap()),
+                        real_path: path.to_str().unwrap().into(),
+                        is_dir: path.is_dir(),
+                    }
+                })
+                .collect(),
+            read_only: true,
+            expires_at: None
+        })
         .is_err()
     );
     assert!(s.db.share_list().unwrap().is_empty());
@@ -213,17 +245,43 @@ fn fresh_auth_revocation_expiry_and_disabled_service() {
     s.prefs.set("remote_access", true).unwrap();
     s.update(
         &row.id,
-        "expired",
-        Some("2000-01-01T00:00:00.000Z".into()),
-        None,
+        Input {
+            name: ("expired").into(),
+            password: row.password.clone(),
+            data: Service::roots(&row).unwrap(),
+            read_only: row.read_only,
+            expires_at: Some("2000-01-01T00:00:00.000Z".into()),
+        },
     )
     .unwrap();
     assert!(s.active(&row.id, true).unwrap().is_none());
-    s.update(&row.id, "active", None, None).unwrap();
+    s.update(
+        &row.id,
+        Input {
+            name: ("active").into(),
+            password: row.password.clone(),
+            data: Service::roots(&row).unwrap(),
+            read_only: row.read_only,
+            expires_at: None,
+        },
+    )
+    .unwrap();
     assert!(s.active(&row.id, true).unwrap().is_some());
     s.db.share_delete(&row.id).unwrap();
     assert!(s.active(&row.id, true).unwrap().is_none());
-    assert!(s.update(&row.id, "revive", None, None).is_err());
+    assert!(
+        s.update(
+            &row.id,
+            Input {
+                name: ("revive").into(),
+                password: row.password.clone(),
+                data: Service::roots(&row).unwrap(),
+                read_only: row.read_only,
+                expires_at: None
+            }
+        )
+        .is_err()
+    );
 }
 #[test]
 fn encrypted_file_ids_are_share_bound_and_roots_are_fresh() {
@@ -256,8 +314,27 @@ fn encrypted_file_ids_are_share_bound_and_roots_are_fresh() {
             .is_none()
     );
     assert!(s.resolve_file(&row.id, "invalid").unwrap().is_none());
-    s.update(&row.id, "new", None, Some(vec![b.to_str().unwrap().into()]))
-        .unwrap();
+    s.update(
+        &row.id,
+        Input {
+            name: ("new").into(),
+            password: row.password.clone(),
+            data: (vec![b.to_str().unwrap().into()])
+                .into_iter()
+                .map(|path: String| {
+                    let path = std::path::PathBuf::from(path);
+                    crate::features::files::shares::SharePath {
+                        virtual_path: format!("/{}", path.file_name().unwrap().to_str().unwrap()),
+                        real_path: path.to_str().unwrap().into(),
+                        is_dir: path.is_dir(),
+                    }
+                })
+                .collect(),
+            read_only: row.read_only,
+            expires_at: None,
+        },
+    )
+    .unwrap();
     assert!(s.resolve_file(&row.id, &encoded).unwrap().is_none());
     let restarted = Service::new(
         Arc::new(Db::open(&dir.path().join("db")).unwrap()),
@@ -306,7 +383,7 @@ fn browse_and_archive_exclude_escaping_symlinks() {
     assert_eq!(
         entries
             .iter()
-            .map(|e| e.relative_path.as_str())
+            .map(|e| e.virtual_path.as_str())
             .collect::<Vec<_>>(),
         vec!["root/a", "root/empty"]
     );
@@ -322,7 +399,7 @@ fn browse_and_archive_exclude_escaping_symlinks() {
     let zip = s.archive(&row.id, &encrypted).unwrap();
     assert_eq!(
         zip.iter()
-            .map(|e| e.relative_path.as_str())
+            .map(|e| e.virtual_path.as_str())
             .collect::<Vec<_>>(),
         vec!["a", "empty/"]
     );

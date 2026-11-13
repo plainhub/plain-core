@@ -1,6 +1,9 @@
 pub mod client_identity;
 pub mod record_id;
 
+#[cfg(feature = "runtime")]
+pub mod downloads;
+
 #[cfg(feature = "chat")]
 pub mod chat;
 

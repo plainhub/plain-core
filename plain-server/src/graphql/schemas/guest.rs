@@ -12,6 +12,8 @@ struct SharedFile {
     size: Long,
     mime_type: String,
     has_thumb: bool,
+    created_at: Option<Instant>,
+    updated_at: Instant,
 }
 #[derive(SimpleObject)]
 struct SharedInfo {
@@ -33,9 +35,24 @@ impl Query {
         &self,
         ctx: &Context<'_>,
         relative_path: Option<String>,
+        password: Option<String>,
     ) -> plain_graphql::Result<SharedInfo> {
         let guest = ctx.data::<Guest>()?;
         let service = Service::new(guest.state.db.clone(), guest.state.prefs.clone());
+        let share = service
+            .active(&guest.id, true)?
+            .ok_or_else(|| plain_graphql::Error::new("share inactive"))?;
+        if !share.password.is_empty() {
+            use subtle::ConstantTimeEq;
+            if !bool::from(
+                share
+                    .password
+                    .as_bytes()
+                    .ct_eq(password.as_deref().unwrap_or_default().as_bytes()),
+            ) {
+                return Err(plain_graphql::Error::new("Invalid share password"));
+            }
+        }
         let id = guest.id.clone();
         let path = relative_path.unwrap_or_default();
         let (share, roots) = tokio::task::spawn_blocking(move || service.browse(&id, &path))
@@ -45,7 +62,7 @@ impl Query {
         let mut entries = Vec::new();
         for root in roots {
             let name = root
-                .relative_path
+                .virtual_path
                 .trim_end_matches('/')
                 .rsplit('/')
                 .next()
@@ -62,26 +79,26 @@ impl Query {
                     "tiff", "tif", "svg",
                 ]
                 .contains(&ext.as_str());
-            let (size, mime_type) = if root.is_dir {
-                (0, String::new())
+            let metadata = tokio::fs::metadata(&root.real_path).await?;
+            let size = if root.is_dir {
+                0
             } else {
-                let metadata = tokio::fs::metadata(&root.real_path)
-                    .await
-                    .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
-                let size = i64::try_from(metadata.len())
-                    .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
-                (
-                    size,
-                    plain_libs::utils::mime::mime_from_ext(&root.real_path).to_owned(),
-                )
+                i64::try_from(metadata.len())?
+            };
+            let mime_type = if root.is_dir {
+                String::new()
+            } else {
+                plain_libs::utils::mime::mime_from_ext(&root.real_path).into()
             };
             entries.push(SharedFile {
                 name,
-                relative_path: root.relative_path,
+                relative_path: root.virtual_path,
                 is_dir: root.is_dir,
                 size: Long(size),
                 mime_type,
                 has_thumb,
+                created_at: metadata.created().ok().map(|time| Instant(time.into())),
+                updated_at: Instant(metadata.modified()?.into()),
             });
         }
         Ok(SharedInfo {

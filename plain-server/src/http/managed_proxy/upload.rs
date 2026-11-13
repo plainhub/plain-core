@@ -48,12 +48,9 @@ pub(super) async fn call(
     ) else {
         return StatusCode::BAD_REQUEST.into_response();
     };
-    let Ok(route) = state.managed_proxy.route(&state, target).await else {
+    let Ok(route) = state.managed_resources.route(&state, target).await else {
         return StatusCode::BAD_GATEWAY.into_response();
     };
-    if !route.supports_managed_resources {
-        return StatusCode::BAD_GATEWAY.into_response();
-    }
     if current(&state, &session).is_err() || route.check_current(&state).is_err() {
         return StatusCode::FORBIDDEN.into_response();
     }

@@ -36,6 +36,7 @@ type File {
 	size: Long!
 	isDir: Boolean!
 	childCount: Int!
+	url: String!
 	isSystem: Boolean!
 }
 
@@ -152,7 +153,6 @@ type Mount {
 	label: String!
 	diskModel: String!
 }
-
 
 type TrashedFile {
 	id: ID!

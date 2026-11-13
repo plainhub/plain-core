@@ -9,6 +9,8 @@ pub mod discovery;
 
 pub mod chat;
 
+pub mod downloads;
+
 pub mod casting;
 
 pub mod settings;

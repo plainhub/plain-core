@@ -74,7 +74,7 @@ async fn run(
             return Err("Empty encrypted confirmation required".into());
         }
         let route = state
-            .managed_proxy
+            .managed_resources
             .route(&state, &target)
             .await
             .map_err(|_| "Device unavailable")?;

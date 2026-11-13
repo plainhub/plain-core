@@ -46,7 +46,8 @@ pub async fn folder(
     }
     if let Some(expires) = expires_at.as_deref() {
         ensure!(
-            plain_libs::chrono::DateTime::parse_from_rfc3339(expires)? > plain_libs::chrono::Utc::now(),
+            plain_libs::chrono::DateTime::parse_from_rfc3339(expires)?
+                > plain_libs::chrono::Utc::now(),
             "Share has expired"
         );
     }
@@ -60,7 +61,22 @@ pub async fn folder(
     let db = state.db.clone();
     let (share, mut pending) = tokio::task::spawn_blocking(move || -> Result<_> {
         ensure!(std::fs::metadata(&path)?.is_dir(), "Share folder required");
-        let share = create.create(name, vec![path], true, expires_at)?;
+        let virtual_path = std::path::Path::new(&path)
+            .file_name()
+            .and_then(|name| name.to_str())
+            .ok_or_else(|| plain_libs::anyhow::anyhow!("Invalid share folder name"))?
+            .to_owned();
+        let share = create.create(crate::features::files::shares::Input {
+            name,
+            password: String::new(),
+            read_only: true,
+            expires_at,
+            data: vec![crate::features::files::shares::SharePath {
+                virtual_path,
+                real_path: path,
+                is_dir: true,
+            }],
+        })?;
         let pending = PendingShare {
             db,
             id: Some(share.id.clone()),

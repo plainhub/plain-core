@@ -146,7 +146,7 @@ async fn browse_current(
                     &link.host,
                     link.port,
                     &info.name,
-                    info.expires_at,
+                    info.expires_at.map(|instant| instant.0.timestamp_millis()),
                 )?;
                 if let Some(row) = updated {
                     let _ = state
@@ -181,34 +181,27 @@ async fn request<T>(
     }
 }
 
-pub async fn own_link(state: &CoreRuntime, id: &str, host: Option<String>) -> Result<Link> {
+pub async fn own_link(state: &CoreRuntime, id: &str) -> Result<Link> {
     request(state, async {
         let service =
             crate::features::files::shares::Service::new(state.db.clone(), state.prefs.clone());
         let token = service.token(id)?;
-        let host = host.unwrap_or_else(|| {
+        let host = {
             crate::infrastructure::transport::lan::local_interfaces()
                 .first()
                 .map(|interface| interface.ip.to_string())
                 .unwrap_or_else(|| "127.0.0.1".into())
-        });
+        };
         Link::new(
             &host,
-            state.prefs.get::<u16>("https_port")?.unwrap_or(8443),
+            state
+                .public_ports()
+                .await
+                .map(|ports| ports.1)
+                .unwrap_or(state.prefs.get::<u16>("https_port")?.unwrap_or(8443)),
             id,
             &token,
         )
-    })
-    .await
-}
-
-pub async fn initial_link(state: &CoreRuntime, message_id: &str, expected: &Card) -> Result<Link> {
-    request(state, async {
-        share_card::current(&state.db, message_id, expected)?;
-        candidates(state, expected, false)?
-            .into_iter()
-            .next()
-            .ok_or_else(|| plain_libs::anyhow::anyhow!("Share address unavailable"))
     })
     .await
 }
@@ -226,33 +219,67 @@ pub async fn browse(
     .await
 }
 
-pub async fn cache_file(
+pub async fn files(
     state: &CoreRuntime,
-    cache: &crate::features::services::files::remote_cache::RemoteCache,
-    link: Link,
-    url_token: String,
-    entry: crate::features::files::shares::client::File,
-    thumbnail: bool,
-) -> Result<String> {
-    ensure!(!entry.is_dir, "Shared preview requires a file");
-    let mut url = link.file_url(&url_token, &entry.relative_path, false)?;
-    let (name, key) = if thumbnail {
-        url.push_str("&action=preview&size=sm");
-        ("thumbnail".to_owned(), Some(json!({"host":link.host,"port":link.port,"shareId":link.shared_id,"token":link.token,"urlToken":url_token,"path":entry.relative_path,"size":entry.size,"thumbnailSize":"sm"}).to_string()))
-    } else {
-        url.push_str("&action=download");
-        (entry.name, None)
-    };
-    cache
-        .download(
-            &url,
-            &name,
-            key.as_deref(),
-            state.stop.clone(),
-            Some(&state.lan.client),
-        )
-        .await
-        .map_err(plain_libs::anyhow::Error::msg)
+    mut input: plain_libs::filesystem::browse::Request,
+) -> Result<plain_libs::serde_json::Value> {
+    use plain_libs::filesystem::record::FileRecord;
+    #[derive(serde::Serialize)]
+    struct File {
+        #[serde(flatten)]
+        record: FileRecord,
+        url: String,
+    }
+    #[derive(serde::Serialize)]
+    struct Page {
+        count: usize,
+        items: Vec<File>,
+    }
+    let (link, path) = Link::parse(&input.root)?;
+    input.root = format!("/{path}");
+    let plan = input.plan()?;
+    let (info, link) =
+        if let Some((id, card)) = share_card::find(&state.db, &link.shared_id, &link.token)? {
+            let result = browse(state, &id, &card, Some(&plan.root))
+                .await?
+                .ok_or_else(|| plain_libs::anyhow::anyhow!("Share unavailable"))?;
+            (result.info, result.link)
+        } else {
+            let info = request(state, fetch(state, &link, Some(&plan.root))).await?;
+            (info, link)
+        };
+    let mut records = vec![];
+    for entry in info.entries {
+        ensure!(entry.size >= 0, "Invalid shared file size");
+        records.push(FileRecord {
+            name: entry.name,
+            path: link.directory_url(&entry.relative_path)?,
+            permission: String::new(),
+            file_id: String::new(),
+            created_at: entry.created_at.map(|time| time.0.timestamp_millis()),
+            updated_at: entry.updated_at.0.timestamp_millis(),
+            size: entry.size,
+            is_dir: entry.is_dir,
+            child_count: 0,
+        });
+    }
+    let page = plan.records_page(records);
+    let items = page
+        .items
+        .into_iter()
+        .map(|record| -> Result<_> {
+            let (_, path) = Link::parse(&record.path)?;
+            let url = format!(
+                "{}&action=download",
+                link.file_url(&info.url_token, &path, false)?
+            );
+            Ok(File { record, url })
+        })
+        .collect::<Result<Vec<_>>>()?;
+    Ok(plain_libs::serde_json::to_value(Page {
+        count: page.count,
+        items,
+    })?)
 }
 
 #[cfg(test)]

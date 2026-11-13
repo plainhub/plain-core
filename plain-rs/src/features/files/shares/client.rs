@@ -1,7 +1,7 @@
 use plain_libs::anyhow::{Result, ensure};
 use plain_libs::protocols::http_client;
-use serde::{Deserialize, Serialize};
 use plain_libs::serde_json::{Value, json};
+use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Link {
@@ -13,6 +13,46 @@ pub struct Link {
     pub page_url: String,
 }
 impl Link {
+    pub fn parse(raw: &str) -> Result<(Self, String)> {
+        let url = http_client::Url::parse(raw)?;
+        let segments: Vec<_> = url
+            .path_segments()
+            .into_iter()
+            .flatten()
+            .map(|part| plain_libs::utils::query::percent_decode(&part.replace('+', "%2B")))
+            .collect();
+        ensure!(
+            url.scheme() == "https"
+                && url.username().is_empty()
+                && url.password().is_none()
+                && url.query().is_none()
+                && segments.len() >= 2
+                && segments[0] == "s"
+                && !segments[1].is_empty(),
+            "Invalid share URL"
+        );
+        let link = Self::new(
+            url.host_str()
+                .ok_or_else(|| plain_libs::anyhow::anyhow!("Missing share host"))?,
+            url.port_or_known_default().unwrap_or(443),
+            &segments[1],
+            url.fragment()
+                .ok_or_else(|| plain_libs::anyhow::anyhow!("Missing share token"))?,
+        )?;
+        let path = segments[2..].join("/");
+        Ok((link, path))
+    }
+    pub fn directory_url(&self, path: &str) -> Result<String> {
+        let mut url = http_client::Url::parse(&self.page_url)?;
+        url.path_segments_mut()
+            .map_err(|_| plain_libs::anyhow::anyhow!("Invalid share path"))?
+            .extend(
+                path.trim_matches('/')
+                    .split('/')
+                    .filter(|part| !part.is_empty()),
+            );
+        Ok(url.to_string())
+    }
     pub fn new(host: &str, port: u16, id: &str, token: &str) -> Result<Self> {
         let mut link = Self {
             host: host.trim().into(),
@@ -62,10 +102,12 @@ impl Link {
         Ok(key)
     }
     pub fn request(&self, relative_path: Option<&str>) -> Result<Vec<u8>> {
-        let query = "query($relativePath: String) { sharedInfo(relativePath: $relativePath) { name readOnly requiresPassword expiresAt urlToken entries { name relativePath isDir size mimeType hasThumb } } }";
+        let query = "query($relativePath: String) { sharedInfo(relativePath: $relativePath) { name readOnly requiresPassword expiresAt urlToken entries { name relativePath isDir size mimeType hasThumb createdAt updatedAt } } }";
         let body = json!({"query":query,"variables":{"relativePath":relative_path}}).to_string();
         crate::infrastructure::transport::http_request::encrypt(
-            &self.key()?, "/guest_graphql", &body,
+            &self.key()?,
+            "/guest_graphql",
+            &body,
         )
         .map_err(|_| plain_libs::anyhow::anyhow!("Cannot encrypt shared request"))
     }
@@ -84,7 +126,8 @@ impl Link {
                 error["message"].as_str().unwrap_or("Share request failed")
             );
         }
-        let info: Info = plain_libs::serde_json::from_value(response["data"]["sharedInfo"].clone())?;
+        let info: Info =
+            plain_libs::serde_json::from_value(response["data"]["sharedInfo"].clone())?;
         ensure!(
             plain_libs::utils::base64::base64_decode_checked(&info.url_token)?.len() == 32,
             "Invalid shared file token"
@@ -116,6 +159,8 @@ pub struct File {
     pub size: i64,
     pub mime_type: String,
     pub has_thumb: bool,
+    pub created_at: Option<crate::infrastructure::types::Instant>,
+    pub updated_at: crate::infrastructure::types::Instant,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -123,7 +168,7 @@ pub struct Info {
     pub name: String,
     pub read_only: bool,
     pub requires_password: bool,
-    pub expires_at: Option<i64>,
+    pub expires_at: Option<crate::infrastructure::types::Instant>,
     pub url_token: String,
     pub entries: Vec<File>,
 }

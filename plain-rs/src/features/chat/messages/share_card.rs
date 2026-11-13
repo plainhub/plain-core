@@ -4,8 +4,8 @@ use crate::infrastructure::db::Db;
 use crate::infrastructure::db::row_to_chat;
 use plain_libs::anyhow::{Result, ensure};
 use plain_libs::rusqlite::{OptionalExtension, params};
-use serde::{Deserialize, Serialize};
 use plain_libs::serde_json::Value;
+use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Peer {
@@ -32,6 +32,12 @@ fn parse(chat: &DChat) -> Result<(Value, Card)> {
     ensure!(value["type"] == "SHARE", "Message is not a share card");
     let card = plain_libs::serde_json::from_value(value["value"].clone())?;
     Ok((value, card))
+}
+pub fn find(db: &Db, share_id: &str, token: &str) -> Result<Option<(String, Card)>> {
+    db.with_conn(|conn| -> Result<_> {
+        let row = conn.query_row("SELECT id,content FROM chats WHERE json_valid(content) AND json_extract(content,'$.type')='SHARE' AND json_extract(content,'$.value.shareId')=?1 AND json_extract(content,'$.value.urlToken')=?2 ORDER BY updated_at DESC,id DESC LIMIT 1",params![share_id,token], |row| Ok((row.get::<_,String>(0)?,row.get::<_,String>(1)?))).optional()?;
+        row.map(|(id,content)| -> Result<_> { let value: Value = plain_libs::serde_json::from_str(&content)?; Ok((id,plain_libs::serde_json::from_value(value["value"].clone())?)) }).transpose()
+    })
 }
 pub fn current(db: &Db, id: &str, expected: &Card) -> Result<String> {
     let row = crate::infrastructure::db::chat_store::messages::get(db, id)?
@@ -85,8 +91,14 @@ pub fn refresh(
             .as_object_mut()
             .ok_or_else(|| plain_libs::anyhow::anyhow!("Invalid share card"))?;
         value.insert("name".into(), Value::String(fresh.name.clone()));
-        value.insert("expiresAt".into(), plain_libs::serde_json::to_value(fresh.expires_at)?);
-        value.insert("peerInfo".into(), plain_libs::serde_json::to_value(&fresh.peer_info)?);
+        value.insert(
+            "expiresAt".into(),
+            plain_libs::serde_json::to_value(fresh.expires_at)?,
+        );
+        value.insert(
+            "peerInfo".into(),
+            plain_libs::serde_json::to_value(&fresh.peer_info)?,
+        );
         let updated = plain_libs::serde_json::to_string(&content)?;
         ensure!(
             tx.execute(

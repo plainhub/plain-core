@@ -196,7 +196,6 @@ pub(crate) fn content_changes(request: &Request) -> bool {
                                 | "moveFile"
                                 | "copyFileToDirectory"
                                 | "createFileTask"
-                                | "cacheSharedFile"
                                 | "cacheZipEntry"
                                 | "cacheAudioCover"
                                 | "exportAppLogs"

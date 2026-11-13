@@ -9,6 +9,22 @@ enum PairingMode {
 	MANAGE
 }
 
+type Peer {
+	id: ID!
+	name: String!
+	ip: String!
+	status: PeerStatus!
+	port: Int
+	deviceType: DeviceType!
+	createdAt: Instant!
+	updatedAt: Instant!
+	online: Boolean!
+	managed: Boolean!
+	key: String!
+	publicKey: String!
+	token: String!
+}
+
 extend type Mutation {
 	cancelPairing(peerId: ID!): Boolean!
 	deletePeer(peerId: ID!): Boolean!

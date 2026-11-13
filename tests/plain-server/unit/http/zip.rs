@@ -1,6 +1,6 @@
 use super::*;
+use plain_libs::serde_json::json;
 use plain_rs::features::enums::DataType;
-use plain_libs::serde_json::{Value, json};
 use std::io::Read;
 
 #[test]
@@ -104,12 +104,26 @@ async fn shared_directory_download_preserves_empty_directories_and_excludes_outs
         let shares =
             plain_rs::features::files::shares::Service::new(state.db.clone(), state.prefs.clone());
         let share = shares
-            .create(
-                "shared folder".into(),
-                vec![folder.to_string_lossy().into_owned()],
-                true,
-                None,
-            )
+            .create(plain_rs::features::files::shares::Input {
+                name: "shared folder".into(),
+                password: String::new(),
+                data: (vec![folder.to_string_lossy().into_owned()])
+                    .into_iter()
+                    .map(|path: String| {
+                        let path = std::path::PathBuf::from(path);
+                        plain_rs::features::files::shares::SharePath {
+                            virtual_path: format!(
+                                "/{}",
+                                path.file_name().unwrap().to_str().unwrap()
+                            ),
+                            real_path: path.to_str().unwrap().into(),
+                            is_dir: path.is_dir(),
+                        }
+                    })
+                    .collect(),
+                read_only: true,
+                expires_at: None,
+            })
             .unwrap();
         let key = plain_libs::utils::base64::base64_decode(&share.url_token);
         let id = plain_rs::features::files::resource_link::seal(

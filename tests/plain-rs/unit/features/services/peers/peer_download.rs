@@ -1,13 +1,13 @@
 use super::*;
+use crate::features::chat::attachments::attachment_imports::Imports;
 use crate::features::chat::attachments::attachment_imports::Ticket;
-use crate::features::chat::attachments::download_queue::{Effect, Queue};
 use plain_libs::serde_json::{Value, json};
 use std::sync::Arc;
 
 fn fixture() -> (
     plain_libs::temporary::TempDir,
     crate::infrastructure::db::Db,
-    Queue,
+    Arc<Imports>,
     Ticket,
 ) {
     let root = plain_libs::temporary::tempdir().unwrap();
@@ -30,17 +30,11 @@ fn fixture() -> (
     }).to_string());
     chat.id = "message".into();
     db.insert_chat(&chat).unwrap();
-    let queue = Queue::new(
-        db.clone(),
-        root.path().to_owned(),
-        Arc::new(crate::features::chat::attachments::attachment_imports::Imports::default()),
-    );
-    assert!(queue.enqueue("message", "file", "peer").unwrap());
-    let ticket = match queue.effect().unwrap() {
-        Effect::Start { ticket, .. } => ticket,
-        Effect::Cancel { .. } => panic!("Expected a started attachment import"),
-    };
-    (root, db, queue, ticket)
+    let imports = Arc::new(Imports::default());
+    let ticket = imports
+        .begin(&db, root.path(), "message", "file", "fsid:remote-file")
+        .unwrap();
+    (root, db, imports, ticket)
 }
 
 #[test]
@@ -51,7 +45,7 @@ fn canceled_queued_ticket_open_cannot_recreate_the_unlinked_import_file() {
             .max_blocking_threads(1)
             .build()
             .unwrap();
-        let (root, _db, queue, ticket) = fixture();
+        let (root, _db, imports, ticket) = fixture();
         let path = std::path::PathBuf::from(&ticket.path);
         let neighbor = root.path().join("neighbor.bin");
         std::fs::write(&neighbor, b"preserved neighbor").unwrap();
@@ -66,7 +60,7 @@ fn canceled_queued_ticket_open_cannot_recreate_the_unlinked_import_file() {
             ready.await.unwrap();
             let mut opening = Box::pin(open_ticket(&ticket.path));
             let queued = futures_util::poll!(opening.as_mut()).is_pending();
-            let canceled = queue.control("file", action).unwrap();
+            let canceled = imports.abort(&ticket.token).unwrap();
             let removed_before_open = !path.exists();
             drop(opening);
             release.send(()).unwrap();
@@ -91,7 +85,7 @@ fn canceled_queued_ticket_open_cannot_recreate_the_unlinked_import_file() {
 
 #[tokio::test]
 async fn existing_ticket_is_truncated_and_exact_download_bytes_commit_normally() {
-    let (root, db, queue, ticket) = fixture();
+    let (root, db, imports, ticket) = fixture();
     std::fs::write(&ticket.path, b"stale bytes must be truncated").unwrap();
     let payload = [0, 255, 128, 10, 13, 42, 1];
     let mut file = open_ticket(&ticket.path).await.unwrap();
@@ -100,9 +94,8 @@ async fn existing_ticket_is_truncated_and_exact_download_bytes_commit_normally()
     file.sync_all().await.unwrap();
     drop(file);
     assert_eq!(std::fs::read(&ticket.path).unwrap(), payload);
-    assert!(queue.finish("file", &ticket.token, None).unwrap());
+    imports.finish(&db, root.path(), &ticket.token).unwrap();
     assert!(!std::path::Path::new(&ticket.path).exists());
-    assert!(queue.snapshot()["tasks"].as_array().unwrap().is_empty());
     let chat = crate::infrastructure::db::chat_store::messages::get(&db, "message")
         .unwrap()
         .unwrap();
@@ -118,8 +111,8 @@ async fn existing_ticket_is_truncated_and_exact_download_bytes_commit_normally()
 
 #[tokio::test]
 async fn missing_ticket_open_fails_without_creating_a_new_file() {
-    let (_root, _db, queue, ticket) = fixture();
-    assert!(queue.control("file", "cancel").unwrap());
+    let (_root, _db, imports, ticket) = fixture();
+    assert!(imports.abort(&ticket.token).unwrap());
     let error = open_ticket(&ticket.path).await.unwrap_err();
     assert_eq!(error.kind(), std::io::ErrorKind::NotFound);
     assert!(!std::path::Path::new(&ticket.path).exists());
@@ -127,15 +120,9 @@ async fn missing_ticket_open_fails_without_creating_a_new_file() {
 
 #[test]
 fn terminal_failure_aborts_its_ticket_but_an_active_import_legitimately_has_a_file() {
-    let (_root, db, queue, ticket) = fixture();
-    assert_eq!(queue.snapshot()["tasks"][0]["status"], "DOWNLOADING");
+    let (_root, db, imports, ticket) = fixture();
     assert!(std::path::Path::new(&ticket.path).is_file());
-    assert!(
-        queue
-            .finish("file", &ticket.token, Some("controlled failure".into()))
-            .unwrap()
-    );
-    assert_eq!(queue.snapshot()["tasks"][0]["status"], "FAILED");
+    assert!(imports.abort(&ticket.token).unwrap());
     assert!(!std::path::Path::new(&ticket.path).exists());
     let chat = crate::infrastructure::db::chat_store::messages::get(&db, "message")
         .unwrap()

@@ -1,7 +1,8 @@
-use crate::{http::websocket::runtime, managed_peers::PeerRoute, server::ServerState};
+use crate::{http::websocket::runtime, server::ServerState};
 use futures_util::{SinkExt, StreamExt};
 use plain_libs::anyhow::{Result, anyhow, ensure};
 use plain_libs::tokio_tungstenite::tungstenite::{Message, protocol::WebSocketConfig};
+use plain_rs::features::services::peers::managed_resources::PeerRoute;
 use plain_rs::infrastructure::{
     host::request_scope::NativeRequestScope,
     protocols::websocket::{self, Stream},
@@ -297,7 +298,7 @@ async fn peer(
     outgoing: &Output,
 ) -> Result<()> {
     let (route, mut socket, mut stream) = tokio::time::timeout(Duration::from_secs(10), async {
-        let route = state.managed_proxy.peers.route(state, peer_id).await?;
+        let route = state.managed_resources.route(state, peer_id).await?;
         let mut url = route.base.join(session.kind.path())?;
         url.set_scheme("wss")
             .map_err(|_| anyhow!("Invalid managed address"))?;

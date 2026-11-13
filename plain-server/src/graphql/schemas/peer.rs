@@ -2,12 +2,12 @@ use crate::graphql::resolvers::peers::query::Query;
 use crate::server::ServerState;
 use plain_graphql::{Context, EmptySubscription, ID, Object, Schema, SimpleObject};
 
+use plain_libs::serde_json::json;
 use plain_rs::features::chat::enums::ChannelSystemMessageType;
 use plain_rs::features::chat::enums::ChatStatus;
 use plain_rs::infrastructure::db::DChat;
 use plain_rs::infrastructure::transport::auth::AuthenticatedPeer;
 use plain_rs::infrastructure::types::Instant;
-use plain_libs::serde_json::{Value, json};
 
 #[derive(SimpleObject)]
 struct ChatItem {
@@ -30,8 +30,12 @@ impl TryFrom<DChat> for ChatItem {
             channel_id: row.channel_id.map(ID),
             id: ID(row.id),
             content: row.content,
-            created_at: Instant(plain_libs::chrono::DateTime::parse_from_rfc3339(&row.created_at)?.into()),
-            updated_at: Instant(plain_libs::chrono::DateTime::parse_from_rfc3339(&row.updated_at)?.into()),
+            created_at: Instant(
+                plain_libs::chrono::DateTime::parse_from_rfc3339(&row.created_at)?.into(),
+            ),
+            updated_at: Instant(
+                plain_libs::chrono::DateTime::parse_from_rfc3339(&row.updated_at)?.into(),
+            ),
             status: row.status,
             status_data: row.status_data.unwrap_or_default(),
         })
@@ -45,7 +49,7 @@ struct PeerContext {
 pub(crate) struct Mutation;
 #[Object]
 impl Mutation {
-    fn create_chat_item(
+    async fn create_chat_item(
         &self,
         ctx: &Context<'_>,
         content: String,
@@ -73,22 +77,14 @@ impl Mutation {
                 )])
                 .to_string(),
             ));
-        if let Ok(content) = plain_libs::serde_json::from_str::<Value>(&received.chat.content) {
-            if matches!(content["type"].as_str(), Some("FILES" | "IMAGES")) {
-                if let Some(files) = content["value"]["items"].as_array() {
-                    for file in files {
-                        if let Some(id) = file["id"].as_str() {
-                            if let Err(error) =
-                                c.state
-                                    .downloads
-                                    .enqueue(&received.chat.id, id, &received.peer.id)
-                            {
-                                log::warn!("Incoming attachment queue: {error}");
-                            }
-                        }
-                    }
-                }
-            }
+        if let Err(error) = plain_rs::features::services::downloads::chat::received(
+            &c.state,
+            &received.chat,
+            &received.peer.id,
+        )
+        .await
+        {
+            log::warn!("Incoming attachment queue: {error}");
         }
         c.state.previews.request(&received.chat.id);
         Ok(vec![item])
@@ -144,8 +140,9 @@ pub(crate) async fn execute(
         Ok(authenticated) => authenticated,
         Err(error) => return (error.http_status(), vec![]),
     };
-    let request = match plain_libs::serde_json::from_str::<plain_graphql::Request>(&authenticated.graphql_json)
-    {
+    let request = match plain_libs::serde_json::from_str::<plain_graphql::Request>(
+        &authenticated.graphql_json,
+    ) {
         Ok(request) => request,
         Err(_) => return (400, vec![]),
     };

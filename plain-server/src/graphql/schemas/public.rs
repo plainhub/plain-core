@@ -49,10 +49,8 @@ use std::sync::Arc;
 pub struct Query(
     crate::graphql::resolvers::app::cache::CacheQuery,
     crate::graphql::resolvers::peers::records::PeerRecordQuery,
-    crate::graphql::resolvers::shares::queue::SharedDownloadQuery,
-    crate::graphql::resolvers::downloads::queue::ChatDownloadQuery,
+    crate::graphql::resolvers::downloads::public::DownloadQuery,
     crate::graphql::resolvers::discovery::mdns::MdnsQuery,
-    crate::graphql::resolvers::shares::client::SharedClientQuery,
     crate::graphql::resolvers::files::trash::TrashQuery,
     crate::graphql::resolvers::casting::sender::DlnaSenderQuery,
     crate::graphql::resolvers::discovery::host::DiscoveryHostQuery,
@@ -95,10 +93,7 @@ pub struct Query(
 #[derive(MergedObject, Default)]
 pub struct Mutation(
     crate::graphql::resolvers::app::cache::CacheMutation,
-    crate::graphql::resolvers::shares::queue::SharedDownloadMutation,
-    crate::graphql::resolvers::downloads::queue::ChatDownloadMutation,
     crate::graphql::resolvers::discovery::mdns::MdnsMutation,
-    crate::graphql::resolvers::shares::client::SharedClientMutation,
     crate::graphql::resolvers::files::trash::TrashMutation,
     crate::graphql::resolvers::casting::sender::DlnaSenderMutation,
     crate::graphql::resolvers::chat::host::ChatHostMutation,

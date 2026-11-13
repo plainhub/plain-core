@@ -25,6 +25,13 @@ pub struct File {
     pub name: String,
 }
 
+pub fn download_url(id: &str) -> String {
+    format!(
+        "/fs?id={}&action=download",
+        plain_libs::utils::query::url_encode(id)
+    )
+}
+
 pub(crate) fn key(state: &CoreRuntime, scope: &Scope) -> plain_libs::anyhow::Result<Vec<u8>> {
     let token = match scope {
         Scope::Session(id) => {
@@ -46,7 +53,11 @@ pub(crate) fn key(state: &CoreRuntime, scope: &Scope) -> plain_libs::anyhow::Res
     Ok(key)
 }
 
-pub fn decrypt(state: &CoreRuntime, id: &str, purpose: ResourcePurpose) -> plain_libs::anyhow::Result<Vec<u8>> {
+pub fn decrypt(
+    state: &CoreRuntime,
+    id: &str,
+    purpose: ResourcePurpose,
+) -> plain_libs::anyhow::Result<Vec<u8>> {
     let (scope, payload) = resource_link::parse(id)?;
     plain_libs::anyhow::ensure!(!matches!(scope, Scope::Share(_)), "Invalid request scope");
     resource_link::decrypt(&scope, purpose, &key(state, &scope)?, payload)
@@ -73,7 +84,9 @@ pub async fn resolve_native_reference(
         .split_once("!zip!/")
         .map_or(file.path.as_str(), |(archive, _)| archive);
     state.file_platform.authorize(physical_path, false).await?;
-    state.native_client_id().map_err(plain_libs::anyhow::Error::msg)?;
+    state
+        .native_client_id()
+        .map_err(plain_libs::anyhow::Error::msg)?;
     Ok(file)
 }
 
@@ -114,24 +127,24 @@ async fn resolve_resource(
     } else {
         kind
     };
-    let media_path = if matches!(
+    let media = if matches!(
         resource.r#type,
         ResourceType::Media | ResourceType::ForegroundMediaThumbnail
     ) {
         state
             .file_platform
-            .resource_media_path(&resource.id)
+            .resource_media_file(&resource.id)
             .await?
     } else {
-        String::new()
+        File {
+            path: String::new(),
+            media_id: String::new(),
+            name: String::new(),
+        }
     };
     let state = state.clone();
     tokio::task::spawn_blocking(move || -> plain_libs::anyhow::Result<File> {
-        let mut file = File {
-            path: media_path,
-            media_id: String::new(),
-            name: String::new(),
-        };
+        let mut file = media;
         let authorize = matches!(
             resource.r#type,
             ResourceType::SharedFile

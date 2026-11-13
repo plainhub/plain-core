@@ -1,12 +1,13 @@
 use crate::{
     managed_peers::{
-        PeerRoute, request_error,
+        request_error,
         upload::{UploadRequest, UploadResponse},
     },
     server::ServerState,
 };
 use plain_libs::axum::{body::Bytes, http::StatusCode};
 use plain_rs::features::services::files::upload_chunks::MAX_UPLOAD_WRITE_BYTES;
+use plain_rs::features::services::peers::managed_resources::PeerRoute;
 use std::{io, sync::Arc};
 use tokio::sync::mpsc;
 
@@ -38,11 +39,12 @@ impl PeerUploadChunk {
         let route = tokio::select! {
             biased;
             _ = stop.wait_for(|value| *value) => return Err("Server stopped".into()),
-            route = state.managed_proxy.peers.route(&state, peer_id) => route.map_err(request_error)?,
+            route = state.managed_resources.route(&state, peer_id) => route.map_err(request_error)?,
         };
         let (sender, receiver) = mpsc::channel(2);
         let metadata =
-            plain_libs::serde_json::json!({"fileId": file_id, "index": index, "size": size}).to_string();
+            plain_libs::serde_json::json!({"fileId": file_id, "index": index, "size": size})
+                .to_string();
         let request = crate::managed_peers::upload::request(
             state.clone(),
             route.clone(),

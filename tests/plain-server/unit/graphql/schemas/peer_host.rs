@@ -1,5 +1,6 @@
 use super::*;
 use plain_libs::protocols::http_client;
+use plain_libs::serde_json::Value;
 #[tokio::test]
 async fn peer_schema_preserves_required_arguments_and_empty_query() {
     let schema = schema();
@@ -35,6 +36,7 @@ async fn encrypted_public_and_ble_rpc_share_auth_executor_and_receipts() {
         .lock()
         .await;
     use crate::server::ContentServer;
+    use plain_libs::tokio_tungstenite::tungstenite::Message;
     use plain_rs::features::chat::enums::DeviceType;
     use plain_rs::features::chat::enums::PeerStatus;
     use plain_rs::infrastructure::db::DPeer;
@@ -43,7 +45,6 @@ async fn encrypted_public_and_ble_rpc_share_auth_executor_and_receipts() {
     use plain_rs::infrastructure::db::chat_store::messages;
     use plain_rs::infrastructure::db::chat_store::peers;
     use std::sync::Arc;
-    use plain_libs::tokio_tungstenite::tungstenite::Message;
     let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs =
         Arc::new(plain_rs::features::prefs::Prefs::load(&dir.path().join("system.json")).unwrap());
@@ -79,7 +80,8 @@ async fn encrypted_public_and_ble_rpc_share_auth_executor_and_receipts() {
             if !message.is_text() {
                 continue;
             }
-            let request: Value = plain_libs::serde_json::from_str(message.to_text().unwrap()).unwrap();
+            let request: Value =
+                plain_libs::serde_json::from_str(message.to_text().unwrap()).unwrap();
             let result = match request["method"].as_str().unwrap() {
                 "systemCapabilities" => json!(["WIFI_AWARE"]),
                 "mdnsMulticast" => {
@@ -119,11 +121,13 @@ async fn encrypted_public_and_ble_rpc_share_auth_executor_and_receipts() {
                         .as_bytes(),
                         &parts.signature
                     ));
-                    let document: Value = plain_libs::serde_json::from_str(parts.request.get()).unwrap();
+                    let document: Value =
+                        plain_libs::serde_json::from_str(parts.request.get()).unwrap();
                     assert_eq!(document["variables"]["type"], "UPDATE");
-                    let payload: Value =
-                        plain_libs::serde_json::from_str(document["variables"]["payload"].as_str().unwrap())
-                            .unwrap();
+                    let payload: Value = plain_libs::serde_json::from_str(
+                        document["variables"]["payload"].as_str().unwrap(),
+                    )
+                    .unwrap();
                     let local = payload["memberPeers"]
                         .as_array()
                         .unwrap()
@@ -160,7 +164,10 @@ async fn encrypted_public_and_ble_rpc_share_auth_executor_and_receipts() {
         .unwrap();
     let wire = |document: Value| {
         let content = document.to_string();
-        let request = plain_rs::infrastructure::transport::graphql_request::Envelope::new(&content).unwrap().json().unwrap();
+        let request = plain_rs::infrastructure::transport::graphql_request::Envelope::new(&content)
+            .unwrap()
+            .json()
+            .unwrap();
         let signature = plain_libs::crypto::ed25519_sign(
             &kp,
             plain_rs::infrastructure::transport::auth::signature_payload("", &request).as_bytes(),
@@ -173,7 +180,9 @@ async fn encrypted_public_and_ble_rpc_share_auth_executor_and_receipts() {
             &key,
             "POST",
             "/peer_graphql",
-            plain_libs::serde_json::to_string(&envelope).unwrap().as_bytes(),
+            plain_libs::serde_json::to_string(&envelope)
+                .unwrap()
+                .as_bytes(),
         )
         .unwrap()
     };

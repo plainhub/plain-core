@@ -44,7 +44,8 @@ async fn folder_share_is_created_once_and_same_card_is_sent_to_every_target() {
     let shares = state.db.share_list().unwrap();
     assert_eq!(shares.len(), 1);
     assert!(shares[0].read_only);
-    let content: plain_libs::serde_json::Value = plain_libs::serde_json::from_str(&messages[0].content).unwrap();
+    let content: plain_libs::serde_json::Value =
+        plain_libs::serde_json::from_str(&messages[0].content).unwrap();
     assert_eq!(content["type"], "SHARE");
     assert_eq!(content["value"]["shareId"], shares[0].id);
     assert_eq!(content["value"]["itemCount"], 2);
@@ -187,12 +188,23 @@ async fn folder_share_and_all_messages_roll_back_when_a_later_message_insert_fai
     std::fs::create_dir(&folder_path).unwrap();
     std::fs::write(folder_path.join("owned.txt"), b"owned bytes").unwrap();
     let existing = service
-        .create(
-            "Existing share".into(),
-            vec![folder_path.to_string_lossy().into_owned()],
-            true,
-            None,
-        )
+        .create(crate::features::files::shares::Input {
+            name: "Existing share".into(),
+            password: String::new(),
+            data: (vec![folder_path.to_string_lossy().into_owned()])
+                .into_iter()
+                .map(|path: String| {
+                    let path = std::path::PathBuf::from(path);
+                    crate::features::files::shares::SharePath {
+                        virtual_path: format!("/{}", path.file_name().unwrap().to_str().unwrap()),
+                        real_path: path.to_str().unwrap().into(),
+                        is_dir: path.is_dir(),
+                    }
+                })
+                .collect(),
+            read_only: true,
+            expires_at: None,
+        })
         .unwrap();
     state.db.with_conn(|connection| connection.execute_batch(
         "CREATE TRIGGER reject_second_share_message BEFORE INSERT ON chats WHEN (SELECT COUNT(*) FROM chats)>0 BEGIN SELECT RAISE(ABORT,'owned batch failure'); END;"
@@ -269,7 +281,8 @@ async fn a_committed_folder_share_survives_a_later_delivery_error() {
         })
         .unwrap();
     assert_eq!(
-        plain_libs::serde_json::from_str::<plain_libs::serde_json::Value>(&content).unwrap()["value"]["shareId"],
+        plain_libs::serde_json::from_str::<plain_libs::serde_json::Value>(&content).unwrap()["value"]
+            ["shareId"],
         shares[0].id
     );
     assert!(folder_path.exists());

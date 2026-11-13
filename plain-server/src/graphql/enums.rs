@@ -350,7 +350,7 @@ impl FromStr for PackageType {
 
 // ── DownloadStatus ─────────────────────────────────────────────────────────
 
-pub use plain_rs::features::chat::attachments::download_status::DownloadStatus;
+pub use plain_rs::features::downloads::Status as DownloadStatus;
 
 // ── MediaPlayMode ──────────────────────────────────────────────────────────
 

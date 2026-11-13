@@ -749,7 +749,9 @@ fn download_controls_are_mutations_and_never_queries() {
         .next()
         .unwrap();
     for field in [
-        "downloadPeerFile",
+        "createDownload",
+        "cancelDownload",
+        "removeDownload",
         "pauseDownload",
         "resumeDownload",
         "retryDownload",

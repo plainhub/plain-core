@@ -127,10 +127,10 @@ fn service_owned_media_notifications_are_not_repeated_by_aliases_or_fragments() 
 #[test]
 fn cache_only_and_task_owned_mutations_skip_the_generic_content_broadcast() {
     for query in [
-        "mutation { preview: cacheSharedFile }",
+        "mutation { preview: copyFileToDirectory }",
         "mutation { deleted: deleteClipboardItems(query: \"all:true\") { affectedCount } }",
-        "mutation { cacheSharedFile cacheZipEntry cacheAudioCover exportAppLogs }",
-        "mutation { ...Cache } fragment Cache on Mutation { cacheSharedFile }",
+        "mutation { copyFileToDirectory cacheZipEntry exportAppLogs }",
+        "mutation { ...Cache } fragment Cache on Mutation { copyFileToDirectory }",
         "mutation { ... on Mutation { copyFileToDirectory copyFile moveFile renameFile } }",
         "mutation { createFileTask }",
         "mutation { ...Copy } fragment Copy on Mutation { copied: setClipboard(text: \"fixture\") }",
@@ -138,7 +138,7 @@ fn cache_only_and_task_owned_mutations_skip_the_generic_content_broadcast() {
         assert!(!content_changes(&Request::new(query)), "{query}");
     }
     assert!(content_changes(&Request::new(
-        "mutation { cacheSharedFile createNote }"
+        "mutation { copyFileToDirectory createNote }"
     )));
     assert!(content_changes(&Request::new("mutation { clearAppLogs }")));
     assert!(content_changes(&Request::new("mutation { clearAppLogs }")));
@@ -256,10 +256,7 @@ async fn sms_subscription_replays_results_after_its_receiver_is_ready() {
                 .unwrap();
         }
     });
-    state
-        .sms_sends
-        .register("send".into(), Some("request".into()), 1)
-        .unwrap();
+    state.sms_sends.register("send".into(), Some("request".into()), 1).unwrap();
     state
         .sms_sends
         .report(

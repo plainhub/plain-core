@@ -1,19 +1,19 @@
 //! Public `/graphql` roots that write: file operations, media-library
 //! actions and the resumable-upload merge state.
 //!
-use plain_rs::features::access::AccessFeature;
 use crate::graphql::resolvers::files::types::File;
 use crate::graphql::resolvers::media::public::MediaDataType;
 use crate::graphql::types::ActionResult;
 use crate::graphql::types::facts::text;
 use crate::http::auth::public_gate;
 use plain_graphql::{Context, Enum, Object, SimpleObject};
+use plain_rs::features::access::AccessFeature;
 
+use plain_libs::serde_json::{Value, json};
 use plain_rs::features::services::files::provider_query as provider_plan;
 use plain_rs::features::services::files::provider_query::Provider;
 use plain_rs::infrastructure::db::Db;
 use plain_rs::infrastructure::types::Long;
-use plain_libs::serde_json::{Value, json};
 use std::sync::Arc;
 
 const STORAGE: AccessFeature = AccessFeature::Files;
@@ -441,6 +441,7 @@ async fn media_action(
 
 fn written_file(record: plain_libs::filesystem::record::FileRecord) -> File {
     File {
+        resource_url: None,
         permission: record.permission,
         file_id: (!record.file_id.is_empty()).then(|| record.file_id.into()),
         name: record.name,
@@ -450,7 +451,8 @@ fn written_file(record: plain_libs::filesystem::record::FileRecord) -> File {
             .and_then(plain_libs::chrono::DateTime::from_timestamp_millis)
             .map(plain_rs::infrastructure::types::Instant),
         updated_at: plain_rs::infrastructure::types::Instant(
-            plain_libs::chrono::DateTime::from_timestamp_millis(record.updated_at).unwrap_or_default(),
+            plain_libs::chrono::DateTime::from_timestamp_millis(record.updated_at)
+                .unwrap_or_default(),
         ),
         size: Long(record.size),
         is_dir: record.is_dir,

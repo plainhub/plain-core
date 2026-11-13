@@ -13,17 +13,17 @@ use crate::graphql::types::facts::list;
 use crate::graphql::types::facts::rows;
 use crate::graphql::types::facts::text;
 use crate::http::auth::public_gate;
-use plain_libs::chrono::{DateTime, Utc};
 use plain_graphql::{Context, Object};
+use plain_libs::chrono::{DateTime, Utc};
 use plain_rs::features::access::AccessFeature;
 
 use plain_libs::filesystem::SortBy;
 use plain_libs::filesystem::browse::Request;
+use plain_libs::serde_json::{Value, json};
 use plain_rs::features::prefs::settings::FileSortBy;
 use plain_rs::features::services::files::browse as file_reads;
 use plain_rs::infrastructure::types::Instant;
 use plain_rs::infrastructure::types::Long;
-use plain_libs::serde_json::{Value, json};
 use std::{path::Path, sync::Arc};
 
 const STORAGE: AccessFeature = AccessFeature::Files;
@@ -100,8 +100,8 @@ impl FilesQuery {
         sort_by: FileSortBy,
     ) -> plain_graphql::Result<Vec<File>> {
         public_gate::require(ctx, prefs(ctx), &[STORAGE])?;
-        let page = file_reads::execute(
-            ctx.data::<Arc<plain_rs::features::services::files::platform::FilePlatform>>()?,
+        let page = read_page(
+            ctx,
             Request {
                 root,
                 query,
@@ -125,8 +125,8 @@ impl FilesQuery {
         query: String,
     ) -> plain_graphql::Result<i32> {
         public_gate::require(ctx, prefs(ctx), &[STORAGE])?;
-        let page = file_reads::execute(
-            ctx.data::<Arc<plain_rs::features::services::files::platform::FilePlatform>>()?,
+        let page = read_page(
+            ctx,
             Request {
                 root,
                 query,
@@ -153,7 +153,8 @@ impl FilesQuery {
             &path,
         )
         .await
-        .map_err(|error| plain_graphql::Error::new(error.to_string()))? else {
+        .map_err(|error| plain_graphql::Error::new(error.to_string()))?
+        else {
             return Ok(None);
         };
         let data = if !record.is_dir && ctx.look_ahead().field("data").exists() {
@@ -237,7 +238,9 @@ async fn media_info(
                 .as_str()
                 .and_then(|value| plain_libs::chrono::DateTime::parse_from_rfc3339(value).ok())
                 .map(|value| {
-                    plain_rs::infrastructure::types::Instant(value.with_timezone(&plain_libs::chrono::Utc))
+                    plain_rs::infrastructure::types::Instant(
+                        value.with_timezone(&plain_libs::chrono::Utc),
+                    )
                 }),
             flash: integer(&facts, "flash") as i32,
             f_number: facts["fNumber"].as_f64().unwrap_or(0.0),
@@ -272,7 +275,9 @@ async fn media_info(
                 .as_str()
                 .and_then(|value| plain_libs::chrono::DateTime::parse_from_rfc3339(value).ok())
                 .map(|value| {
-                    plain_rs::infrastructure::types::Instant(value.with_timezone(&plain_libs::chrono::Utc))
+                    plain_rs::infrastructure::types::Instant(
+                        value.with_timezone(&plain_libs::chrono::Utc),
+                    )
                 }),
             location: location(&facts),
         }),
@@ -324,8 +329,27 @@ fn is_audio(extension: &str) -> bool {
     )
 }
 
+async fn read_page(ctx: &Context<'_>, request: Request) -> Result<Value, String> {
+    if request.root.starts_with("https://") {
+        return plain_rs::features::services::peers::shared_client::files(
+            ctx.data::<crate::server::ServerState>()
+                .map_err(|error| error.message)?,
+            request,
+        )
+        .await
+        .map_err(|error| error.to_string());
+    }
+    file_reads::execute(
+        ctx.data::<Arc<plain_rs::features::services::files::platform::FilePlatform>>()
+            .map_err(|error| error.message)?,
+        request,
+    )
+    .await
+}
+
 fn file(item: &Value) -> File {
     File {
+        resource_url: item["url"].as_str().map(str::to_owned),
         permission: text(item, "permission"),
         file_id: item["mediaId"]
             .as_str()

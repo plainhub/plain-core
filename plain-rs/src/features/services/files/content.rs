@@ -15,6 +15,7 @@ pub enum Size {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Action {
+    Describe,
     Preview,
     Download,
     Probe,
@@ -24,6 +25,7 @@ pub enum Action {
 impl Action {
     pub fn as_str(self) -> &'static str {
         match self {
+            Self::Describe => "describe",
             Self::Preview => "preview",
             Self::Download => "download",
             Self::Probe => "probe",

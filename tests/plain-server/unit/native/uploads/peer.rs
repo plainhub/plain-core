@@ -289,7 +289,6 @@ async fn peer_upload_refuses_a_wrong_tls_pin_before_creating_remote_chunks() {
             .redirect(plain_libs::protocols::http_client::redirect::Policy::none())
             .build()
             .unwrap(),
-        supports_managed_resources: true,
         expires: route.expires,
     });
     let (tx, rx) = mpsc::channel(2);
@@ -341,7 +340,6 @@ async fn peer_upload_uses_progress_timeout_instead_of_inherited_header_deadline(
             .redirect(plain_libs::protocols::http_client::redirect::Policy::none())
             .build()
             .unwrap(),
-        supports_managed_resources: true,
         expires: route.expires,
     });
     let (tx, rx) = mpsc::channel(2);

@@ -1,8 +1,8 @@
 use crate::server::ServerState;
+use plain_libs::serde_json::{Value, json};
 use plain_rs::infrastructure::events::HOST_BINARY_TYPES;
 use plain_rs::infrastructure::events::HOST_TEXT_TYPES;
 use plain_rs::infrastructure::events::WsEvent;
-use plain_libs::serde_json::{Value, json};
 use tokio::sync::{Mutex, mpsc};
 
 pub struct HostEvents {
@@ -44,9 +44,7 @@ impl HostEvents {
             state.http_server.notify_snapshot(&state.host)?;
             state.host.notify("clipboardHistoryRefresh", json!({}))?;
             state.host.notify("dlnaRendererRefresh", json!({}))?;
-            state
-                .host
-                .notify("sharedFolderDownloadsRefresh", json!({}))?;
+            state.host.notify("downloadsRefresh", json!({}))?;
             plain_rs::features::services::peers::peer_transport::notify_snapshot(&state)?;
             state.update_checks.download.notify_snapshot(&state.host)?;
             state.cast.notify_snapshot(&state.host)?;
@@ -217,7 +215,8 @@ impl HostEvents {
         plain_rs::features::services::discovery::pairing_runtime::execute(
             &self.state,
             plain_rs::features::services::discovery::pairing_runtime::Request::Complete {
-                response: plain_libs::serde_json::from_str(&payload).map_err(|error| error.to_string())?,
+                response: plain_libs::serde_json::from_str(&payload)
+                    .map_err(|error| error.to_string())?,
                 sender_ip: String::new(),
             },
         )
@@ -299,8 +298,10 @@ impl HostEvents {
             scan_id: String,
             active: bool,
         }
-        let value: ScanState = plain_libs::serde_json::from_str(&payload).map_err(|error| error.to_string())?;
-        let id = plain_libs::utils::uuid::Uuid::parse_str(&value.scan_id).map_err(|error| error.to_string())?;
+        let value: ScanState =
+            plain_libs::serde_json::from_str(&payload).map_err(|error| error.to_string())?;
+        let id = plain_libs::utils::uuid::Uuid::parse_str(&value.scan_id)
+            .map_err(|error| error.to_string())?;
         return self
             .state
             .ble_scans
@@ -313,7 +314,8 @@ impl HostEvents {
             return Err("host disconnected".into());
         }
 
-        let facts = plain_libs::serde_json::from_str(&payload).map_err(|error| error.to_string())?;
+        let facts =
+            plain_libs::serde_json::from_str(&payload).map_err(|error| error.to_string())?;
         return self
             .state
             .ble_advertising
@@ -374,7 +376,11 @@ impl HostEvents {
         }
 
         self.publish(WsEvent::host_text("ACCESS_UPDATED", payload))?;
-        plain_rs::features::services::files::catalog_scan::access_changed(self.state.core.clone(), self.generation).await?;
+        plain_rs::features::services::files::catalog_scan::access_changed(
+            self.state.core.clone(),
+            self.generation,
+        )
+        .await?;
         #[cfg(target_os = "ios")]
         self.refresh_photos().await?;
         Ok(())
@@ -382,10 +388,17 @@ impl HostEvents {
 
     #[cfg(target_os = "ios")]
     async fn refresh_photos(&self) -> Result<(), String> {
-        self.state.file_platform.photos.sync(&self.state.db, &self.state.host).await?;
+        self.state
+            .file_platform
+            .photos
+            .sync(&self.state.db, &self.state.host)
+            .await?;
         plain_rs::features::services::files::catalog_events::publish(
             &self.state.events,
-            [plain_rs::features::enums::DataType::Image.kind(), plain_rs::features::enums::DataType::Video.kind()],
+            [
+                plain_rs::features::enums::DataType::Image.kind(),
+                plain_rs::features::enums::DataType::Video.kind(),
+            ],
         );
         Ok(())
     }
@@ -584,9 +597,9 @@ impl TestHost {
             ) {
                 continue;
             }
-            return Some(Ok(plain_libs::tokio_tungstenite::tungstenite::Message::Text(
-                value.to_string().into(),
-            )));
+            return Some(Ok(
+                plain_libs::tokio_tungstenite::tungstenite::Message::Text(value.to_string().into()),
+            ));
         }
     }
     pub(crate) async fn send(

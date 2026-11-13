@@ -223,23 +223,44 @@ async fn fresh_sessions_accept_the_same_uuid_independently() {
 
 #[tokio::test]
 async fn distinct_keys_reject_cross_route_frames_and_signed_envelopes_require_peer_syntax() {
+    use plain_libs::utils::base64::{base64_decode_checked, base64_encode};
     use plain_rs::features::chat::enums::{DeviceType, PeerStatus};
     use plain_rs::features::files::shares::Service;
     use plain_rs::features::prefs::Prefs;
     use plain_rs::infrastructure::db::DPeer;
     use plain_rs::infrastructure::transport::{contract, http_response};
-    use plain_libs::utils::base64::{base64_decode_checked, base64_encode};
     use std::sync::Arc;
 
     let dir = plain_libs::temporary::tempdir().unwrap();
     let folder = dir.path().join("shared");
     std::fs::create_dir(&folder).unwrap();
     let prefs = Arc::new(Prefs::load(&dir.path().join("prefs.json")).unwrap());
-    prefs.set("master_secret", base64_encode(&[11; 32])).unwrap();
-    let server = crate::server::ContentServer::start(dir.path(), &base64_encode(&[10; 32]), prefs).unwrap();
+    prefs
+        .set("master_secret", base64_encode(&[11; 32]))
+        .unwrap();
+    let server =
+        crate::server::ContentServer::start(dir.path(), &base64_encode(&[10; 32]), prefs).unwrap();
     let state = server.runtime_state();
     let service = Service::new(state.db.clone(), state.prefs.clone());
-    let share = service.create("fixture".into(), vec![folder.to_str().unwrap().into()], true, None).unwrap();
+    let share = service
+        .create(plain_rs::features::files::shares::Input {
+            name: "fixture".into(),
+            password: String::new(),
+            data: (vec![folder.to_str().unwrap().into()])
+                .into_iter()
+                .map(|path: String| {
+                    let path = std::path::PathBuf::from(path);
+                    plain_rs::features::files::shares::SharePath {
+                        virtual_path: format!("/{}", path.file_name().unwrap().to_str().unwrap()),
+                        real_path: path.to_str().unwrap().into(),
+                        is_dir: path.is_dir(),
+                    }
+                })
+                .collect(),
+            read_only: true,
+            expires_at: None,
+        })
+        .unwrap();
     let key = base64_decode_checked(&service.token(&share.id).unwrap()).unwrap();
     let session = plain_rs::features::services::sessions::create(&state, "fixture".into()).unwrap();
     let main_key = plain_rs::features::sessions::token_key(&session.token).unwrap();
@@ -256,61 +277,162 @@ async fn distinct_keys_reject_cross_route_frames_and_signed_envelopes_require_pe
     let payloads = [
         request(&plain_rs::features::record_id::generate(), "{ __typename }"),
         request(&plain_rs::features::record_id::generate(), "{ __typename }"),
-        contract::signed_request(&keypair, "{ __typename }", plain_libs::serde_json::json!({}), "").unwrap(),
+        contract::signed_request(
+            &keypair,
+            "{ __typename }",
+            plain_libs::serde_json::json!({}),
+            "",
+        )
+        .unwrap(),
     ];
     let keys: [&[u8]; 3] = [&main_key, &key, &peer_key];
     let routes = ["/graphql", "/guest_graphql", "/peer_graphql"];
-    let frames: Vec<Vec<u8>> = payloads.iter().enumerate().map(|(index, plain)| http_request::encrypt_raw(keys[index], "POST", routes[index], plain.as_bytes()).unwrap()).collect();
+    let frames: Vec<Vec<u8>> = payloads
+        .iter()
+        .enumerate()
+        .map(|(index, plain)| {
+            http_request::encrypt_raw(keys[index], "POST", routes[index], plain.as_bytes()).unwrap()
+        })
+        .collect();
     for (source, frame) in frames.iter().enumerate() {
         for (target, route) in routes.iter().enumerate() {
             if source == target {
-                assert_eq!(http_request::decrypt_raw(keys[source], "POST", route, frame).unwrap(), payloads[source].as_bytes());
+                assert_eq!(
+                    http_request::decrypt_raw(keys[source], "POST", route, frame).unwrap(),
+                    payloads[source].as_bytes()
+                );
             } else {
                 assert!(http_request::decrypt_raw(keys[source], "POST", route, frame).is_none());
             }
-            if source == target { continue; }
+            if source == target {
+                continue;
+            }
             let status = match target {
-                0 => call(State(state.clone()), headers(&session), frame.clone().into()).await.status().as_u16(),
+                0 => call(
+                    State(state.clone()),
+                    headers(&session),
+                    frame.clone().into(),
+                )
+                .await
+                .status()
+                .as_u16(),
                 1 => execute_guest(&state, &share.id, frame).await.0,
-                _ => crate::graphql::schemas::peer::execute(&state, &peer.id, "", frame).await.0,
+                _ => {
+                    crate::graphql::schemas::peer::execute(&state, &peer.id, "", frame)
+                        .await
+                        .0
+                }
             };
             assert_eq!(status, 401, "{} -> {route}: {status}", routes[source]);
         }
-        let old = plain_libs::crypto::xchacha_encrypt_raw(keys[source], &[&[(source + 1) as u8][..], payloads[source].as_bytes()].concat()).unwrap();
+        let old = plain_libs::crypto::xchacha_encrypt_raw(
+            keys[source],
+            &[&[(source + 1) as u8][..], payloads[source].as_bytes()].concat(),
+        )
+        .unwrap();
         let status = match source {
-            0 => call(State(state.clone()), headers(&session), old.into()).await.status().as_u16(),
+            0 => call(State(state.clone()), headers(&session), old.into())
+                .await
+                .status()
+                .as_u16(),
             1 => execute_guest(&state, &share.id, &old).await.0,
-            _ => crate::graphql::schemas::peer::execute(&state, &peer.id, "", &old).await.0,
+            _ => {
+                crate::graphql::schemas::peer::execute(&state, &peer.id, "", &old)
+                    .await
+                    .0
+            }
         };
         assert!(matches!(status, 400 | 401));
     }
     // Re-encrypt with the destination key to isolate syntax from key-domain rejection.
     for target in 0..3 {
-        let foreign = if target == 2 { &payloads[0] } else { &payloads[2] };
-        let frame = http_request::encrypt_raw(keys[target], "POST", routes[target], foreign.as_bytes()).unwrap();
+        let foreign = if target == 2 {
+            &payloads[0]
+        } else {
+            &payloads[2]
+        };
+        let frame =
+            http_request::encrypt_raw(keys[target], "POST", routes[target], foreign.as_bytes())
+                .unwrap();
         let status = match target {
-            0 => call(State(state.clone()), headers(&session), frame.into()).await.status().as_u16(),
+            0 => call(State(state.clone()), headers(&session), frame.into())
+                .await
+                .status()
+                .as_u16(),
             1 => execute_guest(&state, &share.id, &frame).await.0,
-            _ => crate::graphql::schemas::peer::execute(&state, &peer.id, "", &frame).await.0,
+            _ => {
+                crate::graphql::schemas::peer::execute(&state, &peer.id, "", &frame)
+                    .await
+                    .0
+            }
         };
         assert!(matches!(status, 400 | 401));
-        let old_plain = format!("signature|{}|nonce|{document}", plain_libs::chrono::Utc::now().timestamp_millis());
-        let old = http_request::encrypt_raw(keys[target], "POST", routes[target], old_plain.as_bytes()).unwrap();
+        let old_plain = format!(
+            "signature|{}|nonce|{document}",
+            plain_libs::chrono::Utc::now().timestamp_millis()
+        );
+        let old =
+            http_request::encrypt_raw(keys[target], "POST", routes[target], old_plain.as_bytes())
+                .unwrap();
         let status = match target {
-            0 => call(State(state.clone()), headers(&session), old.into()).await.status().as_u16(),
+            0 => call(State(state.clone()), headers(&session), old.into())
+                .await
+                .status()
+                .as_u16(),
             1 => execute_guest(&state, &share.id, &old).await.0,
-            _ => crate::graphql::schemas::peer::execute(&state, &peer.id, "", &old).await.0,
+            _ => {
+                crate::graphql::schemas::peer::execute(&state, &peer.id, "", &old)
+                    .await
+                    .0
+            }
         };
         assert!(matches!(status, 400 | 401));
     }
-    assert_eq!(call(State(state.clone()), headers(&session), frames[0].clone().into()).await.status(), StatusCode::OK);
-    for (index, (status, response)) in [execute_guest(&state, &share.id, &frames[1]).await, crate::graphql::schemas::peer::execute(&state, &peer.id, "", &frames[2]).await].into_iter().enumerate() {
+    assert_eq!(
+        call(
+            State(state.clone()),
+            headers(&session),
+            frames[0].clone().into()
+        )
+        .await
+        .status(),
+        StatusCode::OK
+    );
+    for (index, (status, response)) in [
+        execute_guest(&state, &share.id, &frames[1]).await,
+        crate::graphql::schemas::peer::execute(&state, &peer.id, "", &frames[2]).await,
+    ]
+    .into_iter()
+    .enumerate()
+    {
         assert_eq!(status, 200);
-        assert!(http_response::Context::new(&frames[index + 1]).decrypt(keys[index + 1], &response).is_some());
-        assert!(http_response::Context::new(&frames[0]).decrypt(keys[index + 1], &response).is_none());
+        assert!(
+            http_response::Context::new(&frames[index + 1])
+                .decrypt(keys[index + 1], &response)
+                .is_some()
+        );
+        assert!(
+            http_response::Context::new(&frames[0])
+                .decrypt(keys[index + 1], &response)
+                .is_none()
+        );
     }
-    assert_eq!(call(State(state.clone()), headers(&session), frames[0].clone().into()).await.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(
+        call(
+            State(state.clone()),
+            headers(&session),
+            frames[0].clone().into()
+        )
+        .await
+        .status(),
+        StatusCode::BAD_REQUEST
+    );
     assert_eq!(execute_guest(&state, &share.id, &frames[1]).await.0, 400);
-    assert_eq!(crate::graphql::schemas::peer::execute(&state, &peer.id, "", &frames[2]).await.0, 400);
+    assert_eq!(
+        crate::graphql::schemas::peer::execute(&state, &peer.id, "", &frames[2])
+            .await
+            .0,
+        400
+    );
     server.shutdown().await;
 }

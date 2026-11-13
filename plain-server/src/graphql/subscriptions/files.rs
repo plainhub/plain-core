@@ -116,6 +116,7 @@ fn batches(
         }
         bytes += size;
         batch.items.push(File {
+            resource_url: None,
             permission: item.permission,
             file_id: (!item.file_id.is_empty()).then(|| item.file_id.into()),
             name: item.name,
@@ -125,7 +126,8 @@ fn batches(
                 .and_then(plain_libs::chrono::DateTime::from_timestamp_millis)
                 .map(Instant),
             updated_at: Instant(
-                plain_libs::chrono::DateTime::from_timestamp_millis(item.updated_at).unwrap_or_default(),
+                plain_libs::chrono::DateTime::from_timestamp_millis(item.updated_at)
+                    .unwrap_or_default(),
             ),
             size: Long(item.size),
             is_dir: item.is_dir,

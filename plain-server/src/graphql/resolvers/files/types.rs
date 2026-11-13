@@ -52,6 +52,8 @@ pub struct Mount {
 #[derive(SimpleObject, Clone, Debug)]
 #[graphql(complex)]
 pub struct File {
+    #[graphql(skip)]
+    pub resource_url: Option<String>,
     pub permission: String,
     /// Empty for non-media files — exposed as `null` rather than an empty id.
     #[graphql(name = "mediaId")]
@@ -71,6 +73,26 @@ pub struct File {
 
 #[plain_graphql::ComplexObject]
 impl File {
+    fn url(&self, ctx: &plain_graphql::Context<'_>) -> plain_graphql::Result<String> {
+        if let Some(url) = &self.resource_url {
+            return Ok(url.clone());
+        }
+        let (scope, token) = crate::graphql::executor::resource_credentials(ctx)?;
+        let key = plain_libs::utils::base64::base64_decode_checked(&token)?;
+        let resource = if let Some(id) = &self.file_id {
+            plain_rs::features::files::resource_link::Resource {
+                r#type: plain_rs::features::files::resource_link::ResourceType::Media,
+                id: id.0.clone(),
+            }
+        } else {
+            plain_rs::features::files::resource_link::Resource::reference(&self.path)
+        };
+        let id = plain_rs::features::files::resource_link::seal(&scope, &key, &resource)?;
+        Ok(plain_rs::features::services::files::links::download_url(
+            &id,
+        ))
+    }
+
     fn is_system(&self) -> plain_graphql::Result<bool> {
         plain_libs::filesystem::system_items::contains(&self.path)
             .map_err(plain_graphql::Error::new)

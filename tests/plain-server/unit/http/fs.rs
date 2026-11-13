@@ -1,12 +1,17 @@
-use plain_libs::protocols::http_client;
 use crate::server::ContentServer;
 use crate::server::ServerState;
 use plain_libs::axum::body::Body;
 use plain_libs::axum::extract::Request;
 use plain_libs::axum::http::{HeaderName, StatusCode, header};
 use plain_libs::axum::response::Response;
+use plain_libs::protocols::http_client;
 
-fn test_state() -> (plain_libs::temporary::TempDir, ContentServer, ServerState, Vec<u8>) {
+fn test_state() -> (
+    plain_libs::temporary::TempDir,
+    ContentServer,
+    ServerState,
+    Vec<u8>,
+) {
     let directory = plain_libs::temporary::tempdir().unwrap();
     let core = ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state();
@@ -199,7 +204,9 @@ async fn fs_bmp_alpha_survives_uncropped_previews_and_cached_requests() {
             .unwrap()
             .to_owned();
         let bytes = body_bytes(response).await;
-        let decoded = plain_libs::image::load_from_memory(&bytes).unwrap().into_rgba8();
+        let decoded = plain_libs::image::load_from_memory(&bytes)
+            .unwrap()
+            .into_rgba8();
         assert_eq!(decoded.dimensions(), (3, 1));
         assert_eq!(
             decoded.into_raw(),
@@ -592,12 +599,23 @@ async fn fs_share_links_use_the_share_key_and_become_unavailable_after_deletion(
     let shares =
         plain_rs::features::files::shares::Service::new(state.db.clone(), state.prefs.clone());
     let share = shares
-        .create(
-            "fixture".into(),
-            vec![path.to_string_lossy().into_owned()],
-            true,
-            None,
-        )
+        .create(plain_rs::features::files::shares::Input {
+            name: "fixture".into(),
+            password: String::new(),
+            data: (vec![path.to_string_lossy().into_owned()])
+                .into_iter()
+                .map(|path: String| {
+                    let path = std::path::PathBuf::from(path);
+                    plain_rs::features::files::shares::SharePath {
+                        virtual_path: format!("/{}", path.file_name().unwrap().to_str().unwrap()),
+                        real_path: path.to_str().unwrap().into(),
+                        is_dir: path.is_dir(),
+                    }
+                })
+                .collect(),
+            read_only: true,
+            expires_at: None,
+        })
         .unwrap();
     let key = plain_libs::utils::base64::base64_decode(&share.url_token);
     let id = plain_rs::features::files::resource_link::seal(
@@ -637,7 +655,9 @@ async fn fs_thumbnail_conditionals_and_downloads_keep_their_http_contract() {
     let (_root, _core, state, _key) = test_state();
     let images = plain_libs::temporary::tempdir().unwrap();
     let path = images.path().join("preview.png");
-    plain_libs::image::RgbImage::new(64, 32).save(&path).unwrap();
+    plain_libs::image::RgbImage::new(64, 32)
+        .save(&path)
+        .unwrap();
     let original = std::fs::read(&path).unwrap();
     let id = file_id(&state, path.to_str().unwrap());
     let query = format!("id={id}&action=preview&size=sm");
@@ -805,8 +825,16 @@ async fn native_file_preview_uses_its_session_and_the_shared_preview() {
     let scope = Scope::Session(state.native_client_id().unwrap());
     for (name, bytes, expected) in [
         ("fixture.txt", b"text preview\n".as_slice(), "text preview"),
-        ("fixture.md", b"# Markdown preview\n".as_slice(), "# Markdown preview"),
-        ("fixture.docx", include_bytes!("../../../../plain-rs/testdata/preview.docx").as_slice(), "# Document preview"),
+        (
+            "fixture.md",
+            b"# Markdown preview\n".as_slice(),
+            "# Markdown preview",
+        ),
+        (
+            "fixture.docx",
+            include_bytes!("../../../../plain-rs/testdata/preview.docx").as_slice(),
+            "# Document preview",
+        ),
     ] {
         let path = directory.path().join(name);
         std::fs::write(&path, bytes).unwrap();
@@ -833,15 +861,11 @@ async fn native_file_preview_uses_its_session_and_the_shared_preview() {
 async fn fs_thumbnail_latency_benchmark() {
     let (_root, core, state, _key) = test_state();
     let source = plain_libs::temporary::tempdir().unwrap();
-    let (certificate_pem, certificate_key) = plain_libs::tls::generate_pem(&["localhost".into()]).unwrap();
+    let (certificate_pem, certificate_key) =
+        plain_libs::tls::generate_pem(&["localhost".into()]).unwrap();
     let pem = String::from_utf8(certificate_pem).unwrap();
     let (_, port) = core
-        .start_public(
-            0,
-            0,
-            pem.clone().into_bytes(),
-            certificate_key,
-        )
+        .start_public(0, 0, pem.clone().into_bytes(), certificate_key)
         .await
         .unwrap();
     let http = http_client::builder()
@@ -1083,7 +1107,9 @@ async fn fs_png_previews_preserve_alpha_mime_and_conditional_cache_responses() {
         assert_eq!(first.headers()[header::CONTENT_TYPE], "image/png");
         let etag = first.headers()[header::ETAG].to_str().unwrap().to_owned();
         let bytes = body_bytes(first).await;
-        let decoded = plain_libs::image::load_from_memory(&bytes).unwrap().into_rgba8();
+        let decoded = plain_libs::image::load_from_memory(&bytes)
+            .unwrap()
+            .into_rgba8();
         assert_eq!(decoded.dimensions(), dimensions);
         let pixel = decoded.get_pixel(dimensions.0 / 2, dimensions.1 / 2);
         assert_eq!(pixel[3], 128);
@@ -1127,7 +1153,9 @@ async fn fs_tiff_avif_heic_and_heif_share_thumbnails_preserve_alpha_and_download
                 .unwrap()
                 .to_owned();
             let bytes = body_bytes(response).await;
-            let pixels = plain_libs::image::load_from_memory(&bytes).unwrap().into_rgba8();
+            let pixels = plain_libs::image::load_from_memory(&bytes)
+                .unwrap()
+                .into_rgba8();
             assert_eq!(pixels.dimensions(), (64, 48), "{extension} {size}");
             assert!(pixels.pixels().any(|p| p[3] < 255), "{extension}");
             assert_eq!(body_bytes(call_fs(&state, &query, &[]).await).await, bytes);
@@ -1322,7 +1350,10 @@ async fn fs_native_resource_ranges_use_the_provider_file_window() {
         .unwrap();
     let metadata: plain_libs::serde_json::Value =
         plain_libs::serde_json::from_str(&stream.next_request().await.unwrap().unwrap()).unwrap();
-    assert_eq!(metadata, plain_libs::serde_json::json!({"path":resource,"file":true}));
+    assert_eq!(
+        metadata,
+        plain_libs::serde_json::json!({"path":resource,"file":true})
+    );
     let mut file = plain_libs::temporary::tempfile().unwrap();
     std::io::Write::write_all(&mut file, b"PREFIX0123456789SUFFIX").unwrap();
     stream

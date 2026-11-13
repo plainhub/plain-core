@@ -19,7 +19,7 @@ async fn main_share_content_uses_saved_roots_identity_and_live_port() {
     let (_generation, mut requests) = server.runtime_state().host.connect();
     let executor = server.graphql_executor();
     let result = executor.execute(Request::new(format!(
-        "mutation {{ createShare(name: \"A share\", realPaths: [{}], readOnly: true) {{ id }} }}", json!(file.to_str().unwrap())
+        "mutation {{ createShare(input: {{ name: \"A share\", password: \"\", data: [{{ virtualPath: \"/shared.txt\", realPath: {}, isDir: false }}], readOnly: true }}) {{ id }} }}", json!(file.to_str().unwrap())
     ))).await;
     assert!(result.errors.is_empty(), "{:?}", result.errors);
     let data = result.data.into_json().unwrap();
@@ -33,7 +33,8 @@ async fn main_share_content_uses_saved_roots_identity_and_live_port() {
     assert!(result.errors.is_empty(), "{:?}", result.errors);
     let data = result.data.into_json().unwrap();
     let message: Value =
-        plain_libs::serde_json::from_str(data["sendShare"][0]["content"].as_str().unwrap()).unwrap();
+        plain_libs::serde_json::from_str(data["sendShare"][0]["content"].as_str().unwrap())
+            .unwrap();
     assert_eq!(message["type"], "SHARE");
     assert_eq!(message["value"]["shareId"], id);
     assert_eq!(
@@ -104,5 +105,96 @@ async fn main_folder_share_and_batch_chat_use_shared_services_without_host_calls
         2
     );
     assert!(requests.try_recv().is_err());
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn share_crud_preserves_aliases_and_rejects_invalid_replacements_atomically() {
+    let directory = plain_libs::temporary::tempdir().unwrap();
+    let file = directory.path().join("original.txt");
+    std::fs::write(&file, b"original").unwrap();
+    let server = ContentServer::open(&directory.path().join("core")).unwrap();
+    let executor = server.graphql_executor();
+    let projection = "id name password expiresAt readOnly data { virtualPath realPath isDir } url";
+    let input = json!({"name":"Original","password":"secret","expiresAt":"2099-01-01T00:00:00Z","readOnly":true,"data":[{"virtualPath":"/alias.txt","realPath":file,"isDir":false}]});
+    let created = executor
+        .execute(
+            Request::new(format!(
+                "mutation($input:ShareInput!){{createShare(input:$input){{{projection}}}}}"
+            ))
+            .variables(plain_graphql::Variables::from_json(json!({"input":input}))),
+        )
+        .await;
+    assert!(created.errors.is_empty(), "{:?}", created.errors);
+    let created = created.data.into_json().unwrap()["createShare"].clone();
+    let id = created["id"].as_str().unwrap();
+    assert_eq!(created["data"][0]["virtualPath"], "/alias.txt");
+    assert_eq!(created["password"], "secret");
+    let old_url = created["url"].clone();
+    for data in [
+        json!([]),
+        json!([{"virtualPath":"/alias.txt","realPath":file,"isDir":true}]),
+        json!([{"virtualPath":"/../outside","realPath":file,"isDir":false}]),
+        json!([{"virtualPath":"/alias.txt","realPath":file,"isDir":false},{"virtualPath":"alias.txt/","realPath":file,"isDir":false}]),
+    ] {
+        let mut invalid = input.clone();
+        invalid["data"] = data;
+        let result = executor
+            .execute(
+                Request::new(
+                    "mutation($id:ID!,$input:ShareInput!){updateShare(id:$id,input:$input){id}}",
+                )
+                .variables(plain_graphql::Variables::from_json(
+                    json!({"id":id,"input":invalid}),
+                )),
+            )
+            .await;
+        assert!(!result.errors.is_empty());
+        let result = executor
+            .execute(
+                Request::new(format!("query($id:ID!){{share(id:$id){{{projection}}}}}"))
+                    .variables(plain_graphql::Variables::from_json(json!({"id":id}))),
+            )
+            .await;
+        assert!(result.errors.is_empty(), "{:?}", result.errors);
+        assert_eq!(result.data.into_json().unwrap()["share"], created);
+    }
+    let mut replacement = input;
+    replacement["name"] = json!("Updated");
+    replacement["password"] = json!("");
+    replacement["expiresAt"] = Value::Null;
+    replacement["readOnly"] = json!(false);
+    let updated = executor.execute(Request::new(format!("mutation($id:ID!,$input:ShareInput!){{updateShare(id:$id,input:$input){{{projection}}}}}"))
+        .variables(plain_graphql::Variables::from_json(json!({"id":id,"input":replacement})))).await;
+    assert!(updated.errors.is_empty(), "{:?}", updated.errors);
+    let updated = updated.data.into_json().unwrap()["updateShare"].clone();
+    assert_eq!(updated["name"], "Updated");
+    assert_eq!(updated["password"], "");
+    assert_eq!(updated["readOnly"], false);
+    assert!(updated["expiresAt"].is_null());
+    assert_eq!(updated["url"], old_url);
+    assert_eq!(updated["data"], created["data"]);
+    let result = executor.execute(Request::new("query{shares{id}} ")).await;
+    assert!(result.errors.is_empty());
+    assert_eq!(result.data.into_json().unwrap()["shares"][0]["id"], id);
+    for expected in [true, false] {
+        let result = executor
+            .execute(
+                Request::new("mutation($id:ID!){deleteShare(id:$id)}")
+                    .variables(plain_graphql::Variables::from_json(json!({"id":id}))),
+            )
+            .await;
+        assert!(result.errors.is_empty());
+        assert_eq!(result.data.into_json().unwrap()["deleteShare"], expected);
+    }
+    let result = executor
+        .execute(
+            Request::new("query($id:ID!){share(id:$id){id}}")
+                .variables(plain_graphql::Variables::from_json(json!({"id":id}))),
+        )
+        .await;
+    assert!(result.errors.is_empty());
+    assert!(result.data.into_json().unwrap()["share"].is_null());
+    assert_eq!(std::fs::read(file).unwrap(), b"original");
     server.shutdown().await;
 }

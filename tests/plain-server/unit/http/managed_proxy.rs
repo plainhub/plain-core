@@ -1,7 +1,7 @@
-use plain_libs::aad::ResourcePurpose;
 use super::*;
 use crate::server::ContentServer;
 use futures_util::{SinkExt, StreamExt};
+use plain_libs::aad::ResourcePurpose;
 use plain_libs::axum::body::Bytes;
 use plain_libs::serde_json::json;
 use plain_libs::tokio_tungstenite::tungstenite::{Message, client::IntoClientRequest};
@@ -16,7 +16,7 @@ use plain_rs::{
         db::chat_store::SaveMode, protocols::websocket as graphql, transport::http_request,
     },
 };
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
 fn start(path: &std::path::Path, id: &str) -> ContentServer {
     std::fs::create_dir_all(path).unwrap();
@@ -156,10 +156,17 @@ async fn managed_proxy_keeps_the_browser_session_and_streams_a_peer_range() {
             ["app"]["clientId"],
         b_id
     );
-    let first = a_state.managed_proxy.route(&a_state, &b_id).await.unwrap();
-    let second = a_state.managed_proxy.route(&a_state, &b_id).await.unwrap();
+    let first = a_state
+        .managed_resources
+        .route(&a_state, &b_id)
+        .await
+        .unwrap();
+    let second = a_state
+        .managed_resources
+        .route(&a_state, &b_id)
+        .await
+        .unwrap();
     assert!(Arc::ptr_eq(&first, &second));
-    assert!(first.supports_managed_resources);
     assert!(
         first
             .client
@@ -356,7 +363,10 @@ async fn managed_proxy_keeps_the_browser_session_and_streams_a_peer_range() {
         )
         .await
         .unwrap();
-        assert!(b_state.subscription_sessions.snapshot().is_empty(), "invalid confirmation must not open an upstream subscription");
+        assert!(
+            b_state.subscription_sessions.snapshot().is_empty(),
+            "invalid confirmation must not open an upstream subscription"
+        );
     }
     tokio::time::timeout(
         Duration::from_secs(12),
@@ -430,8 +440,14 @@ async fn managed_proxy_keeps_the_browser_session_and_streams_a_peer_range() {
 async fn first_login_and_chat_range_use_proxy_without_a_management_token() {
     use plain_rs::features::{prefs::security, services::peers::peer_wire};
     let dir = plain_libs::temporary::tempdir().unwrap();
-    let a = start(&dir.path().join("a"), "706c6169-0000-8000-8000-000000000052");
-    let b = start(&dir.path().join("b"), "706c6169-0000-8000-8000-000000000053");
+    let a = start(
+        &dir.path().join("a"),
+        "706c6169-0000-8000-8000-000000000052",
+    );
+    let b = start(
+        &dir.path().join("b"),
+        "706c6169-0000-8000-8000-000000000053",
+    );
     let (a_cert, a_key) = plain_libs::tls::generate_pem(&["localhost".into()]).unwrap();
     let (a_http, a_port) = a.start_public(0, 0, a_cert.clone(), a_key).await.unwrap();
     let (b_cert, b_key) = plain_libs::tls::generate_pem(&["localhost".into()]).unwrap();
@@ -601,9 +617,7 @@ async fn first_login_and_chat_range_use_proxy_without_a_management_token() {
     socket.close(None).await.unwrap();
     let mut socket = reconnected;
     let password = b"fixture-password";
-    let login =
-        plain_libs::opaque::ClientLogin::start(&mut rand_core::OsRng, password)
-            .unwrap();
+    let login = plain_libs::opaque::ClientLogin::start(&mut rand_core::OsRng, password).unwrap();
     socket
         .send(Message::Binary(login.message.serialize().to_vec().into()))
         .await
@@ -636,7 +650,8 @@ async fn first_login_and_chat_range_use_proxy_without_a_management_token() {
         )
         .unwrap();
     let login_key = plain_libs::auth::api_key(finish.session_key.as_slice(), &context);
-    let request = json!({"appName":"Fixture", "appVersion":"1", "osName":"Fixture", "osVersion":"1"});
+    let request =
+        json!({"appName":"Fixture", "appVersion":"1", "osName":"Fixture", "osVersion":"1"});
     let encrypted = plain_libs::crypto::xchacha_encrypt_raw_with_aad(
         &login_key,
         &plain_libs::serde_json::to_vec(&request).unwrap(),
@@ -670,7 +685,13 @@ async fn first_login_and_chat_range_use_proxy_without_a_management_token() {
             .unwrap()
             .is_some()
     );
-    assert!(a_state.db.session_get(&browser.client_id).unwrap().is_some());
+    assert!(
+        a_state
+            .db
+            .session_get(&browser.client_id)
+            .unwrap()
+            .is_some()
+    );
     assert!(
         peers::get(&a_state.db, &b_id)
             .unwrap()
@@ -700,13 +721,8 @@ async fn first_login_and_chat_range_use_proxy_without_a_management_token() {
     )
     .unwrap();
     let reference = format!("fsid:{file_id}");
-    let attachment = resource_link::encrypt(
-        &scope,
-        ResourcePurpose::Fs,
-        &key,
-        reference.as_bytes(),
-    )
-    .unwrap();
+    let attachment =
+        resource_link::encrypt(&scope, ResourcePurpose::Fs, &key, reference.as_bytes()).unwrap();
     let url = format!("{origin}/proxy/{b_id}/fs?id={attachment}&action=preview");
     let unknown_peer = url.replace(&format!("/proxy/{b_id}/"), "/proxy/other-device/");
     assert_eq!(
@@ -945,7 +961,9 @@ async fn rejected_subscription_confirmation(
         url,
         None,
         false,
-        Some(plain_libs::tokio_tungstenite::Connector::Rustls(Arc::new(tls))),
+        Some(plain_libs::tokio_tungstenite::Connector::Rustls(Arc::new(
+            tls,
+        ))),
     )
     .await
     .unwrap();
@@ -953,15 +971,21 @@ async fn rejected_subscription_confirmation(
         key,
         client,
         "/graphql",
-        json!({"clientNonce":"ab".repeat(32)}).to_string().as_bytes(),
+        json!({"clientNonce":"ab".repeat(32)})
+            .to_string()
+            .as_bytes(),
     )
     .unwrap();
-    socket.send(Message::Binary(init.clone().into())).await.unwrap();
+    socket
+        .send(Message::Binary(init.clone().into()))
+        .await
+        .unwrap();
     let Message::Binary(ack) = socket.next().await.unwrap().unwrap() else {
         panic!("Missing challenge")
     };
     assert!(graphql::open_ack(key, client, "/graphql", &init, &ack).is_some());
-    let mut cipher = graphql::Stream::new("/graphql", client, &init, &ack, graphql::Role::Client).unwrap();
+    let mut cipher =
+        graphql::Stream::new("/graphql", client, &init, &ack, graphql::Role::Client).unwrap();
     let frame = cipher.encode(command.to_string().as_bytes(), key).unwrap();
     assert_eq!(u64::from_be_bytes(frame[..8].try_into().unwrap()), 1);
     socket.send(Message::Binary(frame.into())).await.unwrap();

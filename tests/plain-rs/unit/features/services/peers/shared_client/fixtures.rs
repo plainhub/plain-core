@@ -51,6 +51,7 @@ pub(super) async fn tls() -> (
     let requested = Arc::new(tokio::sync::Notify::new());
     let released = Arc::new(tokio::sync::Notify::new());
     let seen = count.clone();
+    let file_reads = count.clone();
     let started = requested.clone();
     let release = released.clone();
     let router = Router::new().route("/guest_graphql", post(move |headers: HeaderMap, body: Bytes| {
@@ -68,10 +69,11 @@ pub(super) async fn tls() -> (
                 started.notify_one();
                 release.notified().await;
             }
-            let info = json!({"data":{"sharedInfo":{"name":"current","readOnly":true,"requiresPassword":false,"expiresAt":null,"urlToken":plain_libs::utils::base64::base64_encode(&[8;32]),"entries":[{"name":"a 中文.txt","relativePath":"folder/ +?#中文%","isDir":false,"size":8,"mimeType":"text/plain","hasThumb":false}]}}});
+            let info = json!({"data":{"sharedInfo":{"name":"current","readOnly":true,"requiresPassword":false,"expiresAt":null,"urlToken":plain_libs::utils::base64::base64_encode(&[8;32]),"entries":[{"name":"a 中文.txt","relativePath":"folder/ +?#中文%","isDir":false,"size":8,"mimeType":"text/plain","hasThumb":false,"createdAt":null,"updatedAt":"2026-01-01T00:00:00.000Z"}]}}});
             crate::infrastructure::transport::http_response::Context::new(&body).encrypt(&[7;32], info.to_string().as_bytes()).unwrap()
         }
-    })).route("/fs", get(|Query(params): Query<std::collections::HashMap<String, String>>| async move {
+    })).route("/fs", get(move |Query(params): Query<std::collections::HashMap<String, String>>| { let count=file_reads.clone(); async move {
+        count.fetch_add(1, Ordering::SeqCst);
         assert!(!params.contains_key("sid"));
         if let Some(size) = params.get("size") {
             assert_eq!(size, "sm");
@@ -85,7 +87,7 @@ pub(super) async fn tls() -> (
         assert_eq!(decoded.r#type, crate::features::files::resource_link::ResourceType::SharedFile);
         assert_eq!(decoded.id, "folder/ +?#中文%");
         "download"
-    }));
+    }}));
     let task = tokio::spawn(async move {
         let (_stop, stopped) = tokio::sync::watch::channel(false);
         plain_libs::protocols::https::serve(socket, router, config, stopped)

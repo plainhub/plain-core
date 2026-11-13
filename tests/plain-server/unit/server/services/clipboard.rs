@@ -1,5 +1,5 @@
-use plain_libs::protocols::http_client;
 use crate::server::ContentServer;
+use plain_libs::protocols::http_client;
 use plain_libs::serde_json::{Value, json};
 use std::sync::Arc;
 
@@ -40,7 +40,7 @@ async fn platform_callbacks_before_write_reply_do_not_republish_received_text() 
                 | "onlineClientsChanged"
                 | "httpServerStatusChanged"
                 | "dlnaRendererRefresh"
-                | "sharedFolderDownloadsRefresh"
+                | "downloadsRefresh"
                 | "peerTransportsChanged"
                 | "appUpdateDownloadChanged"
                 | "dlnaSenderChanged"
@@ -85,7 +85,9 @@ async fn platform_callbacks_before_write_reply_do_not_republish_received_text() 
 }
 
 async fn call(port: u16, token: &str, query: &str) -> Value {
-    let response = http_client::builder().build().unwrap()
+    let response = http_client::builder()
+        .build()
+        .unwrap()
         .post(format!("http://127.0.0.1:{port}/graphql"))
         .bearer_auth(token)
         .header("content-type", "application/json")
@@ -124,7 +126,9 @@ async fn native_report_http_search_delete_and_restart_share_one_clipboard() {
     while !initialized {
         let request = bridge.next_request().await.unwrap();
         initialized = request["method"] == "networkInterfacesChanged";
-        bridge.reply(json!({"id":request["id"],"result":null})).unwrap();
+        bridge
+            .reply(json!({"id":request["id"],"result":null}))
+            .unwrap();
     }
     let payload = json!({"text": "100%_ 🌍", "sensitive": true}).to_string();
     bridge
@@ -137,10 +141,14 @@ async fn native_report_http_search_delete_and_restart_share_one_clipboard() {
                 return request;
             }
             assert_eq!(request["method"], "mdnsMulticast");
-            bridge.reply(json!({"id":request["id"],"result":true})).unwrap();
+            bridge
+                .reply(json!({"id":request["id"],"result":true}))
+                .unwrap();
         }
         panic!("Host disconnected before clipboard refresh");
-    }).await.unwrap();
+    })
+    .await
+    .unwrap();
     bridge
         .reply(json!({"id":callback["id"],"result":null}))
         .unwrap();
@@ -154,7 +162,10 @@ async fn native_report_http_search_delete_and_restart_share_one_clipboard() {
     assert_eq!(item["source"], "");
     assert_eq!(item["label"], "");
     assert_eq!(item["sensitive"], true);
-    assert!(plain_libs::chrono::DateTime::parse_from_rfc3339(item["createdAt"].as_str().unwrap()).is_ok());
+    assert!(
+        plain_libs::chrono::DateTime::parse_from_rfc3339(item["createdAt"].as_str().unwrap())
+            .is_ok()
+    );
     bridge
         .publish_text("CLIPBOARD_REPORTED", payload)
         .await

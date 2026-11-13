@@ -15,10 +15,7 @@ use plain_rs::{
     },
     infrastructure::{db::SessionRow, transport::http_response},
 };
-use std::{
-    collections::HashMap,
-    sync::{Arc, Mutex},
-};
+use std::{collections::HashMap, sync::Mutex};
 use subtle::ConstantTimeEq;
 
 mod attachment;
@@ -27,18 +24,13 @@ mod socket;
 mod upload;
 
 pub(super) use crate::managed_peers::resource::MANAGED_RESOURCE;
-use crate::managed_peers::{GRAPHQL_LIMIT, PeerRoute, ROUTE_LIFETIME, decode_key, decode_pin};
+use plain_rs::features::services::peers::managed_resources::{
+    GRAPHQL_LIMIT, PeerRoute, ROUTE_LIFETIME, decode_key, decode_pin,
+};
 #[derive(Default)]
 pub(crate) struct ManagedProxy {
-    pub(crate) peers: crate::managed_peers::ManagedPeerRoutes,
     attachments: Mutex<HashMap<String, attachment::RouteSlot>>,
     native_client: std::sync::OnceLock<http_client::Client>,
-}
-
-impl ManagedProxy {
-    async fn route(&self, state: &ServerState, target: &str) -> Result<Arc<PeerRoute>> {
-        self.peers.route(state, target).await
-    }
 }
 
 pub(crate) async fn call(
@@ -218,9 +210,10 @@ pub(super) fn forwarded_upload_allowed(state: &ServerState, request: &Request) -
 
 pub(super) fn mark_forwarded(mut response: Response, managed: bool) -> Response {
     if managed {
-        response
-            .headers_mut()
-            .insert(MANAGED_RESOURCE, plain_libs::axum::http::HeaderValue::from_static("1"));
+        response.headers_mut().insert(
+            MANAGED_RESOURCE,
+            plain_libs::axum::http::HeaderValue::from_static("1"),
+        );
     }
     response
 }
@@ -252,7 +245,7 @@ async fn graphql(state: ServerState, target: &str, request: Request) -> Response
     if authorize_graphql(&query, false).is_err() {
         return StatusCode::FORBIDDEN.into_response();
     }
-    let Ok(route) = state.managed_proxy.route(&state, target).await else {
+    let Ok(route) = state.managed_resources.route(&state, target).await else {
         return StatusCode::BAD_GATEWAY.into_response();
     };
     if current(&state, &session).is_err() || route.check_current(&state).is_err() {
@@ -341,9 +334,9 @@ fn authorize_graphql(request: &plain_graphql::Request, subscription: bool) -> Re
 }
 
 async fn resource(state: ServerState, target: &str, path: &str, request: Request) -> Response {
-    let Ok(plain_libs::axum::extract::Query(parameters)) =
-        plain_libs::axum::extract::Query::<crate::http::fs::Parameters>::try_from_uri(request.uri())
-    else {
+    let Ok(plain_libs::axum::extract::Query(parameters)) = plain_libs::axum::extract::Query::<
+        crate::http::fs::Parameters,
+    >::try_from_uri(request.uri()) else {
         return StatusCode::BAD_REQUEST.into_response();
     };
     if !parameters.is_valid()
@@ -394,12 +387,9 @@ async fn resource(state: ServerState, target: &str, path: &str, request: Request
     let Some(session) = browser_session else {
         return StatusCode::UNAUTHORIZED.into_response();
     };
-    let Ok(route) = state.managed_proxy.route(&state, target).await else {
+    let Ok(route) = state.managed_resources.route(&state, target).await else {
         return StatusCode::BAD_GATEWAY.into_response();
     };
-    if !route.supports_managed_resources {
-        return StatusCode::BAD_GATEWAY.into_response();
-    }
     if current(&state, session).is_err() || route.check_current(&state).is_err() {
         return StatusCode::FORBIDDEN.into_response();
     }

@@ -1,16 +1,24 @@
-use plain_libs::protocols::http_client;
 use crate::features::services::peers::peer_transport::Pending;
 use crate::infrastructure::transport::router::Outcome;
 use crate::infrastructure::transport::router::TransportType;
 use crate::runtime::Runtime as CoreRuntime;
-use plain_libs::anyhow::{Result, ensure};
 use futures_util::StreamExt;
+use plain_libs::anyhow::{Result, ensure};
+use plain_libs::protocols::http_client;
 use std::time::Duration;
 use tokio::io::AsyncWriteExt;
 
+pub struct Task {
+    pub id: String,
+    pub file_id: String,
+    pub peer: crate::infrastructure::db::DPeer,
+    pub total: u64,
+    pub generation: String,
+}
+
 pub async fn run(
     state: &CoreRuntime,
-    task: &crate::features::chat::attachments::download_queue::Snapshot,
+    task: &Task,
     path: &str,
     attempt: crate::infrastructure::transport::router::Attempt,
 ) -> Result<()> {
@@ -19,10 +27,7 @@ pub async fn run(
         &task.peer.id,
         &task.peer,
     )?;
-    let file_id = task.file["uri"]
-        .as_str()
-        .and_then(|s| s.strip_prefix("fsid:"))
-        .ok_or_else(|| plain_libs::anyhow::anyhow!("Invalid remote attachment"))?;
+    let file_id = task.file_id.as_str();
     let mut available = vec![TransportType::Lan];
     available.extend(
         crate::features::services::peers::peer_transport::capabilities(&state.host)
@@ -37,9 +42,9 @@ pub async fn run(
     let step = state
         .transport
         .begin_with_attempt(&current_peer, &available, attempt)?;
-    let ticket = step
-        .ticket
-        .ok_or_else(|| plain_libs::anyhow::anyhow!(step.error.unwrap_or_else(|| "No peer transport".into())))?;
+    let ticket = step.ticket.ok_or_else(|| {
+        plain_libs::anyhow::anyhow!(step.error.unwrap_or_else(|| "No peer transport".into()))
+    })?;
     let mut pending = Pending {
         state,
         router: &state.transport,
@@ -177,7 +182,9 @@ pub async fn run(
                     .transport
                     .finish(&pending.ticket, Outcome::Unavailable { error })?;
                 pending.ticket = step.ticket.ok_or_else(|| {
-                    plain_libs::anyhow::anyhow!(step.error.unwrap_or_else(|| "Peer unavailable".into()))
+                    plain_libs::anyhow::anyhow!(
+                        step.error.unwrap_or_else(|| "Peer unavailable".into())
+                    )
                 })?;
             }
         }
@@ -192,7 +199,7 @@ pub async fn run(
 }
 async fn write(
     state: &CoreRuntime,
-    task: &crate::features::chat::attachments::download_queue::Snapshot,
+    task: &Task,
     file: &mut tokio::fs::File,
     bytes: &mut u64,
     chunk: &[u8],
@@ -202,12 +209,9 @@ async fn write(
         .ok_or_else(|| plain_libs::anyhow::anyhow!("Attachment size overflow"))?;
     ensure!(*bytes <= task.total, "Attachment exceeds declared size");
     file.write_all(chunk).await?;
-    ensure!(
-        state
-            .downloads
-            .progress(&task.id, &task.generation, *bytes)?,
-        "Attachment transfer expired"
-    );
+    state
+        .downloads
+        .progress(&task.id, &task.generation, *bytes)?;
     Ok(())
 }
 

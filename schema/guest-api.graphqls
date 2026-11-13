@@ -3,7 +3,7 @@ scalar Instant
 scalar Long
 
 type Query {
-	sharedInfo(relativePath: String): SharedInfo!
+	sharedInfo(relativePath: String, password: String): SharedInfo!
 }
 
 type SharedFile {
@@ -13,6 +13,8 @@ type SharedFile {
 	size: Long!
 	mimeType: String!
 	hasThumb: Boolean!
+	createdAt: Instant
+	updatedAt: Instant!
 }
 
 type SharedInfo {

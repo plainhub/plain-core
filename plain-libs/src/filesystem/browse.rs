@@ -131,6 +131,12 @@ impl Plan {
         items.retain(|item| self.matches(item, true));
         Ok(self.page(items))
     }
+    pub fn records_page(&self, mut items: Vec<FileRecord>) -> Page {
+        items.retain(|item| {
+            (self.show_hidden || !item.name.starts_with('.')) && self.matches(item, false)
+        });
+        self.page(items)
+    }
     fn page(&self, mut items: Vec<FileRecord>) -> Page {
         let count = items.len();
         if self.count_only {

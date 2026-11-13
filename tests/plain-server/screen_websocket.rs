@@ -16,7 +16,9 @@ fn public_fixture() -> (
         plain_rs::features::prefs::Prefs::load(&directory.path().join("prefs.json")).unwrap(),
     );
     prefs.set("remote_access", true).unwrap();
-    prefs.set("client_id", "706c6169-1414-8000-8000-000000000004").unwrap();
+    prefs
+        .set("client_id", "706c6169-1414-8000-8000-000000000004")
+        .unwrap();
     let core = ContentServer::start(
         directory.path(),
         &plain_libs::utils::base64::base64_encode(&[4; 32]),
@@ -221,7 +223,7 @@ async fn screen_transports_authenticated_media_and_controls_separately_from_subs
                 | "clipboardHistoryRefresh"
                 | "dlnaRendererChanged"
                 | "dlnaRendererRefresh"
-                | "sharedFolderDownloadsRefresh"
+                | "downloadsRefresh"
                 | "peerTransportsChanged"
                 | "appUpdateDownloadChanged"
                 | "dlnaSenderChanged"
@@ -283,7 +285,9 @@ async fn screen_transports_authenticated_media_and_controls_separately_from_subs
     )
     .unwrap();
     subscriptions
-        .send(ClientMessage::Binary(subscription_stream.encode(&[], &key).unwrap().into()))
+        .send(ClientMessage::Binary(
+            subscription_stream.encode(&[], &key).unwrap().into(),
+        ))
         .await
         .unwrap();
     for (id, query) in [
@@ -591,7 +595,9 @@ async fn remote_subscriptions_enforce_access_and_deliver_pomodoro_updates() {
     )
     .unwrap();
     socket
-        .send(ClientMessage::Binary(stream.encode(&[], &key).unwrap().into()))
+        .send(ClientMessage::Binary(
+            stream.encode(&[], &key).unwrap().into(),
+        ))
         .await
         .unwrap();
     let query = json!({"type":"subscribe","id":"private","payload":{"query":"subscription { pairingSucceeded { deviceId key } }"}}).to_string();

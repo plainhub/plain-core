@@ -1,6 +1,8 @@
 use super::*;
 use crate::server::ContentServer;
 use plain_graphql::Request;
+use plain_rs::features::services::peers::managed_resources::*;
+use plain_rs::infrastructure::db::{DPeer, chat_store::peers};
 use plain_rs::{
     features::{
         chat::enums::{DeviceType, PeerStatus},
@@ -8,6 +10,10 @@ use plain_rs::{
         services::sessions,
     },
     infrastructure::{db::chat_store::SaveMode, host::request_scope::NativeRequestScope},
+};
+use std::{
+    sync::Arc,
+    time::{Duration, Instant},
 };
 
 fn start(path: &std::path::Path, id: &str) -> ContentServer {
@@ -108,7 +114,7 @@ async fn native_peer_requests_reject_invalid_target_scope_and_size_before_creati
             .unwrap_err(),
         "GraphQL request too large"
     );
-    assert!(state.managed_proxy.peers.routes.lock().unwrap().is_empty());
+    assert!(state.managed_resources.routes.lock().unwrap().is_empty());
     server.stop_core().await;
 }
 
@@ -118,10 +124,9 @@ async fn cancelling_an_owner_interrupts_pending_route_resolution() {
     let server = start(dir.path(), "local");
     let state = server.runtime_state();
     peers::save(&state.db, &[peer("remote")], SaveMode::Insert).unwrap();
-    let slot: RouteSlot = Arc::default();
+    let slot = Arc::new(tokio::sync::Mutex::new(None));
     state
-        .managed_proxy
-        .peers
+        .managed_resources
         .routes
         .lock()
         .unwrap()
@@ -206,8 +211,7 @@ async fn native_queries_and_subscriptions_share_a_pinned_route_without_a_local_l
         "Managed device identity changed"
     );
     let route = state
-        .managed_proxy
-        .peers
+        .managed_resources
         .route(&state, REMOTE_ID)
         .await
         .unwrap();
@@ -225,8 +229,7 @@ async fn native_queries_and_subscriptions_share_a_pinned_route_without_a_local_l
         .unwrap()
     );
     let again = state
-        .managed_proxy
-        .peers
+        .managed_resources
         .route(&state, REMOTE_ID)
         .await
         .unwrap();
@@ -251,8 +254,7 @@ async fn native_queries_and_subscriptions_share_a_pinned_route_without_a_local_l
     assert!(Arc::ptr_eq(
         &route,
         &state
-            .managed_proxy
-            .peers
+            .managed_resources
             .route(&state, REMOTE_ID)
             .await
             .unwrap()
@@ -319,12 +321,10 @@ async fn native_queries_and_subscriptions_share_a_pinned_route_without_a_local_l
             .redirect(http_client::redirect::Policy::none())
             .build()
             .unwrap(),
-        supports_managed_resources: route.supports_managed_resources,
         expires: route.expires,
     });
     let slot = state
-        .managed_proxy
-        .peers
+        .managed_resources
         .routes
         .lock()
         .unwrap()
@@ -417,7 +417,6 @@ async fn cached_route_rejects_identity_address_and_management_token_changes() {
         url_key: vec![9; 32],
         pin: [1; 32],
         client: http_client::builder().no_proxy().build().unwrap(),
-        supports_managed_resources: true,
         expires: Instant::now() + ROUTE_LIFETIME,
     };
     assert!(route.check_current(&state).is_ok());
@@ -523,10 +522,9 @@ async fn native_request_budgets_outlive_shared_timeouts_and_cancel_without_retry
             .read_timeout(Duration::from_secs(30))
             .build()
             .unwrap(),
-        supports_managed_resources: true,
         expires: Instant::now() + ROUTE_LIFETIME,
     });
-    state.managed_proxy.peers.routes.lock().unwrap().insert(
+    state.managed_resources.routes.lock().unwrap().insert(
         "remote".into(),
         Arc::new(tokio::sync::Mutex::new(Some(route))),
     );
@@ -692,7 +690,7 @@ async fn stale_bootstrap_unauthorized_cannot_revoke_a_replacement_management_ses
             peer.token
         );
         assert!(
-            state.managed_proxy.peers.routes.lock().unwrap()["remote"]
+            state.managed_resources.routes.lock().unwrap()["remote"]
                 .try_lock()
                 .unwrap()
                 .is_none()

@@ -194,8 +194,7 @@ async fn peer_resources_reject_a_wrong_tls_pin_without_switching_transport() {
     let fixture = Fixture::new().await;
     let state = fixture.local.runtime_state();
     let route = state
-        .managed_proxy
-        .peers
+        .managed_resources
         .route(&state, "remote")
         .await
         .unwrap();
@@ -213,12 +212,10 @@ async fn peer_resources_reject_a_wrong_tls_pin_without_switching_transport() {
             .redirect(http_client::redirect::Policy::none())
             .build()
             .unwrap(),
-        supports_managed_resources: true,
         expires: route.expires,
     });
     let slot = state
-        .managed_proxy
-        .peers
+        .managed_resources
         .routes
         .lock()
         .unwrap()
@@ -275,5 +272,111 @@ async fn peer_generated_thumbnails_preserve_seekable_bytes_when_http_uses_a_full
     registry.close_owner(scope.id());
     assert_eq!(std::fs::read_dir(&prepared).unwrap().count(), 0);
     assert!(resource.read_range(0, 1).await.is_err());
+    fixture.stop().await;
+}
+
+async fn resource_download(fixture: &Fixture, url: &str, target: &std::path::Path) -> String {
+    let response = fixture.local.native_graphql().unwrap().execute(plain_graphql::Request::new("mutation($input:DownloadInput!){createDownload(input:$input){id}}").variables(plain_graphql::Variables::from_json(plain_libs::serde_json::json!({"input":{"resources":{"urls":[url],"targetDir":target.to_str().unwrap()}}})))).await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    response.data.into_json().unwrap()["createDownload"]["id"]
+        .as_str()
+        .unwrap()
+        .into()
+}
+
+async fn terminal_download(fixture: &Fixture, id: &str) -> plain_rs::features::downloads::Download {
+    let state = fixture.local.runtime_state();
+    let mut changed = state.downloads.changed.subscribe();
+    tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        loop {
+            let task = state
+                .downloads
+                .snapshot()
+                .into_iter()
+                .find(|task| task.id == id)
+                .unwrap();
+            if task.status.terminal() {
+                return task;
+            }
+            changed.changed().await.unwrap();
+        }
+    })
+    .await
+    .unwrap()
+}
+
+#[tokio::test]
+async fn generic_downloads_use_remote_file_urls_and_preserve_pinning_and_management_revocation() {
+    use plain_rs::features::downloads::Status;
+    let fixture = Fixture::new().await;
+    let directory = fixture.root.path().join("source");
+    std::fs::create_dir(&directory).unwrap();
+    let bytes: Vec<u8> = (0..128 * 1024).map(|index| (index % 251) as u8).collect();
+    std::fs::write(directory.join("source.bin"), &bytes).unwrap();
+    let response = fixture.local.native_graphql().unwrap().execute_peer_scoped("remote", plain_graphql::Request::new("query($root:String!){files(root:$root,query:\"\",offset:0,limit:10,sortBy:NAME_ASC){name url}}").variables(plain_graphql::Variables::from_json(plain_libs::serde_json::json!({"root":directory.to_str().unwrap()}))), Default::default(), std::time::Duration::from_secs(30)).await.unwrap();
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    let data = response.data.into_json().unwrap();
+    let reference = data["files"][0]["url"].as_str().unwrap();
+    assert!(reference.starts_with("/fs?"));
+    let state = fixture.local.runtime_state();
+    let route = state
+        .managed_resources
+        .route(&state, "remote")
+        .await
+        .unwrap();
+    let url = route.base.join(reference).unwrap().to_string();
+    let target = fixture.root.path().join("saved");
+    let id = resource_download(&fixture, &url, &target).await;
+    let completed = terminal_download(&fixture, &id).await;
+    assert_eq!(completed.status, Status::Completed, "{}", completed.error);
+    assert_eq!(completed.downloaded_bytes, bytes.len() as i64);
+    assert_eq!(std::fs::read(target.join("source.bin")).unwrap(), bytes);
+    let slot = state
+        .managed_resources
+        .routes
+        .lock()
+        .unwrap()
+        .get("remote")
+        .unwrap()
+        .clone();
+    let wrong = Arc::new(PeerRoute {
+        peer: route.peer.clone(),
+        base: route.base.clone(),
+        client_id: route.client_id.clone(),
+        key: route.key.clone(),
+        url_key: route.url_key.clone(),
+        pin: [0; 32],
+        client: http_client::builder()
+            .no_proxy()
+            .https_only(true)
+            .pin_certificate([0; 32])
+            .redirect(http_client::redirect::Policy::none())
+            .build()
+            .unwrap(),
+        expires: route.expires,
+    });
+    *slot.lock().await = Some(wrong);
+    let denied = fixture.root.path().join("wrong-pin");
+    let id = resource_download(&fixture, &url, &denied).await;
+    assert_eq!(
+        terminal_download(&fixture, &id).await.status,
+        Status::Failed
+    );
+    assert!(!denied.exists());
+    *slot.lock().await = Some(route);
+    fixture
+        .remote
+        .runtime_state()
+        .db
+        .session_delete("local")
+        .unwrap();
+    let revoked = fixture.root.path().join("revoked");
+    let id = resource_download(&fixture, &url, &revoked).await;
+    assert_eq!(
+        terminal_download(&fixture, &id).await.status,
+        Status::Failed
+    );
+    assert!(!revoked.exists());
+    assert_eq!(std::fs::read(target.join("source.bin")).unwrap(), bytes);
     fixture.stop().await;
 }

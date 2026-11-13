@@ -1,14 +1,15 @@
-use super::{PeerRoute, request_error};
+use super::request_error;
 use crate::{native::resources::MAX_RESOURCE_RESPONSE_BYTES, server::ServerState};
 use plain_libs::axum::http::{Method, StatusCode, header};
 use plain_libs::protocols::http_client;
+use plain_rs::features::services::peers::managed_resources::PeerRoute;
 use plain_rs::features::{
     files::resource_link::{self, Resource, Scope},
     services::files::content::Size,
 };
 use std::sync::Arc;
 
-pub(crate) const MANAGED_RESOURCE: &str = "x-plain-managed-resource";
+pub(crate) use plain_rs::features::services::peers::managed_resources::MANAGED_RESOURCE;
 
 pub(crate) struct PeerResource {
     state: ServerState,
@@ -27,14 +28,10 @@ impl PeerResource {
         thumbnail: Option<Size>,
     ) -> Result<Self, String> {
         let route = state
-            .managed_proxy
-            .peers
+            .managed_resources
             .route(&state, peer_id)
             .await
             .map_err(request_error)?;
-        if !route.supports_managed_resources {
-            return Err("Managed resources unavailable".into());
-        }
         route.check_current(&state).map_err(request_error)?;
         let id = resource_link::seal(
             &Scope::Session(route.client_id.clone()),

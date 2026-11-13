@@ -1,4 +1,3 @@
-pub mod batch_plan;
 pub mod client;
 pub mod summary;
 use crate::features::prefs::Prefs;
@@ -15,10 +14,18 @@ use std::{
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "graphql", derive(plain_graphql::SimpleObject))]
 #[serde(rename_all = "camelCase")]
-pub struct Root {
-    pub relative_path: String,
+pub struct SharePath {
+    pub virtual_path: String,
     pub real_path: String,
     pub is_dir: bool,
+}
+
+pub struct Input {
+    pub name: String,
+    pub password: String,
+    pub expires_at: Option<String>,
+    pub read_only: bool,
+    pub data: Vec<SharePath>,
 }
 
 pub struct Service {
@@ -29,54 +36,54 @@ impl Service {
     pub fn new(db: Arc<Db>, prefs: Arc<Prefs>) -> Arc<Self> {
         Arc::new(Self { db, prefs })
     }
-    pub fn roots(row: &ShareRow) -> plain_libs::anyhow::Result<Vec<Root>> {
+    pub fn roots(row: &ShareRow) -> plain_libs::anyhow::Result<Vec<SharePath>> {
         Ok(plain_libs::serde_json::from_str(&row.data)?)
     }
-    fn build_roots(paths: Vec<String>) -> plain_libs::anyhow::Result<String> {
-        plain_libs::anyhow::ensure!(!paths.is_empty(), "share needs at least one root");
+    fn build_data(paths: Vec<SharePath>) -> plain_libs::anyhow::Result<String> {
+        plain_libs::anyhow::ensure!(!paths.is_empty(), "Share needs at least one path");
         let mut seen = HashSet::new();
-        let mut names = HashSet::new();
-        let mut roots = Vec::new();
-        for path in paths {
-            let path = std::fs::canonicalize(path)?;
-            if !seen.insert(path.clone()) {
-                continue;
-            }
-            let name = path
-                .file_name()
-                .and_then(|n| n.to_str())
-                .ok_or_else(|| plain_libs::anyhow::anyhow!("invalid root name"))?;
-            plain_libs::anyhow::ensure!(names.insert(name.to_owned()), "duplicate root name: {name}");
-            let meta = path.metadata()?;
-            plain_libs::anyhow::ensure!(meta.is_dir() || meta.is_file(), "unsupported share root");
-            roots.push(Root {
-                relative_path: format!("{name}{}", if meta.is_dir() { "/" } else { "" }),
-                real_path: path
-                    .to_str()
-                    .ok_or_else(|| plain_libs::anyhow::anyhow!("invalid root path"))?
-                    .to_owned(),
-                is_dir: meta.is_dir(),
-            });
+        let mut data = Vec::new();
+        for mut item in paths {
+            let virtual_path = item.virtual_path.trim_matches('/');
+            plain_libs::anyhow::ensure!(
+                !virtual_path.is_empty()
+                    && !virtual_path.contains(['\\', '\0'])
+                    && virtual_path
+                        .split('/')
+                        .all(|part| !part.is_empty() && part != "." && part != ".."),
+                "Invalid virtual path"
+            );
+            item.virtual_path = format!("/{virtual_path}");
+            plain_libs::anyhow::ensure!(
+                seen.insert(item.virtual_path.clone()),
+                "Duplicate virtual path"
+            );
+            let path = std::fs::canonicalize(&item.real_path)?;
+            let metadata = path.metadata()?;
+            plain_libs::anyhow::ensure!(
+                (metadata.is_file() || metadata.is_dir()) && metadata.is_dir() == item.is_dir,
+                "Invalid share path type"
+            );
+            item.real_path = path
+                .to_str()
+                .ok_or_else(|| plain_libs::anyhow::anyhow!("Invalid real path"))?
+                .into();
+            data.push(item);
         }
-        Ok(plain_libs::serde_json::to_string(&roots)?)
+        Ok(plain_libs::serde_json::to_string(&data)?)
     }
-    pub fn create(
-        &self,
-        name: String,
-        paths: Vec<String>,
-        read_only: bool,
-        expires: Option<String>,
-    ) -> plain_libs::anyhow::Result<ShareRow> {
-        validate_expiry(expires.as_deref())?;
-        let now = plain_libs::chrono::Utc::now().to_rfc3339_opts(plain_libs::chrono::SecondsFormat::Millis, true);
+    pub fn create(&self, input: Input) -> plain_libs::anyhow::Result<ShareRow> {
+        validate_expiry(input.expires_at.as_deref())?;
+        let now = plain_libs::chrono::Utc::now()
+            .to_rfc3339_opts(plain_libs::chrono::SecondsFormat::Millis, true);
         let row = ShareRow {
             id: String::new(),
-            name,
-            password: String::new(),
+            name: input.name,
+            password: input.password,
             url_token: plain_libs::crypto::gen_token(),
-            read_only,
-            expires_at: expires,
-            data: Self::build_roots(paths)?,
+            read_only: input.read_only,
+            expires_at: input.expires_at,
+            data: Self::build_data(input.data)?,
             created_at: now.clone(),
             updated_at: now,
         };
@@ -95,28 +102,25 @@ impl Service {
         }
         plain_libs::anyhow::bail!("Unable to allocate a unique share ID")
     }
-    pub fn update(
-        &self,
-        id: &str,
-        name: &str,
-        expires: Option<String>,
-        paths: Option<Vec<String>>,
-    ) -> plain_libs::anyhow::Result<ShareRow> {
-        validate_expiry(expires.as_deref())?;
-        let data = paths.map(Self::build_roots).transpose()?;
+    pub fn update(&self, id: &str, input: Input) -> plain_libs::anyhow::Result<ShareRow> {
+        validate_expiry(input.expires_at.as_deref())?;
+        let data = Self::build_data(input.data)?;
         plain_libs::anyhow::ensure!(
             self.db.share_update(
                 id,
-                name,
-                expires.as_deref(),
-                data.as_deref(),
-                &plain_libs::chrono::Utc::now().to_rfc3339_opts(plain_libs::chrono::SecondsFormat::Millis, true)
+                &input.name,
+                &input.password,
+                input.read_only,
+                input.expires_at.as_deref(),
+                &data,
+                &plain_libs::chrono::Utc::now()
+                    .to_rfc3339_opts(plain_libs::chrono::SecondsFormat::Millis, true)
             )?,
-            "share not found"
+            "Share not found"
         );
         self.db
             .share_get(id)?
-            .ok_or_else(|| plain_libs::anyhow::anyhow!("share not found"))
+            .ok_or_else(|| plain_libs::anyhow::anyhow!("Share not found"))
     }
     pub fn active(&self, id: &str, guest: bool) -> plain_libs::anyhow::Result<Option<ShareRow>> {
         if guest
@@ -132,9 +136,8 @@ impl Service {
             .share_get(id)?
             .filter(|r| match r.expires_at.as_deref() {
                 None => true,
-                Some(t) => {
-                    plain_libs::chrono::DateTime::parse_from_rfc3339(t).is_ok_and(|t| t > plain_libs::chrono::Utc::now())
-                }
+                Some(t) => plain_libs::chrono::DateTime::parse_from_rfc3339(t)
+                    .is_ok_and(|t| t > plain_libs::chrono::Utc::now()),
             }))
     }
     pub fn token(&self, id: &str) -> plain_libs::anyhow::Result<String> {
@@ -162,22 +165,29 @@ impl Service {
         };
         Self::resolve_row(&row, relative_path)
     }
-    fn resolve_row(row: &ShareRow, relative_path: &str) -> plain_libs::anyhow::Result<Option<String>> {
+    fn resolve_row(
+        row: &ShareRow,
+        relative_path: &str,
+    ) -> plain_libs::anyhow::Result<Option<String>> {
         let roots = Self::roots(row)?;
-        let normalized = relative_path.trim().trim_start_matches('/');
-        let (top, rest) = normalized.split_once('/').unwrap_or((normalized, ""));
-        let root = if normalized.is_empty() {
-            roots.first()
-        } else {
-            roots
-                .iter()
-                .find(|r| r.relative_path.trim_end_matches('/') == top)
+        let normalized = format!("/{}", relative_path.trim_matches('/'));
+        let Some(root) = roots
+            .iter()
+            .filter(|root| {
+                normalized == root.virtual_path
+                    || normalized
+                        .strip_prefix(&root.virtual_path)
+                        .is_some_and(|rest| rest.starts_with('/'))
+            })
+            .max_by_key(|root| root.virtual_path.len())
+        else {
+            return Ok(None);
         };
-        let Some(root) = root else { return Ok(None) };
+        let rest = normalized[root.virtual_path.len()..].trim_start_matches('/');
         let base = Path::new(&root.real_path);
         if !root.is_dir && !rest.is_empty() {
             return Ok(None);
-        };
+        }
         let mut relative = PathBuf::new();
         for part in Path::new(rest).components() {
             match part {
@@ -207,14 +217,18 @@ impl Service {
         };
         Ok(candidate.to_str().map(str::to_owned))
     }
-    pub fn browse(&self, id: &str, relative_path: &str) -> plain_libs::anyhow::Result<(ShareRow, Vec<Root>)> {
+    pub fn browse(
+        &self,
+        id: &str,
+        relative_path: &str,
+    ) -> plain_libs::anyhow::Result<(ShareRow, Vec<SharePath>)> {
         let row = self
             .active(id, true)?
             .ok_or_else(|| plain_libs::anyhow::anyhow!("share inactive"))?;
         let mut entries = Vec::new();
         if relative_path.trim().trim_matches('/').is_empty() {
             for root in Self::roots(&row)? {
-                if Self::resolve_row(&row, &root.relative_path)?.is_some() {
+                if Self::resolve_row(&row, &root.virtual_path)?.is_some() {
                     entries.push(root);
                 }
             }
@@ -222,7 +236,7 @@ impl Service {
             let path = Self::resolve_row(&row, relative_path)?
                 .ok_or_else(|| plain_libs::anyhow::anyhow!("path not allowed"))?;
             if Path::new(&path).is_dir() {
-                let parent = relative_path.trim().trim_matches('/');
+                let parent = relative_path.trim_end_matches('/');
                 for entry in std::fs::read_dir(path)? {
                     let entry = entry?;
                     let Some(name) = entry.file_name().to_str().map(str::to_owned) else {
@@ -239,19 +253,19 @@ impl Service {
                     if !meta.is_dir() && !meta.is_file() {
                         continue;
                     }
-                    entries.push(Root {
-                        relative_path,
+                    entries.push(SharePath {
+                        virtual_path: relative_path,
                         real_path,
                         is_dir: meta.is_dir(),
                     });
                 }
-                entries.sort_by(|a, b| a.relative_path.cmp(&b.relative_path));
+                entries.sort_by(|a, b| a.virtual_path.cmp(&b.virtual_path));
             }
         }
         Ok((row, entries))
     }
 
-    pub fn archive(&self, id: &str, encrypted: &str) -> plain_libs::anyhow::Result<Vec<Root>> {
+    pub fn archive(&self, id: &str, encrypted: &str) -> plain_libs::anyhow::Result<Vec<SharePath>> {
         let path = self
             .resolve_file(id, encrypted)?
             .ok_or_else(|| plain_libs::anyhow::anyhow!("share path not allowed"))?;
@@ -269,11 +283,14 @@ impl Service {
                     continue;
                 }
                 let canonical = std::fs::canonicalize(&path)?;
-                plain_libs::anyhow::ensure!(canonical.starts_with(&base), "archive path outside root");
+                plain_libs::anyhow::ensure!(
+                    canonical.starts_with(&base),
+                    "archive path outside root"
+                );
                 if meta.is_dir() {
                     plain_libs::anyhow::ensure!(result.len() < 100_000, "too many archive entries");
-                    result.push(Root {
-                        relative_path: format!(
+                    result.push(SharePath {
+                        virtual_path: format!(
                             "{}/",
                             path.strip_prefix(&base)?
                                 .to_str()
@@ -288,8 +305,8 @@ impl Service {
                     pending.push(canonical);
                 } else if meta.is_file() {
                     plain_libs::anyhow::ensure!(result.len() < 100_000, "too many archive files");
-                    result.push(Root {
-                        relative_path: path
+                    result.push(SharePath {
+                        virtual_path: path
                             .strip_prefix(&base)?
                             .to_str()
                             .ok_or_else(|| plain_libs::anyhow::anyhow!("invalid entry name"))?
@@ -303,11 +320,15 @@ impl Service {
                 }
             }
         }
-        result.sort_by(|a, b| a.relative_path.cmp(&b.relative_path));
+        result.sort_by(|a, b| a.virtual_path.cmp(&b.virtual_path));
         Ok(result)
     }
 
-    pub fn resolve_file(&self, id: &str, encrypted: &str) -> plain_libs::anyhow::Result<Option<String>> {
+    pub fn resolve_file(
+        &self,
+        id: &str,
+        encrypted: &str,
+    ) -> plain_libs::anyhow::Result<Option<String>> {
         let Some(row) = self.active(id, true)? else {
             return Ok(None);
         };
@@ -335,5 +356,3 @@ fn validate_expiry(value: Option<&str>) -> plain_libs::anyhow::Result<()> {
 #[cfg(test)]
 #[path = "../../../../tests/plain-rs/unit/features/files/shares.rs"]
 mod tests;
-
-pub mod batch_queue;

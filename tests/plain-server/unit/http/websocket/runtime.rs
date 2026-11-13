@@ -3,15 +3,16 @@ use plain_libs::protocols::http_client;
 use plain_rs::infrastructure::protocols::websocket as wire;
 #[test]
 fn websocket_query_has_no_client_selected_login_mode() {
-    let params: Params = plain_libs::serde_json::from_value(
-        json!({"cid": "f785d26d-e295-4abf-9179-573c235a60d7"}),
-    )
-    .unwrap();
+    let params: Params =
+        plain_libs::serde_json::from_value(json!({"cid": "f785d26d-e295-4abf-9179-573c235a60d7"}))
+            .unwrap();
     assert_eq!(params.cid, "f785d26d-e295-4abf-9179-573c235a60d7");
     for auth in ["1", "2"] {
         assert!(
-            plain_libs::serde_json::from_value::<Params>(json!({"cid": "f785d26d-e295-4abf-9179-573c235a60d7", "auth": auth}))
-                .is_err()
+            plain_libs::serde_json::from_value::<Params>(
+                json!({"cid": "f785d26d-e295-4abf-9179-573c235a60d7", "auth": auth})
+            )
+            .is_err()
         );
     }
 }
@@ -628,7 +629,7 @@ async fn saturated_host_recovers_online_clients_without_counting_native_sessions
     assert_eq!(dlna["method"], "dlnaRendererRefresh");
     host.reply(json!({"id":dlna["id"],"result":null})).unwrap();
     let downloads = host.next_request().await.unwrap();
-    assert_eq!(downloads["method"], "sharedFolderDownloadsRefresh");
+    assert_eq!(downloads["method"], "downloadsRefresh");
     host.reply(json!({"id":downloads["id"],"result":null}))
         .unwrap();
     let transports = host.next_request().await.unwrap();
@@ -765,7 +766,10 @@ async fn online_clients_follow_authenticated_graphql_connections() {
             );
             let mut stream =
                 wire::Stream::new("/graphql", &client, &init, &ack, wire::Role::Client).unwrap();
-            socket.send(Frame::Binary(stream.encode(&[], &key).unwrap().into())).await.unwrap();
+            socket
+                .send(Frame::Binary(stream.encode(&[], &key).unwrap().into()))
+                .await
+                .unwrap();
             socket
                 .send(Frame::Binary(
                     stream.encode(br#"{"type":"ping"}"#, &key).unwrap().into(),
@@ -942,12 +946,13 @@ async fn password_keys(
     client_id: &str,
 ) -> PasswordKeys {
     use futures_util::{SinkExt, StreamExt};
-    use plain_libs::opaque::{ClientLogin, ClientLoginFinishParameters, CredentialResponse, Identifiers};
+    use plain_libs::opaque::{
+        ClientLogin, ClientLoginFinishParameters, CredentialResponse, Identifiers,
+    };
     use plain_libs::tokio_tungstenite::tungstenite::Message;
     let signing = plain_rs::features::prefs::security::signing_keypair(&state.prefs).unwrap();
     let context = plain_libs::auth::context(client_id, &signing[32..]);
-    let client =
-        ClientLogin::start(&mut rand_core::OsRng, b"secret").unwrap();
+    let client = ClientLogin::start(&mut rand_core::OsRng, b"secret").unwrap();
     socket
         .send(Message::Binary(client.message.serialize().to_vec().into()))
         .await

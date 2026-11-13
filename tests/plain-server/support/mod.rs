@@ -3,7 +3,11 @@ use plain_libs::protocols::http_client;
 mod filesystem;
 pub(crate) use filesystem::public_directory;
 
-pub(crate) async fn graphql_http(port: u16, token: &str, query: &str) -> plain_libs::serde_json::Value {
+pub(crate) async fn graphql_http(
+    port: u16,
+    token: &str,
+    query: &str,
+) -> plain_libs::serde_json::Value {
     graphql_http_variables(port, token, query, plain_libs::serde_json::json!({})).await
 }
 
@@ -13,7 +17,9 @@ pub(crate) async fn graphql_http_variables(
     query: &str,
     variables: plain_libs::serde_json::Value,
 ) -> plain_libs::serde_json::Value {
-    let response = http_client::builder().build().unwrap()
+    let response = http_client::builder()
+        .build()
+        .unwrap()
         .post(format!("http://127.0.0.1:{port}/graphql"))
         .bearer_auth(token)
         .header("content-type", "application/json")
@@ -44,7 +50,7 @@ pub(crate) fn acknowledge_host_callback(
                 | "clipboardHistoryRefresh"
                 | "dlnaRendererChanged"
                 | "dlnaRendererRefresh"
-                | "sharedFolderDownloadsRefresh"
+                | "downloadsRefresh"
                 | "peerTransportsChanged"
                 | "appUpdateDownloadChanged"
                 | "dlnaSenderChanged"

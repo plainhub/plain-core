@@ -28,10 +28,11 @@ impl Parameters {
 
 pub(crate) async fn get(State(state): State<ServerState>, request: Request) -> Response {
     let request = request.into_parts().0;
-    let parameters = match plain_libs::axum::extract::Query::<Parameters>::try_from_uri(&request.uri) {
-        Ok(parameters) if parameters.is_valid() => parameters.0,
-        _ => return StatusCode::BAD_REQUEST.into_response(),
-    };
+    let parameters =
+        match plain_libs::axum::extract::Query::<Parameters>::try_from_uri(&request.uri) {
+            Ok(parameters) if parameters.is_valid() => parameters.0,
+            _ => return StatusCode::BAD_REQUEST.into_response(),
+        };
     let managed = match super::managed_proxy::forwarded_resource(&state, &request, &parameters.id) {
         Ok(managed) => managed,
         Err(status) => return status.into_response(),
@@ -82,6 +83,24 @@ pub(crate) async fn native_preview(
 }
 
 async fn serve(state: ServerState, parameters: Parameters, mut headers: HeaderMap) -> Response {
+    if parameters.action == content::Action::Describe {
+        return match plain_rs::features::services::downloads::metadata::describe(
+            &state,
+            &parameters.id,
+        )
+        .await
+        {
+            Ok(metadata) => secure(
+                plain_libs::axum::Json(metadata).into_response(),
+                None,
+                false,
+            ),
+            Err(error) => {
+                log::warn!("Resource metadata rejected: {error}");
+                StatusCode::FORBIDDEN.into_response()
+            }
+        };
+    }
     if matches!(
         parameters.action,
         content::Action::Probe | content::Action::Transcode
@@ -157,7 +176,8 @@ async fn serve(state: ServerState, parameters: Parameters, mut headers: HeaderMa
                 }
             }
             Content::Codec(codec) => secure(
-                plain_libs::axum::Json(plain_libs::serde_json::json!({"codec":codec})).into_response(),
+                plain_libs::axum::Json(plain_libs::serde_json::json!({"codec":codec}))
+                    .into_response(),
                 None,
                 false,
             ),

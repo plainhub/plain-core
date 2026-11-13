@@ -17,7 +17,7 @@ pub(crate) fn acknowledge_host_callback(
                 | "clipboardHistoryRefresh"
                 | "dlnaRendererChanged"
                 | "dlnaRendererRefresh"
-                | "sharedFolderDownloadsRefresh"
+                | "downloadsRefresh"
                 | "peerTransportsChanged"
                 | "appUpdateDownloadChanged"
                 | "dlnaSenderChanged"

@@ -1,5 +1,5 @@
-use plain_libs::protocols::http_client;
 use super::*;
+use plain_libs::protocols::http_client;
 
 #[cfg(feature = "http_transport")]
 #[tokio::test]
@@ -89,9 +89,11 @@ async fn app_and_remote_access_share_listeners_without_background_service() {
             .body(plain_libs::axum::body::Body::empty())
             .unwrap();
         if let Some(peer) = peer {
-            request.extensions_mut().insert(plain_libs::axum::extract::ConnectInfo(
-                peer.parse::<std::net::SocketAddr>().unwrap(),
-            ));
+            request
+                .extensions_mut()
+                .insert(plain_libs::axum::extract::ConnectInfo(
+                    peer.parse::<std::net::SocketAddr>().unwrap(),
+                ));
         }
         let expected = if peer == Some("127.0.0.1:1234") {
             200
@@ -303,7 +305,8 @@ async fn every_transport_build_serves_the_main_guest_and_peer_contracts_without_
         .await
         .unwrap();
     assert_eq!(http.status(), 200);
-    let body: plain_libs::serde_json::Value = plain_libs::serde_json::from_slice(&http.bytes().await.unwrap()).unwrap();
+    let body: plain_libs::serde_json::Value =
+        plain_libs::serde_json::from_slice(&http.bytes().await.unwrap()).unwrap();
     assert_eq!(body, plain_libs::serde_json::to_value(native).unwrap());
     for path in ["/guest_graphql", "/peer_graphql"] {
         let response = client
@@ -544,8 +547,8 @@ mod services_settings_updates;
 #[path = "server/services/chat/channel_runtime.rs"]
 mod services_chat_channel_runtime;
 
-#[path = "server/services/chat/download_queue.rs"]
-mod services_chat_download_queue;
+#[path = "server/services/downloads/chat.rs"]
+mod services_downloads_chat;
 
 #[path = "server/services/chat/chat_delivery.rs"]
 mod services_chat_chat_delivery;
@@ -607,8 +610,8 @@ mod services_peers_metadata;
 #[path = "server/services/peers/management_http.rs"]
 mod services_peers_management_http;
 
-#[path = "server/services/peers/shared_batch.rs"]
-mod services_peers_shared_batch;
+#[path = "server/services/downloads/resources.rs"]
+mod services_downloads_resources;
 
 #[path = "server/services/peers/peer_transport.rs"]
 mod services_peers_peer_transport;

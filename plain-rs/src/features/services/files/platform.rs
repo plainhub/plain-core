@@ -64,7 +64,7 @@ impl FilePlatform {
             scans,
         }
     }
-    pub(crate) async fn resource_media_path(&self, id: &str) -> Result<String> {
+    pub(crate) async fn resource_media_file(&self, id: &str) -> Result<super::links::File> {
         if self.host.uses_system_media_catalog() {
             let mut plan = crate::features::services::files::provider_query::Plan::default();
             plan.ids("_id", vec![id.to_owned()]);
@@ -76,16 +76,36 @@ impl FilePlatform {
                 )
                 .await
                 .map_err(plain_libs::anyhow::Error::msg)?;
-            return rows
+            let row = rows
                 .as_array()
                 .and_then(|rows| rows.first())
                 .filter(|row| row["mediaId"].as_str() == Some(id))
-                .and_then(|row| row["path"].as_str())
+                .ok_or_else(|| anyhow!("Media unavailable"))?;
+            let path = row["path"]
+                .as_str()
                 .filter(|path| !path.is_empty())
-                .map(str::to_owned)
-                .ok_or_else(|| anyhow!("Media unavailable"));
+                .ok_or_else(|| anyhow!("Media path unavailable"))?;
+            let name = row["name"]
+                .as_str()
+                .filter(|name| !name.is_empty())
+                .ok_or_else(|| anyhow!("Media filename unavailable"))?;
+            return Ok(super::links::File {
+                path: path.into(),
+                name: name.into(),
+                media_id: id.into(),
+            });
         }
-        self.db.media_resource_path(id)
+        let path = self.db.media_resource_path(id)?;
+        let name = Path::new(&path)
+            .file_name()
+            .and_then(|name| name.to_str())
+            .ok_or_else(|| anyhow!("Media filename unavailable"))?
+            .to_owned();
+        Ok(super::links::File {
+            path,
+            name,
+            media_id: id.into(),
+        })
     }
 
     pub fn uses_sdk(&self) -> bool {
@@ -141,7 +161,10 @@ impl FilePlatform {
         let name = path.to_str()?;
         if !self.watchable(path)
             || crate::features::media::catalog_paths::is_media_excluded_at(
-                name, &self.directory, &self.cache, &[],
+                name,
+                &self.directory,
+                &self.cache,
+                &[],
             )
         {
             return None;

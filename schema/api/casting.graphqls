@@ -1,3 +1,9 @@
+enum DlnaCastType {
+	AUDIO
+	VIDEO
+	IMAGE
+}
+
 input DlnaMediaInput {
 	path: String!
 	title: String!
@@ -64,10 +70,4 @@ extend type Mutation {
 extend type Query {
 	dlnaRenderers: [DlnaRenderer!]!
 	dlnaSenderState: DlnaSenderState!
-}
-
-enum DlnaCastType {
-	AUDIO
-	VIDEO
-	IMAGE
 }

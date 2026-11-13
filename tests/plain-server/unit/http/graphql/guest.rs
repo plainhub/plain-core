@@ -1,8 +1,8 @@
 use super::*;
 use crate::server::ContentServer;
+use plain_libs::serde_json::Value;
 use plain_rs::features::files::shares::Service;
 use plain_rs::features::prefs::Prefs;
-use plain_libs::serde_json::Value;
 use std::sync::Arc;
 #[tokio::test]
 async fn guest_executes_encrypted_contract_and_rejects_replay_and_revocation() {
@@ -25,17 +25,29 @@ async fn guest_executes_encrypted_contract_and_rejects_replay_and_revocation() {
     let state = server.runtime_state();
     let service = Service::new(state.db.clone(), state.prefs.clone());
     let share = service
-        .create(
-            "Test".into(),
-            vec![folder.to_str().unwrap().into()],
-            true,
-            None,
-        )
+        .create(plain_rs::features::files::shares::Input {
+            name: "Test".into(),
+            password: String::new(),
+            data: (vec![folder.to_str().unwrap().into()])
+                .into_iter()
+                .map(|path: String| {
+                    let path = std::path::PathBuf::from(path);
+                    plain_rs::features::files::shares::SharePath {
+                        virtual_path: format!("/{}", path.file_name().unwrap().to_str().unwrap()),
+                        real_path: path.to_str().unwrap().into(),
+                        is_dir: path.is_dir(),
+                    }
+                })
+                .collect(),
+            read_only: true,
+            expires_at: None,
+        })
         .unwrap();
     let key = plain_libs::utils::base64::base64_decode_checked(&service.token(&share.id).unwrap())
         .unwrap();
     let wrap = |query: &str| {
-        plain_rs::infrastructure::transport::http_request::encrypt(&key, "/guest_graphql", query).unwrap()
+        plain_rs::infrastructure::transport::http_request::encrypt(&key, "/guest_graphql", query)
+            .unwrap()
     };
     let body = wrap(
         r#"{"query":"query($path:String){ alias:sharedInfo(relativePath:$path){name readOnly expiresAt entries{name relativePath isDir size mimeType hasThumb}} }","variables":{"path":""}}"#,
@@ -51,15 +63,21 @@ async fn guest_executes_encrypted_contract_and_rejects_replay_and_revocation() {
     assert_eq!(result["data"]["alias"]["name"], "Test");
     assert_eq!(
         result["data"]["alias"]["entries"][0]["relativePath"],
-        "Shared/"
+        "/Shared"
     );
     assert_eq!(result["data"]["alias"]["entries"][0]["size"], 0);
     assert_eq!(execute_guest(&state, &share.id, &body).await.0, 400);
     assert_eq!(execute_guest(&state, &share.id, &[0; 40]).await.0, 401);
     assert_eq!(execute_guest(&state, "", &body).await.0, 401);
-    let malformed = plain_rs::infrastructure::transport::http_request::encrypt_raw(&key, "POST", "/guest_graphql", b"invalid").unwrap();
+    let malformed = plain_rs::infrastructure::transport::http_request::encrypt_raw(
+        &key,
+        "POST",
+        "/guest_graphql",
+        b"invalid",
+    )
+    .unwrap();
     assert_eq!(execute_guest(&state, &share.id, &malformed).await.0, 400);
-    let forbidden = wrap( r#"{"query":"{ shareRecords { id } }"}"#);
+    let forbidden = wrap(r#"{"query":"{ shareRecords { id } }"}"#);
     let (status, encrypted) = execute_guest(&state, &share.id, &forbidden).await;
     assert_eq!(status, 200);
     let result: Value = plain_libs::serde_json::from_slice(

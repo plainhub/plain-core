@@ -1,4 +1,4 @@
-use super::Root;
+use super::SharePath;
 use plain_libs::anyhow::Result;
 use std::fs;
 
@@ -8,7 +8,7 @@ pub struct Summary {
     pub total_size: i64,
 }
 
-pub fn summarize(roots: &[Root]) -> Result<Summary> {
+pub fn summarize(roots: &[SharePath]) -> Result<Summary> {
     let mut result = Summary {
         item_count: 0,
         total_size: 0,

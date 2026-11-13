@@ -428,7 +428,10 @@ async fn automatic_indexing_excludes_private_hidden_nomedia_and_app_storage_path
     for name in ["image.png", "song.wav", "clip.mp4", "document.txt"] {
         let path = public.join(name);
         std::fs::write(&path, b"fixture").unwrap();
-        assert!(state.file_platform.indexable_type(&path).is_some(), "{name}");
+        assert!(
+            state.file_platform.indexable_type(&path).is_some(),
+            "{name}"
+        );
     }
     for path in [
         state.directory.join("private.png"),
@@ -439,10 +442,19 @@ async fn automatic_indexing_excludes_private_hidden_nomedia_and_app_storage_path
         public.join("Android/obb/app/image.png"),
         public.join("archive.zip"),
     ] {
-        assert!(state.file_platform.indexable_type(&path).is_none(), "{}", path.display());
+        assert!(
+            state.file_platform.indexable_type(&path).is_none(),
+            "{}",
+            path.display()
+        );
     }
     std::fs::write(public.join(".nomedia"), b"").unwrap();
-    assert!(state.file_platform.indexable_type(&public.join("image.png")).is_none());
+    assert!(
+        state
+            .file_platform
+            .indexable_type(&public.join("image.png"))
+            .is_none()
+    );
     assert!(state.file_platform.watchable(&public));
     assert!(
         !state
@@ -480,11 +492,12 @@ async fn media_resource_lookup_uses_zero_sql_and_tracks_committed_changes() {
             }),
         )
     });
-    let path = state.file_platform.resource_media_path(&id).await.unwrap();
+    let file = state.file_platform.resource_media_file(&id).await.unwrap();
     state
         .db
         .with_conn(|connection| connection.progress_handler(0, None::<fn() -> bool>));
-    assert_eq!(path, "/media-lookup/photo.jpg");
+    assert_eq!(file.path, "/media-lookup/photo.jpg");
+    assert_eq!(file.name, "photo.jpg");
     assert!(
         steps.load(Ordering::Relaxed) == 0,
         "single media lookup executed {} VM steps",
@@ -500,7 +513,7 @@ async fn media_resource_lookup_uses_zero_sql_and_tracks_committed_changes() {
         assert!(
             state
                 .file_platform
-                .resource_media_path(&invalid)
+                .resource_media_file(&invalid)
                 .await
                 .is_err()
         );
@@ -508,27 +521,37 @@ async fn media_resource_lookup_uses_zero_sql_and_tracks_committed_changes() {
     let change = |sql: &str| state.db.with_conn(|c| c.execute_batch(sql)).unwrap();
     change("UPDATE files SET path='renamed.jpg' WHERE id='file-photo.jpg'");
     assert_eq!(
-        state.file_platform.resource_media_path(&id).await.unwrap(),
+        state
+            .file_platform
+            .resource_media_file(&id)
+            .await
+            .unwrap()
+            .path,
         "/media-lookup/renamed.jpg"
     );
     change("BEGIN; DELETE FROM files WHERE id='file-photo.jpg'; ROLLBACK");
-    assert!(state.file_platform.resource_media_path(&id).await.is_ok());
+    assert!(state.file_platform.resource_media_file(&id).await.is_ok());
     change("UPDATE volumes SET is_available=0 WHERE id='media-lookup'");
-    assert!(state.file_platform.resource_media_path(&id).await.is_err());
+    assert!(state.file_platform.resource_media_file(&id).await.is_err());
     change("UPDATE volumes SET path='/remounted',is_available=1 WHERE id='media-lookup'");
     assert_eq!(
-        state.file_platform.resource_media_path(&id).await.unwrap(),
+        state
+            .file_platform
+            .resource_media_file(&id)
+            .await
+            .unwrap()
+            .path,
         "/remounted/renamed.jpg"
     );
     change(
         "INSERT OR REPLACE INTO files(id,volume_id,path,file_name,kind,updated_at) VALUES('replacement','media-lookup','renamed.jpg','renamed.jpg','IMAGE','2026')",
     );
-    assert!(state.file_platform.resource_media_path(&id).await.is_err());
+    assert!(state.file_platform.resource_media_file(&id).await.is_err());
     change("UPDATE files SET trashed_at='2026',original_path='renamed.jpg' WHERE id='replacement'");
     assert!(
         state
             .file_platform
-            .resource_media_path("replacement")
+            .resource_media_file("replacement")
             .await
             .is_err()
     );
@@ -536,7 +559,7 @@ async fn media_resource_lookup_uses_zero_sql_and_tracks_committed_changes() {
     assert!(
         state
             .file_platform
-            .resource_media_path("replacement")
+            .resource_media_file("replacement")
             .await
             .is_ok()
     );
@@ -544,7 +567,7 @@ async fn media_resource_lookup_uses_zero_sql_and_tracks_committed_changes() {
     assert!(
         state
             .file_platform
-            .resource_media_path("replacement")
+            .resource_media_file("replacement")
             .await
             .is_err()
     );

@@ -24,6 +24,28 @@ type ClipboardChange {
 	time: Instant!
 }
 
+"""
+Taggable data domains — the plain-app `DataType` wire enum
+(`shared/src/commonMain/kotlin/com/ismartcoding/plain/enums/DataType.kt`).
+GraphQL-arg and tag-column domain; `kind()` is the ordinal stored in
+the shared library db `type` column.
+"""
+enum DataType {
+	DEFAULT
+	AUDIO
+	VIDEO
+	IMAGE
+	SMS
+	CONTACT
+	NOTE
+	FEED_ENTRY
+	CALL
+	PACKAGE
+	FILE
+	APP_FILE
+	DOC
+}
+
 enum DeviceType {
 	COMPUTER
 	PHONE
@@ -103,11 +125,11 @@ A scalar that can represent any JSON value.
 """
 scalar JSON
 
+scalar Long
+
 type MediaChange {
 	types: [DataType!]!
 }
-
-scalar Long
 
 """
 Media-library item kinds accepted by media item actions and buckets
@@ -151,22 +173,6 @@ type PairingRequestNotice {
 	deviceType: DeviceType!
 	verificationCode: String!
 	identityChanged: Boolean!
-}
-
-type Peer {
-	id: ID!
-	name: String!
-	ip: String!
-	status: PeerStatus!
-	port: Int
-	deviceType: DeviceType!
-	createdAt: Instant!
-	updatedAt: Instant!
-	online: Boolean!
-	managed: Boolean!
-	key: String!
-	publicKey: String!
-	token: String!
 }
 
 enum PeerStatus {

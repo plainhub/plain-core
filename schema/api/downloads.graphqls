@@ -1,53 +1,74 @@
-type ChatDownloadFile {
-	fileId: String!
-	uri: String!
-	size: Long!
-	durationMs: Long!
-	width: Int!
-	height: Int!
-	summary: String!
-	fileName: String!
-}
-
-type ChatDownloadQueue {
-	runtimeId: String!
-	revision: Long!
-	tasks: [ChatDownloadTask!]!
-}
-
-type ChatDownloadTask {
-	id: ID!
+input ChatDownloadInput {
 	messageId: ID!
-	file: ChatDownloadFile!
-	peer: Peer!
-	status: DownloadStatus!
-	error: String!
-	downloaded: Long!
-	total: Long!
-	speed: Long!
+	peerId: ID!
+	fileIds: [String!]!
 }
+
+type ChatDownloadSource {
+	messageId: ID!
+	peerId: ID!
+	fileIds: [String!]!
+}
+
+type Download {
+	id: ID!
+	title: String!
+	source: DownloadSource!
+	targetDir: String!
+	zipName: String
+	status: DownloadStatus!
+	downloadedBytes: Long!
+	totalBytes: Long!
+	bytesPerSecond: Long!
+	totalFiles: Int!
+	doneFiles: Int!
+	currentFile: String!
+	error: String!
+	failures: [DownloadFailure!]!
+}
+
+type DownloadFailure {
+	path: String!
+	error: String!
+}
+
+input DownloadInput {
+	resources: ResourceDownloadInput
+	chat: ChatDownloadInput
+}
+
+union DownloadSource = ResourceDownloadSource | ChatDownloadSource
 
 enum DownloadStatus {
 	PENDING
 	DOWNLOADING
 	PAUSED
+	PACKING
 	COMPLETED
+	PARTIAL
 	FAILED
 	CANCELED
 }
 
+input ResourceDownloadInput {
+	urls: [String!]!
+	targetDir: String!
+	zipName: String
+}
+
+type ResourceDownloadSource {
+	urls: [String!]!
+}
+
 extend type Mutation {
-	downloadPeerFile(messageId: ID!, peerId: ID!): Boolean!
-	enqueueChatDownload(messageId: ID!, fileId: String!, peerId: ID!): Boolean!
-	pauseChatDownload(id: ID!): Boolean!
-	pauseDownload(messageId: ID!): Boolean!
-	removeChatDownload(id: ID!): Boolean!
-	resumeChatDownload(id: ID!): Boolean!
-	resumeDownload(messageId: ID!, peerId: ID!): Boolean!
-	retryChatDownload(id: ID!): Boolean!
-	retryDownload(messageId: ID!, peerId: ID!): Boolean!
+	cancelDownload(id: ID!): Boolean!
+	createDownload(input: DownloadInput!): Download!
+	pauseDownload(id: ID!): Boolean!
+	removeDownload(id: ID!): Boolean!
+	resumeDownload(id: ID!): Boolean!
+	retryDownload(id: ID!): Boolean!
 }
 
 extend type Query {
-	chatDownloadQueue: ChatDownloadQueue!
+	downloads: [Download!]!
 }

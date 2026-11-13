@@ -21,11 +21,6 @@ type Sms {
 	tags: [Tag!]!
 }
 
-type SmsSendReceipt {
-	requestId: String!
-	requiresConfirmation: Boolean!
-}
-
 type SmsAttachment {
 	path: String!
 	contentType: String!
@@ -47,6 +42,11 @@ type SmsCounts {
 	inbox: Int!
 	sent: Int!
 	drafts: Int!
+}
+
+type SmsSendReceipt {
+	requestId: String!
+	requiresConfirmation: Boolean!
 }
 
 enum SmsType {

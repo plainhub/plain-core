@@ -23,9 +23,14 @@ fn guest_wire_and_file_ids_use_existing_xchacha_contract_and_exact_query_encodin
         .unwrap(),
     )
     .unwrap();
-    let envelope = crate::infrastructure::transport::graphql_request::Envelope::parse(&plain).unwrap();
+    let envelope =
+        crate::infrastructure::transport::graphql_request::Envelope::parse(&plain).unwrap();
     let id = envelope.id().unwrap();
-    assert!(id.timestamp().abs_diff(crate::features::peers::pairing::now_ms()) < 1000);
+    assert!(
+        id.timestamp()
+            .abs_diff(crate::features::peers::pairing::now_ms())
+            < 1000
+    );
     let document: Value = plain_libs::serde_json::from_str(&plain).unwrap();
     assert_eq!(
         document["variables"]["relativePath"],
@@ -103,4 +108,33 @@ fn guest_response_never_accepts_unauthenticated_data_or_invalid_file_tokens() {
         link.response(&request, &errors).unwrap_err().to_string(),
         "expired"
     );
+}
+
+#[test]
+fn share_browsing_urls_roundtrip_virtual_names_and_require_guest_links() {
+    let link = Link::new(
+        "localhost",
+        443,
+        "share-id",
+        &plain_libs::utils::base64::base64_encode_url_safe(&[7; 32]),
+    )
+    .unwrap();
+    let path = "/folder +中文/100% #?.txt";
+    let url = link.directory_url(path).unwrap();
+    let (parsed, relative) = Link::parse(&url).unwrap();
+    assert_eq!(relative, path.trim_start_matches('/'));
+    assert_eq!(parsed.shared_id, "share-id");
+    assert_eq!(parsed.token, link.token);
+    for invalid in [
+        link.page_url.replacen("https:", "http:", 1),
+        link.page_url.replacen("localhost", "user@localhost", 1),
+        format!(
+            "{}?q=1#{}",
+            link.page_url.split('#').next().unwrap(),
+            link.token
+        ),
+        link.page_url.split('#').next().unwrap().to_owned(),
+    ] {
+        assert!(Link::parse(&invalid).is_err(), "{invalid}");
+    }
 }

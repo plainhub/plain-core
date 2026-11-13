@@ -53,7 +53,7 @@ impl NativeGraphqlExecutor {
             _ = scope.wait_closed() => Err("Native request scope closed".into()),
             _ = stop.wait_for(|value| *value) => Err("Server stopped".into()),
             result = async {
-                let route = self.state.managed_proxy.peers.route(&self.state, peer_id).await.map_err(peer_error)?;
+                let route = self.state.managed_resources.route(&self.state, peer_id).await.map_err(peer_error)?;
                 route.check_current(&self.state).map_err(peer_error)?;
                 self.state.subscription_sessions.open_peer_with_pin(
                     self.state.clone(),
@@ -75,8 +75,9 @@ impl NativeGraphqlExecutor {
         let deadline = tokio::time::Instant::now() + timeout;
         request.extensions.remove("nativeScope");
         request.extensions.remove("nativeDeadlineMs");
-        let request = plain_libs::serde_json::to_string(&request).map_err(|error| error.to_string())?;
-        if request.len() > crate::managed_peers::GRAPHQL_LIMIT {
+        let request =
+            plain_libs::serde_json::to_string(&request).map_err(|error| error.to_string())?;
+        if request.len() > plain_rs::features::services::peers::managed_resources::GRAPHQL_LIMIT {
             return Err("GraphQL request too large".into());
         }
         let mut stop = self.state.stop.clone();
@@ -86,7 +87,7 @@ impl NativeGraphqlExecutor {
             _ = stop.wait_for(|value| *value) => Err("Server stopped".into()),
             _ = tokio::time::sleep_until(deadline) => Err("connection_timeout".into()),
             result = async {
-                let route = self.state.managed_proxy.peers.route(&self.state, peer_id).await?;
+                let route = self.state.managed_resources.route(&self.state, peer_id).await?;
                 let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
                 let response = route.exchange(&self.state, &request, Some(remaining)).await?;
                 plain_libs::serde_json::from_slice(&response).map_err(plain_libs::anyhow::Error::from)

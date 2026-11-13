@@ -1,6 +1,6 @@
 use super::*;
 use crate::features::files::shares::client::Link;
-use crate::features::services::peers::shared_download::download_url;
+use crate::features::services::downloads::resources::url as download_url;
 use crate::infrastructure::db::DPeer;
 use crate::infrastructure::db::chat_store::SaveMode;
 use crate::infrastructure::db::chat_store::messages;
@@ -14,8 +14,10 @@ use std::sync::{
 mod fixtures;
 use fixtures::*;
 
-#[test]
-fn discovery_selects_complete_matching_records_and_safe_ipv6_urls() {
+#[tokio::test]
+async fn discovery_selects_complete_matching_records_and_safe_ipv6_urls() {
+    let (_directory, core, _) = root();
+    let state = core.runtime_state();
     let expected = card(443);
     let mut links = vec![];
     let mut seen = HashSet::new();
@@ -23,9 +25,9 @@ fn discovery_selects_complete_matching_records_and_safe_ipv6_urls() {
     discovery_candidates(&mut links, &mut seen, &snapshot, &expected);
     assert_eq!(links.len(), 2);
     assert!(links[1].page_url.starts_with("https://[::1]:8443/"));
-    assert!(download_url("http://localhost/fs?sid=s&id=x").is_err());
-    assert!(download_url("https://user@localhost/fs?sid=s&id=x").is_err());
-    assert!(download_url("https://localhost/proxyfs?sid=s&id=x").is_err());
+    assert!(download_url(&state, "http://localhost/fs?sid=s&id=x").is_err());
+    assert!(download_url(&state, "https://user@localhost/fs?sid=s&id=x").is_err());
+    assert!(download_url(&state, "https://localhost/proxyfs?sid=s&id=x").is_err());
     let link = Link::new(
         "localhost",
         443,
@@ -40,11 +42,12 @@ fn discovery_selects_complete_matching_records_and_safe_ipv6_urls() {
             false,
         )
         .unwrap();
-    assert!(download_url(&format!("{url}&action=download")).is_ok());
-    assert!(download_url(&format!("{url}&action=preview")).is_err());
-    assert!(download_url("https://localhost/fs?id=c.owner.AA").is_err());
-    assert!(download_url("https://localhost/fs?id=c.client.AA").is_err());
-    assert!(download_url("https://localhost/fs?id=x").is_err());
+    assert!(download_url(&state, &format!("{url}&action=download")).is_ok());
+    assert!(download_url(&state, &format!("{url}&action=preview")).is_err());
+    assert!(download_url(&state, "https://localhost/fs?id=c.owner.AA").is_err());
+    assert!(download_url(&state, "https://localhost/fs?id=c.client.AA").is_err());
+    assert!(download_url(&state, "https://localhost/fs?id=x").is_err());
+    core.shutdown().await;
 }
 
 #[tokio::test]
@@ -93,11 +96,7 @@ async fn stopped_core_rejects_every_typed_shared_operation_before_side_effects()
     .unwrap();
     server.stop_core().await;
     let errors = [
-        own_link(&state, "missing-share", None).await.err().unwrap(),
-        initial_link(&state, &row.id, &expected)
-            .await
-            .err()
-            .unwrap(),
+        own_link(&state, "missing-share").await.err().unwrap(),
         browse(&state, &row.id, &expected, None)
             .await
             .err()
@@ -106,30 +105,12 @@ async fn stopped_core_rejects_every_typed_shared_operation_before_side_effects()
     for error in errors {
         assert_eq!(error.to_string(), "Core stopped");
     }
-    let cache = crate::features::services::files::remote_cache::RemoteCache::new(
-        directory.path().join("cache"),
-    );
-    let file = crate::features::files::shares::client::File {
-        name: "preview.txt".into(),
-        relative_path: "folder/ +?#中文%".into(),
-        is_dir: false,
-        size: 8,
-        mime_type: "text/plain".into(),
-        has_thumb: false,
-    };
-    assert_eq!(
-        cache_file(
-            &state,
-            &cache,
-            link,
-            plain_libs::utils::base64::base64_encode(&[8; 32]),
-            file,
-            false
-        )
-        .await
-        .unwrap_err()
-        .to_string(),
-        "Download cancelled"
+    assert!(
+        files(&state, file_request(link.page_url))
+            .await
+            .unwrap_err()
+            .to_string()
+            .contains("Core stopped")
     );
     assert!(!directory.path().join("cache/remote_files").exists());
     assert_eq!(count.load(Ordering::SeqCst), 0);
@@ -236,11 +217,23 @@ async fn root_candidates_preserve_foreign_self_unbound_and_deduplicated_endpoint
     server.shutdown().await;
 }
 
+fn file_request(root: String) -> plain_libs::filesystem::browse::Request {
+    plain_libs::filesystem::browse::Request {
+        root,
+        query: String::new(),
+        sort_by: plain_libs::filesystem::SortBy::NameAsc,
+        offset: 0,
+        limit: None,
+        count_only: false,
+        count_children: false,
+    }
+}
+
 #[tokio::test]
-async fn thumbnail_requests_use_named_size_and_replace_previous_cache_entries() {
+async fn generic_preview_copy_reuses_named_thumbnail_bytes_without_reusing_obsolete_versions() {
     let (directory, server, _) = root();
     let state = server.runtime_state();
-    let (port, tls, _, _, _) = tls().await;
+    let (port, tls, count, _, _) = tls().await;
     let link = Link::new(
         "127.0.0.1",
         port,
@@ -248,57 +241,39 @@ async fn thumbnail_requests_use_named_size_and_replace_previous_cache_entries() 
         &plain_libs::utils::base64::base64_encode(&[7; 32]),
     )
     .unwrap();
-    let url_token = plain_libs::utils::base64::base64_encode(&[8; 32]);
-    let entry = crate::features::files::shares::client::File {
-        name: "photo.jpg".into(),
-        relative_path: "folder/ +?#中文%".into(),
-        is_dir: false,
-        size: 8,
-        mime_type: "image/jpeg".into(),
-        has_thumb: true,
-    };
-    let cache = crate::features::services::files::remote_cache::RemoteCache::new(
-        directory.path().join("cache"),
-    );
-    let old_key = json!({"host":link.host,"port":link.port,"shareId":link.shared_id,"token":link.token,"urlToken":url_token,"path":entry.relative_path,"size":entry.size,"centerCrop":false}).to_string();
-    let old_path = cache
-        .download(
-            &link
-                .file_url(&url_token, &entry.relative_path, false)
-                .unwrap(),
-            "thumbnail",
-            Some(&old_key),
-            state.stop.clone(),
-            Some(&state.lan.client),
+    let url = link
+        .file_url(
+            &plain_libs::utils::base64::base64_encode(&[8; 32]),
+            "folder/ +?#中文%",
+            false,
         )
-        .await
         .unwrap();
-    tokio::fs::write(&old_path, b"old thumbnail size")
-        .await
-        .unwrap();
-    let first = cache_file(
-        &state,
-        &cache,
-        link.clone(),
-        url_token.clone(),
-        entry.clone(),
-        true,
-    )
-    .await
-    .unwrap();
-    assert_ne!(
-        first, old_path,
-        "Previous thumbnail sizes must not be reused"
-    );
-    assert_eq!(tokio::fs::read(&first).await.unwrap(), b"download");
-    let second = cache_file(&state, &cache, link, url_token, entry, true)
-        .await
-        .unwrap();
-    assert_eq!(first, second, "Named thumbnails keep a stable cache key");
-    assert_eq!(
-        tokio::fs::read(&old_path).await.unwrap(),
-        b"old thumbnail size"
-    );
+    let target = directory.path().join("previews");
+    let copy = |version: u8| {
+        let state = state.clone();
+        let target = target.to_string_lossy().into_owned();
+        let source = format!("{url}&action=preview&size=sm&v={version}");
+        async move {
+            crate::features::services::files::named_copy::copy(
+                &state,
+                "local".into(),
+                source,
+                target,
+                "thumbnail".into(),
+            )
+            .await
+            .unwrap()
+            .unwrap()
+        }
+    };
+    let first = copy(1).await;
+    let second = copy(1).await;
+    assert_eq!(std::fs::read(&first).unwrap(), b"download");
+    assert_eq!(std::fs::read(&second).unwrap(), b"download");
+    assert_eq!(count.load(Ordering::SeqCst), 1);
+    let third = copy(2).await;
+    assert_eq!(std::fs::read(third).unwrap(), b"download");
+    assert_eq!(count.load(Ordering::SeqCst), 2);
     server.shutdown().await;
     tls.abort();
 }

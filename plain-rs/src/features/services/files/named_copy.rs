@@ -13,7 +13,29 @@ pub async fn copy(
     tokio::spawn(async move {
         let _cache = state.cache_changes.read().await;
         plain_libs::anyhow::ensure!(!*state.stop.borrow(), "Rust core stopped");
-        let temporary = if source.starts_with("content://") || source.starts_with("ph://") {
+        let cached = if let Some(url) = shared_resource(&source) {
+            let thumbnail = url
+                .query_pairs()
+                .any(|(key, value)| key == "action" && value == "preview");
+            Some(
+                state
+                    .remote_cache
+                    .download(
+                        &source,
+                        &name,
+                        thumbnail.then_some(source.as_str()),
+                        state.stop.clone(),
+                        Some(&state.lan.client),
+                    )
+                    .await
+                    .map_err(plain_libs::anyhow::Error::msg)?,
+            )
+        } else {
+            None
+        };
+        let temporary = if cached.is_some() {
+            None
+        } else if source.starts_with("content://") || source.starts_with("ph://") {
             Some(
                 crate::features::services::files::source_files::stage(
                     &source,
@@ -38,9 +60,10 @@ pub async fn copy(
             None
         };
         plain_libs::anyhow::ensure!(!*state.stop.borrow(), "Rust core stopped");
-        let path = match temporary.as_ref() {
-            Some(file) => file.path().to_string_lossy().into_owned(),
-            None => crate::features::services::files::references::resolve(
+        let path = match (cached, temporary.as_ref()) {
+            (Some(path), _) => path,
+            (None, Some(file)) => file.path().to_string_lossy().into_owned(),
+            (None, None) => crate::features::services::files::references::resolve(
                 state.db.clone(),
                 state.directory.clone(),
                 &source,
@@ -52,4 +75,24 @@ pub async fn copy(
             .await
     })
     .await?
+}
+
+fn shared_resource(raw: &str) -> Option<plain_libs::protocols::http_client::Url> {
+    let url = plain_libs::protocols::http_client::Url::parse(raw).ok()?;
+    if url.scheme() != "https"
+        || url.path() != "/fs"
+        || !url.username().is_empty()
+        || url.password().is_some()
+        || url.fragment().is_some()
+    {
+        return None;
+    }
+    let id = url.query_pairs().find(|(key, _)| key == "id")?.1;
+    if !matches!(
+        crate::features::files::resource_link::parse(&id).ok()?.0,
+        crate::features::files::resource_link::Scope::Share(_)
+    ) {
+        return None;
+    }
+    Some(url)
 }

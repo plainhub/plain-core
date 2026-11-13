@@ -1,8 +1,8 @@
 use super::*;
 
-fn root(path: &std::path::Path) -> Root {
-    Root {
-        relative_path: "root".into(),
+fn root(path: &std::path::Path) -> SharePath {
+    SharePath {
+        virtual_path: "root".into(),
         real_path: path.to_str().unwrap().into(),
         is_dir: path.is_dir(),
     }

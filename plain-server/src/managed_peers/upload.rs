@@ -1,4 +1,3 @@
-use super::{GRAPHQL_LIMIT, PeerRoute};
 use crate::server::ServerState;
 use futures_util::StreamExt;
 use plain_libs::anyhow::{Result, ensure};
@@ -7,6 +6,7 @@ use plain_libs::axum::{
     http::{StatusCode, header},
 };
 use plain_libs::protocols::http_client;
+use plain_rs::features::services::peers::managed_resources::{GRAPHQL_LIMIT, PeerRoute};
 use plain_rs::infrastructure::transport::http_request;
 use std::{future::Future, io, pin::Pin, sync::Arc};
 use tokio::{
@@ -33,10 +33,6 @@ pub(crate) fn request(
         "Invalid upload path"
     );
     ensure!(metadata.len() <= 64 * 1024, "Upload metadata too large");
-    ensure!(
-        route.supports_managed_resources,
-        "Managed upload unavailable"
-    );
     route.check_current(&state)?;
     let filename = filename.rsplit(['/', '\\']).next().unwrap_or_default();
     ensure!(

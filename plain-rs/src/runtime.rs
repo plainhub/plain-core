@@ -56,9 +56,11 @@ pub struct Runtime {
     pub(crate) transport_delivery: Arc<std::sync::Mutex<bool>>,
     pub previews: Arc<crate::features::services::link_preview::Schedule>,
     pub prewarmer: Arc<crate::features::chat::attachments::prewarm::Prewarmer>,
-    pub shared_batches: Arc<crate::features::services::peers::shared_batch::Runtime>,
-    pub(crate) download_runtime: Arc<crate::features::services::chat::download_queue::Runtime>,
-    pub downloads: Arc<crate::features::chat::attachments::download_queue::Queue>,
+    pub download_runtime: Arc<crate::features::services::downloads::Runtime>,
+    pub managed_resources:
+        Arc<crate::features::services::peers::managed_resources::ManagedPeerRoutes>,
+    pub downloads: Arc<crate::features::downloads::queue::Queue>,
+    pub(crate) attachments: Arc<crate::features::chat::attachments::attachment_imports::Imports>,
     pub(crate) delivery: Arc<crate::features::chat::delivery::Delivery>,
     pub(crate) channel_delivery: Arc<tokio::sync::Semaphore>,
     pub ble_transport: Arc<crate::features::services::peers::ble_transport::Runtime>,
@@ -324,13 +326,7 @@ impl Runtime {
         );
         let attachments =
             Arc::new(crate::features::chat::attachments::attachment_imports::Imports::default());
-        let downloads = Arc::new(
-            crate::features::chat::attachments::download_queue::Queue::new(
-                (*db).clone(),
-                directory.clone(),
-                attachments.clone(),
-            ),
-        );
+        let downloads = Arc::new(crate::features::downloads::queue::Queue::default());
         let preview_events = events.clone();
         let previews = Arc::new(crate::features::services::link_preview::Schedule::new(
             (*db).clone(),
@@ -338,8 +334,10 @@ impl Runtime {
             Arc::new(move |row| {
                 let _ = preview_events.send(WsEvent::broadcast(
                     crate::features::chat::events::WS_MESSAGE_UPDATED,
-                    plain_libs::serde_json::json!([crate::features::chat::service::chat_to_json(&row)])
-                        .to_string(),
+                    plain_libs::serde_json::json!([crate::features::chat::service::chat_to_json(
+                        &row
+                    )])
+                    .to_string(),
                 ));
             }),
             receiver.clone(),
@@ -389,13 +387,12 @@ impl Runtime {
             transport_delivery: Arc::new(std::sync::Mutex::new(false)),
             previews,
             prewarmer: Arc::new(crate::features::chat::attachments::prewarm::Prewarmer::default()),
-            shared_batches: Arc::new(
-                crate::features::services::peers::shared_batch::Runtime::default(),
-            ),
-            download_runtime: Arc::new(
-                crate::features::services::chat::download_queue::Runtime::default(),
+            download_runtime: Arc::new(crate::features::services::downloads::Runtime::default()),
+            managed_resources: Arc::new(
+                crate::features::services::peers::managed_resources::ManagedPeerRoutes::default(),
             ),
             downloads,
+            attachments,
             delivery: Arc::new(crate::features::chat::delivery::Delivery::new(
                 (*db).clone(),
             )),
@@ -473,8 +470,7 @@ impl Runtime {
             ));
         Thumbnails::start(state.clone());
         crate::features::services::feeds::sync_service::schedule::start(state.clone());
-        crate::features::services::chat::download_queue::start(state.clone());
-        crate::features::services::peers::shared_batch::start(state.clone());
+        crate::features::services::downloads::start(state.clone());
         crate::features::services::peers::aware::start(state.clone());
         *state.external_index_task.lock() = Some(
             crate::features::services::files::external_index::start(state.clone()),
@@ -529,7 +525,6 @@ impl Runtime {
     }
     pub async fn shutdown(&self, stop: &watch::Sender<bool>) {
         self.cast.stop_tasks();
-        self.shared_batches.shutdown(&self.directory).await;
         let external_index = self.external_index_task.lock().take();
         if let Some(task) = external_index {
             task.abort();
@@ -544,7 +539,10 @@ impl Runtime {
         if self.host.connected() && self.host.needs_socket_cleanup() {
             let _ = self
                 .host
-                .call("peerTransportSocketCloseAll", plain_libs::serde_json::json!({}))
+                .call(
+                    "peerTransportSocketCloseAll",
+                    plain_libs::serde_json::json!({}),
+                )
                 .await;
         }
         #[cfg(feature = "runtime-media")]

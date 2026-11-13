@@ -100,17 +100,11 @@ pub(super) fn files(sdl: &str) -> BTreeMap<String, String> {
         resolvers::chat::host::ChatHostQuery,
         resolvers::chat::public::ChatQuery
     );
-    group!(
-        "Query",
-        "shares",
-        resolvers::shares::queue::SharedDownloadQuery,
-        resolvers::shares::client::SharedClientQuery,
-        resolvers::shares::host::ShareHostQuery
-    );
+    group!("Query", "shares", resolvers::shares::host::ShareHostQuery);
     group!(
         "Query",
         "downloads",
-        resolvers::downloads::queue::ChatDownloadQuery
+        resolvers::downloads::public::DownloadQuery
     );
     group!(
         "Query",
@@ -226,14 +220,11 @@ pub(super) fn files(sdl: &str) -> BTreeMap<String, String> {
     group!(
         "Mutation",
         "shares",
-        resolvers::shares::queue::SharedDownloadMutation,
-        resolvers::shares::client::SharedClientMutation,
         resolvers::shares::host::ShareHostMutation
     );
     group!(
         "Mutation",
         "downloads",
-        resolvers::downloads::queue::ChatDownloadMutation,
         resolvers::downloads::public::DownloadMutation
     );
     group!(
@@ -256,11 +247,7 @@ pub(super) fn files(sdl: &str) -> BTreeMap<String, String> {
         resolvers::images::image_editor_project::ImageEditorProjectMutation,
         resolvers::images::public_index::ImageIndexMutation
     );
-    group!(
-        "Mutation",
-        "audio",
-        resolvers::audio::public::AudioMutation
-    );
+    group!("Mutation", "audio", resolvers::audio::public::AudioMutation);
     group!(
         "Mutation",
         "chat",
@@ -366,7 +353,10 @@ pub(super) fn files(sdl: &str) -> BTreeMap<String, String> {
                 .entry(("chat_channel".into(), name.into()))
                 .or_default()
                 .push(("channelsChanged".into(), channel[0].into()));
-            files.entry("common".into()).or_default().push(common.join("\n") + "\n");
+            files
+                .entry("common".into())
+                .or_default()
+                .push(common.join("\n") + "\n");
         } else if matches!(name, "Query" | "Mutation") && declaration.starts_with("type ") {
             let mut pending = Vec::new();
             let mut description = false;
@@ -418,9 +408,14 @@ pub(super) fn files(sdl: &str) -> BTreeMap<String, String> {
             assert!(pending.iter().all(|line| line.trim().is_empty()));
         } else {
             let group = match name {
-                "ChannelChange" | "ChannelInvite" | "ChannelInviteCancellation"
-                | "ChannelMemberStatus" | "ChatChannel" | "ChatChannelActions"
-                | "ChatChannelMember" | "ChatChannelStatus" => "chat_channel",
+                "ChannelChange"
+                | "ChannelInvite"
+                | "ChannelInviteCancellation"
+                | "ChannelMemberStatus"
+                | "ChatChannel"
+                | "ChatChannelActions"
+                | "ChatChannelMember"
+                | "ChatChannelStatus" => "chat_channel",
                 _ => types
                     .get(name)
                     .filter(|groups| groups.len() == 1)
