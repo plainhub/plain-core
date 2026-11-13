@@ -1,10 +1,9 @@
 type Call {
 	typeCode: Int!
-	photoUri: String!
 	id: ID!
 	number: String!
 	name: String!
-	photoId: String!
+	photo: String!
 	startedAt: Instant!
 	durationSec: Int!
 	type: CallType!

@@ -1,6 +1,6 @@
 use crate::graphql::resolvers::app::types::Capability;
 use crate::graphql::types::KeyValuePair;
-use plain_graphql::{ComplexObject, Context, Object, SimpleObject};
+use plain_graphql::{ComplexObject, Context, ID, Object, SimpleObject};
 
 use plain_rs::features::access::AccessFeature;
 use plain_rs::features::services::device::types::*;
@@ -12,7 +12,7 @@ use std::sync::Arc;
 #[derive(SimpleObject, Clone)]
 #[graphql(complex)]
 pub struct App {
-    pub client_id: String,
+    pub client_id: ID,
     pub http_port: i32,
     pub https_port: i32,
     pub device_name: String,
@@ -216,7 +216,7 @@ impl DeviceQuery {
             None => (user.http_port, user.https_port),
         };
         Ok(App {
-            client_id: system.client_id,
+            client_id: ID(system.client_id),
             http_port,
             https_port,
             device_name: user.device_name,

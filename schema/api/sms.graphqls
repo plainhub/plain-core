@@ -21,6 +21,11 @@ type Sms {
 	tags: [Tag!]!
 }
 
+type SmsSendReceipt {
+	requestId: String!
+	requiresConfirmation: Boolean!
+}
+
 type SmsAttachment {
 	path: String!
 	contentType: String!
@@ -58,16 +63,7 @@ extend type Mutation {
 	archiveSmsConversation(id: ID!, date: Instant): Boolean!
 	deleteSms(query: String!): ActionResult!
 	restoreSms(query: String!): ActionResult!
-	"""
-	Compose an MMS in the device's default SMS app and track the send.
-	Returns a pendingId consumed by the MMS polling flow.
-	"""
-	sendMms(number: String!, body: String!, attachmentPaths: [String!]!, threadId: ID!): String!
-	"""
-	`subscriptionId` picks the SIM (-1 = system default, see `sims`);
-	`requestId` is an optional idempotency key that dedupes retried sends.
-	"""
-	sendSms(number: String!, body: String!, subscriptionId: Int!, requestId: String): Boolean!
+	sendSms(number: String!, body: String!, attachmentPaths: [String!]! = [], subscriptionId: Int, requestId: String!): SmsSendReceipt!
 	trashSms(query: String!): ActionResult!
 	unarchiveSmsConversation(id: ID!): Boolean!
 }

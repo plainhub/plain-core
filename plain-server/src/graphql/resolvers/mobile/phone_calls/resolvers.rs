@@ -64,12 +64,10 @@ pub struct PhoneGeo {
 #[graphql(complex)]
 pub struct Call {
     pub type_code: i32,
-    pub photo_uri: String,
     pub id: ID,
     pub number: String,
     pub name: String,
-    #[graphql(name = "photoId")]
-    pub photo_id: String,
+    pub photo: String,
     #[graphql(name = "startedAt")]
     pub started_at: plain_rs::infrastructure::types::Instant,
     #[graphql(name = "durationSec")]
@@ -147,27 +145,7 @@ impl CallsQuery {
             None
         };
         let runtime = ctx.data_unchecked::<Arc<plain_libs::phone::Service>>();
-        let (scope, token) = crate::graphql::executor::resource_credentials(ctx)?;
-        let key = plain_libs::utils::base64::base64_decode(&token);
-        let mut calls = Vec::with_capacity(facts.len());
-        for fact in &facts {
-            let mut row = call(fact);
-            let path = text(fact, "photoUri");
-            row.photo_id = if path.is_empty()
-                || path.to_ascii_lowercase().starts_with("http://")
-                || path.to_ascii_lowercase().starts_with("https://")
-            {
-                path
-            } else {
-                plain_rs::features::files::resource_link::seal(
-                    &scope,
-                    &key,
-                    &plain_rs::features::files::resource_link::Resource::reference(&path),
-                )
-                .map_err(|error| plain_graphql::Error::new(error.to_string()))?
-            };
-            calls.push(row);
-        }
+        let mut calls: Vec<Call> = facts.iter().map(call).collect();
         if let Some(locale) = locale {
             let numbers = calls.iter().map(|call| call.number.clone()).collect();
             let metadata =
@@ -291,12 +269,11 @@ fn call(fact: &Value) -> Call {
         id: ID::from(id),
         number: text(fact, "number"),
         name: text(fact, "name"),
-        photo_id: String::new(),
+        photo: text(fact, "photoUri"),
         started_at: instant(fact, "startedAt"),
         duration_sec: integer(fact, "durationSec") as i32,
         r#type: CallType::from_android(integer(fact, "type")),
         type_code: integer(fact, "type") as i32,
-        photo_uri: text(fact, "photoUri"),
         account_id: ID::from(text(fact, "accountId")),
         geo: None,
     }

@@ -112,6 +112,40 @@ async fn files_are_gated_on_storage_permission() {
 }
 
 #[tokio::test]
+async fn trash_count_matches_filtered_list_before_pagination() {
+    let (dir, schema) = fixture(GRANTED);
+    let root = sample_tree(dir.path());
+    let paths = [root.join("alpha.txt"), root.join("beta.png")];
+    let response = schema
+        .execute(&format!(
+            "mutation {{ trashFiles(paths: {}) {{ affectedCount }} }}",
+            plain_libs::serde_json::to_string(&paths).unwrap()
+        ))
+        .await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    for (query, expected) in [(" ALPHA.TXT ", 1_i32), ("missing-name", 0), ("", 2)] {
+        let response = schema
+            .execute(&format!(
+                "query {{ trashedFileCount(query: {query:?}) trashedFiles(query: {query:?}, offset: 0, limit: 1, sortBy: NAME_ASC) {{ originalPath }} }}"
+            ))
+            .await;
+        assert!(response.errors.is_empty(), "{:?}", response.errors);
+        let data = response.data.into_json().unwrap();
+        assert_eq!(data["trashedFileCount"], expected);
+        assert_eq!(
+            data["trashedFiles"].as_array().unwrap().len(),
+            expected.min(1) as usize
+        );
+    }
+    assert!(
+        !schema.execute("{ trashedFileCount }").await.errors.is_empty()
+    );
+    let (_denied_dir, denied) = fixture("[]");
+    let response = denied.execute(r#"{ trashedFileCount(query: "") }"#).await;
+    assert_eq!(response.errors[0].message, "no_permission");
+}
+
+#[tokio::test]
 async fn a_directory_page_is_read_through_the_shared_filesystem_walk() {
     let (dir, schema) = fixture(GRANTED);
     let root = sample_tree(dir.path());
@@ -234,12 +268,12 @@ async fn file_info_combines_rust_gps_with_sdk_decode_bounds() {
 }
 
 #[tokio::test]
-async fn the_display_name_selects_the_media_type_and_rust_sniffs_the_container() {
+async fn the_path_extension_selects_the_media_type_and_rust_sniffs_the_container() {
     let (dir, schema) = fixture_with(GRANTED, |method, _| match method {
         "systemAccessFacts" => json!({"granted":{"FILES":true}}),
         other => panic!("unexpected host call {other}"),
     });
-    let path = dir.path().join("blob");
+    let path = dir.path().join("track.m4a");
     fs::copy(
         concat!(
             env!("CARGO_MANIFEST_DIR"),
@@ -250,7 +284,7 @@ async fn the_display_name_selects_the_media_type_and_rust_sniffs_the_container()
     .unwrap();
     let response = schema
         .execute(plain_graphql::Request::new(format!(
-            r#"query {{ fileInfo(path:{:?}, fileName:"track.m4a")
+            r#"query {{ fileInfo(path:{:?})
                       {{ data {{ ... on AudioFileInfo {{ durationMs location {{ latitude longitude }} }} }} }} }}"#,
             path.to_string_lossy()
 )).data(plain_rs::features::services::files::info::Info::sdk(schema_host(&schema))))
@@ -280,102 +314,81 @@ async fn a_non_media_name_probes_nothing() {
     );
 }
 
-/// A path that cannot be resolved is not an error: the panel renders zeros
-/// so a stale link degrades instead of blowing up the whole page.
 #[tokio::test]
-async fn a_missing_path_reports_zeros_rather_than_failing() {
-    let (_dir, schema) = fixture(GRANTED);
-    let response = schema
-        .execute(r#"query { fileInfo(path:"/nope/missing.jpg") { path size updatedAt data { ... on ImageFileInfo { width } } } }"#)
-        .await;
-    assert!(response.errors.is_empty(), "{:?}", response.errors);
-    let data = response.data.into_json().unwrap();
-    assert_eq!(data["fileInfo"]["size"], 0);
-    assert_eq!(data["fileInfo"]["updatedAt"], "1970-01-01T00:00:00.000Z");
-    assert_eq!(data["fileInfo"]["data"], Value::Null);
-}
-
-#[tokio::test]
-async fn path_predicates_answer_for_files_and_directories() {
+async fn missing_file_info_is_null_and_empty_files_have_real_metadata() {
     let (dir, schema) = fixture(GRANTED);
-    let root = sample_tree(dir.path());
-    let file = root.join("alpha.txt");
-    let response = schema
-        .execute(&format!(
-            r#"query {{ f: pathExists(path:{:?}) fk: pathKind(path:{:?})
-                      d: pathExists(path:{:?}) dk: pathKind(path:{:?}) }}"#,
-            file.to_string_lossy(),
-            file.to_string_lossy(),
-            root.to_string_lossy(),
-            root.to_string_lossy()
-        ))
-        .await;
+    let empty = dir.path().join("empty.txt");
+    fs::write(&empty, []).unwrap();
+    let response = schema.execute(&format!(
+        "{{ missing: fileInfo(path:{:?}) {{ size updatedAt }} empty: fileInfo(path:{:?}) {{ size updatedAt data {{ __typename }} }} }}",
+        dir.path().join("missing.jpg").to_string_lossy(), empty.to_string_lossy()
+    )).await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     let data = response.data.into_json().unwrap();
-    assert_eq!(data["f"], true);
-    assert_eq!(data["fk"], "FILE");
-    assert_eq!(data["d"], true);
-    assert_eq!(data["dk"], "DIR");
+    assert!(data["missing"].is_null());
+    assert_eq!(data["empty"]["size"], 0);
+    assert_ne!(data["empty"]["updatedAt"], "1970-01-01T00:00:00.000Z");
+    assert!(data["empty"]["data"].is_null());
 }
 
-/// The total predicate: blank, "." and missing all read false / null and
-/// none of them raise, so clients can filter on it unguarded.
+#[cfg(unix)]
 #[tokio::test]
-async fn unresolvable_paths_are_false_rather_than_errors() {
+async fn file_info_preserves_filesystem_errors() {
+    let (dir, schema) = fixture(GRANTED);
+    let path = dir.path().join("cycle.jpg");
+    std::os::unix::fs::symlink(&path, &path).unwrap();
+    let response = schema.execute(&format!(
+        "{{ fileInfo(path:{:?}) {{ size }} }}", path.to_string_lossy()
+    )).await;
+    assert_eq!(response.errors.len(), 1);
+    assert!(response.data.into_json().unwrap()["fileInfo"].is_null());
+}
+
+#[tokio::test]
+async fn extensionless_files_do_not_use_a_client_media_hint() {
+    let (dir, schema) = fixture(GRANTED);
+    let path = dir.path().join("extensionless");
+    fs::write(&path, b"plain bytes").unwrap();
+    let response = schema.execute(&format!(
+        "{{ fileInfo(path:{:?}) {{ size data {{ __typename }} }} }}", path.to_string_lossy()
+    )).await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    let data = response.data.into_json().unwrap();
+    assert_eq!(data["fileInfo"]["size"], 11);
+    assert!(data["fileInfo"]["data"].is_null());
+}
+
+#[tokio::test]
+async fn retired_file_roots_and_filename_override_are_rejected() {
     let (_dir, schema) = fixture(GRANTED);
-    let response = schema
-        .execute(
-            r#"query { blank: pathExists(path:"") dot: pathExists(path:".")
-                      missing: pathExists(path:"/nope")
-                      blankKind: pathKind(path:"") missingKind: pathKind(path:"/nope") }"#,
-        )
-        .await;
-    assert!(response.errors.is_empty(), "{:?}", response.errors);
-    let data = response.data.into_json().unwrap();
-    assert_eq!(data["blank"], false);
-    assert_eq!(data["dot"], false);
-    assert_eq!(data["missing"], false);
-    assert_eq!(data["blankKind"], Value::Null);
-    assert_eq!(data["missingKind"], Value::Null);
+    for document in [
+        r#"{ pathExists(path:"/unused") }"#,
+        r#"{ pathKind(path:"/unused") }"#,
+        r#"mutation { copyFile(src:"/unused",dst:"/unused",overwrite:false) }"#,
+        r#"mutation { moveFile(src:"/unused",dst:"/unused",overwrite:false) }"#,
+        r#"{ fileInfo(path:"/unused",fileName:"audio.mp3") { size } }"#,
+    ] {
+        assert!(!schema.execute(document).await.errors.is_empty(), "{document}");
+    }
 }
 
-/// A refused root is indistinguishable from a missing one on purpose —
-/// `pathExists` must not become a probe for what the client may read.
-#[tokio::test]
-async fn a_denied_root_reads_as_absent() {
-    let (_dir, schema) = fixture_with(GRANTED, |method, _| match method {
-        "systemAccessFacts" => json!({"granted":{"FILES":false}}),
-        other => panic!("unexpected host call {other}"),
-    });
-    let response = schema
-        .execute(r#"query { exists: pathExists(path:"/data/user/0/secret") kind: pathKind(path:"/data/user/0/secret") }"#)
-        .await;
-    assert!(response.errors.is_empty(), "{:?}", response.errors);
-    let data = response.data.into_json().unwrap();
-    assert_eq!(data["exists"], false);
-    assert_eq!(data["kind"], Value::Null);
-}
-
-/// The decoder must not run for a path the authorization refused: the
-/// probe reads the file's header, so running it on a denied path would
-/// hand a client dimensions and GPS for bytes it may not read. The stub
-/// panics on any media call, so this fails loudly if one is made.
 #[tokio::test]
 async fn a_denied_path_is_never_probed_for_media() {
     let (_dir, schema) = fixture_with(GRANTED, |method, _| match method {
         "systemAccessFacts" => json!({"granted":{"FILES":false}}),
         other => panic!("media probe ran for a denied path: {other}"),
     });
-    let response = schema
-        .execute(
-            r#"query { fileInfo(path:"/data/user/0/secret.jpg")
-                      { path size data { ... on ImageFileInfo { width } } } }"#,
-        )
-        .await;
-    assert!(response.errors.is_empty(), "{:?}", response.errors);
-    let data = response.data.into_json().unwrap();
-    assert_eq!(data["fileInfo"]["size"], 0);
-    assert_eq!(data["fileInfo"]["data"], Value::Null);
+    schema.data::<Arc<plain_rs::features::services::files::platform::FilePlatform>>()
+        .unwrap().use_sdk_for_test();
+    let external = plain_libs::temporary::tempdir().unwrap();
+    let path = external.path().join("denied.jpg");
+    fs::write(&path, image_gps_metadata()).unwrap();
+    let response = schema.execute(&format!(
+        "{{ fileInfo(path:{:?}) {{ size data {{ ... on ImageFileInfo {{ width }} }} }} }}", path.to_string_lossy()
+    )).await;
+    assert_eq!(response.errors.len(), 1);
+    assert!(response.errors[0].message.contains("permission"));
+    assert!(response.data.into_json().unwrap()["fileInfo"].is_null());
 }
 
 /// These two carry no permission gate: enumerating volumes and reading the
@@ -786,13 +799,13 @@ fn image_gps_metadata() -> Vec<u8> {
 #[tokio::test]
 async fn duration_only_media_info_uses_shared_rust_probing_through_aliases_and_fragments() {
     let (directory, schema) = fixture(GRANTED);
-    let path = directory.path().join("audio-without-extension");
+    let path = directory.path().join("audio.mp3");
     fs::copy(
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../plain-rs/testdata/audio-untagged.mp3"),
         &path,
     )
     .unwrap();
-    let document = "query($path:String!){fileInfo(path:$path,fileName:\"audio.mp3\"){metadata:data{__typename ...DurationOnly}}} fragment DurationOnly on AudioFileInfo{time:durationMs}";
+    let document = "query($path:String!){fileInfo(path:$path){metadata:data{__typename ...DurationOnly}}} fragment DurationOnly on AudioFileInfo{time:durationMs}";
     let request = plain_graphql::Request::new(document)
         .variables(plain_graphql::Variables::from_json(json!({"path":path})))
         .data(plain_rs::features::services::files::info::Info::sdk(
@@ -808,16 +821,16 @@ async fn duration_only_media_info_uses_shared_rust_probing_through_aliases_and_f
 #[tokio::test]
 async fn type_only_media_info_never_requests_sdk_metadata() {
     let (directory, schema) = fixture(GRANTED);
-    let path = directory.path().join("unknown-container");
-    fs::write(&path, b"not a media container").unwrap();
     for (name, kind) in [
         ("video.mp4", "VideoFileInfo"),
         ("photo.jpg", "ImageFileInfo"),
         ("audio.mp3", "AudioFileInfo"),
     ] {
+        let path = directory.path().join(name);
+        fs::write(&path, b"not a media container").unwrap();
         let response = schema.execute(plain_graphql::Request::new(
-            "query($path:String!,$name:String!){fileInfo(path:$path,fileName:$name){data{__typename}}}"
-        ).variables(plain_graphql::Variables::from_json(json!({"path":path,"name":name})))
+            "query($path:String!){fileInfo(path:$path){data{__typename}}}"
+        ).variables(plain_graphql::Variables::from_json(json!({"path":path})))
             .data(plain_rs::features::services::files::info::Info::sdk(schema_host(&schema))))
             .await;
         assert!(response.errors.is_empty(), "{:?}", response.errors);
@@ -913,7 +926,7 @@ async fn file_queries_resolve_shared_references_and_preserve_the_requested_path(
     ];
     for reference in references {
         let response = schema.execute(plain_graphql::Request::new(
-            "query($path:String!){fileInfo(path:$path){path size data{... on VideoFileInfo{width height durationMs}}} pathExists(path:$path) pathKind(path:$path)}"
+            "query($path:String!){fileInfo(path:$path){path size data{... on VideoFileInfo{width height durationMs}}}}"
         ).variables(plain_graphql::Variables::from_json(json!({"path":reference})))).await;
         assert!(response.errors.is_empty(), "{:?}", response.errors);
         let data = response.data.into_json().unwrap();
@@ -924,8 +937,6 @@ async fn file_queries_resolve_shared_references_and_preserve_the_requested_path(
         );
         assert_eq!(data["fileInfo"]["data"]["width"], 320);
         assert_eq!(data["fileInfo"]["data"]["height"], 240);
-        assert_eq!(data["pathExists"], true);
-        assert_eq!(data["pathKind"], "FILE");
         assert_eq!(data["fileInfo"]["data"]["durationMs"], 6000);
     }
     for reference in [
@@ -937,15 +948,9 @@ async fn file_queries_resolve_shared_references_and_preserve_the_requested_path(
         "file://remote/clip.mp4",
     ] {
         let response = schema.execute(plain_graphql::Request::new(
-            "query($path:String!){fileInfo(path:$path){path size data{__typename}} pathExists(path:$path) pathKind(path:$path)}"
+            "query($path:String!){fileInfo(path:$path){path size data{__typename}}}"
         ).variables(plain_graphql::Variables::from_json(json!({"path":reference})))).await;
-        assert!(response.errors.is_empty(), "{:?}", response.errors);
-        let data = response.data.into_json().unwrap();
-        assert_eq!(data["fileInfo"]["path"], reference);
-        assert_eq!(data["fileInfo"]["size"], 0);
-        assert_eq!(data["fileInfo"]["data"], Value::Null);
-        assert_eq!(data["pathExists"], false);
-        assert_eq!(data["pathKind"], Value::Null);
+        assert!(!response.errors.is_empty(), "invalid reference: {reference}");
     }
 }
 
@@ -986,10 +991,10 @@ fn mount_projection_preserves_stable_ids_and_explicit_statistics() {
 }
 
 #[tokio::test]
-async fn audio_duration_selection_probes_unknown_file_names_without_sdk_metadata() {
+async fn media_duration_selection_uses_path_extensions_without_sdk_metadata() {
     let (directory, schema) = fixture(GRANTED);
     for (fixture_name, expected) in [("audio-untagged.mp3", 4), ("video-h264-baseline.mp4", 6)] {
-        let path = directory.path().join(fixture_name.replace('.', "-"));
+        let path = directory.path().join(fixture_name);
         fs::copy(
             Path::new(env!("CARGO_MANIFEST_DIR"))
                 .join("../plain-rs/testdata")
@@ -998,7 +1003,7 @@ async fn audio_duration_selection_probes_unknown_file_names_without_sdk_metadata
         )
         .unwrap();
         let response = schema.execute(plain_graphql::Request::new(
-            "query($path:String!){fileInfo(path:$path,fileName:\"audio.mp3\"){data{... on AudioFileInfo{durationMs}}}}"
+            "query($path:String!){fileInfo(path:$path){data{... on AudioFileInfo{durationMs} ... on VideoFileInfo{durationMs}}}}"
         ).variables(plain_graphql::Variables::from_json(json!({"path":path})))
             .data(plain_rs::features::services::files::info::Info::sdk(schema_host(&schema))))
             .await;
@@ -1014,7 +1019,7 @@ async fn audio_duration_selection_probes_unknown_file_names_without_sdk_metadata
 }
 
 #[tokio::test]
-async fn audio_duration_selection_keeps_null_for_missing_invalid_and_unknown_sources() {
+async fn audio_duration_selection_keeps_null_for_missing_and_unknown_sources() {
     let (directory, schema) = fixture(GRANTED);
     let unsupported = directory.path().join("unsupported");
     fs::write(&unsupported, b"unsupported media bytes").unwrap();
@@ -1025,11 +1030,9 @@ async fn audio_duration_selection_keeps_null_for_missing_invalid_and_unknown_sou
             .join("missing")
             .to_string_lossy()
             .into_owned(),
-        String::new(),
-        "app://../outside".to_owned(),
     ] {
         let response = schema.execute(plain_graphql::Request::new(
-            "query($path:String!){fileInfo(path:$path,fileName:\"audio.mp3\"){data{... on AudioFileInfo{durationMs}}}}"
+            "query($path:String!){fileInfo(path:$path){data{... on AudioFileInfo{durationMs} ... on VideoFileInfo{durationMs}}}}"
         ).variables(plain_graphql::Variables::from_json(json!({"path":path})))
             .data(plain_rs::features::services::files::info::Info::sdk(schema_host(&schema))))
             .await;
@@ -1042,7 +1045,7 @@ async fn audio_duration_selection_keeps_null_for_missing_invalid_and_unknown_sou
 async fn audio_duration_selection_preserves_permission_and_probe_errors() {
     let (_directory, schema) = fixture("[]");
     let response = schema.execute(
-        "{fileInfo(path:\"missing\",fileName:\"audio.mp3\"){data{... on AudioFileInfo{durationMs}}}}"
+        "{fileInfo(path:\"missing\"){data{... on AudioFileInfo{durationMs}}}}"
     ).await;
     assert_eq!(response.errors.len(), 1);
     assert_eq!(response.errors[0].message, "no_permission");
@@ -1059,7 +1062,7 @@ async fn audio_duration_selection_preserves_permission_and_probe_errors() {
         .shutdown()
         .await;
     let response = schema.execute(plain_graphql::Request::new(
-        "query($path:String!){fileInfo(path:$path,fileName:\"audio.mp3\"){data{... on AudioFileInfo{durationMs}}}}"
+        "query($path:String!){fileInfo(path:$path){data{... on AudioFileInfo{durationMs}}}}"
     ).variables(plain_graphql::Variables::from_json(json!({"path":path})))).await;
     assert_eq!(response.errors.len(), 1);
     assert_eq!(response.errors[0].message, "Media duration runtime stopped");

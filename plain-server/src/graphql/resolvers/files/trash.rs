@@ -106,8 +106,8 @@ impl TrashQuery {
             .map(TryInto::try_into)
             .collect()
     }
-    async fn trashed_file_count(&self, ctx: &Context<'_>) -> Result<i32> {
-        Ok(tasks(ctx)?.trash_count().await?.try_into()?)
+    async fn trashed_file_count(&self, ctx: &Context<'_>, query: String) -> Result<i32> {
+        Ok(tasks(ctx)?.trash_count(query).await?.try_into()?)
     }
 }
 #[derive(Default)]

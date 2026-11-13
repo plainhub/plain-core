@@ -53,7 +53,7 @@ type FileInfo {
 
 type FileTask {
 	id: ID!
-	clientId: String!
+	clientId: ID!
 	type: FileTaskType!
 	title: String!
 	status: FileTaskStatus!
@@ -153,10 +153,6 @@ type Mount {
 	diskModel: String!
 }
 
-enum PathKind {
-	FILE
-	DIR
-}
 
 type TrashedFile {
 	id: ID!
@@ -209,7 +205,6 @@ type VideoFileInfo {
 
 extend type Mutation {
 	cacheZipEntry(path: String!): String!
-	copyFile(src: String!, dst: String!, overwrite: Boolean!): Boolean!
 	copyFileToDirectory(src: String!, directory: String!, name: String!): String
 	createDir(path: String!): File!
 	createFile(path: String!): File!
@@ -232,7 +227,6 @@ extend type Mutation {
 	websocket, and `mergeStatus` is the polling fallback for a lost event.
 	"""
 	mergeChunks(fileId: String!, totalChunks: Int!, path: String!, replace: Boolean!, totalSize: Long!): MergeTask!
-	moveFile(src: String!, dst: String!, overwrite: Boolean!): Boolean!
 	moveMediaItems(type: MediaDataType!, query: String!, destDir: String!): ActionResult!
 	releaseAppFile(fileId: String!): Boolean!
 	renameFile(path: String!, name: String!): String
@@ -250,7 +244,7 @@ extend type Query {
 	Total matches for the same query, ignoring paging.
 	"""
 	fileCount(root: String!, query: String!): Int!
-	fileInfo(path: String!, fileName: String): FileInfo!
+	fileInfo(path: String!): FileInfo
 	fileTasks(query: String!, offset: Int!, limit: Int!): [FileTask!]!
 	"""
 	One page of a directory listing, filtered and sorted by the search
@@ -267,22 +261,11 @@ extend type Query {
 	mergeStatus(fileId: String!): MergeTask!
 	mounts: [Mount!]!
 	"""
-	A total predicate, never an error: a blank path, `"."`, a missing
-	file and a denied path all read as `false` so callers can use it in
-	a filter without guarding every call.
-	"""
-	pathExists(path: String!): Boolean!
-	"""
-	Same total-predicate semantics as `pathExists`; `null` when the path
-	cannot be resolved.
-	"""
-	pathKind(path: String!): PathKind
-	"""
 	Recently-opened files. Reading them is a storage read, so this one
 	gates — plain-app's `recentFiles` calls `checkEnabledAsync`.
 	"""
 	recentFiles: [File!]!
-	trashedFileCount: Int!
+	trashedFileCount(query: String!): Int!
 	trashedFiles(query: String!, offset: Int!, limit: Int!, sortBy: TrashedFileSortBy!): [TrashedFile!]!
 	"""
 	Chunk state for a client-chosen chunk-set id, as `index:byteSize`

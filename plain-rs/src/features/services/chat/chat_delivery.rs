@@ -39,12 +39,11 @@ impl PeerTransport for Transport {
 pub async fn deliver(
     state: &CoreRuntime,
     id: &str,
-    recipients: Option<Vec<String>>,
 ) -> plain_libs::anyhow::Result<crate::features::chat::delivery::Receipt> {
     deliver_observed(
         state,
         id,
-        recipients,
+        None,
         crate::infrastructure::transport::router::Attempt::Automatic,
         |_| {},
     )

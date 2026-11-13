@@ -1,4 +1,3 @@
-use plain_rs::features::access::AccessFeature;
 use crate::graphql::resolvers::tags::domain_types::Tag;
 use crate::graphql::types::ActionResult;
 use crate::graphql::types::facts::flag;
@@ -9,14 +8,15 @@ use crate::graphql::types::facts::strings;
 use crate::graphql::types::facts::text;
 use crate::http::auth::public_gate;
 use plain_graphql::{Context, Enum, ID, Object, SimpleObject};
+use plain_rs::features::access::AccessFeature;
 
+use plain_libs::serde_json::Value;
 use plain_rs::features::prefs::Prefs;
 use plain_rs::features::services::sms::query as sms_query;
 use plain_rs::features::services::sms::send as sms_send;
 use plain_rs::features::services::sms::state as sms_state;
 use plain_rs::infrastructure::db::Db;
 use plain_rs::infrastructure::host::bridge::Host;
-use plain_libs::serde_json::Value;
 use std::sync::Arc;
 
 #[derive(SimpleObject, Clone, Debug)]
@@ -26,6 +26,12 @@ pub struct Sim {
     pub number: String,
     #[graphql(name = "subscriptionId")]
     pub subscription_id: i32,
+}
+
+#[derive(SimpleObject)]
+pub struct SmsSendReceipt {
+    pub request_id: String,
+    pub requires_confirmation: bool,
 }
 
 const READ: AccessFeature = AccessFeature::Sms;
@@ -130,8 +136,10 @@ impl SmsQuery {
             ctx.data_unchecked::<Arc<Prefs>>(),
             &[AccessFeature::PhoneNumber],
         )?;
-        let facts = ctx.data_unchecked::<Arc<Host>>()
-            .call("systemSimFacts", plain_libs::serde_json::json!({})).await
+        let facts = ctx
+            .data_unchecked::<Arc<Host>>()
+            .call("systemSimFacts", plain_libs::serde_json::json!({}))
+            .await
             .map_err(plain_graphql::Error::new)?;
         Ok(crate::graphql::types::facts::rows(&facts, |value| Sim {
             id: crate::graphql::types::facts::id(value, "id"),
@@ -245,7 +253,8 @@ impl SmsMutation {
         date: Option<plain_rs::infrastructure::types::Instant>,
     ) -> plain_graphql::Result<bool> {
         let date = if let Some(date) = date {
-            date.0.to_rfc3339_opts(plain_libs::chrono::SecondsFormat::Millis, true)
+            date.0
+                .to_rfc3339_opts(plain_libs::chrono::SecondsFormat::Millis, true)
         } else {
             let receipt = sms_query::execute(
                 ctx.data_unchecked::<Arc<Db>>(),
@@ -258,7 +267,8 @@ impl SmsMutation {
                 .as_str()
                 .map(str::to_owned)
                 .unwrap_or_else(|| {
-                    plain_libs::chrono::Utc::now().to_rfc3339_opts(plain_libs::chrono::SecondsFormat::Millis, true)
+                    plain_libs::chrono::Utc::now()
+                        .to_rfc3339_opts(plain_libs::chrono::SecondsFormat::Millis, true)
                 })
         };
         sms_state::archive(ctx.data_unchecked::<Arc<Db>>(), id.as_str(), &date)
@@ -311,47 +321,34 @@ impl SmsMutation {
         .await
     }
 
-    /// `subscriptionId` picks the SIM (-1 = system default, see `sims`);
-    /// `requestId` is an optional idempotency key that dedupes retried sends.
     async fn send_sms(
         &self,
         ctx: &Context<'_>,
         number: String,
         body: String,
-        subscription_id: i32,
-        request_id: Option<String>,
-    ) -> plain_graphql::Result<bool> {
-        sms_send::execute(
+        #[graphql(default)] attachment_paths: Vec<String>,
+        subscription_id: Option<i32>,
+        request_id: String,
+    ) -> plain_graphql::Result<SmsSendReceipt> {
+        let receipt = sms_send::execute(
             ctx.data_unchecked::<Arc<Prefs>>(),
             ctx.data_unchecked::<Arc<Host>>(),
             ctx.data_unchecked::<Arc<plain_rs::features::services::sms::send_runtime::Runtime>>(),
+            ctx.data_unchecked::<Arc<plain_rs::features::services::sms::mms::Runtime>>(),
             sms_send::Request {
                 number,
                 body,
-                subscription_id: (subscription_id >= 0).then_some(subscription_id),
-                client_id: None,
-                client_request_id: request_id,
+                attachment_paths,
+                subscription_id: subscription_id.filter(|id| *id >= 0),
+                request_id,
             },
         )
         .await
         .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
-        Ok(true)
-    }
-
-    /// Compose an MMS in the device's default SMS app and track the send.
-    /// Returns a pendingId consumed by the MMS polling flow.
-    async fn send_mms(
-        &self,
-        ctx: &Context<'_>,
-        number: String,
-        body: String,
-        attachment_paths: Vec<String>,
-        thread_id: ID,
-    ) -> plain_graphql::Result<String> {
-        ctx.data_unchecked::<Arc<plain_rs::features::services::sms::mms::Runtime>>()
-            .send(number, body, attachment_paths, thread_id.0)
-            .await
-            .map_err(|error| plain_graphql::Error::new(error.to_string()))
+        Ok(SmsSendReceipt {
+            request_id: receipt.request_id,
+            requires_confirmation: receipt.requires_confirmation,
+        })
     }
 }
 

@@ -247,7 +247,7 @@ async fn named_copy_creates_parents_and_explicit_copy_overwrite_keeps_the_reques
     let response = native
         .execute(
             Request::new(
-                "mutation($src:String!,$dst:String!){copyFile(src:$src,dst:$dst,overwrite:true)}",
+                "mutation($src:String!,$dst:String!){createFileTask(type:COPY,title:\"COPY\",ops:[{src:$src,dst:$dst,overwrite:true}],waitForCompletion:true){status error completedOps{src dst}}}",
             )
             .variables(plain_graphql::Variables::from_json(
                 json!({"src":source,"dst":destination}),
@@ -255,7 +255,7 @@ async fn named_copy_creates_parents_and_explicit_copy_overwrite_keeps_the_reques
         )
         .await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
-    assert_eq!(response.data.into_json().unwrap()["copyFile"], true);
+    assert_eq!(response.data.into_json().unwrap()["createFileTask"]["status"], "DONE");
     assert_eq!(std::fs::read(&destination).unwrap(), b"replacement");
     assert!(!target.join("saved (1).txt").exists());
     tokio::time::timeout(std::time::Duration::from_secs(5), async {
@@ -292,7 +292,7 @@ async fn named_copy_creates_parents_and_explicit_copy_overwrite_keeps_the_reques
         .public
         .execute(
             Request::new(
-                "mutation($src:String!,$dst:String!){copyFile(src:$src,dst:$dst,overwrite:true)}",
+                "mutation($src:String!,$dst:String!){createFileTask(type:COPY,title:\"COPY\",ops:[{src:$src,dst:$dst,overwrite:true}],waitForCompletion:true){status error completedOps{src dst}}}",
             )
             .data("copy-request-owner".to_owned())
             .variables(plain_graphql::Variables::from_json(
@@ -301,7 +301,7 @@ async fn named_copy_creates_parents_and_explicit_copy_overwrite_keeps_the_reques
         )
         .await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
-    assert_eq!(response.data.into_json().unwrap()["copyFile"], true);
+    assert_eq!(response.data.into_json().unwrap()["createFileTask"]["status"], "DONE");
     let foreign = state
         .files
         .list("copy-request-owner".to_owned())

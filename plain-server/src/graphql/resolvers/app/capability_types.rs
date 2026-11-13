@@ -19,7 +19,7 @@ pub enum EventType {
     LOGIN,
     LOGIN_FAILED,
     LOGOUT,
-    REVOKE,
+    REVOKE_SESSION,
     SET_HOSTNAME,
     UPDATE_DEVICE_NAME,
     MOUNT,
@@ -35,7 +35,7 @@ impl EventType {
             "login" => Some(Self::LOGIN),
             "login_failed" => Some(Self::LOGIN_FAILED),
             "logout" => Some(Self::LOGOUT),
-            "revoke" => Some(Self::REVOKE),
+            "revoke" => Some(Self::REVOKE_SESSION),
             "set_hostname" => Some(Self::SET_HOSTNAME),
             "update_device_name" => Some(Self::UPDATE_DEVICE_NAME),
             "mount" => Some(Self::MOUNT),
@@ -53,7 +53,7 @@ pub struct Event {
     pub id: ID,
     pub r#type: EventType,
     pub message: String,
-    pub client_id: Option<String>,
+    pub client_id: Option<ID>,
     pub created_at: Instant,
 }
 

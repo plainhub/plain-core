@@ -47,7 +47,7 @@ extend type Mutation {
 	addDlnaItem(item: DlnaMediaInput!): DlnaSenderState!
 	castDlnaMedia(item: DlnaMediaInput!): DlnaSenderState!
 	clearDlnaItems: DlnaSenderState!
-	dlnaCast(rendererUdn: String!, url: String!, title: String!, mime: String!, type: MediaDataType!): Boolean!
+	dlnaCast(rendererUdn: String!, url: String!, title: String!, mime: String!, type: DlnaCastType!): Boolean!
 	exitDlna: DlnaSenderState!
 	pauseDlna: DlnaSenderState!
 	playDlna: DlnaSenderState!
@@ -64,4 +64,10 @@ extend type Mutation {
 extend type Query {
 	dlnaRenderers: [DlnaRenderer!]!
 	dlnaSenderState: DlnaSenderState!
+}
+
+enum DlnaCastType {
+	AUDIO
+	VIDEO
+	IMAGE
 }

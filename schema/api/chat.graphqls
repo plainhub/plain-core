@@ -55,10 +55,9 @@ extend type Mutation {
 	"""
 	deleteChatItem(id: ID!): Boolean!
 	deleteChatItems(query: String!): ActionResult!
-	deliverChatItem(id: ID!, recipients: [ID!]): ChatItem!
 	editChatText(id: ID!, text: String!): ChatTextEdit!
 	forwardChatItems(id: ID!, targets: [String!]!): [ChatItem!]!
-	retryChatItem(id: ID!): ChatItem!
+	retryChatItem(id: ID!, recipientIds: [ID!]): ChatItem!
 	"""
 	Send the same ChatItem.content JSON to one or more peer:<id> or channel:<id> targets.
 	"""

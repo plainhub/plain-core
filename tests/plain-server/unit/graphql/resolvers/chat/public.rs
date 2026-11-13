@@ -389,6 +389,16 @@ async fn retrying_reports_the_persisted_row() {
     )
     .await;
     assert_eq!(retried["data"]["retryChatItem"]["id"], "new-1", "{retried}");
+    let targeted = channel_query(
+        &state,
+        r#"mutation { retryChatItem(id: "new-1", recipientIds: ["peer"]) { id } }"#,
+    )
+    .await;
+    assert_eq!(
+        targeted["errors"][0]["message"],
+        "Targeted retry requires a channel",
+        "{targeted}"
+    );
     server.shutdown().await;
 }
 

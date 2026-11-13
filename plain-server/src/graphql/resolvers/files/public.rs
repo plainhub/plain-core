@@ -14,7 +14,7 @@ use crate::graphql::types::facts::rows;
 use crate::graphql::types::facts::text;
 use crate::http::auth::public_gate;
 use plain_libs::chrono::{DateTime, Utc};
-use plain_graphql::{Context, Enum, Object};
+use plain_graphql::{Context, Object};
 use plain_rs::features::access::AccessFeature;
 
 use plain_libs::filesystem::SortBy;
@@ -146,80 +146,30 @@ impl FilesQuery {
         &self,
         ctx: &Context<'_>,
         path: String,
-        file_name: Option<String>,
-    ) -> plain_graphql::Result<FileInfo> {
+    ) -> plain_graphql::Result<Option<FileInfo>> {
         public_gate::require(ctx, prefs(ctx), &[STORAGE])?;
-        let record = file_reads::stat_record(
+        let Some(record) = file_reads::stat_record(
             ctx.data::<Arc<plain_rs::features::services::files::platform::FilePlatform>>()?,
             &path,
         )
-        .await;
-        let name = file_name.unwrap_or_else(|| {
-            record
-                .as_ref()
-                .map(|record| record.name.clone())
-                .unwrap_or_default()
-        });
-        let data = match &record {
-            Some(record) if ctx.look_ahead().field("data").exists() => {
-                media_info(ctx, &record.path, &name).await?
-            }
-            _ => None,
+        .await
+        .map_err(|error| plain_graphql::Error::new(error.to_string()))? else {
+            return Ok(None);
         };
-        Ok(FileInfo {
+        let data = if !record.is_dir && ctx.look_ahead().field("data").exists() {
+            media_info(ctx, &record.path, &record.name).await?
+        } else {
+            None
+        };
+        Ok(Some(FileInfo {
             path,
-            updated_at: record
-                .as_ref()
-                .map(|record| instant(record.updated_at))
-                .unwrap_or_else(epoch),
-            size: Long(record.map(|record| record.size).unwrap_or_default()),
+            updated_at: instant(record.updated_at),
+            size: Long(record.size),
             data,
-        })
-    }
-
-    /// A total predicate, never an error: a blank path, `"."`, a missing
-    /// file and a denied path all read as `false` so callers can use it in
-    /// a filter without guarding every call.
-    async fn path_exists(&self, ctx: &Context<'_>, path: String) -> plain_graphql::Result<bool> {
-        Ok(file_reads::stat_record(
-            ctx.data::<Arc<plain_rs::features::services::files::platform::FilePlatform>>()?,
-            &path,
-        )
-        .await
-        .is_some())
-    }
-
-    /// Same total-predicate semantics as `pathExists`; `null` when the path
-    /// cannot be resolved.
-    async fn path_kind(
-        &self,
-        ctx: &Context<'_>,
-        path: String,
-    ) -> plain_graphql::Result<Option<PathKind>> {
-        Ok(file_reads::stat_record(
-            ctx.data::<Arc<plain_rs::features::services::files::platform::FilePlatform>>()?,
-            &path,
-        )
-        .await
-        .map(|record| {
-            if record.is_dir {
-                PathKind::Dir
-            } else {
-                PathKind::File
-            }
         }))
     }
 }
 
-#[derive(Enum, Copy, Clone, Eq, PartialEq, Debug)]
-enum PathKind {
-    File,
-    Dir,
-}
-
-/// The probe is chosen by file *name*, not by sniffing: the client may pass
-/// a display name that differs from the on-disk one, and plain-app keys off
-/// the extension either way.
 async fn media_info(
     ctx: &Context<'_>,
     path: &str,
@@ -430,10 +380,6 @@ fn mount(item: &Value) -> Mount {
 
 fn instant(millis: i64) -> Instant {
     Instant(DateTime::<Utc>::from_timestamp_millis(millis).unwrap_or_else(epoch_datetime))
-}
-
-fn epoch() -> Instant {
-    Instant(epoch_datetime())
 }
 
 fn epoch_datetime() -> DateTime<Utc> {

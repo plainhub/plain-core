@@ -6,9 +6,9 @@ fn events_keep_their_own_named_type_and_closed_status_values() {
     assert!(sdl.contains("events(query: String!, offset: Int!, limit: Int!): [Event!]!"));
     assert!(sdl.contains("type Event {"));
     let object = sdl.split("type Event {").nth(1).unwrap().split('}').next().unwrap();
-    for field in ["id: ID!", "type: EventType!", "message: String!", "clientId: String", "createdAt: Instant!"] { assert!(object.contains(field), "{field}"); }
+    for field in ["id: ID!", "type: EventType!", "message: String!", "clientId: ID", "createdAt: Instant!"] { assert!(object.lines().any(|line| line.trim() == field), "{field}"); }
     let values: Vec<_> = sdl.split("enum EventType {").nth(1).unwrap().split('}').next().unwrap().split_whitespace().collect();
-    assert_eq!(values, ["LOGIN", "LOGIN_FAILED", "LOGOUT", "REVOKE", "SET_HOSTNAME", "UPDATE_DEVICE_NAME", "MOUNT", "MOUNT_FAILED", "UNMOUNT", "FORMAT_DISK", "FORMAT_DISK_FAILED"]);
+    assert_eq!(values, ["LOGIN", "LOGIN_FAILED", "LOGOUT", "REVOKE_SESSION", "SET_HOSTNAME", "UPDATE_DEVICE_NAME", "MOUNT", "MOUNT_FAILED", "UNMOUNT", "FORMAT_DISK", "FORMAT_DISK_FAILED"]);
     assert!(sdl.contains("enum ContactEventType {"));
     for name in ["ContactEvent", "ContactEventInput"] {
         let object = sdl.split(&format!("{name} {{")).nth(1).unwrap().split('}').next().unwrap();

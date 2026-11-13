@@ -76,21 +76,23 @@ async fn authorize(
 pub async fn stat_record(
     platform: &crate::features::services::files::platform::FilePlatform,
     path: &str,
-) -> Option<FileRecord> {
-    if path.trim().is_empty() || path == "." {
-        return None;
+) -> plain_libs::anyhow::Result<Option<FileRecord>> {
+    plain_libs::anyhow::ensure!(!path.trim().is_empty() && path != ".", "file path required");
+    let path = platform.resolve_reference(path)?;
+    plain_libs::anyhow::ensure!(std::path::Path::new(&path).is_absolute(), "absolute file path required");
+    if let Err(error) = platform.authorize(&path, false).await {
+        if error.downcast_ref::<std::io::Error>()
+            .is_some_and(|error| error.kind() == std::io::ErrorKind::NotFound)
+        {
+            return Ok(None);
+        }
+        return Err(error);
     }
-    let path = platform.resolve_reference(path).ok()?;
-    if !std::path::Path::new(&path).is_absolute() {
-        return None;
-    }
-    if authorize(platform, &path).await.is_err() {
-        return None;
-    }
-    tokio::task::spawn_blocking(move || FileRecord::stat(std::path::Path::new(&path)).ok())
-        .await
-        .ok()
-        .flatten()
+    tokio::task::spawn_blocking(move || match FileRecord::stat(std::path::Path::new(&path)) {
+        Ok(record) => Ok(Some(record)),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(error.into()),
+    }).await?
 }
 
 #[cfg(test)]

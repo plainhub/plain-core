@@ -1,6 +1,6 @@
 use crate::graphql::resolvers::app::capability_types::Disk;
 use crate::server::ServerState;
-use plain_graphql::{Context, Object, Result};
+use plain_graphql::{Context, ID, Object, Result};
 
 use plain_rs::features::services::settings::types::AppUpdate;
 use plain_rs::infrastructure::host::bridge::Host;
@@ -40,7 +40,7 @@ impl PlatformQuery {
                             id: row.id.into(),
                             r#type: kind,
                             message: row.message,
-                            client_id: row.client_id,
+                            client_id: row.client_id.map(ID),
                             created_at: plain_rs::infrastructure::types::Instant(
                                 at.with_timezone(&plain_libs::chrono::Utc),
                             ),

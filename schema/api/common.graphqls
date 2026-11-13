@@ -128,12 +128,6 @@ type MirrorState {
 	running: Boolean!
 }
 
-type MmsSendResult {
-	pendingId: ID!
-	success: Boolean!
-	resultCode: Int
-}
-
 type PairingCompletedNotice {
 	deviceId: ID!
 	deviceName: String!
@@ -231,8 +225,6 @@ type Subscription {
 	fileSearchResults(root: String!, query: String!, offset: Int!, limit: Int!, sortBy: FileSortBy!): FileSearchResults!
 	smsChanged: SmsProviderChange
 	smsSendResult: SmsSendResult!
-	mmsSendResult: MmsSendResult!
-	mmsSent: String!
 }
 
 type Tag {

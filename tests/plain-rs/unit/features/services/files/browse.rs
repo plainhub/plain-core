@@ -37,10 +37,14 @@ async fn stat_authorizes_the_resolved_path_once_and_rejects_invalid_references_b
         assert!(
             crate::features::services::files::browse::stat_record(&state.file_platform, &reference)
                 .await
+                .unwrap()
                 .is_some()
         );
     }
     assert!(calls.lock().unwrap().is_empty());
+    assert!(crate::features::services::files::browse::stat_record(
+        &state.file_platform, "app://missing.txt"
+    ).await.unwrap().is_none());
     let external = temp.path().join("external.txt");
     std::fs::write(&external, b"external").unwrap();
     assert!(
@@ -49,7 +53,7 @@ async fn stat_authorizes_the_resolved_path_once_and_rejects_invalid_references_b
             external.to_str().unwrap()
         )
         .await
-        .is_none()
+        .is_err()
     );
     assert_eq!(*calls.lock().unwrap(), vec![json!(["FILES"])]);
     for reference in [
@@ -63,7 +67,7 @@ async fn stat_authorizes_the_resolved_path_once_and_rejects_invalid_references_b
         assert!(
             crate::features::services::files::browse::stat_record(&state.file_platform, reference)
                 .await
-                .is_none()
+                .is_err()
         );
     }
     assert_eq!(calls.lock().unwrap().len(), 1);

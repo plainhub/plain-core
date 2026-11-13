@@ -20,7 +20,7 @@ type Event {
 	id: ID!
 	type: EventType!
 	message: String!
-	clientId: String
+	clientId: ID
 	createdAt: Instant!
 }
 
@@ -28,7 +28,7 @@ enum EventType {
 	LOGIN
 	LOGIN_FAILED
 	LOGOUT
-	REVOKE
+	REVOKE_SESSION
 	SET_HOSTNAME
 	UPDATE_DEVICE_NAME
 	MOUNT

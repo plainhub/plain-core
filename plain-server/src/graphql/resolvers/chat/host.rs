@@ -131,23 +131,6 @@ impl ChatHostMutation {
                 .collect(),
         )
     }
-    async fn deliver_chat_item(
-        &self,
-        ctx: &Context<'_>,
-        id: ID,
-        recipients: Option<Vec<ID>>,
-    ) -> plain_graphql::Result<ChatItem> {
-        let recipients = recipients.map(|ids| ids.into_iter().map(|id| id.to_string()).collect());
-        let receipt = plain_rs::features::services::chat::chat_delivery::deliver(
-            ctx.data::<ServerState>()?,
-            id.as_str(),
-            recipients,
-        )
-        .await?;
-        Ok(item(&receipt.chat.ok_or_else(|| {
-            plain_graphql::Error::new("Message unavailable")
-        })?))
-    }
     fn edit_chat_text(
         &self,
         ctx: &Context<'_>,

@@ -123,8 +123,8 @@ async fn file_writes_are_gated_on_storage_permission() {
         r#"createDir(path:"/a/b") { name }"#,
         r#"renameFile(path:"/a", name:"c")"#,
         r#"writeTextFile(path:"/a/b.txt", content:"x", overwrite:false) { name }"#,
-        r#"copyFile(src:"/a", dst:"/b", overwrite:false)"#,
-        r#"moveFile(src:"/a", dst:"/b", overwrite:false)"#,
+        r#"createFileTask(type:COPY,title:"COPY",ops:[{src:"/a",dst:"/b",overwrite:false}],waitForCompletion:true) { status error }"#,
+        r#"createFileTask(type:MOVE,title:"MOVE",ops:[{src:"/a",dst:"/b",overwrite:false}],waitForCompletion:true) { status error }"#,
     ] {
         let response = schema.execute(format!("mutation {{ {operation} }}")).await;
         assert_eq!(
@@ -217,15 +217,18 @@ async fn copy_and_move_use_the_shared_file_tasks() {
     let (dir, schema) = fixture(GRANTED);
     let source = dir.path().join("a");
     let destination = dir.path().join("b");
-    for name in ["copyFile", "moveFile"] {
+    for kind in ["COPY", "MOVE"] {
         std::fs::write(&source, "new").unwrap();
         std::fs::write(&destination, "old").unwrap();
-        let response = schema.execute(plain_graphql::Request::new(format!("mutation($src:String!,$dst:String!){{{name}(src:$src,dst:$dst,overwrite:true)}}"))
+        let response = schema.execute(plain_graphql::Request::new(format!("mutation($src:String!,$dst:String!){{createFileTask(type:{kind},title:\"{kind}\",ops:[{{src:$src,dst:$dst,overwrite:true}}],waitForCompletion:true){{status error completedOps{{src dst}}}}}}"))
             .variables(plain_graphql::Variables::from_json(json!({"src":source,"dst":destination}))).data("file-test".to_owned())).await;
         assert!(response.errors.is_empty(), "{:?}", response.errors);
-        assert_eq!(response.data.into_json().unwrap()[name], true);
+        let task = response.data.into_json().unwrap()["createFileTask"].clone();
+        assert_eq!(task["status"], "DONE");
+        assert_eq!(task["error"], "");
+        assert_eq!(task["completedOps"][0]["dst"], destination.to_string_lossy().as_ref());
         assert_eq!(std::fs::read_to_string(&destination).unwrap(), "new");
-        assert_eq!(source.exists(), name == "copyFile");
+        assert_eq!(source.exists(), kind == "COPY");
         let tasks = schema
             .data::<Arc<plain_rs::features::services::files::file_tasks::FileTasks>>()
             .unwrap()
@@ -235,7 +238,7 @@ async fn copy_and_move_use_the_shared_file_tasks() {
         assert!(
             tasks
                 .iter()
-                .any(|task| task.title == if name == "copyFile" { "COPY" } else { "MOVE" })
+                .any(|task| task.title == kind)
         );
     }
 }

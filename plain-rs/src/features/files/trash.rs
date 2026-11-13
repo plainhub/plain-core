@@ -249,15 +249,25 @@ impl Trash {
         Ok(items.into_iter().skip(offset).take(limit).collect())
     }
 
-    pub fn trash_count(&self) -> Result<usize> {
-        let total = self.db.with_conn(|conn| {
-            conn.query_row(
-                &format!("SELECT count(*) FROM file_catalog WHERE {TOP_LEVEL}"),
-                [],
-                |row| row.get::<_, i64>(0),
-            )
-        })?;
-        Ok(usize::try_from(total)?)
+    pub fn trash_count(&self, query: &str) -> Result<usize> {
+        let needle = query.trim().to_lowercase();
+        self.db.with_conn(|conn| {
+            if needle.is_empty() {
+                let total = conn.query_row(
+                    &format!("SELECT count(*) FROM file_catalog WHERE {TOP_LEVEL}"),
+                    [],
+                    |row| row.get::<_, i64>(0),
+                )?;
+                return Ok(usize::try_from(total)?);
+            }
+            let mut statement = conn.prepare(&format!(
+                "SELECT original_path FROM file_catalog WHERE {TOP_LEVEL}"
+            ))?;
+            let mut paths = statement.query_map([], |row| row.get::<_, String>(0))?;
+            paths.try_fold(0, |count, path| {
+                Ok(count + usize::from(path?.to_lowercase().contains(&needle)))
+            })
+        })
     }
 }
 

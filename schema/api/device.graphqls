@@ -33,7 +33,7 @@ type AndroidExtras {
 }
 
 type App {
-	clientId: String!
+	clientId: ID!
 	httpPort: Int!
 	httpsPort: Int!
 	deviceName: String!
@@ -130,7 +130,7 @@ type KeyValuePair {
 }
 
 type Session {
-	clientId: String!
+	clientId: ID!
 	clientName: String!
 	type: SessionType!
 	token: String!
@@ -165,9 +165,9 @@ extend type Mutation {
 	request was accepted, since the connection dies with the process.
 	"""
 	relaunchApp: Boolean!
-	renameSession(clientId: String!, name: String!): Boolean!
+	renameSession(clientId: ID!, name: String!): Boolean!
 	requestAccess(feature: AccessFeature!): Boolean!
-	revokeSession(clientId: String!): Boolean!
+	revokeSession(clientId: ID!): Boolean!
 	setTempValue(key: String!, value: String!): KeyValuePair!
 	"""
 	Renaming the device also re-publishes the mDNS advertisement, so a

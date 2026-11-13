@@ -40,13 +40,6 @@ pub struct SmsSendResult {
     pub result_code: Option<i32>,
 }
 #[derive(SimpleObject, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct MmsSendResult {
-    pub pending_id: ID,
-    pub success: bool,
-    pub result_code: Option<i32>,
-}
-#[derive(SimpleObject, Deserialize)]
 #[graphql(complex)]
 pub struct ClipboardChange {
     pub text: String,

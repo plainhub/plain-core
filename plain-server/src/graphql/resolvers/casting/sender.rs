@@ -1,7 +1,6 @@
 use crate::graphql::resolvers::app::capability_types::DlnaRenderer;
-use crate::graphql::resolvers::media::types::MediaDataType;
 use crate::server::ServerState;
-use plain_graphql::{Context, InputObject, Object, Result, SimpleObject};
+use plain_graphql::{Context, Enum, InputObject, Object, Result, SimpleObject};
 
 use plain_rs::features::services::casting::dlna_sender_runtime as sender;
 use plain_rs::features::services::casting::dlna_sender_runtime::Command;
@@ -137,6 +136,13 @@ impl DlnaSenderQuery {
         Ok(rows)
     }
 }
+#[derive(Enum, Copy, Clone, Eq, PartialEq)]
+enum DlnaCastType {
+    Audio,
+    Video,
+    Image,
+}
+
 #[derive(Default)]
 pub struct DlnaSenderMutation;
 #[Object]
@@ -148,11 +154,8 @@ impl DlnaSenderMutation {
         url: String,
         title: String,
         mime: String,
-        #[graphql(name = "type")] media_type: MediaDataType,
+        #[graphql(name = "type")] media_type: DlnaCastType,
     ) -> Result<bool> {
-        if media_type == MediaDataType::DOC {
-            return Err("dlna_cast_doc_unsupported".into());
-        }
         let state = ctx.data::<ServerState>()?;
         let runtime = state.cast.clone();
         let interruption = runtime.media.interruption();
@@ -167,7 +170,7 @@ impl DlnaSenderMutation {
                 sender::Item {
                     path: url,
                     title,
-                    audio: media_type == MediaDataType::AUDIO,
+                    audio: media_type == DlnaCastType::Audio,
                     ..Default::default()
                 },
                 false,

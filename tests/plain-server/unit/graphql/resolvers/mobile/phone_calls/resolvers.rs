@@ -74,7 +74,7 @@ async fn calls_map_the_provider_rows_onto_the_contract_type() {
     let response = schema
         .execute(
             r#"query { calls(offset:0, limit:20, query:"text:ada") {
-                 id number name photoId startedAt durationSec type accountId
+                 id number name photo startedAt durationSec type accountId
                  tags { id name count }
                  geo { country numberType carrier description } } }"#,
         )
@@ -82,6 +82,7 @@ async fn calls_map_the_provider_rows_onto_the_contract_type() {
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     let call = &response.data.into_json().unwrap()["calls"][0];
     assert_eq!(call["id"], "c1");
+    assert_eq!(call["photo"], "");
     assert_eq!(call["type"], "OUTGOING");
     assert_eq!(call["durationSec"], 42);
     assert_eq!(call["startedAt"], "2026-10-05T00:00:00.000Z");
@@ -228,13 +229,13 @@ async fn calls_without_geo_preserve_provider_values_without_phone_metadata_calls
         }
     });
     let response = schema
-        .execute(r#"{ calls(query:"", offset:0, limit:10) { id type typeCode photoUri } }"#)
+        .execute(r#"{ calls(query:"", offset:0, limit:10) { id type typeCode photo } }"#)
         .await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     let data = response.data.into_json().unwrap();
     assert_eq!(data["calls"][0]["type"], "UNKNOWN");
     assert_eq!(data["calls"][0]["typeCode"], 37);
-    assert_eq!(data["calls"][0]["photoUri"], "content://contacts/photo/1");
+    assert_eq!(data["calls"][0]["photo"], "content://contacts/photo/1");
     assert_eq!(*calls.lock().unwrap(), ["systemCallFacts"]);
 }
 

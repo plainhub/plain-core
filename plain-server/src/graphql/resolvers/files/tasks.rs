@@ -33,7 +33,7 @@ impl From<CompletedOp> for FileTaskCompletedOp {
 #[graphql(name = "FileTask")]
 struct FileTaskResult {
     id: ID,
-    client_id: String,
+    client_id: ID,
     r#type: FileTaskType,
     title: String,
     status: FileTaskStatus,
@@ -50,7 +50,7 @@ impl From<FileTask> for FileTaskResult {
     fn from(t: FileTask) -> Self {
         Self {
             id: ID(t.id),
-            client_id: t.client_id,
+            client_id: ID(t.client_id),
             r#type: t.kind,
             title: t.title,
             status: t.status,

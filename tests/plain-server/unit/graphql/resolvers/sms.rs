@@ -230,7 +230,7 @@ async fn send_sms_needs_the_send_permission_and_passes_the_sim_choice() {
     });
     let response = schema
         .execute(
-            r#"mutation { sendSms(number:"+1555", body:"hi", subscriptionId:2, requestId:"r1") }"#,
+            r#"mutation { sendSms(number:"+1555", body:"hi", subscriptionId:2, requestId:"11111111-1111-4111-8111-111111111111") { requestId requiresConfirmation } }"#,
         )
         .await;
     assert_eq!(response.errors[0].message, "no_permission");
@@ -252,11 +252,14 @@ async fn send_sms_needs_the_send_permission_and_passes_the_sim_choice() {
     });
     let response = schema
         .execute(
-            r#"mutation { sendSms(number:"+1555", body:"hi", subscriptionId:2, requestId:"r1") }"#,
+            r#"mutation { sendSms(number:"+1555", body:"hi", subscriptionId:2, requestId:"11111111-1111-4111-8111-111111111111") { requestId requiresConfirmation } }"#,
         )
         .await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
-    assert_eq!(response.data.into_json().unwrap()["sendSms"], true);
+    assert_eq!(
+        response.data.into_json().unwrap()["sendSms"],
+        json!({"requestId":"11111111-1111-4111-8111-111111111111","requiresConfirmation":false})
+    );
 }
 
 /// -1 means "system default", which reaches the platform as no subscription.
@@ -268,49 +271,168 @@ async fn send_sms_maps_the_default_sim_to_no_subscription() {
         "systemDivideSmsText" => json!(["hi"]),
         "systemSendSmsParts" => {
             assert_eq!(params["subscriptionId"], Value::Null);
+            assert_eq!(params["requestId"], "22222222-2222-4222-8222-222222222222");
             json!(true)
         }
         other => panic!("unexpected host call {other}"),
     });
     let response = schema
         .execute(
-            r#"mutation { sendSms(number:"+1555", body:"hi", subscriptionId:-1, requestId:"r2") }"#,
+            r#"mutation { sendSms(number:"+1555", body:"hi", subscriptionId:-1, requestId:"22222222-2222-4222-8222-222222222222") { requestId requiresConfirmation } }"#,
         )
         .await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
 }
 
+#[tokio::test(start_paused = true)]
+async fn send_sms_with_attachments_launches_once_and_replays_the_same_request_result() {
+    for success in [false, true] {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        let (dir, schema) = fixture(json!(["SMS"]));
+        let attachment = dir.path().join("synthetic.png");
+        std::fs::write(&attachment, b"synthetic MMS attachment").unwrap();
+        let launches = Arc::new(AtomicUsize::new(0));
+        let counted = launches.clone();
+        stub(schema_host(&schema), move |method, params| match method {
+            "systemMmsLatest" => json!(7),
+            "systemMmsLaunch" => {
+                counted.fetch_add(1, Ordering::SeqCst);
+                assert_eq!(params["number"], "+1555");
+                assert_eq!(params["attachments"].as_array().unwrap().len(), 1);
+                assert_eq!(
+                    std::fs::read(params["attachments"][0]["path"].as_str().unwrap()).unwrap(),
+                    b"synthetic MMS attachment"
+                );
+                assert!(params.get("threadId").is_none());
+                json!(100)
+            }
+            "systemMmsCandidates" => {
+                if success {
+                    json!([{"id":8,"addressCandidates":[{"value":"+1555","isSender":false}],"parts":[
+                        {"path":"text","contentType":"text/plain","name":"","fileName":"","hasData":false,"text":"hi"},
+                        {"path":"image","contentType":"image/png","name":"synthetic.png","fileName":"synthetic.png","hasData":true,"text":""}
+                    ]}])
+                } else {
+                    json!([])
+                }
+            }
+            other => panic!("Unexpected platform primitive: {other}"),
+        });
+        let mutation = format!(
+            r#"mutation {{sendSms(number:"+1555",body:"hi",attachmentPaths:[{}],requestId:"33333333-3333-4333-8333-333333333333") {{ requestId requiresConfirmation }} }}"#,
+            json!(attachment)
+        );
+        for _ in 0..2 {
+            let response = schema.execute(&mutation).await;
+            assert!(response.errors.is_empty(), "{:?}", response.errors);
+            assert_eq!(
+                response.data.into_json().unwrap()["sendSms"],
+                json!({"requestId":"33333333-3333-4333-8333-333333333333","requiresConfirmation":true})
+            );
+        }
+        assert_eq!(launches.load(Ordering::SeqCst), 1);
+        let conflict = schema
+            .execute(mutation.replace("body:\"hi\"", "body:\"changed\""))
+            .await;
+        assert!(conflict.errors[0].message.contains("different message"));
+        assert_eq!(launches.load(Ordering::SeqCst), 1);
+        let temporary = dir.path().join("mms_attachments");
+        let directories: Vec<_> = std::fs::read_dir(&temporary)
+            .unwrap()
+            .map(|entry| entry.unwrap().path())
+            .collect();
+        assert_eq!(directories.len(), 1);
+        assert!(directories[0].starts_with(&temporary));
+        assert_eq!(
+            directories[0].file_name().unwrap().to_str().unwrap().len(),
+            36
+        );
+        let runtime = schema
+            .data::<Arc<plain_rs::features::services::sms::mms::Runtime>>()
+            .unwrap();
+        let mut events = schema
+            .data::<tokio::sync::broadcast::Sender<plain_rs::infrastructure::events::WsEvent>>()
+            .unwrap()
+            .subscribe();
+        if !success {
+            runtime.cancel_all().await;
+        }
+        let event = tokio::time::timeout(std::time::Duration::from_secs(5), events.recv())
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(event.event_type, "SMS_SEND_RESULT");
+        assert_eq!(
+            plain_libs::serde_json::from_str::<Value>(&event.payload).unwrap(),
+            json!({"requestId":"33333333-3333-4333-8333-333333333333","success":success,"resultCode":if success {0} else {-1001}})
+        );
+        runtime.replay().unwrap();
+        let replay = events.recv().await.unwrap();
+        assert_eq!(replay.event_type, event.event_type);
+        assert_eq!(replay.payload, event.payload);
+        runtime.shutdown().await;
+        assert!(!directories[0].exists());
+        assert_eq!(
+            std::fs::read(attachment).unwrap(),
+            b"synthetic MMS attachment"
+        );
+    }
+}
+
 #[tokio::test]
-async fn send_mms_allocates_one_rust_pending_id_and_launches_only_a_native_intent() {
+async fn send_sms_preserves_the_client_uuid_with_default_sim() {
     let (_dir, schema) = fixture(json!(["SMS"]));
     stub(schema_host(&schema), |method, params| match method {
-        "systemMmsLatest" => json!(7),
-        "systemMmsLaunch" => {
-            assert_eq!(params["number"], "+1555");
-            assert_eq!(params["attachments"], json!([]));
-            json!(100)
+        "systemDivideSmsText" => json!(["hi"]),
+        "systemSendSmsParts" => {
+            assert_eq!(params["subscriptionId"], Value::Null);
+            assert_eq!(params["requestId"], "44444444-4444-4444-8444-444444444444");
+            json!(true)
         }
-        "systemMmsCandidates" => json!([]),
-        other => panic!("Unexpected platform primitive: {other}"),
+        other => panic!("unexpected host call {other}"),
     });
     let response = schema
-        .execute(r#"mutation {sendMms(number:"+1555",body:"hi",attachmentPaths:[],threadId:"t1")}"#)
+        .execute(
+            r#"mutation { sendSms(number:"+1555",body:"hi",requestId:"44444444-4444-4444-8444-444444444444") { requestId requiresConfirmation } }"#,
+        )
         .await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
-    let id = response.data.into_json().unwrap()["sendMms"]
-        .as_str()
-        .unwrap()
-        .to_owned();
-    assert!(id.starts_with("pending_mms_"));
-    let runtime = schema
-        .data::<Arc<plain_rs::features::services::sms::mms::Runtime>>()
+    let data = response.data.into_json().unwrap();
+    let id = data["sendSms"]["requestId"].as_str().unwrap();
+    assert_eq!(id, "44444444-4444-4444-8444-444444444444");
+    assert_eq!(data["sendSms"]["requiresConfirmation"], false);
+    let sends = schema
+        .data::<Arc<plain_rs::features::services::sms::send_runtime::Runtime>>()
         .unwrap();
-    let duplicate = schema
-        .execute(r#"mutation {sendMms(number:"+1555",body:"hi",attachmentPaths:[],threadId:"t1")}"#)
-        .await;
-    assert_eq!(duplicate.errors.len(), 1);
-    assert!(duplicate.errors[0].message.contains("already pending"));
-    runtime.cancel_all().await;
+    let pending = plain_rs::features::sms_sends::pending(&sends.store().unwrap()).unwrap();
+    assert_eq!(pending[0].client_request_id.as_deref(), Some(id));
+}
+
+#[tokio::test]
+async fn send_sms_rejects_mms_sim_selection_and_blank_request_ids_before_effects() {
+    let (_dir, schema) = fixture(json!(["SMS"]));
+    stub(schema_host(&schema), |method, _| {
+        panic!("unexpected host call {method}")
+    });
+    for (args, expected) in [
+        (
+            r#"attachmentPaths:["synthetic.txt"],subscriptionId:2,requestId:"55555555-5555-4555-8555-555555555555""#,
+            "cannot select a SIM for MMS",
+        ),
+        (r#"requestId:" ""#, "requestId must be a UUID"),
+        (r#"requestId:"../request""#, "requestId must be a UUID"),
+    ] {
+        let response = schema
+            .execute(format!(
+                r#"mutation {{ sendSms(number:"+1555",body:"hi",{args}) {{ requestId }} }}"#
+            ))
+            .await;
+        assert!(
+            response.errors[0].message.contains(expected),
+            "{:?}",
+            response.errors
+        );
+    }
 }
 
 #[test]
@@ -318,4 +440,20 @@ fn message_projection_preserves_raw_provider_type_for_app_clients() {
     let sms = message(&json!({"id":"7", "type":37, "date":"2026-10-01T00:00:00.000Z"}));
     assert_eq!(sms.type_code, 37);
     assert_eq!(sms.r#type, SmsType::Unknown);
+}
+
+#[tokio::test]
+async fn send_sms_requires_a_client_request_id_before_platform_effects() {
+    let (_dir, schema) = fixture(json!(["SMS"]));
+    stub(schema_host(&schema), |method, _| {
+        panic!("unexpected host call {method}")
+    });
+    for argument in ["", ",requestId:null"] {
+        let response = schema
+            .execute(format!(
+                r#"mutation {{sendSms(number:"+1555",body:"hi"{argument}) {{requestId}}}}"#
+            ))
+            .await;
+        assert!(!response.errors.is_empty());
+    }
 }

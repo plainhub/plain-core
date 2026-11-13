@@ -39,6 +39,10 @@ async fn unicode_trash_search_preserves_case_folding_before_paging() {
     let found = trash.list_trash(0, 1, "ωMEGA", SortOrder::NameAsc).unwrap();
     assert_eq!(found.len(), 1);
     assert!(found[0].original_path.ends_with("Ωmega.txt"));
+    assert_eq!(trash.trash_count("  ωMEGA  ").unwrap(), 1);
+    assert_eq!(trash.trash_count("missing-name").unwrap(), 0);
+    assert_eq!(trash.trash_count(" ").unwrap(), 2);
+    assert_eq!(trash.trash_count("%").unwrap(), 0);
     assert!(
         trash
             .list_trash(1, 1, "ωMEGA", SortOrder::NameAsc)
@@ -68,7 +72,7 @@ async fn trash_and_restore_preserve_file_identity_favorite_and_text_store() {
         .unwrap()
         .remove(0);
     assert!(!path.exists());
-    assert_eq!(trash.trash_count().unwrap(), 1);
+    assert_eq!(trash.trash_count("").unwrap(), 1);
     let row = trash.load_item(&first.id.to_string()).unwrap().unwrap();
     assert_eq!(
         Path::new(&row.original_path).parent().unwrap(),
@@ -89,7 +93,7 @@ async fn trash_and_restore_preserve_file_identity_favorite_and_text_store() {
     assert!(restored.ends_with("report (1).txt"));
     assert_eq!(std::fs::read(&restored).unwrap(), b"restore");
     assert_eq!(std::fs::read(&path).unwrap(), b"existing");
-    assert_eq!(trash.trash_count().unwrap(), 0);
+    assert_eq!(trash.trash_count("").unwrap(), 0);
     let row = trash.db.file(&first.id).unwrap().unwrap();
     assert!(row.favorited);
     assert!(row.trashed_at.is_none() && row.original_path.is_none());
@@ -148,7 +152,8 @@ async fn trash_lists_only_the_directory_root_and_restores_descendant_ids() {
         .await
         .unwrap()
         .remove(0);
-    assert_eq!(trash.trash_count().unwrap(), 1);
+    assert_eq!(trash.trash_count("").unwrap(), 1);
+    assert_eq!(trash.trash_count("child.txt").unwrap(), 0);
     let trashed = trash.db.file(&original[1].id).unwrap().unwrap();
     assert!(trashed.trashed_at.is_some());
     assert!(trashed.path.ends_with("child.txt"));

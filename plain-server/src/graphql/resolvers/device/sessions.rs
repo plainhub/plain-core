@@ -1,5 +1,5 @@
 use crate::server::ServerState;
-use plain_graphql::{Context, Object, Result, SimpleObject};
+use plain_graphql::{Context, ID, Object, Result, SimpleObject};
 
 use plain_rs::features::sessions::SessionInfo;
 use plain_rs::infrastructure::db::Db;
@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 #[derive(SimpleObject)]
 struct Session {
-    client_id: String,
+    client_id: ID,
     client_name: String,
     r#type: plain_rs::features::sessions::SessionType,
     #[graphql(guard = "crate::http::auth::public_gate::LocalOwner")]
@@ -31,7 +31,7 @@ impl TryFrom<plain_rs::infrastructure::db::SessionRow> for Session {
     fn try_from(row: plain_rs::infrastructure::db::SessionRow) -> Result<Self> {
         let value = SessionInfo::try_from(row.clone())?;
         Ok(Self {
-            client_id: value.client_id,
+            client_id: ID(value.client_id),
             client_name: value.client_name,
             r#type: row.r#type,
             token: value.token,
@@ -85,11 +85,11 @@ pub struct SessionsMutation;
 
 #[Object]
 impl SessionsMutation {
-    fn rename_session(&self, ctx: &Context<'_>, client_id: String, name: String) -> Result<bool> {
+    fn rename_session(&self, ctx: &Context<'_>, client_id: ID, name: String) -> Result<bool> {
         caller(ctx)?;
         Ok(plain_rs::features::services::sessions::rename(
             ctx.data::<ServerState>()?,
-            &client_id,
+            client_id.as_str(),
             &name,
         )?)
     }
@@ -97,12 +97,12 @@ impl SessionsMutation {
         revoke(ctx, caller(ctx)?, "logout")
     }
 
-    fn revoke_session(&self, ctx: &Context<'_>, client_id: String) -> Result<bool> {
+    fn revoke_session(&self, ctx: &Context<'_>, client_id: ID) -> Result<bool> {
         if client_id.trim().is_empty() {
             return Ok(false);
         }
         caller(ctx)?;
-        revoke(ctx, &client_id, "revoke")
+        revoke(ctx, client_id.as_str(), "revoke")
     }
 }
 

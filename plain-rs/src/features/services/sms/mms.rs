@@ -1,8 +1,8 @@
 use crate::infrastructure::db::Db;
 use crate::infrastructure::events::WsEvent;
 use crate::infrastructure::host::bridge::Host;
-use serde::{Deserialize, Serialize};
 use plain_libs::serde_json::{Value, json};
+use serde::{Deserialize, Serialize};
 use std::{
     collections::{HashMap, VecDeque},
     sync::{Arc, Mutex},
@@ -10,24 +10,21 @@ use std::{
 };
 use tokio::sync::{broadcast, watch};
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct Attachment {
     path: String,
     content_type: String,
     name: String,
 }
-#[derive(Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Clone)]
 struct Pending {
     id: String,
     number: String,
     body: String,
-    thread_id: String,
     attachments: Vec<Attachment>,
     launch_time_sec: i64,
     minimum_id: i64,
-    created_at: String,
 }
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -35,7 +32,6 @@ struct Candidate {
     id: i64,
     address_candidates: Vec<crate::features::services::sms::addresses::MmsAddress>,
     parts: Vec<crate::features::services::sms::parts::Part>,
-    thread_id: String,
 }
 impl Candidate {
     fn address(&self) -> &str {
@@ -99,10 +95,9 @@ impl Runtime {
     ) -> plain_libs::anyhow::Result<String> {
         if path.starts_with("content://") {
             use tokio::io::AsyncWriteExt;
-            let (resources, stop) =
-                self.resources.lock().unwrap().clone().ok_or_else(|| {
-                    plain_libs::anyhow::anyhow!("Native attachment resources are unavailable")
-                })?;
+            let (resources, stop) = self.resources.lock().unwrap().clone().ok_or_else(|| {
+                plain_libs::anyhow::anyhow!("Native attachment resources are unavailable")
+            })?;
             let facts = crate::features::services::files::resources::read(
                 &self.host,
                 "mime",
@@ -122,12 +117,15 @@ impl Runtime {
                 mime
             }
             .to_owned();
-            let mut reader = resources
-                .read_native(path, stop)
-                .await
-                .map_err(|status| plain_libs::anyhow::anyhow!("Attachment resource returned {status}"))?;
+            let mut reader = resources.read_native(path, stop).await.map_err(|status| {
+                plain_libs::anyhow::anyhow!("Attachment resource returned {status}")
+            })?;
             let mut file = tokio::fs::File::create(destination).await?;
-            while let Some(chunk) = reader.read().await.map_err(plain_libs::anyhow::Error::msg)? {
+            while let Some(chunk) = reader
+                .read()
+                .await
+                .map_err(plain_libs::anyhow::Error::msg)?
+            {
                 file.write_all(&chunk).await?;
             }
             file.flush().await?;
@@ -187,23 +185,20 @@ impl Runtime {
         self.store.get()?.set_json("mms_send_results", &terminal)?;
         for value in terminal {
             let _ = self.events.send(WsEvent::broadcast(
-                "MMS_SEND_RESULT",
+                "SMS_SEND_RESULT",
                 value["result"].to_string(),
             ));
         }
         Ok(())
     }
-    pub async fn send(
+    pub(super) async fn send(
         self: &Arc<Self>,
+        id: String,
         number: String,
         body: String,
         paths: Vec<String>,
-        thread_id: String,
-    ) -> plain_libs::anyhow::Result<String> {
-        plain_libs::anyhow::ensure!(!number.trim().is_empty(), "MMS recipient is required");
-        crate::features::services::capabilities::require(&self.host, "TELEPHONY").await?;
+    ) -> plain_libs::anyhow::Result<()> {
         let _guard = self.send.lock().await;
-        let id = format!("pending_mms_{}", plain_libs::utils::uuid::Uuid::new_v4());
         let temporary = OwnedAttachments(self.directory.join("mms_attachments").join(&id));
         tokio::fs::create_dir_all(&temporary.0).await?;
         let mut attachments = vec![];
@@ -241,9 +236,6 @@ impl Runtime {
                     ) && (body.is_empty()
                         || pending.body.is_empty()
                         || body.trim() == pending.body.trim())
-                        && (thread_id.is_empty()
-                            || pending.thread_id.is_empty()
-                            || thread_id == pending.thread_id)
                         && types
                             == normalized_types(
                                 pending.attachments.iter().map(|a| a.content_type.as_str()),
@@ -274,11 +266,9 @@ impl Runtime {
             id: id.clone(),
             number,
             body,
-            thread_id,
             attachments,
             launch_time_sec: launched,
             minimum_id: latest,
-            created_at: plain_libs::chrono::Utc::now().to_rfc3339_opts(plain_libs::chrono::SecondsFormat::Millis, true),
         };
         let (cancel, receiver) = watch::channel(false);
         {
@@ -298,7 +288,7 @@ impl Runtime {
         });
         self.state.lock().unwrap().tasks.insert(id.clone(), task);
         let _ = ready.send(());
-        Ok(id)
+        Ok(())
     }
     async fn poll(
         self: Arc<Self>,
@@ -315,7 +305,8 @@ impl Runtime {
             tokio::select! {_=tokio::time::sleep(Duration::from_secs(2))=>{},_=cancel.changed()=>{result_code=-1001;break;}}
             let facts = tokio::select! {result=self.host.call("systemMmsCandidates",json!({"minimumId":pending.minimum_id,"launchTimeSec":pending.launch_time_sec}))=>result,_=cancel.changed()=>{result_code=-1001;break;}};
             if let Ok(facts) = facts {
-                if let Ok(candidates) = plain_libs::serde_json::from_value::<Vec<Candidate>>(facts) {
+                if let Ok(candidates) = plain_libs::serde_json::from_value::<Vec<Candidate>>(facts)
+                {
                     let matches = matching(&pending, candidates);
                     let mut state = self.state.lock().unwrap();
                     if let Some(id) = matches.into_iter().find(|id| !state.claimed.contains(id)) {
@@ -335,7 +326,7 @@ impl Runtime {
             state.cancels.remove(&pending.id);
         }
         let result =
-            json!({"pendingId":pending.id,"success":result_code==0,"resultCode":result_code});
+            json!({"requestId":pending.id,"success":result_code==0,"resultCode":result_code});
         {
             let _guard = self.outbox.lock().unwrap();
             let saved = (|| -> plain_libs::anyhow::Result<()> {
@@ -350,12 +341,9 @@ impl Runtime {
                 log::warn!("MMS result persistence failed: {error}");
             }
         }
-        let event = if result_code == 0 {
-            WsEvent::broadcast("MMS_SENT", json!(pending.id).to_string())
-        } else {
-            WsEvent::broadcast("MMS_SEND_RESULT", result.to_string())
-        };
-        let _ = self.events.send(event);
+        let _ = self
+            .events
+            .send(WsEvent::broadcast("SMS_SEND_RESULT", result.to_string()));
         if result_code == -1001 {
             tokio::time::sleep(Duration::from_secs(300)).await;
         }
@@ -401,8 +389,7 @@ fn matching(pending: &Pending, candidates: Vec<Candidate>) -> Vec<i64> {
         .into_iter()
         .filter(|candidate| {
             let message = crate::features::services::sms::parts::message(&candidate.parts);
-            (pending.thread_id.is_empty() || candidate.thread_id == pending.thread_id)
-                && (pending.body.is_empty() || message.body.trim() == pending.body.trim())
+            (pending.body.is_empty() || message.body.trim() == pending.body.trim())
                 && normalized_types(
                     message
                         .attachments

@@ -17,7 +17,7 @@ pub async fn deliver(state: &CoreRuntime, row: DChat) -> Result<DChat> {
     if row.channel_id.is_none() && (row.to_id.is_empty() || row.to_id == "local") {
         return Ok(row);
     }
-    crate::features::services::chat::chat_delivery::deliver(state, &row.id, None)
+    crate::features::services::chat::chat_delivery::deliver(state, &row.id)
         .await?
         .chat
         .ok_or_else(|| plain_libs::anyhow::anyhow!("Message removed"))
@@ -130,7 +130,11 @@ impl Drop for Imported {
         }
     }
 }
-pub async fn retry(state: &CoreRuntime, id: String) -> Result<DChat> {
+pub async fn retry(
+    state: &CoreRuntime,
+    id: String,
+    recipient_ids: Option<Vec<String>>,
+) -> Result<DChat> {
     let (sender, receiver) = tokio::sync::oneshot::channel();
     let sender = std::sync::Arc::new(std::sync::Mutex::new(Some(sender)));
     let state = state.clone();
@@ -138,7 +142,7 @@ pub async fn retry(state: &CoreRuntime, id: String) -> Result<DChat> {
         let mut stop = state.stop.clone();
         let result = tokio::select! {
             _=stop.changed()=>Err(plain_libs::anyhow::anyhow!("Chat service stopped")),
-            result=crate::features::services::chat::chat_delivery::deliver_observed(&state,&id,None,crate::infrastructure::transport::router::Attempt::Retry,|chat| {
+            result=crate::features::services::chat::chat_delivery::deliver_observed(&state,&id,recipient_ids,crate::infrastructure::transport::router::Attempt::Retry,|chat| {
                 if let Some(sender)=sender.lock().unwrap().take() {let _=sender.send(Ok(chat.clone()));}
             })=>result.and_then(|receipt|receipt.chat.ok_or_else(||plain_libs::anyhow::anyhow!("Message unavailable"))),
         };

@@ -227,28 +227,6 @@ impl FileOpsMutation {
         .await?)
     }
 
-    async fn copy_file(
-        &self,
-        ctx: &Context<'_>,
-        src: String,
-        dst: String,
-        overwrite: bool,
-    ) -> plain_graphql::Result<bool> {
-        public_gate::require(ctx, prefs(ctx), &[STORAGE])?;
-        transfer(ctx, "COPY", src, dst, overwrite).await
-    }
-
-    async fn move_file(
-        &self,
-        ctx: &Context<'_>,
-        src: String,
-        dst: String,
-        overwrite: bool,
-    ) -> plain_graphql::Result<bool> {
-        public_gate::require(ctx, prefs(ctx), &[STORAGE])?;
-        transfer(ctx, "MOVE", src, dst, overwrite).await
-    }
-
     async fn delete_chunks(
         &self,
         ctx: &Context<'_>,
@@ -425,34 +403,6 @@ async fn require_narrowing_media(
     };
     provider_plan::require_narrowing(ctx.data_unchecked::<Arc<Db>>(), provider, query)
         .map_err(|error| plain_graphql::Error::new(error.to_string()))
-}
-
-async fn transfer(
-    ctx: &Context<'_>,
-    kind: &str,
-    src: String,
-    dst: String,
-    overwrite: bool,
-) -> plain_graphql::Result<bool> {
-    let kind = match kind {
-        "COPY" => plain_rs::features::files::tasks::FileTaskType::Copy,
-        "MOVE" => plain_rs::features::files::tasks::FileTaskType::Move,
-        _ => return Err("invalid file task type".into()),
-    };
-    Ok(ctx
-        .data::<Arc<plain_rs::features::services::files::file_tasks::FileTasks>>()?
-        .execute(
-            &super::tasks::caller(ctx)?,
-            kind,
-            vec![plain_rs::features::files::tasks::FileTaskOp {
-                src,
-                dst,
-                overwrite,
-            }],
-        )
-        .await?
-        .status
-        == plain_rs::features::files::tasks::FileTaskStatus::Done)
 }
 
 async fn media_action(

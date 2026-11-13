@@ -186,10 +186,12 @@ impl ChatMutation {
         &self,
         ctx: &Context<'_>,
         id: plain_graphql::ID,
+        recipient_ids: Option<Vec<plain_graphql::ID>>,
     ) -> plain_graphql::Result<ChatItem> {
         let row = plain_rs::features::services::chat::chat_actions::retry(
             ctx.data::<crate::server::ServerState>()?,
             id.to_string(),
+            recipient_ids.map(|ids| ids.into_iter().map(|id| id.to_string()).collect()),
         )
         .await?;
         Ok(item(&row))

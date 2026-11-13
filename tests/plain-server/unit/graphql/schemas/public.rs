@@ -24,6 +24,40 @@ fn sdl() -> String {
 mod snapshot;
 
 #[test]
+fn graphql_client_identifiers_use_id() {
+    let sdl = sdl();
+    for object in ["App", "Session", "FileTask"] {
+        let fields = sdl
+            .split(&format!("type {object} {{"))
+            .nth(1)
+            .unwrap()
+            .split('}')
+            .next()
+            .unwrap();
+        assert!(
+            fields.lines().any(|line| line.trim() == "clientId: ID!"),
+            "{object}.clientId"
+        );
+    }
+    assert!(sdl.contains("renameSession(clientId: ID!, name: String!): Boolean!"));
+    assert!(sdl.contains("revokeSession(clientId: ID!): Boolean!"));
+}
+
+#[test]
+fn dlna_cast_only_accepts_castable_media_types() {
+    let sdl = sdl();
+    let values = sdl
+        .split("enum DlnaCastType {")
+        .nth(1)
+        .unwrap()
+        .split('}')
+        .next()
+        .unwrap();
+    assert_eq!(values.split_whitespace().collect::<Vec<_>>(), ["AUDIO", "VIDEO", "IMAGE"]);
+    assert!(sdl.contains("dlnaCast(rendererUdn: String!, url: String!, title: String!, mime: String!, type: DlnaCastType!): Boolean!"));
+}
+
+#[test]
 fn public_schema_matches_committed_sdl() {
     snapshot::verify_or_write(&sdl());
 }
@@ -244,8 +278,7 @@ fn public_schema_exposes_the_contract_it_has_to_serve() {
         "trashSms(query: String!): ActionResult!",
         "restoreSms(query: String!): ActionResult!",
         "deleteSms(query: String!): ActionResult!",
-        "sendSms(number: String!, body: String!, subscriptionId: Int!, requestId: String): Boolean!",
-        "sendMms(number: String!, body: String!, attachmentPaths: [String!]!, threadId: ID!): String!",
+        "sendSms(number: String!, body: String!, attachmentPaths: [String!]! = [], subscriptionId: Int, requestId: String!): SmsSendReceipt!",
         "calls(query: String!, offset: Int!, limit: Int!): [Call!]!",
         "callCount(query: String!): Int!",
         "call(number: String!, showDialer: Boolean!): Boolean!",
@@ -351,7 +384,7 @@ fn public_schema_exposes_the_contract_it_has_to_serve() {
         "sendChatItems(targets: [String!]!, content: String!): [ChatItem!]!",
         "deleteChatItem(id: ID!): Boolean!",
         "deleteChatItems(query: String!): ActionResult!",
-        "retryChatItem(id: ID!): ChatItem!",
+        "retryChatItem(id: ID!, recipientIds: [ID!]): ChatItem!",
         "createChatChannel(name: String!): ChatChannel!",
         "updateChatChannel(id: ID!, name: String!): ChatChannel!",
         "deleteChatChannel(id: ID!): Boolean!",
@@ -370,6 +403,7 @@ fn public_schema_exposes_the_contract_it_has_to_serve() {
     ] {
         assert!(sdl.contains(field), "missing {field}");
     }
+    assert!(!sdl.contains("deliverChatItem("));
     assert!(
         sdl.contains("replyActions: [String!]!"),
         "replyActions renamed"
@@ -777,7 +811,6 @@ async fn deployed_schema_exposes_platform_fields_and_subscriptions_on_every_host
             "mutationType",
             &[
                 "sendSms",
-                "sendMms",
                 "deleteContacts",
                 "deleteCalls",
                 "uninstallPackages",
@@ -788,8 +821,6 @@ async fn deployed_schema_exposes_platform_fields_and_subscriptions_on_every_host
             &[
                 "smsChanged",
                 "smsSendResult",
-                "mmsSendResult",
-                "mmsSent",
             ][..],
         ),
     ] {
@@ -809,14 +840,12 @@ async fn deployed_schema_exposes_platform_fields_and_subscriptions_on_every_host
         .iter()
         .map(|value| value["name"].as_str().unwrap())
         .collect();
-    for name in ["Contact", "Call", "Sms", "SmsSendResult", "MmsSendResult"] {
+    for name in ["Contact", "Call", "Sms", "SmsSendResult", "SmsSendReceipt"] {
         assert!(names.contains(&name), "type {name} missing");
     }
     for field in [
         "smsChanged",
         "smsSendResult",
-        "mmsSendResult",
-        "mmsSent",
     ] {
         assert_eq!(
             crate::graphql::subscriptions::operation::spec(&plain_graphql::Request::new(format!(
@@ -947,4 +976,15 @@ fn pairing_commands_have_no_public_ui_state_or_client_record_snapshots() {
     assert!(input.contains("password: String"));
     assert_eq!(input.lines().filter(|line| line.contains(':')).count(),3);
     assert!(sdl.contains("peerFileUrl(peerId: ID!, fileId: String!): String!"));
+}
+
+#[test]
+fn sms_sending_has_one_mutation_and_one_result_subscription() {
+    let schema = sdl();
+    assert!(schema.contains("sendSms(number: String!, body: String!, attachmentPaths: [String!]! = [], subscriptionId: Int, requestId: String!): SmsSendReceipt!"));
+    let receipt = schema.split("type SmsSendReceipt {").nth(1).unwrap().split('}').next().unwrap();
+    assert_eq!(receipt.lines().map(str::trim).filter(|line| !line.is_empty()).collect::<Vec<_>>(), ["requestId: String!", "requiresConfirmation: Boolean!"]);
+    for retired in ["sendMms(", "mmsSendResult:", "mmsSent:", "type MmsSendResult {"] {
+        assert!(!schema.contains(retired), "retired contract remains: {retired}");
+    }
 }

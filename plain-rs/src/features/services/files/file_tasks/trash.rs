@@ -117,8 +117,8 @@ impl FileTasks {
         })
         .await?
     }
-    pub async fn trash_count(&self) -> Result<usize> {
+    pub async fn trash_count(&self, query: String) -> Result<usize> {
         let db = self.hooks.platform.db.clone();
-        tokio::task::spawn_blocking(move || Trash::new(db).trash_count()).await?
+        tokio::task::spawn_blocking(move || Trash::new(db).trash_count(&query)).await?
     }
 }
