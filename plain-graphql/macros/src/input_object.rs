@@ -1,8 +1,8 @@
+use crate::meta::Data;
 use crate::{
     args::{self, RenameTarget},
     utils::{GeneratorResult, gen_deprecation, generate_default, get_crate_path, get_rustdoc},
 };
-use crate::meta::Data;
 use proc_macro::TokenStream;
 use quote::quote;
 use syn::{Error, ext::IdentExt};
@@ -75,11 +75,21 @@ pub fn generate(object_args: &args::InputObject) -> GeneratorResult<TokenStream>
         } else {
             get_fields . push (quote ! { let # ident : # ty = # crate_name :: InputType :: parse (obj . get (# name) . cloned ()) . map_err (# crate_name :: InputValueError :: propagate) ?;  }) ;
         }
-        put_fields.push(quote! {
+        let put_field = quote! {
             map.insert(
                 #crate_name::Name::new(#name),
                 #crate_name::InputType::to_value(&self.#ident)
             );
+        };
+        put_fields.push(if object_args.oneof {
+            quote! {
+                let value = #crate_name::InputType::to_value(&self.#ident);
+                if value != #crate_name::Value::Null {
+                    map.insert(#crate_name::Name::new(#name), value);
+                }
+            }
+        } else {
+            put_field
         });
         fields.push(ident);
         let has_deprecation = !matches!(field.deprecation, args::Deprecation::NoDeprecated);
@@ -117,6 +127,9 @@ pub fn generate(object_args: &args::InputObject) -> GeneratorResult<TokenStream>
     }
     let mut input_object_builder = Vec::new();
     input_object_builder.push(quote ! (.rust_typename(::std::any::type_name::<Self>())));
+    if object_args.oneof {
+        input_object_builder.push(quote!(.oneof(true)));
+    }
     if has_desc {
         input_object_builder.push(quote ! (.description(#desc)));
     }

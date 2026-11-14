@@ -28,11 +28,7 @@ async fn source_validation_rejects_missing_and_competing_sources_before_side_eff
             )
             .await;
         assert_eq!(result.errors.len(), 1);
-        assert!(
-            result.errors[0]
-                .message
-                .contains("Exactly one download source")
-        );
+        assert!(result.errors[0].message.contains("OneOf"));
         assert!(state.downloads.snapshot().is_empty());
     }
     let result = schema.execute("query { downloads { id } }").await;
@@ -61,6 +57,8 @@ fn public_contract_has_one_task_control_family_and_typed_sources() {
     let sdl = schema.sdl();
     for field in [
         "createDownload(input: DownloadInput!): Download!",
+        "input DownloadInput @oneOf {",
+        "directive @oneOf on INPUT_OBJECT",
         "pauseDownload(id: ID!): Boolean!",
         "resumeDownload(id: ID!): Boolean!",
         "retryDownload(id: ID!): Boolean!",
@@ -108,6 +106,14 @@ async fn source_union_and_status_enum_are_exact_and_retired_arguments_are_reject
     let response = schema.execute("{ statuses:__type(name:\"DownloadStatus\"){enumValues{name}} sources:__type(name:\"DownloadSource\"){possibleTypes{name}} }").await;
     assert!(response.errors.is_empty());
     let data = response.data.into_json().unwrap();
+    let metadata = schema
+        .execute("{__type(name:\"DownloadInput\"){isOneOf}}")
+        .await;
+    assert!(metadata.errors.is_empty());
+    assert_eq!(
+        metadata.data.into_json().unwrap()["__type"]["isOneOf"],
+        true
+    );
     let names = |values: &plain_libs::serde_json::Value| {
         let mut names: Vec<_> = values
             .as_array()
@@ -151,6 +157,59 @@ async fn source_union_and_status_enum_are_exact_and_retired_arguments_are_reject
                 .iter()
                 .all(|error| !error.message.contains("ServerState")),
             "Validation must precede execution"
+        );
+    }
+}
+
+#[tokio::test]
+async fn oneof_sources_reject_invalid_inputs_before_any_mutation_executes() {
+    let schema = Schema::build(DownloadQuery, DownloadMutation, EmptySubscription).finish();
+    let resources = json!({"urls":[],"targetDir":""});
+    let chat = json!({"messageId":"message","peerId":"peer","fileIds":["file"]});
+    for input in [
+        json!({}),
+        json!({"resources":resources,"chat":chat}),
+        json!({"resources":null}),
+        json!({"chat":null}),
+        json!({"resources":resources,"chat":null}),
+        json!({"resources":null,"chat":chat}),
+        json!({"resources":null,"chat":null}),
+        json!(null),
+    ] {
+        let response = schema.execute(Request::new("mutation($input:DownloadInput!){pauseDownload(id:\"missing\") createDownload(input:$input){id}}")
+            .variables(plain_graphql::Variables::from_json(json!({"input":input})))).await;
+        assert!(!response.errors.is_empty(), "Accepted {input}");
+        assert!(
+            response.errors.iter().all(|error| error.path.is_empty()),
+            "Resolver executed for {input}: {:?}",
+            response.errors
+        );
+        assert!(
+            response
+                .errors
+                .iter()
+                .all(|error| !error.message.contains("ServerState")),
+            "Resolver executed for {input}: {:?}",
+            response.errors
+        );
+    }
+    for input in [
+        "{}",
+        "{resources:{urls:[],targetDir:\"\"},chat:{messageId:\"message\",peerId:\"peer\",fileIds:[\"file\"]}}",
+        "{resources:null}",
+        "{chat:null}",
+        "null",
+    ] {
+        let response = schema
+            .execute(format!(
+                "mutation{{pauseDownload(id:\"missing\") createDownload(input:{input}){{id}}}}"
+            ))
+            .await;
+        assert!(!response.errors.is_empty(), "Accepted {input}");
+        assert!(
+            response.errors.iter().all(|error| error.path.is_empty()),
+            "Resolver executed for {input}: {:?}",
+            response.errors
         );
     }
 }

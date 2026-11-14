@@ -15,7 +15,7 @@ use std::collections::{HashMap, HashSet};
 #[derive(Default)]
 pub struct VariableInAllowedPosition<'a> {
     spreads: HashMap<Scope<'a>, HashSet<&'a str>>,
-    variable_usages: HashMap<Scope<'a>, Vec<(&'a str, Pos, MetaTypeName<'a>)>>,
+    variable_usages: HashMap<Scope<'a>, Vec<(&'a str, Pos, MetaTypeName<'a>, bool)>>,
     variable_defs: HashMap<Scope<'a>, Vec<&'a Positioned<VariableDefinition>>>,
     current_scope: Option<Scope<'a>>,
 }
@@ -32,8 +32,14 @@ impl<'a> VariableInAllowedPosition<'a> {
         }
         visited.insert(*from);
         if let Some(usages) = self.variable_usages.get(from) {
-            for (var_name, usage_pos, var_type) in usages {
+            for (var_name, usage_pos, var_type, oneof) in usages {
                 if let Some(def) = var_defs.iter().find(|def| def.node.name.node == *var_name) {
+                    if *oneof {
+                        if def.node.var_type.node.nullable {
+                            ctx.report_error(vec![def.pos, *usage_pos], format!("Variable \"{var_name}\" must be non-nullable for a OneOf input field"));
+                        }
+                        continue;
+                    }
                     let expected_type =
                         if def.node.var_type.node.nullable && def.node.default_value.is_some() {
                             format!("{}!", def.node.var_type.node)
@@ -101,19 +107,44 @@ impl<'a> Visitor<'a> for VariableInAllowedPosition<'a> {
     }
     fn enter_input_value(
         &mut self,
-        _ctx: &mut VisitorContext<'a>,
+        ctx: &mut VisitorContext<'a>,
         pos: Pos,
         expected_type: &Option<MetaTypeName<'a>>,
         value: &'a Value,
     ) {
+        if let Value::Object(values) = value
+            && let Some(expected_type) = expected_type
+            && let MetaTypeName::Named(expected_type) = expected_type.unwrap_non_null()
+            && let Some(crate::registry::MetaType::InputObject {
+                input_fields,
+                oneof: true,
+                ..
+            }) = ctx.registry.types.get(expected_type)
+            && let Some(scope) = self.current_scope
+        {
+            for (name, value) in values {
+                if let Value::Variable(variable) = value
+                    && let Some(field) = input_fields.get(name.as_str())
+                {
+                    self.variable_usages.entry(scope).or_default().push((
+                        variable,
+                        pos,
+                        MetaTypeName::create(&field.ty),
+                        true,
+                    ));
+                }
+            }
+        }
         if let Value::Variable(name) = value
             && let Some(expected_type) = expected_type
             && let Some(scope) = &self.current_scope
         {
-            self.variable_usages
-                .entry(*scope)
-                .or_default()
-                .push((name, pos, *expected_type));
+            self.variable_usages.entry(*scope).or_default().push((
+                name,
+                pos,
+                *expected_type,
+                false,
+            ));
         }
     }
 }

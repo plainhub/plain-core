@@ -555,7 +555,8 @@ pub(crate) fn prepare_request(
     if let Some(max) = max_aliases {
         check_alias_count(&document, max).map_err(|error| vec![error])?;
     }
-    crate::validation::enum_literals::validate(registry, &document).map_err(|error| vec![error])?;
+    crate::validation::input_literals::validate(registry, &document)
+        .map_err(|error| vec![error])?;
     let validation_result = check_rules(
         registry,
         &document,

@@ -1,4 +1,4 @@
-pub(crate) mod enum_literals;
+pub(crate) mod input_literals;
 #[cfg(test)]
 #[macro_use]
 #[path = "../../../tests/plain-graphql/unit/validation/test_harness.rs"]

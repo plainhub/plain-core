@@ -333,6 +333,7 @@ pub struct InputObject {
     pub attrs: Vec<Attribute>,
     pub data: Data<(), InputObjectField>,
     pub internal: bool,
+    pub oneof: bool,
     pub name: Option<String>,
     pub crate_path: Option<Path>,
 }
@@ -345,6 +346,7 @@ impl InputObject {
             attrs: meta::docs(&input.attrs),
             data: Data::parse(input, |_| Ok(()), InputObjectField::from_field)?,
             internal: options.optional("internal")?.unwrap_or_default(),
+            oneof: options.optional("oneof")?.unwrap_or_default(),
             name: options.optional("name")?,
             crate_path: options.optional("crate")?,
         };

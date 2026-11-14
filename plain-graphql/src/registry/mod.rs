@@ -401,6 +401,14 @@ impl InputObjectBuilder {
         self
     }
     pub fn build(self) -> MetaType {
+        if self.oneof {
+            for field in self.input_fields.values() {
+                assert!(
+                    !field.ty.ends_with('!') && field.default_value.is_none(),
+                    "OneOf input fields must be nullable and have no default value"
+                );
+            }
+        }
         MetaType::InputObject {
             name: self.name,
             description: self.description,

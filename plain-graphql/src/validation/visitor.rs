@@ -245,6 +245,26 @@ where
     A: Visitor<'a> + 'a,
     B: Visitor<'a> + 'a,
 {
+    fn enter_input_value(
+        &mut self,
+        ctx: &mut VisitorContext<'a>,
+        pos: Pos,
+        expected_type: &Option<MetaTypeName<'a>>,
+        value: &'a Value,
+    ) {
+        self.0.enter_input_value(ctx, pos, expected_type, value);
+        self.1.enter_input_value(ctx, pos, expected_type, value);
+    }
+    fn exit_input_value(
+        &mut self,
+        ctx: &mut VisitorContext<'a>,
+        pos: Pos,
+        expected_type: &Option<MetaTypeName<'a>>,
+        value: &Value,
+    ) {
+        self.0.exit_input_value(ctx, pos, expected_type, value);
+        self.1.exit_input_value(ctx, pos, expected_type, value);
+    }
     fn mode(&self) -> VisitMode {
         self.0.mode()
     }

@@ -121,7 +121,20 @@ fn input(registry: &Registry, expected: &str, value: &Value, position: Pos) -> S
                 format!("Enum \"{name}\" cannot represent a string literal."),
                 Some(position),
             )),
-            (Some(MetaType::InputObject { input_fields, .. }), Value::Object(values)) => {
+            (
+                Some(MetaType::InputObject {
+                    input_fields,
+                    oneof,
+                    ..
+                }),
+                Value::Object(values),
+            ) => {
+                if *oneof && values.len() != 1 {
+                    return Err(ServerError::new(
+                        "OneOf input objects require exactly one field",
+                        Some(position),
+                    ));
+                }
                 for (name, value) in values {
                     if let Some(field) = input_fields.get(name.as_str()) {
                         input(registry, &field.ty, value, position)?;
@@ -135,5 +148,5 @@ fn input(registry: &Registry, expected: &str, value: &Value, position: Pos) -> S
 }
 
 #[cfg(test)]
-#[path = "../../../tests/plain-graphql/unit/validation/enum_literals.rs"]
+#[path = "../../../tests/plain-graphql/unit/validation/input_literals.rs"]
 mod tests;

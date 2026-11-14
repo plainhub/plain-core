@@ -14,6 +14,7 @@ pub(super) struct ChatDownloadInput {
     file_ids: Vec<String>,
 }
 #[derive(InputObject)]
+#[graphql(oneof)]
 pub(super) struct DownloadInput {
     resources: Option<ResourceDownloadInput>,
     chat: Option<ChatDownloadInput>,

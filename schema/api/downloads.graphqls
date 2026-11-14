@@ -32,7 +32,7 @@ type DownloadFailure {
 	error: String!
 }
 
-input DownloadInput {
+input DownloadInput @oneOf {
 	resources: ResourceDownloadInput
 	chat: ChatDownloadInput
 }
