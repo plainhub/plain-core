@@ -19,17 +19,13 @@ impl PomodoroQuery {
 pub struct PomodoroMutation;
 #[Object]
 impl PomodoroMutation {
-    fn start_pomodoro(&self, ctx: &Context<'_>, duration_sec: i32) -> plain_graphql::Result<bool> {
-        ctx.data::<Arc<Service>>()?
-            .command("start", Some(duration_sec))?;
-        Ok(true)
+    fn start_pomodoro(&self, ctx: &Context<'_>, duration_sec: i32) -> plain_graphql::Result<PomodoroToday> {
+        Ok(ctx.data::<Arc<Service>>()?.command("start", Some(duration_sec))?)
     }
-    fn pause_pomodoro(&self, ctx: &Context<'_>) -> plain_graphql::Result<bool> {
-        ctx.data::<Arc<Service>>()?.command("pause", None)?;
-        Ok(true)
+    fn pause_pomodoro(&self, ctx: &Context<'_>) -> plain_graphql::Result<PomodoroToday> {
+        Ok(ctx.data::<Arc<Service>>()?.command("pause", None)?)
     }
-    fn stop_pomodoro(&self, ctx: &Context<'_>) -> plain_graphql::Result<bool> {
-        ctx.data::<Arc<Service>>()?.command("stop", None)?;
-        Ok(true)
+    fn stop_pomodoro(&self, ctx: &Context<'_>) -> plain_graphql::Result<PomodoroToday> {
+        Ok(ctx.data::<Arc<Service>>()?.command("stop", None)?)
     }
 }

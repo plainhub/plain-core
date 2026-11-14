@@ -15,7 +15,7 @@ extend type Mutation {
 	"""
 	removeFavoriteFolder(fullPath: String!): [FavoriteFolder!]!
 	"""
-	Set the favorite folder's display alias and return the whole list.
+	Set the favorite folder's display alias and return the whole list; error if the favorite does not exist.
 	"""
 	setFavoriteFolderAlias(fullPath: String!, alias: String!): [FavoriteFolder!]!
 }

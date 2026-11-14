@@ -126,6 +126,7 @@ pub struct PackagesMutation;
 
 #[Object]
 impl PackagesMutation {
+    /// Launch system uninstall requests; true means initiated, not uninstalled. Confirm removal with packageStatuses.
     async fn uninstall_packages(
         &self,
         ctx: &Context<'_>,

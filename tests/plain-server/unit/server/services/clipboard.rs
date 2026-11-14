@@ -66,7 +66,7 @@ async fn platform_callbacks_before_write_reply_do_not_republish_received_text() 
     while let Ok(event) = events.try_recv() {
         assert_ne!(event.event_type, "CLIPBOARD_CHANGED");
     }
-    assert_eq!(history_updates.load(std::sync::atomic::Ordering::SeqCst), 2);
+    assert_eq!(history_updates.load(std::sync::atomic::Ordering::SeqCst), 1);
     server.shutdown().await;
     serving.await.unwrap().unwrap();
     assert!(

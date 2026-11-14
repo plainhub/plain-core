@@ -27,10 +27,10 @@ type PomodoroToday {
 }
 
 extend type Mutation {
-	adjustPomodoro(durationSec: Int!): PomodoroToday!
-	pausePomodoro: Boolean!
-	startPomodoro(durationSec: Int!): Boolean!
-	stopPomodoro: Boolean!
+	pausePomodoro: PomodoroToday!
+	setPomodoroRemainingTime(remainingSec: Int!): PomodoroToday!
+	startPomodoro(durationSec: Int!): PomodoroToday!
+	stopPomodoro: PomodoroToday!
 }
 
 extend type Query {

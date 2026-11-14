@@ -289,7 +289,6 @@ async fn encrypted_clipboard_sync_seeds_baseline_retries_failed_writes_and_reche
     let (remote_generation, mut remote_requests) =
         crate::test_support::HostRequests::connect(&remote_state.host);
     let (remote_host, remote_db) = (remote_state.host.clone(), remote_state.db.clone());
-    let expected_source = session.client_id.clone();
     let remote_responder = tokio::spawn(async move {
         while let Some(request) = remote_requests.recv().await {
             let result = match request["method"].as_str().unwrap() {
@@ -299,7 +298,7 @@ async fn encrypted_clipboard_sync_seeds_baseline_retries_failed_writes_and_reche
                     let item = remote_db
                         .clipboard_page("encrypted fixture write", 1, 0)
                         .unwrap();
-                    assert_eq!(item[0].source, expected_source);
+                    assert!(item.is_empty());
                     json!(true)
                 }
                 "mdnsMulticast" => json!(false),
@@ -322,6 +321,12 @@ async fn encrypted_clipboard_sync_seeds_baseline_retries_failed_writes_and_reche
         4 * 1024 * 1024,
     ).await.unwrap();
     assert_eq!(result["setClipboard"], true);
+    let recorded = remote_state
+        .db
+        .clipboard_page("encrypted fixture write", 1, 0)
+        .unwrap();
+    assert_eq!(recorded.len(), 1);
+    assert_eq!(recorded[0].source, session.client_id);
     let mut remote_echoes = remote_state.events.subscribe();
     plain_rs::features::services::clipboard::report(
         &remote_state,

@@ -41,6 +41,9 @@ enum PackageType {
 
 extend type Mutation {
 	installPackage(path: String!): PackageInstallPending!
+	"""
+	Launch system uninstall requests; true means initiated, not uninstalled. Confirm removal with packageStatuses.
+	"""
 	uninstallPackages(ids: [ID!]!): Boolean!
 }
 

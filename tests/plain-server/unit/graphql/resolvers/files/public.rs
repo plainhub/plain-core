@@ -554,14 +554,6 @@ async fn removing_an_unknown_favorite_folder_is_a_no_op() {
         response.data.into_json().unwrap()["removeFavoriteFolder"],
         json!([])
     );
-    let response = schema
-        .execute(r#"mutation { setFavoriteFolderAlias(fullPath:"/nope", alias:"x") { fullPath } }"#)
-        .await;
-    assert!(response.errors.is_empty(), "{:?}", response.errors);
-    assert_eq!(
-        response.data.into_json().unwrap()["setFavoriteFolderAlias"],
-        json!([])
-    );
 }
 
 #[test]

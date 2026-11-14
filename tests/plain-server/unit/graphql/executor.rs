@@ -227,14 +227,14 @@ fn shared_batch_chat_and_share_flows_own_their_events() {
 #[test]
 fn timer_controls_do_not_invalidate_unrelated_domains() {
     for query in [
-        "mutation { startPomodoro(durationSec:30) }",
-        "mutation { named: adjustPomodoro(durationSec:30) {state} }",
+        "mutation { startPomodoro(durationSec:30) {timeLeftSec totalTimeSec isRunning isPaused state} }",
+        "mutation { named: setPomodoroRemainingTime(remainingSec:30) {state} }",
         "query {pomodoroToday {state}}",
     ] {
         assert!(!content_changes(&Request::new(query)));
     }
     assert!(content_changes(&Request::new(
-        "mutation {adjustPomodoro(durationSec:30) {state} deleteBookmarks(ids:[]) {affectedCount}}"
+        "mutation {setPomodoroRemainingTime(remainingSec:30) {state} deleteBookmarks(ids:[]) {affectedCount}}"
     )));
 }
 

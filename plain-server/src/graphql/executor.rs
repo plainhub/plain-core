@@ -207,7 +207,7 @@ pub(crate) fn content_changes(request: &Request) -> bool {
                                 | "restoreMediaItems"
                                 | "moveMediaItems"
                                 | "broadcastImageEditorUpdate"
-                                | "adjustPomodoro"
+                                | "setPomodoroRemainingTime"
                                 | "startPomodoro"
                                 | "pausePomodoro"
                                 | "stopPomodoro"

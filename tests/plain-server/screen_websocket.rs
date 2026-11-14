@@ -689,7 +689,7 @@ async fn remote_subscriptions_enforce_access_and_deliver_pomodoro_updates() {
     assert!(native.execute(request).await.errors.is_empty());
     assert!(
         native
-            .execute("mutation { startPomodoro(durationSec:30) }".into())
+            .execute("mutation { startPomodoro(durationSec:30) {timeLeftSec totalTimeSec isRunning isPaused state} }".into())
             .await
             .errors
             .is_empty()

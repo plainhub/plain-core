@@ -54,26 +54,29 @@ async fn server_assembly_runs_the_timer_and_main_controls_share_its_statistics()
     let state = server.runtime_state();
     let mut events = state.events.subscribe();
     for query in [
-        "mutation {startPomodoro(durationSec:0)}",
-        "mutation {adjustPomodoro(durationSec:-1) {state}}",
+        "mutation {startPomodoro(durationSec:0) {timeLeftSec totalTimeSec isRunning isPaused state}}",
+        "mutation {setPomodoroRemainingTime(remainingSec:-1) {state}}",
     ] {
         assert!(call(&server, &token, query).await.get("errors").is_some());
     }
-    for query in [
-        "mutation {startPomodoro(durationSec:30)}",
-        "mutation {pausePomodoro}",
-    ] {
-        assert!(call(&server, &token, query).await.get("errors").is_none());
-    }
+    let started = call(&server, &token, "mutation {startPomodoro(durationSec:30) {isRunning isPaused totalTimeSec}}").await;
+    assert!(started.get("errors").is_none(), "{started}");
+    assert_eq!(started["data"]["startPomodoro"], json!({"isRunning":true,"isPaused":false,"totalTimeSec":60}));
+    let paused = call(&server, &token, "mutation {pausePomodoro {isRunning isPaused}}").await;
+    assert!(paused.get("errors").is_none(), "{paused}");
+    assert_eq!(paused["data"]["pausePomodoro"], json!({"isRunning":false,"isPaused":true}));
+    let changed = call(&server, &token, "mutation {setPomodoroRemainingTime(remainingSec:17) {timeLeftSec totalTimeSec isRunning isPaused}}").await;
+    assert!(changed.get("errors").is_none(), "{changed}");
+    assert_eq!(changed["data"]["setPomodoroRemainingTime"], json!({"timeLeftSec":17,"totalTimeSec":60,"isRunning":false,"isPaused":true}));
     assert_eq!(
         call(&server, &token, "{pomodoroToday {isRunning isPaused}} ").await["data"]["pomodoroToday"],
         json!({"isRunning":false,"isPaused":true})
     );
-    call(&server, &token, "mutation {startPomodoro(durationSec:30)}").await;
+    call(&server, &token, "mutation {startPomodoro(durationSec:30) {timeLeftSec totalTimeSec isRunning isPaused state}}").await;
     call(
         &server,
         &token,
-        "mutation {adjustPomodoro(durationSec:0) {state}}",
+        "mutation {setPomodoroRemainingTime(remainingSec:0) {state}}",
     )
     .await;
     tokio::time::timeout(std::time::Duration::from_secs(5), async {
@@ -109,12 +112,12 @@ async fn server_assembly_runs_the_timer_and_main_controls_share_its_statistics()
     call(
         &server,
         &token,
-        "mutation {adjustPomodoro(durationSec:0) {state}}",
+        "mutation {setPomodoroRemainingTime(remainingSec:0) {state}}",
     )
     .await;
     assert_eq!(
-        call(&server, &token, "mutation {stopPomodoro}").await["data"]["stopPomodoro"],
-        true
+        call(&server, &token, "mutation {stopPomodoro {timeLeftSec totalTimeSec isRunning isPaused state}}").await["data"]["stopPomodoro"],
+        json!({"timeLeftSec":60,"totalTimeSec":60,"isRunning":false,"isPaused":false,"state":"WORK"})
     );
     server.shutdown().await;
 }
@@ -126,6 +129,8 @@ async fn main_schema_rejects_retired_client_scheduler_controls() {
     let server =
         ContentServer::start(fixture._directory.path(), &token, fixture.prefs.clone()).unwrap();
     for query in [
+        "mutation { adjustPomodoro(durationSec:10) {state} }",
+        "mutation { setPomodoroRemainingTime(durationSec:10) {state} }",
         "mutation { tickPomodoro {completedState} }",
         "mutation { skipPomodoro {completedState} }",
         "{pomodoroTotalCompleted}",

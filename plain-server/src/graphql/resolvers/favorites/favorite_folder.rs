@@ -68,7 +68,7 @@ impl FavoriteFolderMutation {
         list_gql(db)
     }
 
-    /// Set the favorite folder's display alias and return the whole list.
+    /// Set the favorite folder's display alias and return the whole list; error if the favorite does not exist.
     fn set_favorite_folder_alias(
         &self,
         ctx: &Context<'_>,
@@ -76,9 +76,15 @@ impl FavoriteFolderMutation {
         alias: String,
     ) -> Result<Vec<FavoriteFolder>> {
         let db = ctx.data::<Arc<Db>>()?;
-        if let Some(f) = favorite_folders::find_by_full_path(db, &full_path)? {
-            favorite_folders::set_alias(db, &f.root_path, &f.relative_path, &alias)?;
+        let favorite = favorite_folders::find_by_full_path(db, &full_path)?
+            .ok_or_else(|| plain_graphql::Error::new("Favorite folder not found"))?;
+        if !favorite_folders::set_alias(db, &favorite.root_path, &favorite.relative_path, &alias)? {
+            return Err(plain_graphql::Error::new("Favorite folder not found"));
         }
         list_gql(db)
     }
 }
+
+#[cfg(test)]
+#[path = "../../../../../tests/plain-server/unit/graphql/resolvers/favorites/favorite_folder.rs"]
+mod tests;

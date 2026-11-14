@@ -7,13 +7,13 @@ use std::sync::Arc;
 pub struct PomodoroControlMutation;
 #[Object]
 impl PomodoroControlMutation {
-    fn adjust_pomodoro(
+    fn set_pomodoro_remaining_time(
         &self,
         ctx: &Context<'_>,
-        duration_sec: i32,
+        remaining_sec: i32,
     ) -> plain_graphql::Result<PomodoroToday> {
         Ok(ctx
             .data::<Arc<Service>>()?
-            .command("adjust", Some(duration_sec))?)
+            .command("adjust", Some(remaining_sec))?)
     }
 }

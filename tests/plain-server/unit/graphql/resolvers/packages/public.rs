@@ -214,3 +214,27 @@ async fn package_manifest_preserves_package_permission_and_missing_package_error
             .any(|error| error.message == "Package not found")
     );
 }
+
+#[tokio::test]
+async fn uninstall_initiation_does_not_imply_package_removal() {
+    let (_dir, schema, _prefs) = fixture(json!(["APPS"]));
+    stub(schema_host(&schema), |method, params| {
+        assert_eq!(params, json!({"ids":["com.example.fixture"]}));
+        match method {
+            "systemUninstallPackages" => json!(true),
+            "systemPackageStatuses" => json!({"com.example.fixture": {"updatedAt": null}}),
+            other => panic!("unexpected platform operation {other}"),
+        }
+    });
+    let response = schema.execute(
+        r#"mutation { uninstallPackages(ids:["com.example.fixture"]) }"#
+    ).await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    assert_eq!(response.data.into_json().unwrap(), json!({"uninstallPackages":true}));
+    let response = schema.execute(
+        r#"{ packageStatuses(ids:["com.example.fixture"]) { id exists } }"#
+    ).await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    assert_eq!(response.data.into_json().unwrap(),
+        json!({"packageStatuses":[{"id":"com.example.fixture", "exists":true}]}));
+}
