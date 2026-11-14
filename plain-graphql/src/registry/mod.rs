@@ -79,6 +79,9 @@ impl MetaTypeName<'_> {
             (MetaTypeName::List(super_type), MetaTypeName::List(sub_type)) => {
                 MetaTypeName::create(super_type).is_subtype(&MetaTypeName::create(sub_type))
             }
+            (MetaTypeName::List(_), MetaTypeName::NonNull(sub_type)) => {
+                self.is_subtype(&MetaTypeName::create(sub_type))
+            }
             _ => false,
         }
     }

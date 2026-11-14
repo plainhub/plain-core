@@ -29,3 +29,25 @@ fn test_non_repeatable_directive_dsl() {
         .sdl()
     )
 }
+
+#[test]
+fn list_variable_subtypes_preserve_outer_and_item_nullability() {
+    use crate::registry::MetaTypeName;
+    for (expected, actual, accepted) in [
+        ("[String!]", "[String!]!", true),
+        ("[String]", "[String!]!", true),
+        ("[[String!]]", "[[String!]!]!", true),
+        ("[String!]!", "[String!]", false),
+        ("[String!]", "[String]", false),
+        ("[String!]", "[String]!", false),
+        ("[String]", "String!", false),
+        ("String", "[String]!", false),
+        ("[String!]", "[Int!]!", false),
+    ] {
+        assert_eq!(
+            MetaTypeName::create(expected).is_subtype(&MetaTypeName::create(actual)),
+            accepted,
+            "{actual} into {expected}"
+        );
+    }
+}

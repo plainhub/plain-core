@@ -352,3 +352,23 @@ async fn exports_are_queries_and_do_not_notify_content_changes() {
     }
     server.shutdown().await;
 }
+
+#[tokio::test]
+async fn tools_preferences_with_variables_return_defaults_on_a_fresh_native_host() {
+    let directory = plain_libs::temporary::tempdir().unwrap();
+    let core = ContentServer::open(directory.path()).unwrap();
+    let response = core
+        .native_graphql()
+        .unwrap()
+        .execute(
+            plain_graphql::Request::new("query($keys: [String!]!) { prefs(keys: $keys) }")
+                .variables(plain_graphql::Variables::from_json(json!({"keys":["app_home_features"]}))),
+        )
+        .await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    assert_eq!(
+        response.data.into_json().unwrap()["prefs"]["app_home_features"],
+        "IMAGES|VIDEOS|AUDIO|DOCS|FILES|NOTES|FEEDS"
+    );
+    core.shutdown().await;
+}
