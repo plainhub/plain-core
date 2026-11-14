@@ -8,12 +8,10 @@ pub struct KeyValueQuery;
 #[Object]
 impl KeyValueQuery {
     /// Read JSON application data by key; returns null when absent and does not read preferences.
-    fn key_value(&self, ctx: &Context<'_>, key: String) -> Result<Json<Value>> {
+    fn key_value(&self, ctx: &Context<'_>, key: String) -> Result<Option<Json<Value>>> {
         validate_key(&key)?;
         let state = ctx.data::<ServerState>()?;
-        Ok(Json(
-            state.store.get()?.get_json(&key)?.unwrap_or(Value::Null),
-        ))
+        Ok(state.store.get()?.get_json(&key)?.map(Json))
     }
 }
 

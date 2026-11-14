@@ -4,13 +4,31 @@ use crate::runtime::Runtime as CoreRuntime;
 use std::sync::Arc;
 use tokio::sync::watch;
 
+#[derive(Clone)]
 pub struct Capture {
     pub text: String,
     pub sensitive: bool,
     pub eligible: bool,
+    received: bool,
 }
 
 pub struct Changes(watch::Sender<Option<Arc<Capture>>>);
+
+pub struct Receipt<'a> {
+    changes: &'a Changes,
+    text: &'a str,
+}
+
+impl Drop for Receipt<'_> {
+    fn drop(&mut self) {
+        self.changes.0.send_if_modified(|current| {
+            if let Some(capture) = current.as_mut().filter(|capture| capture.text == self.text) {
+                Arc::make_mut(capture).received = false;
+            }
+            false
+        });
+    }
+}
 
 impl Default for Changes {
     fn default() -> Self {
@@ -30,11 +48,11 @@ impl Changes {
             .is_some_and(|capture| capture.eligible && !capture.sensitive && capture.text == text)
     }
 
-    pub fn received(&self, text: &str) {
+    pub fn received<'a>(&'a self, text: &'a str) -> Receipt<'a> {
         self.0.send_if_modified(|current| {
             if current
                 .as_ref()
-                .is_some_and(|old| old.text == text && !old.eligible && !old.sensitive)
+                .is_some_and(|old| old.text == text && old.received)
             {
                 return false;
             }
@@ -42,9 +60,11 @@ impl Changes {
                 text: text.into(),
                 sensitive: false,
                 eligible: false,
+                received: true,
             }));
             true
         });
+        Receipt { changes: self, text }
     }
 
     fn observe(&self, text: &str, sensitive: bool, inserted: bool) {
@@ -60,6 +80,7 @@ impl Changes {
                 text: text.into(),
                 sensitive,
                 eligible: inserted && !sensitive,
+                received: false,
             }));
             true
         });
@@ -90,6 +111,13 @@ pub fn record_history(
 pub fn report(state: &CoreRuntime, payload: &str) -> Result<(), String> {
     let value: Report = plain_libs::serde_json::from_str(payload).map_err(|error| error.to_string())?;
     if !crate::features::services::device::access::is_enabled(&state.prefs, &[AccessFeature::Clipboard]) {
+        return Ok(());
+    }
+    if !value.sensitive
+        && state.clipboard_changes.0.borrow().as_ref().is_some_and(|capture| {
+            capture.received && capture.text == value.text
+        })
+    {
         return Ok(());
     }
     let (item, inserted) =

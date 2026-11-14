@@ -141,6 +141,7 @@ fn write_host(
     let observations = Arc::new(std::sync::Mutex::new(Vec::new()));
     let seen = observations.clone();
     let db = state.db.clone();
+    let state = state.clone();
     let host = state.host.clone();
     let (generation, mut requests) = host.connect();
     tokio::spawn(async move {
@@ -156,6 +157,13 @@ fn write_host(
                         .into_iter()
                         .find(|item| item.text == text);
                     seen.lock().unwrap().push(item);
+                    if result.get("result").and_then(Value::as_bool) == Some(true) {
+                        plain_rs::features::services::clipboard::report(
+                            &state,
+                            &json!({"text":text,"sensitive":false}).to_string(),
+                        )
+                        .unwrap();
+                    }
                     result.clone()
                 }
                 other => panic!("unexpected host call {other}"),
@@ -169,7 +177,7 @@ fn write_host(
 }
 
 #[tokio::test]
-async fn set_clipboard_records_authenticated_source_before_platform_write_and_suppresses_echo() {
+async fn set_clipboard_records_after_platform_success_and_suppresses_early_and_late_echoes() {
     let (_dir, server) = write_fixture();
     let state = server.runtime_state();
     let seen = write_host(&state, json!({"result":true}));
@@ -182,18 +190,12 @@ async fn set_clipboard_records_authenticated_source_before_platform_write_and_su
     }
     let observations = seen.lock().unwrap();
     assert_eq!(observations.len(), 2);
-    for item in observations.iter() {
-        let item = item
-            .as_ref()
-            .expect("history must precede the platform write");
-        assert_eq!(item.source, "fixture-client");
-        assert_eq!(item.label, "");
-        assert!(!item.sensitive);
-    }
-    assert_eq!(
-        observations[0].as_ref().unwrap().id,
-        observations[1].as_ref().unwrap().id
-    );
+    assert!(observations[0].is_none(), "history must follow platform success");
+    let item = observations[1].as_ref().unwrap();
+    assert_eq!(item.source, "fixture-client");
+    assert_eq!(item.label, "");
+    assert!(!item.sensitive);
+    assert_eq!(state.db.clipboard_latest().unwrap().unwrap().id, item.id);
     drop(observations);
     let mut events = state.events.subscribe();
     plain_rs::features::services::clipboard::report(
@@ -252,22 +254,26 @@ async fn set_clipboard_keeps_the_utf16_boundary_and_platform_failure_semantics()
     let text = "🌍".repeat(128 * 1024);
     let response = write_request(&state, &text).await;
     assert_eq!(response.errors[0].message, "fixture platform failure");
-    assert!(
-        seen.lock().unwrap()[0].is_some(),
-        "baseline history remains recorded even when the SDK fails"
-    );
-    assert_eq!(state.db.clipboard_count_rows().unwrap(), 1);
+    assert!(seen.lock().unwrap()[0].is_none());
+    assert_eq!(state.db.clipboard_count_rows().unwrap(), 0);
     let seen = write_host(&state, json!({"result":false}));
     let response = write_request(&state, &text).await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     assert_eq!(response.data.into_json().unwrap()["setClipboard"], false);
     assert_eq!(seen.lock().unwrap().len(), 1);
+    assert_eq!(state.db.clipboard_count_rows().unwrap(), 0);
+    let seen = write_host(&state, json!({"result":true}));
+    let response = write_request(&state, &text).await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    assert_eq!(response.data.into_json().unwrap()["setClipboard"], true);
+    assert!(seen.lock().unwrap()[0].is_none());
+    assert_eq!(state.db.clipboard_latest().unwrap().unwrap().text, text);
     assert_eq!(state.db.clipboard_count_rows().unwrap(), 1);
     server.shutdown().await;
 }
 
 #[tokio::test]
-async fn set_clipboard_does_not_write_to_the_platform_when_history_storage_fails() {
+async fn set_clipboard_reports_history_storage_failure_after_the_platform_write() {
     let (_dir, server) = write_fixture();
     let state = server.runtime_state();
     let seen = write_host(&state, json!({"result":true}));
@@ -280,7 +286,8 @@ async fn set_clipboard_does_not_write_to_the_platform_when_history_storage_fails
             .message
             .contains("fixture storage failure")
     );
-    assert!(seen.lock().unwrap().is_empty());
+    assert_eq!(seen.lock().unwrap().len(), 1);
+    assert!(seen.lock().unwrap()[0].is_none());
     assert_eq!(state.db.clipboard_count_rows().unwrap(), 0);
     server.shutdown().await;
 }

@@ -73,7 +73,7 @@ fn public_schema_exposes_the_contract_it_has_to_serve() {
     assert!(!sdl.contains("dbTableColumns("));
     assert!(!sdl.contains("includeTrashed"));
     assert!(!sdl.contains("embeddedAudioLyrics"));
-    assert!(sdl.contains("keyValue(key: String!): JSON!"));
+    assert!(sdl.lines().any(|line| line.trim() == "keyValue(key: String!): JSON"));
     assert!(sdl.contains("setKeyValue(key: String!, value: JSON!): Boolean!"));
     for removed in [
         "savedValue(",

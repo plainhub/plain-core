@@ -59,6 +59,23 @@ async fn reports_recheck_permission_deduplicate_and_publish_only_nonsensitive_te
 }
 
 #[tokio::test]
+async fn repeated_local_captures_are_not_treated_as_received_echoes_after_history_is_cleared() {
+    let dir = plain_libs::temporary::tempdir().unwrap();
+    let (server, _, _) = start(&dir);
+    let state = server.runtime_state();
+    let payload = json!({"text":"local fixture", "sensitive":false}).to_string();
+    report(&state, &payload).unwrap();
+    report(&state, &payload).unwrap();
+    assert_eq!(state.db.clipboard_clear().unwrap(), 1);
+    let mut events = state.events.subscribe();
+    report(&state, &payload).unwrap();
+    assert_eq!(state.db.clipboard_count_rows().unwrap(), 1);
+    assert!(state.clipboard_changes.can_send("local fixture"));
+    assert_eq!(events.try_recv().unwrap().event_type, "CLIPBOARD_CHANGED");
+    server.shutdown().await;
+}
+
+#[tokio::test]
 async fn local_captures_coalesce_duplicates_and_sensitive_or_historical_changes_invalidate_pending_pushes()
  {
     let directory = plain_libs::temporary::tempdir().unwrap();

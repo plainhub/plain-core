@@ -18,9 +18,7 @@ extend type Mutation {
 	"""
 	deleteClipboardItems(query: String!): ActionResult!
 	"""
-	Write text into the system clipboard on behalf of the calling client.
-	The write is recorded with the caller as source; the local watcher
-	sees it but skips re-broadcasting (hash dedup), so there is no loop.
+	Record caller-attributed history only after a successful system write; suppress watcher echoes.
 	"""
 	setClipboard(text: String!): Boolean!
 }

@@ -49,32 +49,35 @@ pub struct ClipboardMutation;
 
 #[Object]
 impl ClipboardMutation {
-    /// Write text into the system clipboard on behalf of the calling client.
-    /// The write is recorded with the caller as source; the local watcher
-    /// sees it but skips re-broadcasting (hash dedup), so there is no loop.
+    /// Record caller-attributed history only after a successful system write; suppress watcher echoes.
     async fn set_clipboard(&self, ctx: &Context<'_>, text: String) -> plain_graphql::Result<bool> {
         enabled(ctx)?;
         let source = ctx
             .data_opt::<crate::graphql::executor::RequestClient>()
             .map(crate::graphql::executor::RequestClient::client_id)
             .unwrap_or_default();
-        plain_rs::features::services::clipboard::record_history(
-            ctx.data::<Arc<Db>>()?,
-            ctx.data::<Arc<Host>>()?,
-            &text,
-            source,
-            false,
-        )
-        .map_err(plain_graphql::Error::new)?;
-        if let Some(state) = ctx.data_opt::<crate::server::ServerState>() {
-            state.clipboard_changes.received(&text);
-        }
+        plain_rs::features::clipboard::validate_text(&text)
+            .map_err(plain_graphql::Error::new)?;
+        let _receipt = ctx
+            .data_opt::<crate::server::ServerState>()
+            .map(|state| state.clipboard_changes.received(&text));
         let result = ctx
             .data::<Arc<Host>>()?
-            .call("systemSetClipboard", plain_libs::serde_json::json!({ "text": text }))
+            .call("systemSetClipboard", plain_libs::serde_json::json!({ "text": &text }))
             .await
             .map_err(plain_graphql::Error::new)?;
-        Ok(plain_libs::serde_json::from_value(result)?)
+        let written = plain_libs::serde_json::from_value(result)?;
+        if written {
+            plain_rs::features::services::clipboard::record_history(
+                ctx.data::<Arc<Db>>()?,
+                ctx.data::<Arc<Host>>()?,
+                &text,
+                source,
+                false,
+            )
+            .map_err(plain_graphql::Error::new)?;
+        }
+        Ok(written)
     }
 
     /// Delete clipboard history entries matching the query DSL (`ids:` /
