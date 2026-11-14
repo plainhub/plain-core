@@ -1,1 +1,0 @@
-import{f as e}from"./chunk-client-id-CSj66mmO.js";function t(){let t=crypto.getRandomValues(new Uint8Array(16)),n=Date.now();for(let e=5;e>=0;e--)t[e]=n%256,n=Math.floor(n/256);t[6]=t[6]&15|112,t[8]=t[8]&63|128;let r=e(t);return`${r.slice(0,8)}-${r.slice(8,12)}-${r.slice(12,16)}-${r.slice(16,20)}-${r.slice(20)}`}export{t};
