@@ -17,6 +17,8 @@ pub(super) struct Values {
     pub(super) stdin: bool,
     pub(super) after: Option<String>,
     pub(super) request_id: Option<String>,
+    pub(super) pref_key: Option<String>,
+    pub(super) pref_value: Option<String>,
 }
 
 impl Values {

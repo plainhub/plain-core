@@ -70,30 +70,32 @@ fn password_input_can_use_standard_input() {
 }
 
 #[test]
-fn developer_mode_commands_require_an_explicit_state() {
-    for (state, enabled) in [("on", true), ("off", false)] {
-        let cli = Cli::try_parse_from([
-            "plainapp",
-            "dev",
-            state,
-            "--data-dir",
-            "data",
-            "--cache-dir",
-            "cache",
-        ])
-        .unwrap();
-        assert!(matches!(cli.command, Cmd::Dev { enabled: value } if value == enabled));
-        assert_eq!(cli.data_dir, Some(PathBuf::from("data")));
-        assert_eq!(cli.cache_dir, Some(PathBuf::from("cache")));
+fn preferences_command_requires_key_and_value() {
+    let cli = Cli::try_parse_from([
+        "plainapp",
+        "prefs",
+        "developer_mode",
+        "true",
+        "--data-dir",
+        "data",
+        "--cache-dir",
+        "cache",
+    ])
+    .unwrap();
+    assert!(
+        matches!(cli.command, Cmd::Prefs { ref key, ref value } if key == "developer_mode" && value == "true")
+    );
+    assert_eq!(cli.data_dir, Some(PathBuf::from("data")));
+    assert_eq!(cli.cache_dir, Some(PathBuf::from("cache")));
+    for arguments in [
+        vec!["prefs"],
+        vec!["prefs", "developer_mode"],
+        vec!["prefs", "developer_mode", "true", "extra"],
+        vec!["dev", "on"],
+    ] {
+        assert!(Cli::try_parse_from(std::iter::once("plainapp").chain(arguments)).is_err());
     }
-    for arguments in [vec!["dev"], vec!["dev", "true"], vec!["dev", "on", "off"]] {
-        let error = Cli::try_parse_from(std::iter::once("plainapp").chain(arguments)).unwrap_err();
-        assert_eq!(error.code, 2);
-    }
-    let error = Cli::try_parse_from(["plainapp", "dev"]).unwrap_err();
-    assert!(error.message.contains("plainapp dev"));
-    let help = Cli::try_parse_from(["plainapp", "dev", "--help"]).unwrap_err();
+    let help = Cli::try_parse_from(["plainapp", "prefs", "--help"]).unwrap_err();
     assert_eq!(help.code, 0);
-    assert!(help.message.contains("on"));
-    assert!(help.message.contains("off"));
+    assert!(help.message.contains("<KEY> <VALUE>"));
 }

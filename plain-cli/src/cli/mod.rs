@@ -2,7 +2,7 @@ mod help;
 mod options;
 mod parser;
 
-pub mod dev;
+pub mod prefs;
 pub mod install;
 pub mod login;
 pub mod passwd;
@@ -69,8 +69,9 @@ pub(crate) enum Cmd {
         command: login::Command,
     },
     Update,
-    Dev {
-        enabled: bool,
+    Prefs {
+        key: String,
+        value: String,
     },
 }
 

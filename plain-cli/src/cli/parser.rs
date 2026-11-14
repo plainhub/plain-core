@@ -18,9 +18,7 @@ pub(super) enum Scope {
     Allow,
     Deny,
     Update,
-    Dev,
-    DevOn,
-    DevOff,
+    Prefs,
     RootHelp,
     LoginHelp,
 }
@@ -86,9 +84,15 @@ impl Cli {
                     (Scope::Root, "passwd") => Scope::Passwd,
                     (Scope::Root, "login") => Scope::Login,
                     (Scope::Root, "update") => Scope::Update,
-                    (Scope::Root, "dev") => Scope::Dev,
-                    (Scope::Dev, "on") => Scope::DevOn,
-                    (Scope::Dev, "off") => Scope::DevOff,
+                    (Scope::Root, "prefs") => Scope::Prefs,
+                    (Scope::Prefs, _) if !help_command && values.pref_key.is_none() => {
+                        values.pref_key = Some(word);
+                        scope
+                    }
+                    (Scope::Prefs, _) if !help_command && values.pref_value.is_none() => {
+                        values.pref_value = Some(word);
+                        scope
+                    }
                     (Scope::Login, "requests") => Scope::Requests,
                     (Scope::Login, "allow") => Scope::Allow,
                     (Scope::Login, "deny") => Scope::Deny,
@@ -136,10 +140,15 @@ impl Cli {
                 }
             }
             Scope::Update => Cmd::Update,
-            Scope::DevOn | Scope::DevOff => Cmd::Dev {
-                enabled: scope == Scope::DevOn,
+            Scope::Prefs => Cmd::Prefs {
+                key: values
+                    .pref_key
+                    .ok_or_else(|| ParseError::invalid("a preference key is required"))?,
+                value: values
+                    .pref_value
+                    .ok_or_else(|| ParseError::invalid("a preference value is required"))?,
             },
-            Scope::Root | Scope::Login | Scope::Dev | Scope::RootHelp | Scope::LoginHelp => {
+            Scope::Root | Scope::Login | Scope::RootHelp | Scope::LoginHelp => {
                 return Err(ParseError {
                     code: 2,
                     message: super::help::render(scope).to_owned(),
@@ -152,8 +161,7 @@ impl Cli {
                 Scope::Run
                     | Scope::Uninstall
                     | Scope::Passwd
-                    | Scope::DevOn
-                    | Scope::DevOff
+                    | Scope::Prefs
                     | Scope::Requests
                     | Scope::Allow
                     | Scope::Deny
@@ -163,11 +171,7 @@ impl Cli {
                 "--data-dir is not used by this command",
             ));
         }
-        if values.cache_dir.is_some()
-            && !matches!(
-                scope,
-                Scope::Run | Scope::Passwd | Scope::DevOn | Scope::DevOff
-            )
+        if values.cache_dir.is_some() && !matches!(scope, Scope::Run | Scope::Passwd | Scope::Prefs)
         {
             return Err(ParseError::invalid(
                 "--cache-dir is not used by this command",
