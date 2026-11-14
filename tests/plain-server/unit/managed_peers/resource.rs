@@ -180,7 +180,7 @@ async fn peer_exports_stream_large_files_to_local_collision_safe_destinations() 
                 &scope,
                 Some("remote"),
                 source.to_str().unwrap(),
-                ResourceDestination::File(destination.join("cancelled.bin"))
+                ResourceDestination::File(destination.join("canceled.bin"))
             )
             .await
             .is_err()

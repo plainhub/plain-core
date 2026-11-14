@@ -82,10 +82,10 @@ async fn refresh(
     state: &plain_rs::runtime::Runtime,
     id: &str,
     identity: &plain_rs::features::services::peers::management::Identity,
-    cancelled: &tokio::sync::watch::Receiver<bool>,
+    canceled: &tokio::sync::watch::Receiver<bool>,
 ) -> plain_libs::anyhow::Result<()> {
     plain_rs::features::services::peers::management::refresh_data(
-        state, id, identity, cancelled, None,
+        state, id, identity, canceled, None,
     )
     .await
 }
@@ -354,21 +354,21 @@ async fn encrypted_snapshots_keep_socket_delivery_live_and_discard_revoked_crede
         ip: peer.ip.clone(),
         port: peer.port,
     };
-    let (cancel, cancelled) = watch::channel(false);
+    let (cancel, canceled) = watch::channel(false);
     while callbacks.try_recv().is_ok() {}
     *facts.lock().unwrap() = vec![plain_libs::serde_json::to_value(notification("confirmed")).unwrap()];
-    refresh(&state, &peer.id, &identity, &cancelled)
+    refresh(&state, &peer.id, &identity, &canceled)
         .await
         .unwrap();
     let confirmed = event(&mut callbacks);
     assert_eq!(confirmed["alerts"][0]["id"], "confirmed");
-    refresh(&state, &peer.id, &identity, &cancelled)
+    refresh(&state, &peer.id, &identity, &canceled)
         .await
         .unwrap();
     assert!(callbacks.try_recv().is_err());
     let before = reads.load(Ordering::SeqCst);
     allowed.store(false, Ordering::SeqCst);
-    refresh(&state, &peer.id, &identity, &cancelled)
+    refresh(&state, &peer.id, &identity, &canceled)
         .await
         .unwrap();
     assert_eq!(reads.load(Ordering::SeqCst), before);
@@ -380,7 +380,7 @@ async fn encrypted_snapshots_keep_socket_delivery_live_and_discard_revoked_crede
     );
     allowed.store(true, Ordering::SeqCst);
     supported.store(false, Ordering::SeqCst);
-    refresh(&state, &peer.id, &identity, &cancelled)
+    refresh(&state, &peer.id, &identity, &canceled)
         .await
         .unwrap();
     assert_eq!(reads.load(Ordering::SeqCst), before);
@@ -393,7 +393,7 @@ async fn encrypted_snapshots_keep_socket_delivery_live_and_discard_revoked_crede
             .any(|capability| capability == "NOTIFICATIONS")
     );
     supported.store(true, Ordering::SeqCst);
-    refresh(&state, &peer.id, &identity, &cancelled)
+    refresh(&state, &peer.id, &identity, &canceled)
         .await
         .unwrap();
     event(&mut callbacks);
@@ -402,7 +402,7 @@ async fn encrypted_snapshots_keep_socket_delivery_live_and_discard_revoked_crede
         .set("api_permissions", json!([]))
         .unwrap();
     let before = reads.load(Ordering::SeqCst);
-    refresh(&state, &peer.id, &identity, &cancelled)
+    refresh(&state, &peer.id, &identity, &canceled)
         .await
         .unwrap();
     let error = plain_rs::features::services::peers::management_http::query(
@@ -428,7 +428,7 @@ async fn encrypted_snapshots_keep_socket_delivery_live_and_discard_revoked_crede
         .set("api_permissions", json!(["NOTIFICATIONS"]))
         .unwrap();
     hold.store(true, Ordering::SeqCst);
-    let pending = refresh(&state, &peer.id, &identity, &cancelled);
+    let pending = refresh(&state, &peer.id, &identity, &canceled);
     tokio::pin!(pending);
     tokio::select! {
         _ = &mut pending => panic!("Snapshot must wait for platform facts"),
@@ -444,7 +444,7 @@ async fn encrypted_snapshots_keep_socket_delivery_live_and_discard_revoked_crede
     assert!(callbacks.try_recv().is_err());
     cancel.send_replace(true);
     let before = reads.load(Ordering::SeqCst);
-    refresh(&state, &peer.id, &identity, &cancelled)
+    refresh(&state, &peer.id, &identity, &canceled)
         .await
         .unwrap();
     assert_eq!(reads.load(Ordering::SeqCst), before);
@@ -457,7 +457,7 @@ async fn encrypted_snapshots_keep_socket_delivery_live_and_discard_revoked_crede
             )
             .unwrap()
     });
-    refresh(&state, &peer.id, &identity, &cancelled)
+    refresh(&state, &peer.id, &identity, &canceled)
         .await
         .unwrap();
     let restored = event(&mut callbacks);
@@ -466,7 +466,7 @@ async fn encrypted_snapshots_keep_socket_delivery_live_and_discard_revoked_crede
         remote_state.db.session_delete(&session.client_id).unwrap(),
         1
     );
-    refresh(&state, &peer.id, &identity, &cancelled)
+    refresh(&state, &peer.id, &identity, &canceled)
         .await
         .unwrap();
     let rejected = event(&mut callbacks);

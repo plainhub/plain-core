@@ -8,8 +8,7 @@ fn fixture(name: &str) -> Vec<u8> {
     std::fs::read(&p).unwrap_or_else(|_| panic!("missing fixture {}", p.display()))
 }
 
-/// Reference: full JPEG decoding at one-eighth scale. scale.
-/// The dev-only feature avoids CPU-specific SIMD rounding without weakening parity.
+/// Reference: full JPEG decoding at one-eighth scale with native color rounding.
 fn reference_1_8(data: &[u8]) -> Bitmap {
     let mut dec = crate::jpeg::Decoder::new(std::io::Cursor::new(data));
     dec.read_info().unwrap();
@@ -38,8 +37,7 @@ fn assert_same(a: &Bitmap, b: &Bitmap, ctx: &str) {
     );
     let (da, _, _) = a.raw();
     let (db, _, _) = b.raw();
-    // The kernels mirror jpeg-decoder's scalar integer math exactly; measured
-    // byte-identical on all fixtures. Allow nothing.
+    // Preserve byte equality with the reference decoder on each architecture.
     assert!(
         da == db,
         "{ctx}: {} of {} bytes differ",
@@ -109,8 +107,7 @@ fn sequential_dc_matches_scalar_decoder_with_nonzero_ac_coefficients() {
         crate::image::codecs::jpeg::JpegEncoder::new_with_quality(&mut bytes, 85)
             .encode(image.as_raw(), w, h, crate::image::ExtendedColorType::Rgb8)
             .unwrap();
-        let mut decoder = Decoder::new(&bytes).unwrap();
-        decoder.six_bit_color = false;
+        let decoder = Decoder::new(&bytes).unwrap();
         let decoded = decoder.decode(false, None).unwrap();
         assert_same(&decoded, &reference_1_8(&bytes), "sequential AC skipping");
         let mut decoder = Decoder::new(&bytes).unwrap();
@@ -453,5 +450,26 @@ fn cropped_dc_reconstruction_matches_the_full_grid_with_chroma_neighbors() {
                 (expected.width() * expected.height()) as usize
             );
         }
+    }
+}
+
+#[test]
+fn progressive_and_sequential_color_use_the_same_vector_rounding_and_scalar_tail() {
+    let frame = Frame {
+        width: 128,
+        height: 8,
+        comps: (0..3).map(|id| ComponentSpec { id, sx: 1, sy: 1, quant_id: 0 }).collect(),
+        hmax: 1,
+        vmax: 1,
+    };
+    for sequential in [false, true] {
+        let mut decoder = Decoder::new(&[0xff, 0xd8, 0xff, 0xd9]).unwrap();
+        decoder.sequential = sequential;
+        decoder.six_bit_color = true;
+        decoder.quant[0] = vec![1; 64];
+        decoder.coefs = vec![vec![0; 16], vec![-1024; 16], vec![-408; 16]];
+        let image = decoder.reconstruct(&frame, None).unwrap();
+        let expected = [[57, 208, 0]; 8].into_iter().chain([[56, 208, 0]; 8]).flatten().collect::<Vec<_>>();
+        assert_eq!(image.raw().0, expected, "sequential={sequential}");
     }
 }

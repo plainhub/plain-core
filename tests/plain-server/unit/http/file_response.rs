@@ -37,7 +37,7 @@ fn conditional_thumbnail_response_releases_its_shared_buffer() {
 }
 
 #[tokio::test]
-async fn temporary_output_survives_until_the_response_body_is_consumed_or_cancelled() {
+async fn temporary_output_survives_until_the_response_body_is_consumed_or_canceled() {
     let dir = plain_libs::temporary::tempdir().unwrap();
     for consume in [true, false] {
         let path = dir.path().join("preview.png");

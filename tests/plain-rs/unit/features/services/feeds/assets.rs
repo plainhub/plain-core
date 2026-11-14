@@ -1,7 +1,7 @@
 use super::*;
 
 #[tokio::test]
-async fn cancelled_imports_are_drained_and_release_only_their_own_reference() {
+async fn canceled_imports_are_drained_and_release_only_their_own_reference() {
     for reused in [false, true] {
         let directory = plain_libs::temporary::tempdir().unwrap();
         let db = Arc::new(Db::open(&directory.path().join("feeds.db")).unwrap());

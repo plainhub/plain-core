@@ -6,35 +6,35 @@ use crate::anyhow::{Context, Result};
 pub fn walk_files(
     root: &Path,
     excluded: impl FnMut(&Path) -> bool,
-    cancelled: impl FnMut() -> bool,
+    canceled: impl FnMut() -> bool,
     visit: impl FnMut(&Path) -> Result<()>,
 ) -> Result<()> {
-    walk(root, excluded, cancelled, visit, false, |_| {})
+    walk(root, excluded, canceled, visit, false, |_| {})
 }
 
 pub fn walk_entries(
     root: &Path,
     excluded: impl FnMut(&Path) -> bool,
-    cancelled: impl FnMut() -> bool,
+    canceled: impl FnMut() -> bool,
     visit: impl FnMut(&Path) -> Result<()>,
 ) -> Result<()> {
-    walk_entries_with_skipped(root, excluded, cancelled, visit, |_| {})
+    walk_entries_with_skipped(root, excluded, canceled, visit, |_| {})
 }
 
 pub fn walk_entries_with_skipped(
     root: &Path,
     excluded: impl FnMut(&Path) -> bool,
-    cancelled: impl FnMut() -> bool,
+    canceled: impl FnMut() -> bool,
     visit: impl FnMut(&Path) -> Result<()>,
     skipped: impl FnMut(&Path),
 ) -> Result<()> {
-    walk(root, excluded, cancelled, visit, true, skipped)
+    walk(root, excluded, canceled, visit, true, skipped)
 }
 
 fn walk(
     root: &Path,
     mut excluded: impl FnMut(&Path) -> bool,
-    mut cancelled: impl FnMut() -> bool,
+    mut canceled: impl FnMut() -> bool,
     mut visit: impl FnMut(&Path) -> Result<()>,
     include_directories: bool,
     mut skipped: impl FnMut(&Path),
@@ -45,8 +45,8 @@ fn walk(
             root.display()
         ));
     }
-    if cancelled() {
-        return Err(cancelled_error(root));
+    if canceled() {
+        return Err(canceled_error(root));
     }
     let root_meta = match fs::symlink_metadata(root) {
         Ok(metadata) => metadata,
@@ -75,8 +75,8 @@ fn walk(
         return Ok(());
     }
     if root_meta.is_file() {
-        if cancelled() {
-            return Err(cancelled_error(root));
+        if canceled() {
+            return Err(canceled_error(root));
         }
         visit(root).with_context(|| format!("cannot visit {}", root.display()))?;
         return Ok(());
@@ -84,8 +84,8 @@ fn walk(
 
     let mut stack: Vec<PathBuf> = vec![root.to_path_buf()];
     while let Some(directory) = stack.pop() {
-        if cancelled() {
-            return Err(cancelled_error(root));
+        if canceled() {
+            return Err(canceled_error(root));
         }
         let entries = match fs::read_dir(&directory) {
             Ok(entries) => entries,
@@ -115,8 +115,8 @@ fn walk(
                     });
                 }
             };
-            if cancelled() {
-                return Err(cancelled_error(root));
+            if canceled() {
+                return Err(canceled_error(root));
             }
             let path = entry.path();
             if excluded(&path) {
@@ -137,8 +137,8 @@ fn walk(
             if file_type.is_dir() {
                 subdirectories.push(path);
             } else if file_type.is_file() {
-                if cancelled() {
-                    return Err(cancelled_error(root));
+                if canceled() {
+                    return Err(canceled_error(root));
                 }
                 visit(&path).with_context(|| format!("cannot visit {}", path.display()))?;
             }
@@ -148,10 +148,10 @@ fn walk(
     Ok(())
 }
 
-fn cancelled_error(root: &Path) -> crate::anyhow::Error {
+fn canceled_error(root: &Path) -> crate::anyhow::Error {
     crate::anyhow::Error::new(std::io::Error::new(
         std::io::ErrorKind::Interrupted,
-        format!("file walk cancelled: {}", root.display()),
+        format!("file walk canceled: {}", root.display()),
     ))
 }
 

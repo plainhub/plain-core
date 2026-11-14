@@ -20,7 +20,7 @@ pub async fn import(
     cache_changes: Arc<tokio::sync::RwLock<()>>,
 ) -> Result<DAppFile, String> {
     if *stop.borrow() {
-        return Err("File import cancelled".into());
+        return Err("File import canceled".into());
     }
     let platform = request.source.starts_with("content://") || request.source.starts_with("ph://");
     if platform && request.delete_source {
@@ -28,7 +28,7 @@ pub async fn import(
     }
     let cache_guard = cache_changes.read_owned().await;
     if *stop.borrow() {
-        return Err("File import cancelled".into());
+        return Err("File import canceled".into());
     }
     let temporary = if platform {
         Some(

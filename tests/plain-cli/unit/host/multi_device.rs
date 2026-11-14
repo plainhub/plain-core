@@ -211,7 +211,7 @@ async fn native_password_and_approval_pairing_enables_actual_chat_and_preserves_
     assert_eq!(initial["items"], json!([]));
     query(
         &second.native,
-        r#"mutation { addDlnaItem(item:{path:"/target/owned.mp3",title:"Owned"}) { version } }"#,
+        r#"mutation { addDlnaItem(item:{path:"/target/owned.mp3",title:"Owned",type:AUDIO}) { version } }"#,
         json!({}),
     )
     .await;
@@ -231,15 +231,15 @@ async fn native_password_and_approval_pairing_enables_actual_chat_and_preserves_
     );
     first.native.close_subscriptions(remote_handle);
     let content =
-        json!({"type":"TEXT","value":{"text":"accepted native pairing message"}}).to_string();
-    let sent = query(&first.native, "mutation($targets:[String!]!,$content:String!){sendChatItems(targets:$targets,content:$content){id status}}",
+        json!({"text":{"text":"accepted native pairing message"}});
+    let sent = query(&first.native, "mutation($targets:[String!]!,$content:ChatContentInput!){sendChatItems(targets:$targets,content:$content){id status}}",
         json!({"targets":[format!("peer:{second_id}")],"content":content})).await;
     assert_eq!(sent["sendChatItems"][0]["status"], "SENT");
-    let received = query(&second.native, "query($target:String!){chatItems(target:$target,query:\"\",offset:0,limit:10){fromId toId content}}",
+    let received = query(&second.native, "query($target:String!){chatItems(target:$target,query:\"\",offset:0,limit:10){fromId toId content{... on ChatTextContent{__typename text}}}}",
         json!({"target":format!("peer:{first_id}")})).await;
     assert_eq!(
         received["chatItems"],
-        json!([{"fromId":first_id,"toId":"me","content":content}])
+        json!([{"fromId":first_id,"toId":"me","content":{"__typename":"ChatTextContent","text":"accepted native pairing message"}}])
     );
     assert_eq!(
         query(

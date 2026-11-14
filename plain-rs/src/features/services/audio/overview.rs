@@ -2,7 +2,7 @@ use crate::features::enums::DataType;
 use crate::features::media::audio::overview;
 use crate::features::media::audio::overview::Accumulator;
 use crate::features::media::audio::overview::Artist;
-use crate::features::prefs::settings::FileSortBy;
+use crate::features::prefs::settings::MediaSortBy;
 use crate::features::services::files::catalog::MediaCatalog;
 use crate::infrastructure::db::Db;
 use std::sync::Arc;
@@ -38,7 +38,7 @@ async fn platform_read(
     let mut offset = 0u32;
     loop {
         let page = catalog
-            .sampled_rows(DataType::Audio, "", FileSortBy::NameAsc, PAGE_SIZE, offset)
+            .sampled_rows(DataType::Audio, "", MediaSortBy::TitleAsc, PAGE_SIZE, offset)
             .await?;
         if page.revision_before != page.revision_after
             || revision

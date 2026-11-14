@@ -126,7 +126,7 @@ pub fn construct_future(parts: &mut plain_libs::http::request::Parts) -> impl Fu
 }
 
 #[tokio::test]
-async fn cancelling_native_parts_extraction_keeps_headers_extensions_and_body() {
+async fn canceling_native_parts_extraction_keeps_headers_extensions_and_body() {
     use crate::axum_core::extract::FromRequestParts;
     use std::{
         convert::Infallible,

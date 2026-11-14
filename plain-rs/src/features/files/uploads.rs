@@ -42,7 +42,13 @@ pub fn chunk_dir(base: &Path, id: &str) -> plain_libs::anyhow::Result<PathBuf> {
     );
     Ok(base.join(id))
 }
-pub async fn chunks(base: &Path, id: &str) -> plain_libs::anyhow::Result<Vec<(u32, u64)>> {
+#[derive(Debug, PartialEq, Eq)]
+pub struct UploadedChunk {
+    pub index: u32,
+    pub size_bytes: u64,
+}
+
+pub async fn list(base: &Path, id: &str) -> plain_libs::anyhow::Result<Vec<UploadedChunk>> {
     let dir = chunk_dir(base, id)?;
     let mut reader = match tokio::fs::read_dir(dir).await {
         Ok(reader) => reader,
@@ -59,19 +65,15 @@ pub async fn chunks(base: &Path, id: &str) -> plain_libs::anyhow::Result<Vec<(u3
         {
             let meta = entry.metadata().await?;
             if meta.is_file() {
-                items.push((index, meta.len()));
+                items.push(UploadedChunk {
+                    index,
+                    size_bytes: meta.len(),
+                });
             }
         }
     }
-    items.sort_by_key(|item| item.0);
+    items.sort_by_key(|item| item.index);
     Ok(items)
-}
-pub async fn list(base: &Path, id: &str) -> plain_libs::anyhow::Result<Vec<String>> {
-    Ok(chunks(base, id)
-        .await?
-        .into_iter()
-        .map(|(index, size)| format!("{index}:{size}"))
-        .collect())
 }
 pub fn chunk_path(base: &Path, id: &str, index: i64) -> plain_libs::anyhow::Result<PathBuf> {
     plain_libs::anyhow::ensure!(

@@ -263,7 +263,6 @@ async fn generic_preview_copy_reuses_named_thumbnail_bytes_without_reusing_obsol
             )
             .await
             .unwrap()
-            .unwrap()
         }
     };
     let first = copy(1).await;

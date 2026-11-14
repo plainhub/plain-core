@@ -1,4 +1,5 @@
 use super::*;
+use plain_libs::serde_json::json;
 use crate::server::ContentServer;
 use std::sync::Arc;
 
@@ -146,7 +147,7 @@ async fn chat_subscriptions_deliver_messages_without_status_details_and_remain_a
         ("messagesUpdated", "MESSAGE_UPDATED"),
     ] {
         session.send(&plain_libs::serde_json::json!({"type": "subscribe", "id": field, "payload": {
-            "query": format!("subscription {{ {field} {{ id status statusData channelId }} }}")
+            "query": format!("subscription {{ {field} {{ id status deliveryResults {{peerId peerName error}} channelId }} }}")
         }}).to_string()).unwrap();
         let ready: plain_libs::serde_json::Value = plain_libs::serde_json::from_str(
             &tokio::time::timeout(std::time::Duration::from_secs(5), session.read())
@@ -187,8 +188,8 @@ async fn chat_subscriptions_deliver_messages_without_status_details_and_remain_a
             assert!(next["payload"]["errors"].is_null(), "{next}");
             assert_eq!(next["payload"]["data"][field][0]["id"], "message", "{next}");
             assert_eq!(
-                next["payload"]["data"][field][0]["statusData"],
-                details.unwrap_or_default()
+                next["payload"]["data"][field][0]["deliveryResults"],
+                json!([])
             );
             assert!(next["payload"]["data"][field][0]["channelId"].is_null());
         }
@@ -307,4 +308,47 @@ fn remote_transport_errors_preserve_session_and_permission_status() {
         peer_error(plain_libs::anyhow::anyhow!("fixture failure")),
         "fixture failure"
     );
+}
+
+#[tokio::test]
+async fn exports_are_queries_and_do_not_notify_content_changes() {
+    let directory = plain_libs::temporary::tempdir().unwrap();
+    let prefs = Arc::new(
+        plain_rs::features::prefs::Prefs::load(&directory.path().join("prefs.json")).unwrap(),
+    );
+    let server = ContentServer::start_core(
+        directory.path(),
+        &plain_libs::utils::base64::base64_encode(&[7; 32]),
+        prefs,
+    )
+    .unwrap();
+    let executor = server.native_graphql().unwrap();
+    let mut events = server.runtime_state().events.subscribe();
+    let created = executor
+        .execute(Request::new(r#"mutation { createNote(input: { title: "Export fixture", content: "Unchanged" }) { id } }"#))
+        .await;
+    assert!(created.errors.is_empty(), "{:?}", created.errors);
+    assert_eq!(events.try_recv().unwrap().event_type, "CONTENT_CHANGED");
+    let exported = executor
+        .execute(Request::new(r#"query { exportFeeds exportNotes(query: "") noteCount(query: "") }"#))
+        .await;
+    assert!(exported.errors.is_empty(), "{:?}", exported.errors);
+    let data = exported.data.into_json().unwrap();
+    assert!(data["exportFeeds"].as_str().unwrap().contains("<opml"));
+    let notes: plain_libs::serde_json::Value =
+        plain_libs::serde_json::from_str(data["exportNotes"].as_str().unwrap()).unwrap();
+    assert_eq!(notes.as_array().unwrap().len(), 1);
+    assert_eq!(notes[0]["title"], "Export fixture");
+    assert_eq!(data["noteCount"], 1);
+    for document in [
+        "mutation { exportFeeds }",
+        r#"mutation { exportNotes(query: "") }"#,
+    ] {
+        let response = executor.execute(Request::new(document)).await;
+        assert!(!response.errors.is_empty());
+    }
+    while let Ok(event) = events.try_recv() {
+        assert_ne!(event.event_type, "CONTENT_CHANGED");
+    }
+    server.shutdown().await;
 }

@@ -197,7 +197,7 @@ fn public_schema_exposes_the_contract_it_has_to_serve() {
         assert!(!sdl.contains(removed), "Retired root/type: {removed}");
     }
     assert!(sdl.contains(
-        "images(query: String!, offset: Int!, limit: Int!, sortBy: FileSortBy!): [Image!]!"
+        "images(query: String!, offset: Int!, limit: Int!, sortBy: ImageSortBy!): [Image!]!"
     ));
     assert!(sdl.contains("imageCount(query: String!): Int!"));
     assert!(sdl.contains("dlnaSenderState: DlnaSenderState!"));
@@ -361,7 +361,7 @@ fn public_schema_exposes_the_contract_it_has_to_serve() {
         "syncFeedEntryContent(id: ID!): FeedEntry!",
         "deleteFeedEntries(query: String!): ActionResult!",
         "audioCount(query: String!): Int!",
-        "audios(query: String!, offset: Int!, limit: Int!, sortBy: FileSortBy!): [Audio!]!",
+        "audios(query: String!, offset: Int!, limit: Int!, sortBy: AudioSortBy!): [Audio!]!",
         "audioLyrics(mediaId: ID!): String",
         "audioQueueItems(query: String!, offset: Int!, limit: Int!): [AudioItem!]!",
         "audioQueueItemCount(query: String!): Int!",
@@ -392,7 +392,7 @@ fn public_schema_exposes_the_contract_it_has_to_serve() {
         "declineChatChannelInvite(id: ID!): Boolean!",
         "addAudioPlaylistItems(id: ID!, query: String!): Boolean!",
         "renameFile(path: String!, name: String!): String",
-        "sendChatItems(targets: [String!]!, content: String!): [ChatItem!]!",
+        "sendChatItems(targets: [String!]!, content: ChatContentInput!): [ChatItem!]!",
         "deleteChatItem(id: ID!): Boolean!",
         "deleteChatItems(query: String!): ActionResult!",
         "retryChatItem(id: ID!, recipientIds: [ID!]): ChatItem!",
@@ -498,7 +498,7 @@ async fn public_schema_pomodoro_roots_execute() {
 
 /// Scalars and enums a probe can ask for without pulling in a whole object
 /// graph; anything else is skipped as a selection leaf.
-const PROBE_LEAVES: [&str; 12] = [
+const PROBE_LEAVES: [&str; 16] = [
     "Int",
     "String",
     "Boolean",
@@ -509,6 +509,10 @@ const PROBE_LEAVES: [&str; 12] = [
     "JSON",
     "DateTime",
     "FileSortBy",
+    "ImageSortBy",
+    "VideoSortBy",
+    "DocSortBy",
+    "AudioSortBy",
     "MediaDataType",
     "DataType",
 ];
@@ -998,7 +1002,7 @@ fn sms_sending_has_one_mutation_and_one_result_subscription() {
     let receipt = schema.split("type SmsSendReceipt {").nth(1).unwrap().split('}').next().unwrap();
     assert_eq!(receipt.lines().map(str::trim).filter(|line| !line.is_empty()).collect::<Vec<_>>(), ["requestId: String!", "requiresConfirmation: Boolean!"]);
     let result = schema.split("type SmsSendResult {").nth(1).unwrap().split('}').next().unwrap();
-    assert!(result.lines().any(|line| line.trim() == "requestId: ID!"));
+    assert!(result.lines().any(|line| line.trim() == "requestId: String!"));
     for retired in ["sendMms(", "mmsSendResult:", "mmsSent:", "type MmsSendResult {"] {
         assert!(!schema.contains(retired), "retired contract remains: {retired}");
     }
@@ -1006,3 +1010,50 @@ fn sms_sending_has_one_mutation_and_one_result_subscription() {
 
 #[path = "file_index.rs"]
 mod file_index;
+
+#[test]
+fn each_catalog_exposes_only_its_named_sort_contract() {
+    let schema = sdl();
+    let common = ["UPDATED_AT_ASC", "UPDATED_AT_DESC", "SIZE_ASC", "SIZE_DESC"];
+    for (name, labels, capture) in [
+        ("FileSortBy", ["NAME_ASC", "NAME_DESC"], false),
+        ("DocSortBy", ["NAME_ASC", "NAME_DESC"], false),
+        ("AudioSortBy", ["TITLE_ASC", "TITLE_DESC"], false),
+        ("ImageSortBy", ["NAME_ASC", "NAME_DESC"], true),
+        ("VideoSortBy", ["NAME_ASC", "NAME_DESC"], true),
+    ] {
+        let body = schema.split(&format!("enum {name} {{")).nth(1).unwrap().split('}').next().unwrap();
+        let actual = body.split_whitespace().collect::<Vec<_>>();
+        let mut expected = common.to_vec();
+        expected.extend(labels);
+        if capture { expected.push("TAKEN_AT_DESC"); }
+        assert_eq!(actual, expected, "{name}");
+    }
+    for (field, name) in [("images", "Image"), ("videos", "Video"), ("audios", "Audio"), ("docs", "Doc")] {
+        assert!(schema.contains(&format!("{field}(query: String!, offset: Int!, limit: Int!, sortBy: {name}SortBy!)")));
+    }
+    assert!(schema.contains("replaceAudioQueue(query: String!, sortBy: AudioSortBy!, shuffle: Boolean!)"));
+}
+
+#[tokio::test]
+async fn irrelevant_sort_values_fail_before_resolver_context_is_accessed() {
+    let schema = super::PublicSchema::build(
+        super::Query::default(), super::Mutation::default(),
+        crate::graphql::subscriptions::Subscription::default(),
+    ).finish();
+    for (field, value, name) in [
+        ("audios", "TAKEN_AT_DESC", "AudioSortBy"),
+        ("audios", "NAME_ASC", "AudioSortBy"),
+        ("docs", "TAKEN_AT_DESC", "DocSortBy"),
+        ("images", "TITLE_ASC", "ImageSortBy"),
+        ("videos", "UPDATED_AT", "VideoSortBy"),
+    ] {
+        let response = schema.execute(format!(r#"{{ {field}(query:"",offset:0,limit:1,sortBy:{value}) {{ __typename }} }}"#)).await;
+        assert!(!response.errors.is_empty());
+        let errors = response.errors.iter().map(|error| error.message.as_str()).collect::<Vec<_>>().join(" ");
+        assert!(errors.contains(name) && errors.contains(value), "{errors}");
+        assert!(!errors.contains("Data "), "resolver executed: {errors}");
+    }
+    let response = schema.execute(r#"{ files(root:"/example",query:"",offset:0,limit:1,sortBy:TAKEN_AT_DESC) { name } }"#).await;
+    assert!(response.errors.iter().any(|error| error.message.contains("FileSortBy") && error.message.contains("TAKEN_AT_DESC")));
+}

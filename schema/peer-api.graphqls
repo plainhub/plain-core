@@ -7,16 +7,84 @@ enum ChannelSystemMessageType {
 	LEAVE
 }
 
+type ChatAttachment {
+	id: ID!
+	uri: String!
+	size: Long!
+	durationMs: Long!
+	width: Int!
+	height: Int!
+	summary: String!
+	fileName: String!
+}
+
+union ChatContent = ChatTextContent | ChatImagesContent | ChatFilesContent | ChatShareContent
+
+type ChatDeliveryResult {
+	peerId: ID!
+	peerName: String!
+	error: String
+}
+
+type ChatFilesContent {
+	items: [ChatAttachment!]!
+}
+
+type ChatImagesContent {
+	items: [ChatAttachment!]!
+}
+
 type ChatItem {
+	"""
+	`me` when this device created the item, otherwise the client id of
+	the originating peer.
+	"""
 	fromId: ID!
+	"""
+	Peer id for direct messages; empty for channel messages —
+	`channelId` is authoritative there.
+	"""
 	toId: ID!
+	"""
+	Null for direct messages: the store keeps "" and the contract says
+	null, because "" is not a channel a client can query.
+	"""
 	channelId: ID
 	id: ID!
-	content: String!
+	content: ChatContent!
 	createdAt: Instant!
 	updatedAt: Instant!
 	status: ChatStatus!
-	statusData: String!
+	deliveryResults: [ChatDeliveryResult!]!
+}
+
+type ChatLinkPreview {
+	url: String!
+	title: String
+	description: String
+	imageUrl: String
+	imageLocalPath: String
+	imageWidth: Int!
+	imageHeight: Int!
+	siteName: String
+	domain: String
+	createdAt: Instant!
+}
+
+type ChatShareContent {
+	shareId: ID!
+	urlToken: String!
+	peerInfo: ChatSharePeer!
+	name: String!
+	itemCount: Long!
+	totalSize: Long!
+	expiresAt: Instant
+}
+
+type ChatSharePeer {
+	id: ID!
+	ip: String!
+	port: Int!
 }
 
 enum ChatStatus {
@@ -24,6 +92,11 @@ enum ChatStatus {
 	FAILED
 	PARTIAL
 	PENDING
+}
+
+type ChatTextContent {
+	text: String!
+	linkPreviews: [ChatLinkPreview!]!
 }
 
 scalar Instant

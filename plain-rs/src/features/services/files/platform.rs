@@ -211,7 +211,7 @@ impl FilePlatform {
                         .call(
                             "systemFileIndexRows",
                             json!({
-                                "plan":plan,"offset":0,"limit":100,"sortBy":"DATE_DESC"
+                                "plan":plan,"offset":0,"limit":100,"sortBy":"UPDATED_AT_DESC"
                             }),
                         )
                         .await

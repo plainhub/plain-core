@@ -80,7 +80,7 @@ async fn replacing_the_host_rejects_old_resource_handles() {
 }
 
 #[tokio::test]
-async fn cancelling_before_attachment_releases_registration_and_capacity() {
+async fn canceling_before_attachment_releases_registration_and_capacity() {
     let host = Arc::new(Host::default());
     let (generation, mut requests) = host.connect();
     let resources = Arc::new(NativeResources::new(host.clone()));
@@ -99,7 +99,7 @@ async fn cancelling_before_attachment_releases_registration_and_capacity() {
         .unwrap();
     opening.abort();
     let Err(error) = opening.await else {
-        panic!("cancelled resource open completed")
+        panic!("canceled resource open completed")
     };
     assert!(error.is_cancelled());
     assert!(resources.attach_native(&id, generation).is_err());
@@ -185,7 +185,7 @@ async fn descriptor_range_rejection_keeps_the_stream_available_for_failure() {
 }
 
 #[tokio::test]
-async fn cancelling_descriptor_delivery_releases_capacity_without_a_second_request() {
+async fn canceling_descriptor_delivery_releases_capacity_without_a_second_request() {
     let host = Arc::new(Host::default());
     let (generation, mut requests) = host.connect();
     let resources = Arc::new(NativeResources::new(host.clone()));

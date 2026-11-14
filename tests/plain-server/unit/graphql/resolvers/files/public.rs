@@ -564,13 +564,10 @@ async fn removing_an_unknown_favorite_folder_is_a_no_op() {
     );
 }
 
-/// `TAKEN_AT_DESC` has no filesystem equivalent — it is an EXIF-time sort
-/// the directory walk cannot do, so it must not be mistaken for a name
-/// sort that would silently return a different page.
 #[test]
 fn sort_by_maps_onto_what_the_directory_walk_can_do() {
     assert!(matches!(
-        FileSortBy::DateDesc.into(),
+        FileSortBy::UpdatedAtDesc.into(),
         plain_libs::filesystem::SortBy::DateDesc
     ));
     assert!(matches!(
@@ -581,10 +578,7 @@ fn sort_by_maps_onto_what_the_directory_walk_can_do() {
         FileSortBy::NameDesc.into(),
         plain_libs::filesystem::SortBy::NameDesc
     ));
-    assert!(matches!(
-        FileSortBy::TakenAtDesc.into(),
-        plain_libs::filesystem::SortBy::NameAsc
-    ));
+    assert!(plain_libs::serde_json::from_str::<FileSortBy>("\"TAKEN_AT_DESC\"").is_err());
 }
 
 #[tokio::test]

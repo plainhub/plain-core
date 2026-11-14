@@ -78,7 +78,7 @@ impl VideosQuery {
         query: String,
         offset: i32,
         limit: i32,
-        sort_by: plain_rs::features::prefs::settings::FileSortBy,
+        sort_by: plain_rs::features::prefs::settings::VideoSortBy,
     ) -> plain_graphql::Result<Vec<Video>> {
         public_gate::require(ctx, prefs(ctx), &[FEATURE])?;
         let items = media_rows(

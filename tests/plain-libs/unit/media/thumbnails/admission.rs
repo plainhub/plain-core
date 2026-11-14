@@ -1,7 +1,7 @@
 use super::*;
 
 #[tokio::test]
-async fn cancelled_running_job_keeps_admission_until_its_buffers_are_released() {
+async fn canceled_running_job_keeps_admission_until_its_buffers_are_released() {
     let admission = Admission::new(1, 1);
     let (started, running) = std::sync::mpsc::channel();
     let (release, wait) = std::sync::mpsc::channel();
@@ -90,7 +90,7 @@ async fn cpu_limit_applies_even_when_memory_is_free() {
 }
 
 #[tokio::test]
-async fn cancelling_a_memory_waiter_releases_its_cpu_slot() {
+async fn canceling_a_memory_waiter_releases_its_cpu_slot() {
     let adm = Admission::new(2, 1);
     let held = adm.acquire(1024 * 1024).await.unwrap();
     let mut waiter = Box::pin(adm.acquire(1));

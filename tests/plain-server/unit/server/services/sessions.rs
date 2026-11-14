@@ -186,16 +186,16 @@ async fn confirmation_is_once_only_and_cancel_or_revoke_prevents_issuance() {
             .await
             .is_err()
     );
-    for cancelled in [true, false] {
+    for canceled in [true, false] {
         let pending = ws_login::execute(&state, offer(&state, Value::Null).0)
             .await
             .unwrap();
         let id = pending["requestId"].as_str().unwrap().to_owned();
-        if cancelled {
+        if canceled {
             ws_login::execute(
                 &state,
                 ws_login::Request::Cancel {
-                    reason: "cancelled",
+                    reason: "canceled",
                     request_id: id.clone(),
                 },
             )

@@ -25,20 +25,20 @@ async fn native_thumbnail_output_is_one_shot_and_validates_before_consuming() {
 }
 
 #[test]
-fn cancelled_thumbnail_output_discards_its_token() {
+fn canceled_thumbnail_output_discards_its_token() {
     let thumbnails = super::Thumbnails::new();
     let (sender, receiver) = tokio::sync::oneshot::channel();
     thumbnails
         .outputs
         .lock()
         .unwrap()
-        .insert("cancelled".into(), sender);
+        .insert("canceled".into(), sender);
     let output = super::Output {
         service: &thumbnails,
-        token: "cancelled".into(),
+        token: "canceled".into(),
     };
     drop(output);
-    assert!(thumbnails.submit("cancelled", vec![1]).is_err());
+    assert!(thumbnails.submit("canceled", vec![1]).is_err());
     assert!(receiver.blocking_recv().is_err());
 }
 
@@ -127,7 +127,7 @@ async fn sdk_decode_validates_receipts_and_cleans_every_output_token() {
 }
 
 #[tokio::test]
-async fn cancelling_a_pending_sdk_decode_removes_its_token() {
+async fn canceling_a_pending_sdk_decode_removes_its_token() {
     let (_dir, core, _cache) = server_with_cache();
     let state = core.runtime_state();
     let (_generation, mut requests) = state.host.connect();
@@ -170,7 +170,7 @@ async fn shutdown_releases_a_pending_sdk_decode_without_waiting_for_the_host_rep
 }
 
 #[tokio::test]
-async fn cancelling_a_started_generation_keeps_its_slot_and_single_flight_until_it_finishes() {
+async fn canceling_a_started_generation_keeps_its_slot_and_single_flight_until_it_finishes() {
     let (_directory, core, _cache) = server_with_cache();
     let state = core.runtime_state();
     let source = plain_libs::temporary::tempdir().unwrap();

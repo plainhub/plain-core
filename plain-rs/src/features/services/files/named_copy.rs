@@ -7,7 +7,7 @@ pub async fn copy(
     source: String,
     directory: String,
     name: String,
-) -> Result<Option<String>> {
+) -> Result<String> {
     crate::features::services::files::file_tasks::named_directory(&directory, &name)?;
     let state = state.clone();
     tokio::spawn(async move {

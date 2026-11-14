@@ -46,11 +46,11 @@ async fn replacement_and_revocation_cancel_already_authorized_resources() {
     let mut second = Session::new(peer);
     let next = second.register("/two.mp4", "video/mp4");
     registry.replace(second);
-    stream.cancelled().await;
+    stream.canceled().await;
     assert!(registry.lookup(&name, peer).is_none());
     let stream = registry.lookup(&next, peer).unwrap();
     registry.revoke();
-    stream.cancelled().await;
+    stream.canceled().await;
     assert!(registry.lookup(&next, peer).is_none());
 }
 
@@ -70,7 +70,7 @@ async fn requests_do_not_renew_the_lease_and_expired_sessions_cannot_revive() {
     assert!(registry.lookup(&name, peer).is_none());
     registry.renew();
     assert!(!registry.accepts(peer));
-    stream.cancelled().await;
+    stream.canceled().await;
 }
 
 #[test]
@@ -98,7 +98,7 @@ async fn abandoned_cast_cancels_pending_media_even_when_registry_is_retained() {
     let stream = registry.lookup(&name, peer).unwrap();
     drop(pending);
     assert!(registry.lookup(&name, peer).is_none());
-    stream.cancelled().await;
+    stream.canceled().await;
 }
 
 #[test]

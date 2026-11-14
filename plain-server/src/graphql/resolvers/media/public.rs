@@ -130,7 +130,7 @@ pub(crate) async fn media_count(
 struct RowsRequest {
     data_type: DataType,
     query: String,
-    sort_by: plain_rs::features::prefs::settings::FileSortBy,
+    sort_by: plain_rs::features::prefs::settings::MediaSortBy,
     limit: u32,
     offset: u32,
 }
@@ -181,7 +181,7 @@ pub(crate) async fn library_rows(
     ctx: &Context<'_>,
     data_type: DataType,
     query: String,
-    sort_by: plain_rs::features::prefs::settings::FileSortBy,
+    sort_by: plain_rs::features::prefs::settings::MediaSortBy,
     offset: u32,
     limit: u32,
 ) -> plain_graphql::Result<Vec<Value>> {

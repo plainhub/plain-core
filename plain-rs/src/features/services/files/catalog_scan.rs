@@ -183,7 +183,7 @@ impl NativeMediaCatalog {
                 session.wait_running().await?;
                 let metadata = tokio::select! {
                     biased;
-                    _ = crate::features::services::files::media_scans::wait_stop(&mut cancel) => return Err("Media scan cancelled".into()),
+                    _ = crate::features::services::files::media_scans::wait_stop(&mut cancel) => return Err("Media scan canceled".into()),
                     _ = crate::features::services::files::media_scans::wait_stop(&mut stop) => {
                         self.state.media_scans.cancel()?;
                         return Err("Rust core stopped".into());
@@ -951,7 +951,7 @@ impl NativeMediaCatalog {
         };
         let result = tokio::select! {
             biased;
-            _ = crate::features::services::files::media_scans::wait_stop(&mut cancel) => Err("Media scan cancelled".into()),
+            _ = crate::features::services::files::media_scans::wait_stop(&mut cancel) => Err("Media scan canceled".into()),
             _ = crate::features::services::files::media_scans::wait_stop(&mut stop) => {
                 self.state.media_scans.cancel()?;
                 Err("Rust core stopped".into())
@@ -1130,7 +1130,7 @@ impl NativeMediaCatalog {
         &self,
         data_type: DataType,
         query: &str,
-        sort: crate::features::prefs::settings::FileSortBy,
+        sort: crate::features::prefs::settings::MediaSortBy,
         limit: u32,
         offset: u32,
     ) -> Result<Vec<MediaFileRow>, String> {

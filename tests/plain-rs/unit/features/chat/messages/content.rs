@@ -35,3 +35,17 @@ fn attachments_resolve_the_current_session_url_token_without_retaining_a_service
     assert!(peer_content(content, "client", &db).is_err());
     assert!(db.session_get("client").unwrap().is_none());
 }
+
+#[test]
+fn attachment_duration_preserves_units_precedence_and_rejects_invalid_values() {
+    for (value, expected) in [
+        (plain_libs::serde_json::json!({"durationMs":7,"duration":8}),7),
+        (plain_libs::serde_json::json!({"legacyDurationSec":2}),2000),
+        (plain_libs::serde_json::json!({"duration":3}),3000),
+        (plain_libs::serde_json::json!({"durationMs":null,"duration":4}),4000),
+        (plain_libs::serde_json::json!({}),0),
+    ] { assert_eq!(attachment_duration_ms(&value).unwrap(), expected); }
+    for value in [plain_libs::serde_json::json!({"durationMs":"bad"}),plain_libs::serde_json::json!({"duration":-1}),plain_libs::serde_json::json!({"legacyDurationSec":i64::MAX}),plain_libs::serde_json::json!({"legacyDurationSec":2,"duration":i64::MAX})] {
+        assert!(attachment_duration_ms(&value).is_err());
+    }
+}

@@ -131,7 +131,7 @@ async fn service_grants_remote_file_features_and_preserves_other_settings_across
                 .await
                 .unwrap();
             let body = plain_libs::serde_json::json!({
-                "query": "{ app { capabilities access } fileIndexVolumes { id } fileIndexDefaults { excludedDirs } fileIndexScanProgress { state } audios(query:\"\",offset:0,limit:1,sortBy:NAME_ASC) { id } }"
+                "query": "{ app { capabilities access } fileIndexVolumes { id } fileIndexDefaults { excludedDirs } fileIndexScanProgress { state } audios(query:\"\",offset:0,limit:1,sortBy:TITLE_ASC) { id } }"
             })
             .to_string();
             let request = format!(

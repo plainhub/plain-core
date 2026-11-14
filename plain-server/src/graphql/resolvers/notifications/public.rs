@@ -28,6 +28,7 @@ impl NotificationsQuery {
         offset: i32,
         limit: i32,
     ) -> plain_graphql::Result<Vec<Notification>> {
+        crate::graphql::resolvers::common::validate_pagination(offset, limit)?;
         public_gate::require(ctx, ctx.data_unchecked::<Arc<Prefs>>(), &[FEATURE])?;
         plain_rs::features::services::capabilities::require(
             ctx.data_unchecked::<Arc<Host>>(),
@@ -38,8 +39,8 @@ impl NotificationsQuery {
         let items = notification_items(ctx, &query).await?;
         Ok(items
             .into_iter()
-            .skip(offset.max(0) as usize)
-            .take(limit.max(0) as usize)
+            .skip(offset as usize)
+            .take(limit as usize)
             .map(|item| notification(&item))
             .collect())
     }
@@ -86,16 +87,16 @@ impl NotificationsMutation {
             )
             .await
             .map_err(|error| plain_graphql::Error::new(error))?;
-        let cancelled: Vec<String> = plain_libs::serde_json::from_value(receipt)
+        let canceled: Vec<String> = plain_libs::serde_json::from_value(receipt)
             .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
         // The platform only confirms what it actually dismissed; a receipt
         // naming an id that was never sent is a host contract violation.
-        if cancelled.iter().any(|id| !ids.contains(id)) {
+        if canceled.iter().any(|id| !ids.contains(id)) {
             return Err(plain_graphql::Error::new(
                 "invalid notification cancellation receipt",
             ));
         }
-        if !cancelled.is_empty() {
+        if !canceled.is_empty() {
             let _ = ctx
                 .data_unchecked::<tokio::sync::broadcast::Sender<plain_rs::infrastructure::events::WsEvent>>()
                 .send(plain_rs::infrastructure::events::WsEvent::broadcast(
@@ -104,7 +105,7 @@ impl NotificationsMutation {
                 ));
         }
         Ok(ActionResult {
-            affected_count: cancelled.len() as i32,
+            affected_count: canceled.len() as i32,
         })
     }
 

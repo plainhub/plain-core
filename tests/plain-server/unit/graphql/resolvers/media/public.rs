@@ -195,7 +195,7 @@ async fn images_carry_their_row_and_their_tags() {
     plain_rs::features::tags::add_relations(&db, &relations).unwrap();
     let response = schema
         .execute(
-            r#"query { images(offset:0, limit:20, query:"", sortBy:DATE_DESC)
+            r#"query { images(offset:0, limit:20, query:"", sortBy:UPDATED_AT_DESC)
                       { id title path size bucketId createdAt updatedAt takenAt isFavorite
                         tags { id name count } } }"#,
         )
@@ -543,10 +543,10 @@ async fn all_media_lists_accept_the_original_shared_interface_fragment() {
         .execute(
             r#"
         query {
-            audios(query: "", offset: 0, limit: 1, sortBy: DATE_DESC) { ...OriginalMedia }
-            images(query: "", offset: 0, limit: 1, sortBy: DATE_DESC) { ...OriginalMedia }
-            videos(query: "", offset: 0, limit: 1, sortBy: DATE_DESC) { ...OriginalMedia }
-            docs(query: "", offset: 0, limit: 1, sortBy: DATE_DESC) { ...OriginalMedia }
+            audios(query: "", offset: 0, limit: 1, sortBy: UPDATED_AT_DESC) { ...OriginalMedia }
+            images(query: "", offset: 0, limit: 1, sortBy: UPDATED_AT_DESC) { ...OriginalMedia }
+            videos(query: "", offset: 0, limit: 1, sortBy: UPDATED_AT_DESC) { ...OriginalMedia }
+            docs(query: "", offset: 0, limit: 1, sortBy: UPDATED_AT_DESC) { ...OriginalMedia }
         }
         fragment OriginalMedia on MediaItem { id title path size bucketId createdAt updatedAt }
     "#,

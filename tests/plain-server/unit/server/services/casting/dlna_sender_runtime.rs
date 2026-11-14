@@ -10,7 +10,7 @@ async fn queue_mutations_preserve_duplicates_and_order_through_the_main_schema()
     let server = crate::server::ContentServer::open(dir.path()).unwrap();
     let native = server.native_graphql().unwrap();
     for path in ["a.mp3", "b.mp3", "a.mp3"] {
-        let response = native.execute(plain_graphql::Request::new("mutation($path:String!){addDlnaItem(item:{path:$path,title:$path}){items{path}}}").variables(plain_graphql::Variables::from_json(json!({"path":path})))).await;
+        let response = native.execute(plain_graphql::Request::new("mutation($path:String!){addDlnaItem(item:{path:$path,title:$path,type:AUDIO}){items{path}}}").variables(plain_graphql::Variables::from_json(json!({"path":path})))).await;
         assert!(response.errors.is_empty(), "{:?}", response.errors);
     }
     let response = native
@@ -268,7 +268,7 @@ async fn sender_controls_use_soap_and_release_the_original_subscription() {
         state.cast.media.lookup(active_name, peer).is_none(),
         "Revoke before remote Stop responds"
     );
-    stream.cancelled().await;
+    stream.canceled().await;
     stop_release.notify_one();
     stopping.await.unwrap().unwrap();
     assert!(state.cast.snapshot().current_device.is_none());
@@ -391,7 +391,7 @@ async fn stop_during_pending_poll_does_not_advance_the_queue() {
         let state = state.clone();
         tokio::spawn(async move { run(&state, Command::Stop).await })
     };
-    tokio::time::timeout(Duration::from_secs(5), stream.cancelled())
+    tokio::time::timeout(Duration::from_secs(5), stream.canceled())
         .await
         .unwrap();
     assert!(state.cast.media.lookup(name, peer).is_none());
@@ -431,4 +431,53 @@ async fn stop_during_pending_poll_does_not_advance_the_queue() {
     assert!(state.cast.snapshot().current_device.is_none());
     server.shutdown().await;
     renderer.abort();
+}
+
+#[tokio::test]
+async fn media_types_are_required_and_round_trip_without_boolean_fallbacks() {
+    let dir = plain_libs::temporary::tempdir().unwrap();
+    let server = crate::server::ContentServer::open(dir.path()).unwrap();
+    let native = server.native_graphql().unwrap();
+    let response = native.execute(r#"{
+        input: __type(name: "DlnaMediaInput") { inputFields { name type { kind ofType { kind name } } } }
+        media: __type(name: "DlnaSenderMedia") { fields { name type { kind ofType { kind name } } } }
+        kind: __type(name: "DlnaCastType") { enumValues { name } }
+    }"#.into()).await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    let contract = response.data.into_json().unwrap();
+    for (owner, fields) in [("input", "inputFields"), ("media", "fields")] {
+        let fields = contract[owner][fields].as_array().unwrap();
+        let field = fields.iter().find(|field| field["name"] == "type").unwrap();
+        assert_eq!(field["type"], json!({"kind":"NON_NULL","ofType":{"kind":"ENUM","name":"DlnaCastType"}}));
+        assert!(!fields.iter().any(|field| field["name"] == "audio"));
+    }
+    assert_eq!(contract["kind"]["enumValues"], json!([{"name":"AUDIO"},{"name":"VIDEO"},{"name":"IMAGE"}]));
+    for kind in ["AUDIO", "VIDEO", "IMAGE"] {
+        let response = native.execute(plain_graphql::Request::new(
+            "mutation($item:DlnaMediaInput!){addDlnaItem(item:$item){items{path type}}}"
+        ).variables(plain_graphql::Variables::from_json(json!({
+            "item":{"path":format!("synthetic-{kind}"),"title":kind,"type":kind}
+        })))).await;
+        assert!(response.errors.is_empty(), "{:?}", response.errors);
+        let data = response.data.into_json().unwrap();
+        assert_eq!(data["addDlnaItem"]["items"].as_array().unwrap().last().unwrap()["type"], kind);
+    }
+    for item in [
+        json!({"path":"invalid","title":"invalid","type":"DOC"}),
+        json!({"path":"invalid","title":"invalid"}),
+        json!({"path":"invalid","title":"invalid","type":"VIDEO","audio":false}),
+    ] {
+        let response = native.execute(plain_graphql::Request::new(
+            "mutation($item:DlnaMediaInput!){addDlnaItem(item:$item){items{type}}}"
+        ).variables(plain_graphql::Variables::from_json(json!({"item":item})))).await;
+        assert!(!response.errors.is_empty());
+    }
+    let rejected = native.execute(r#"mutation {
+        addDlnaItem(item:{path:"invalid",title:"invalid",type:DOC}) { version }
+    }"#.into()).await;
+    assert!(!rejected.errors.is_empty());
+    let response = native.execute("{dlnaSenderState{items{type}}}".into()).await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    assert_eq!(response.data.into_json().unwrap()["dlnaSenderState"]["items"], json!([{"type":"AUDIO"},{"type":"VIDEO"},{"type":"IMAGE"}]));
+    server.shutdown().await;
 }

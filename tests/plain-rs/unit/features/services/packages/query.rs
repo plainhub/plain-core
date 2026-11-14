@@ -19,7 +19,7 @@ fn packages_filter_certificates_types_and_page_after_sorting() {
         "a"
     );
     assert_eq!(
-        packages(&db, facts.clone(), "ids:a,c", "DATE_DESC").unwrap()[0]["id"],
+        packages(&db, facts.clone(), "ids:a,c", "UPDATED_AT_DESC").unwrap()[0]["id"],
         "c"
     );
     assert!(
@@ -67,8 +67,8 @@ fn sorting_computes_each_name_key_once_and_skips_keys_for_other_orders() {
         "NAME_DESC",
         "SIZE_ASC",
         "SIZE_DESC",
-        "DATE_ASC",
-        "DATE_DESC",
+        "UPDATED_AT_ASC",
+        "UPDATED_AT_DESC",
     ] {
         let mut calls = Vec::new();
         let result = sort_packages(facts.clone(), order, |name| {
@@ -88,7 +88,7 @@ fn sorting_computes_each_name_key_once_and_skips_keys_for_other_orders() {
             result[0]["id"],
             match order {
                 "NAME_ASC" | "SIZE_ASC" => "a",
-                "DATE_ASC" => "b",
+                "UPDATED_AT_ASC" => "b",
                 _ => "z",
             }
         );

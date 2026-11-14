@@ -22,12 +22,12 @@ async fn inactive_and_replaced_scans_do_not_request_platform_reads() {
     let state = core.runtime_state();
     let (owner, mut requests) = crate::test_support::HostRequests::connect(&state.host);
     state.ble_scans.set_owner(owner);
-    let cancelled = pending(&state, owner, "706c6169-2d74-8e53-9a16-f08b62c591d3");
+    let canceled = pending(&state, owner, "706c6169-2d74-8e53-9a16-f08b62c591d3");
     state
         .ble_scans
-        .report_state(owner, cancelled.scan.parse().unwrap(), false)
+        .report_state(owner, canceled.scan.parse().unwrap(), false)
         .unwrap();
-    run(state.clone(), cancelled).await;
+    run(state.clone(), canceled).await;
     assert!(requests.try_recv().is_err());
     let replaced = pending(&state, owner, "706c6169-2d74-8e53-9a16-f08b62c591d3");
     let (replacement, mut requests) = crate::test_support::HostRequests::connect(&state.host);

@@ -30,7 +30,7 @@ async fn native_catalog_reads_rows_counts_ids_and_buckets_without_a_host() {
     let catalog = MediaCatalog::new(db, Arc::new(Host::default()));
     assert!(matches!(catalog, MediaCatalog::Native(_)));
     let rows = catalog
-        .rows(DataType::Image, "", FileSortBy::NameAsc, 10, 0)
+        .rows(DataType::Image, "", MediaSortBy::NameAsc, 10, 0)
         .await
         .unwrap();
     assert_eq!(rows.len(), 1);
@@ -108,7 +108,7 @@ async fn platform_catalog_reads_os_facts_without_a_local_catalogue() {
     let db = Arc::new(Db::open(&dir.path().join("data.db")).unwrap());
     let catalog = MediaCatalog::new(db, host);
     let rows = catalog
-        .rows(DataType::Image, "text:picture", FileSortBy::NameAsc, 8, 4)
+        .rows(DataType::Image, "text:picture", MediaSortBy::NameAsc, 8, 4)
         .await
         .unwrap();
     assert_eq!(rows[0]["id"], "42");

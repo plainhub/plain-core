@@ -99,6 +99,7 @@ impl FilesQuery {
         limit: i32,
         sort_by: FileSortBy,
     ) -> plain_graphql::Result<Vec<File>> {
+        crate::graphql::resolvers::common::validate_pagination(offset, limit)?;
         public_gate::require(ctx, prefs(ctx), &[STORAGE])?;
         let page = read_page(
             ctx,
@@ -106,8 +107,8 @@ impl FilesQuery {
                 root,
                 query,
                 sort_by: sort_by.into(),
-                offset: offset.max(0) as usize,
-                limit: Some(limit.max(0) as usize),
+                offset: offset as usize,
+                limit: Some(limit as usize),
                 count_only: false,
                 count_children: ctx.look_ahead().field("childCount").exists(),
             },

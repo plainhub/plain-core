@@ -132,13 +132,13 @@ async fn sending_uses_the_real_encrypted_api_preserves_source_and_retries_platfo
         responder,
     ) = fixture().await;
     let mut remote_events = remote_state.events.subscribe();
-    let (_cancel, cancelled) = watch::channel(false);
+    let (_cancel, canceled) = watch::channel(false);
     assert!(
         send(
             &state,
             &peer.id,
             &identity,
-            &cancelled,
+            &canceled,
             "Fixture 🌍",
             &watch::channel(Some(true)).1
         )
@@ -151,7 +151,7 @@ async fn sending_uses_the_real_encrypted_api_preserves_source_and_retries_platfo
             &state,
             &peer.id,
             &identity,
-            &cancelled,
+            &canceled,
             "Fixture 🌍",
             &watch::channel(Some(true)).1
         )
@@ -184,7 +184,7 @@ async fn sending_uses_the_real_encrypted_api_preserves_source_and_retries_platfo
 }
 
 #[tokio::test]
-async fn invalid_directions_disabled_local_sharing_revoked_identity_and_cancelled_workers_cannot_write_a_remote_clipboard()
+async fn invalid_directions_disabled_local_sharing_revoked_identity_and_canceled_workers_cannot_write_a_remote_clipboard()
  {
     let (
         _directory,
@@ -198,7 +198,7 @@ async fn invalid_directions_disabled_local_sharing_revoked_identity_and_cancelle
         _succeeds,
         responder,
     ) = fixture().await;
-    let (cancel, cancelled) = watch::channel(false);
+    let (cancel, canceled) = watch::channel(false);
     for direction in ["off", "pull"] {
         state
             .prefs
@@ -209,7 +209,7 @@ async fn invalid_directions_disabled_local_sharing_revoked_identity_and_cancelle
                 &state,
                 &peer.id,
                 &identity,
-                &cancelled,
+                &canceled,
                 "Fixture",
                 &watch::channel(Some(true)).1
             )
@@ -226,7 +226,7 @@ async fn invalid_directions_disabled_local_sharing_revoked_identity_and_cancelle
             &state,
             &peer.id,
             &identity,
-            &cancelled,
+            &canceled,
             "Fixture",
             &watch::channel(Some(true)).1
         )
@@ -243,7 +243,7 @@ async fn invalid_directions_disabled_local_sharing_revoked_identity_and_cancelle
             &state,
             &peer.id,
             &identity,
-            &cancelled,
+            &canceled,
             "Fixture",
             &watch::channel(Some(true)).1
         )
@@ -260,7 +260,7 @@ async fn invalid_directions_disabled_local_sharing_revoked_identity_and_cancelle
             &state,
             &peer.id,
             &identity,
-            &cancelled,
+            &canceled,
             "Fixture",
             &watch::channel(Some(true)).1
         )
@@ -277,7 +277,7 @@ async fn invalid_directions_disabled_local_sharing_revoked_identity_and_cancelle
             &state,
             &peer.id,
             &identity,
-            &cancelled,
+            &canceled,
             "Fixture",
             &watch::channel(Some(true)).1
         )
@@ -290,7 +290,7 @@ async fn invalid_directions_disabled_local_sharing_revoked_identity_and_cancelle
                 &state,
                 &peer.id,
                 &identity,
-                &cancelled,
+                &canceled,
                 &text,
                 &watch::channel(Some(true)).1
             )
@@ -321,11 +321,11 @@ async fn unconfirmed_or_unsupported_remote_capabilities_keep_automatic_pushes_ou
         _succeeds,
         responder,
     ) = fixture().await;
-    let (cancel, cancelled) = watch::channel(false);
+    let (cancel, canceled) = watch::channel(false);
     let (access, accessed) = watch::channel(None);
     let changed = tokio::sync::Notify::new();
     let mut service = Box::pin(follow(
-        &state, &peer.id, &identity, &cancelled, &changed, accessed,
+        &state, &peer.id, &identity, &canceled, &changed, accessed,
     ));
     assert!(std::future::poll_fn(|cx| Poll::Ready(service.as_mut().poll(cx).is_pending())).await);
     plain_rs::features::services::clipboard::report(
@@ -360,11 +360,11 @@ async fn automatic_push_coalesces_to_the_latest_local_fact_and_replaces_a_failed
         succeeds,
         responder,
     ) = fixture().await;
-    let (cancel, cancelled) = watch::channel(false);
+    let (cancel, canceled) = watch::channel(false);
     let (_access, accessed) = watch::channel(Some(true));
     let changed = tokio::sync::Notify::new();
     let mut service = Box::pin(follow(
-        &state, &peer.id, &identity, &cancelled, &changed, accessed,
+        &state, &peer.id, &identity, &canceled, &changed, accessed,
     ));
     assert!(std::future::poll_fn(|cx| Poll::Ready(service.as_mut().poll(cx).is_pending())).await);
     for text in ["superseded", "first attempt"] {
@@ -429,13 +429,13 @@ async fn an_incoming_write_invalidates_a_local_send_while_identity_lookup_is_wai
         })
     });
     acquired.await.unwrap();
-    let (_cancel, cancelled) = watch::channel(false);
+    let (_cancel, canceled) = watch::channel(false);
     let (_access, accessed) = watch::channel(Some(true));
     let mut sending = Box::pin(send(
         &state,
         &peer.id,
         &identity,
-        &cancelled,
+        &canceled,
         "Fixture 🌍",
         &accessed,
     ));

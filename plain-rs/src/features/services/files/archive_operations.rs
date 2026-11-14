@@ -50,7 +50,7 @@ pub async fn pack_named_files(
         return Err("Archive sources required".into());
     }
     let cancel = Cancel(Arc::new(AtomicBool::new(false)));
-    let cancelled = cancel.0.clone();
+    let canceled = cancel.0.clone();
     let output = tokio::task::spawn_blocking(move || {
         let mut names = HashSet::new();
         let mut entries = Vec::with_capacity(files.len());
@@ -75,16 +75,16 @@ pub async fn pack_named_files(
                 directory: false,
             });
         }
-        pack_entries(entries, target, &stop, &cancelled)
+        pack_entries(entries, target, &stop, &canceled)
     })
     .await
     .map_err(|error| error.to_string())??;
     Ok(output.keep().0.to_string_lossy().into_owned())
 }
 
-pub fn running(stop: &watch::Receiver<bool>, cancelled: &AtomicBool) -> Result<(), String> {
-    if *stop.borrow() || stop.has_changed().is_err() || cancelled.load(Ordering::Acquire) {
-        return Err("Archive operation cancelled".into());
+pub fn running(stop: &watch::Receiver<bool>, canceled: &AtomicBool) -> Result<(), String> {
+    if *stop.borrow() || stop.has_changed().is_err() || canceled.load(Ordering::Acquire) {
+        return Err("Archive operation canceled".into());
     }
     Ok(())
 }
@@ -93,12 +93,12 @@ pub fn copy(
     reader: &mut impl Read,
     writer: &mut impl Write,
     stop: &watch::Receiver<bool>,
-    cancelled: &AtomicBool,
+    canceled: &AtomicBool,
 ) -> Result<u64, String> {
     let mut buffer = [0; 64 * 1024];
     let mut total = 0;
     loop {
-        running(stop, cancelled)?;
+        running(stop, canceled)?;
         let size = reader
             .read(&mut buffer)
             .map_err(|error| error.to_string())?;
@@ -164,9 +164,9 @@ enum Visit {
 pub fn collect_entries(
     paths: Vec<String>,
     stop: &watch::Receiver<bool>,
-    cancelled: &AtomicBool,
+    canceled: &AtomicBool,
 ) -> Result<Vec<Entry>, String> {
-    running(stop, cancelled)?;
+    running(stop, canceled)?;
     let mut entries = Vec::new();
     let mut names = HashSet::new();
     for source in paths {
@@ -182,7 +182,7 @@ pub fn collect_entries(
         let mut ancestors = HashSet::new();
         let mut pending = vec![Visit::Enter(path, name)];
         while let Some(visit) = pending.pop() {
-            running(stop, cancelled)?;
+            running(stop, canceled)?;
             let (path, name) = match visit {
                 Visit::Enter(path, name) => (path, name),
                 Visit::Leave(path) => {
@@ -233,13 +233,13 @@ fn pack_files(
     paths: Vec<String>,
     target: PathBuf,
     stop: &watch::Receiver<bool>,
-    cancelled: &AtomicBool,
+    canceled: &AtomicBool,
 ) -> Result<Output, String> {
     pack_entries(
-        collect_entries(paths, stop, cancelled)?,
+        collect_entries(paths, stop, canceled)?,
         target,
         stop,
-        cancelled,
+        canceled,
     )
 }
 
@@ -247,9 +247,9 @@ pub fn pack_entries(
     entries: Vec<Entry>,
     target: PathBuf,
     stop: &watch::Receiver<bool>,
-    cancelled: &AtomicBool,
+    canceled: &AtomicBool,
 ) -> Result<Output, String> {
-    running(stop, cancelled)?;
+    running(stop, canceled)?;
     let (mut output, file) = reserve(&target, false)?;
     let mut zip = plain_libs::zip::ZipWriter::new(file.ok_or("Archive file missing")?);
     let options = plain_libs::zip::write::SimpleFileOptions::default()
@@ -260,7 +260,7 @@ pub fn pack_entries(
         directory,
     } in entries
     {
-        running(stop, cancelled)?;
+        running(stop, canceled)?;
         if directory {
             zip.add_directory(format!("{name}/"), options)
                 .map_err(|error| error.to_string())?;
@@ -284,12 +284,12 @@ pub fn pack_entries(
             zip.start_file(name, options)
                 .map_err(|error| error.to_string())?;
             let mut source = File::open(path).map_err(|error| error.to_string())?;
-            copy(&mut source, &mut zip, stop, cancelled)?;
+            copy(&mut source, &mut zip, stop, canceled)?;
         }
     }
     let file = zip.finish().map_err(|error| error.to_string())?;
     file.sync_all().map_err(|error| error.to_string())?;
-    running(stop, cancelled)?;
+    running(stop, canceled)?;
     output
         .files
         .push(output.path.to_string_lossy().into_owned());
@@ -319,14 +319,14 @@ pub fn unpack_files(
     source: &Path,
     target: &Path,
     stop: &watch::Receiver<bool>,
-    cancelled: &AtomicBool,
+    canceled: &AtomicBool,
 ) -> Result<Output, String> {
-    running(stop, cancelled)?;
+    running(stop, canceled)?;
     let file = File::open(source).map_err(|error| error.to_string())?;
     let mut zip = plain_libs::zip::ZipArchive::new(file).map_err(|error| error.to_string())?;
     let mut entries = Vec::new();
     for index in 0..zip.len() {
-        running(stop, cancelled)?;
+        running(stop, canceled)?;
         let entry = zip.by_index(index).map_err(|error| error.to_string())?;
         if entry
             .unix_mode()
@@ -343,7 +343,7 @@ pub fn unpack_files(
         .map_err(|error| error.to_string())?;
     let mut written = HashSet::new();
     for (index, name) in entries.into_iter().enumerate() {
-        running(stop, cancelled)?;
+        running(stop, canceled)?;
         let mut entry = zip.by_index(index).map_err(|error| error.to_string())?;
         let path = root.join(name);
         if entry.is_dir() {
@@ -368,7 +368,7 @@ pub fn unpack_files(
             options.create_new(true);
         }
         let mut file = options.open(&path).map_err(|error| error.to_string())?;
-        let size = copy(&mut entry, &mut file, stop, cancelled)?;
+        let size = copy(&mut entry, &mut file, stop, canceled)?;
         if size != entry.size() {
             return Err("Archive entry size changed".into());
         }
@@ -397,7 +397,7 @@ pub fn unpack_files(
             output.files.push(path.to_string_lossy().into_owned());
         }
     }
-    running(stop, cancelled)?;
+    running(stop, canceled)?;
     Ok(output)
 }
 
@@ -420,10 +420,10 @@ pub async fn pack(
         .await
         .map_err(|error| error.to_string())?;
     let cancel = Cancel(Arc::new(AtomicBool::new(false)));
-    let cancelled = cancel.0.clone();
+    let canceled = cancel.0.clone();
     let planning_stop = stop.clone();
     let entries =
-        tokio::task::spawn_blocking(move || collect_entries(paths, &planning_stop, &cancelled))
+        tokio::task::spawn_blocking(move || collect_entries(paths, &planning_stop, &canceled))
             .await
             .map_err(|error| error.to_string())??;
     let mut authorized = HashSet::new();
@@ -436,9 +436,9 @@ pub async fn pack(
         .authorize_paths(&paths, false)
         .await
         .map_err(|error| error.to_string())?;
-    let cancelled = cancel.0.clone();
+    let canceled = cancel.0.clone();
     let output = tokio::task::spawn_blocking(move || {
-        pack_entries(entries, PathBuf::from(target), &stop, &cancelled)
+        pack_entries(entries, PathBuf::from(target), &stop, &canceled)
     })
     .await
     .map_err(|error| error.to_string())??;
@@ -465,9 +465,9 @@ pub async fn unpack(
         .await
         .map_err(|error| error.to_string())?;
     let cancel = Cancel(Arc::new(AtomicBool::new(false)));
-    let cancelled = cancel.0.clone();
+    let canceled = cancel.0.clone();
     let output = tokio::task::spawn_blocking(move || {
-        unpack_files(Path::new(&source), Path::new(&target), &stop, &cancelled)
+        unpack_files(Path::new(&source), Path::new(&target), &stop, &canceled)
     })
     .await
     .map_err(|error| error.to_string())??;

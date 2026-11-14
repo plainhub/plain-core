@@ -91,7 +91,7 @@ async fn provider_failure_never_publishes_partial_output_and_releases_staging() 
 }
 
 #[tokio::test]
-async fn cache_clear_waits_for_owned_copy_after_the_graphql_waiter_is_cancelled() {
+async fn cache_clear_waits_for_owned_copy_after_the_graphql_waiter_is_canceled() {
     let dir = plain_libs::temporary::tempdir().unwrap();
     let core = Arc::new(ContentServer::open(&dir.path().join("data")).unwrap());
     let state = core.runtime_state();
@@ -362,5 +362,41 @@ async fn copies_logical_image_references_without_changing_the_source() {
     let response = execute(&core, "app://../outside.png", &rejected, "escape.png").await;
     assert!(!response.errors.is_empty());
     assert!(!rejected.exists());
+    core.stop_core().await;
+}
+
+#[tokio::test]
+async fn schema_contract_named_copy_propagates_the_completed_task_error() {
+    let dir = plain_libs::temporary::tempdir().unwrap();
+    let core = ContentServer::open(&dir.path().join("data")).unwrap();
+    let source = dir.path().join("source");
+    std::fs::create_dir(&source).unwrap();
+    std::fs::write(source.join("preserved.txt"), b"preserved").unwrap();
+    let response = execute(&core, source.to_str().unwrap(), &source, "nested").await;
+    assert_eq!(response.errors.len(), 1, "{:?}", response.errors);
+    assert_eq!(response.errors[0].message, "cannot copy or move into source");
+    assert!(!source.join("nested").exists());
+    assert_eq!(std::fs::read(source.join("preserved.txt")).unwrap(), b"preserved");
+    core.stop_core().await;
+}
+
+#[tokio::test]
+async fn schema_contract_pagination_rejects_negative_offset_and_limit() {
+    let dir = plain_libs::temporary::tempdir().unwrap();
+    let core = ContentServer::open(&dir.path().join("data")).unwrap();
+    let schema = core.native_graphql().unwrap();
+    for field in [
+        format!("files(root:{:?},sortBy:NAME_ASC,", dir.path().to_str().unwrap()),
+        "notifications(".to_owned(),
+        "appFiles(".to_owned(),
+        "fileTasks(".to_owned(),
+    ] {
+        for (offset, limit) in [(-1, 1), (0, -1), (-1, -1)] {
+            let document = format!("{{{field}query:\"\",offset:{offset},limit:{limit}){{__typename}}}}");
+            let response = schema.execute(Request::new(document)).await;
+            assert_eq!(response.errors.len(), 1, "{field}: {:?}", response.errors);
+            assert_eq!(response.errors[0].message, "invalid pagination", "{field}");
+        }
+    }
     core.stop_core().await;
 }

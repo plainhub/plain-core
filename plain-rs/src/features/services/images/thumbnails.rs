@@ -236,7 +236,7 @@ impl Thumbnails {
             .remove(token)
             .ok_or("thumbnail output expired")?
             .send(bytes)
-            .map_err(|_| "thumbnail output cancelled".into())
+            .map_err(|_| "thumbnail output canceled".into())
     }
 
     pub fn next_access_order(&self) -> u64 {

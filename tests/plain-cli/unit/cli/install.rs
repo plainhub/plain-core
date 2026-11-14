@@ -38,7 +38,7 @@ fn installation_sets_a_password_and_reinstallation_never_prompts_or_overwrites_i
 }
 
 #[test]
-fn cancelled_or_invalid_installation_never_creates_a_password() {
+fn canceled_or_invalid_installation_never_creates_a_password() {
     for value in [None, Some(""), Some("  ")] {
         let root = plain_libs::temporary::tempdir().unwrap();
         let paths = paths(root.path());

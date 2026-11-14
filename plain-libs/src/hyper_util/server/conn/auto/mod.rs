@@ -128,14 +128,14 @@ where
         buf: [MaybeUninit::uninit(); 24],
         filled: 0,
         version: Version::H2,
-        cancelled: false,
+        canceled: false,
         _pin: PhantomPinned,
     }
 }
-pin_project! { struct ReadVersion < I > { io : Option < I >, buf : [MaybeUninit < u8 >; 24] , filled : usize , version : Version , cancelled : bool , #[pin] _pin : PhantomPinned , } }
+pin_project! { struct ReadVersion < I > { io : Option < I >, buf : [MaybeUninit < u8 >; 24] , filled : usize , version : Version , canceled : bool , #[pin] _pin : PhantomPinned , } }
 impl<I> ReadVersion<I> {
     pub fn cancel(self: Pin<&mut Self>) {
-        *self.project().cancelled = true;
+        *self.project().canceled = true;
     }
 }
 impl<I> Future for ReadVersion<I>
@@ -145,8 +145,8 @@ where
     type Output = io::Result<(Version, Rewind<I>)>;
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let this = self.project();
-        if *this.cancelled {
-            return Poll::Ready(Err(io::Error::new(io::ErrorKind::Interrupted, "Cancelled")));
+        if *this.canceled {
+            return Poll::Ready(Err(io::Error::new(io::ErrorKind::Interrupted, "Canceled")));
         }
         let mut buf = ReadBuf::uninit(&mut *this.buf);
         unsafe {

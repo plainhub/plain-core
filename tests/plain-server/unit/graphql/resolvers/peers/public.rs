@@ -167,7 +167,7 @@ async fn responding_requires_a_verified_current_pairing_request() {
 }
 
 #[tokio::test]
-async fn cancelling_and_unpairing_both_acknowledge() {
+async fn canceling_and_unpairing_both_acknowledge() {
     let (_dir, schema) = fixture();
     for (document, field) in [
         (

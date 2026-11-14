@@ -265,7 +265,7 @@ impl SyncService {
             let this = self.clone();
             tokio::spawn(async move {
                 let mut errors = Vec::new();
-                let mut cancelled = false;
+                let mut canceled = false;
                 for receiver in &mut subscriptions {
                     while receiver.borrow().active() {
                         if receiver.changed().await.is_err() {
@@ -273,13 +273,13 @@ impl SyncService {
                         }
                     }
                     let state = receiver.borrow().clone();
-                    cancelled |= state.status == FeedWorkerStatus::Canceled;
+                    canceled |= state.status == FeedWorkerStatus::Canceled;
                     if !state.error.is_empty() {
                         errors.push(state.error);
                     }
                 }
                 let mut result = batch.borrow().clone();
-                result.status = if cancelled {
+                result.status = if canceled {
                     FeedWorkerStatus::Canceled
                 } else if errors.is_empty() {
                     FeedWorkerStatus::Completed
@@ -348,7 +348,7 @@ impl SyncService {
                 state.error.clear();
                 let _ = self.events.send(WsEvent::broadcast(
                     "FEEDS_FETCHED",
-                    plain_libs::serde_json::json!({"feedId":feed.id,"cancelled":true}).to_string(),
+                    plain_libs::serde_json::json!({"feedId":feed.id,"canceled":true}).to_string(),
                 ));
             }
             Some(Ok(())) => {

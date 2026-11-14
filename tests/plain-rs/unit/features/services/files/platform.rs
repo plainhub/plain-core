@@ -102,7 +102,7 @@ async fn sdk_recents(
                 "systemFileIndexRows" => {
                     assert_eq!(request["params"]["limit"], 100);
                     assert_eq!(request["params"]["offset"], 0);
-                    assert_eq!(request["params"]["sortBy"], "DATE_DESC");
+                    assert_eq!(request["params"]["sortBy"], "UPDATED_AT_DESC");
                     assert_eq!(
                         request["params"]["plan"]["clauses"],
                         json!(["mime_type != ?"])

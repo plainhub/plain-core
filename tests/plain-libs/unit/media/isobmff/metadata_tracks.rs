@@ -163,7 +163,7 @@ fn non_metadata_files_do_not_copy_or_rewrite_output() {
 }
 
 #[test]
-fn malformed_and_cancelled_sources_fail_before_output_is_written() {
+fn malformed_and_canceled_sources_fail_before_output_is_written() {
     for source in [
         vec![0; 7],
         atom(b"moov", &[0; 7]),
@@ -197,12 +197,12 @@ fn malformed_and_cancelled_sources_fail_before_output_is_written() {
 fn cancellation_during_streaming_stops_before_the_next_copy_block() {
     struct Output<'a> {
         bytes: Cursor<Vec<u8>>,
-        cancelled: &'a AtomicBool,
+        canceled: &'a AtomicBool,
     }
     impl Write for Output<'_> {
         fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
             let written = self.bytes.write(bytes)?;
-            self.cancelled.store(true, Ordering::Release);
+            self.canceled.store(true, Ordering::Release);
             Ok(written)
         }
         fn flush(&mut self) -> io::Result<()> {
@@ -219,11 +219,11 @@ fn cancellation_during_streaming_stops_before_the_next_copy_block() {
         atom(b"moov", &track(2, b"mebx")),
     ]
     .concat();
-    let cancelled = AtomicBool::new(false);
+    let canceled = AtomicBool::new(false);
     let mut output = Output {
         bytes: Cursor::new(Vec::new()),
-        cancelled: &cancelled,
+        canceled: &canceled,
     };
-    assert!(remove_mebx_tracks(&mut Cursor::new(source), &mut output, &cancelled).is_err());
+    assert!(remove_mebx_tracks(&mut Cursor::new(source), &mut output, &canceled).is_err());
     assert_eq!(output.bytes.into_inner().len(), 64 * 1024);
 }

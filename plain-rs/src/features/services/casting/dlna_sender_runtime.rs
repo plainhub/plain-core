@@ -16,6 +16,16 @@ pub struct Device {
     pub name: String,
     pub location: String,
 }
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[cfg_attr(feature = "graphql", derive(plain_graphql::Enum))]
+pub enum DlnaCastType {
+    Audio,
+    #[default]
+    Video,
+    Image,
+}
+
 #[derive(Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Item {
@@ -27,8 +37,8 @@ pub struct Item {
     pub artist: String,
     #[serde(default)]
     pub duration_ms: i64,
-    #[serde(default)]
-    pub audio: bool,
+    #[serde(rename = "type")]
+    pub media_type: DlnaCastType,
 }
 #[derive(Clone, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -205,7 +215,7 @@ pub async fn run(state: &CoreRuntime, command: Command) -> Result<Snapshot, Stri
             | Command::Select { .. }
     ) && interruption != runtime.media.interruption()
     {
-        return Err("Cast cancelled".into());
+        return Err("Cast canceled".into());
     }
     let result = execute(state, &runtime, command).await;
     runtime.publish(state);
@@ -257,7 +267,7 @@ pub async fn execute(
                         .await;
                 runtime.snapshot.lock().unwrap().items = items;
                 if !unchanged {
-                    return Err("Cast cancelled".into());
+                    return Err("Cast canceled".into());
                 }
             }
             runtime.snapshot.lock().unwrap().current_device = Some(device);

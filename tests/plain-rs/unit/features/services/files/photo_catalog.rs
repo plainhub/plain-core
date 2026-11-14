@@ -1,6 +1,6 @@
 use super::*;
 use crate::features::{
-    enums::DataType, prefs::settings::FileSortBy, services::files::media_catalog,
+    enums::DataType, prefs::settings::MediaSortBy, services::files::media_catalog,
 };
 
 #[test]
@@ -19,7 +19,7 @@ fn photo_snapshot_populates_shared_image_queries_and_preserves_identity() {
         favorite: false,
     };
     replace(&db, std::slice::from_ref(&asset)).unwrap();
-    let rows = media_catalog::rows(&db, DataType::Image, "", FileSortBy::NameAsc, 10, 0).unwrap();
+    let rows = media_catalog::rows(&db, DataType::Image, "", MediaSortBy::NameAsc, 10, 0).unwrap();
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].path, "ph://asset/L0/001");
     assert_eq!(rows[0].size_bytes, 0);
@@ -58,7 +58,7 @@ fn photo_snapshot_populates_shared_image_queries_and_preserves_identity() {
     asset.favorite = true;
     asset.created_at = "2026-01-02T00:00:00Z".into();
     replace(&db, &[asset]).unwrap();
-    let rows = media_catalog::rows(&db, DataType::Image, "", FileSortBy::NameAsc, 10, 0).unwrap();
+    let rows = media_catalog::rows(&db, DataType::Image, "", MediaSortBy::NameAsc, 10, 0).unwrap();
     assert_eq!(rows[0].id, id);
     assert_eq!(rows[0].title, "edited.jpg");
     assert!(rows[0].favorited);
@@ -121,7 +121,7 @@ fn photo_snapshot_stores_videos_in_the_shared_catalog_without_copying() {
         {"id":"video/L0/001","name":"video.mov","mediaType":2,"durationMs":1250,"width":1920,"height":1080,"createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-01T00:00:00Z","favorite":true}
     ])).unwrap();
     replace(&db, &assets).unwrap();
-    let videos = media_catalog::rows(&db, DataType::Video, "", FileSortBy::NameAsc, 10, 0).unwrap();
+    let videos = media_catalog::rows(&db, DataType::Video, "", MediaSortBy::NameAsc, 10, 0).unwrap();
     assert_eq!(videos.len(), 1);
     assert_eq!(videos[0].path, "ph://video/L0/001");
     assert_eq!(videos[0].size_bytes, 0);

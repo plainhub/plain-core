@@ -1,5 +1,5 @@
 use crate::features::enums::DataType;
-use crate::features::prefs::settings::FileSortBy;
+use crate::features::prefs::settings::MediaSortBy;
 use crate::features::services::files::media_catalog;
 use crate::features::services::files::media_catalog_facts;
 use crate::infrastructure::db::Db;
@@ -64,7 +64,7 @@ impl MediaCatalog {
         &self,
         kind: DataType,
         query: &str,
-        sort: FileSortBy,
+        sort: MediaSortBy,
         limit: u32,
         offset: u32,
     ) -> Result<Vec<Value>, String> {
@@ -96,7 +96,7 @@ impl MediaCatalog {
         &self,
         kind: DataType,
         query: &str,
-        sort: FileSortBy,
+        sort: MediaSortBy,
         limit: u32,
         offset: u32,
     ) -> Result<MediaPage, String> {
@@ -151,7 +151,7 @@ impl MediaCatalog {
                         &db,
                         DataType::Image,
                         plan,
-                        FileSortBy::NameAsc,
+                        MediaSortBy::NameAsc,
                         limit,
                         0,
                     )

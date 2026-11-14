@@ -141,7 +141,7 @@ async fn observe(
                     |track| crate::features::services::casting::dlna_sender_runtime::Item {
                         path: track.path,
                         title: track.title,
-                        audio: true,
+                        media_type: super::dlna_sender_runtime::DlnaCastType::Audio,
                         ..Default::default()
                     },
                 )

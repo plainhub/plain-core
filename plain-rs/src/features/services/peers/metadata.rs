@@ -22,10 +22,10 @@ fn apply(
     state: &CoreRuntime,
     id: &str,
     identity: &Identity,
-    cancelled: &watch::Receiver<bool>,
+    canceled: &watch::Receiver<bool>,
     name: &str,
 ) -> Result<bool> {
-    if !current(connection, state, id, identity, cancelled)? {
+    if !current(connection, state, id, identity, canceled)? {
         return Ok(false);
     }
     if !name.is_empty() {
@@ -46,9 +46,9 @@ pub async fn refresh(
     state: &CoreRuntime,
     id: &str,
     identity: &Identity,
-    cancelled: &watch::Receiver<bool>,
+    canceled: &watch::Receiver<bool>,
 ) -> Result<Option<AppSnapshot>> {
-    if !current_peer(state, id, identity, cancelled).await? {
+    if !current_peer(state, id, identity, canceled).await? {
         return Ok(None);
     }
     let data = crate::features::services::peers::management_http::query(
@@ -64,7 +64,7 @@ pub async fn refresh(
     let state = state.clone();
     let id = id.to_owned();
     let identity = identity.clone();
-    let cancelled = cancelled.clone();
+    let canceled = canceled.clone();
     tokio::task::spawn_blocking(move || {
         state.db.with_conn(|connection| {
             Ok(apply(
@@ -72,7 +72,7 @@ pub async fn refresh(
                 &state,
                 &id,
                 &identity,
-                &cancelled,
+                &canceled,
                 &app.device_name,
             )?
             .then_some(app))

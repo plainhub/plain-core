@@ -17,7 +17,7 @@ pub struct MediaChange {
 pub struct FeedSyncChange {
     pub feed_id: ID,
     pub error: Option<String>,
-    pub cancelled: Option<bool>,
+    pub canceled: Option<bool>,
 }
 #[derive(SimpleObject, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -35,7 +35,7 @@ pub struct SmsProviderChange {
 #[derive(SimpleObject, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SmsSendResult {
-    pub request_id: ID,
+    pub request_id: String,
     pub success: bool,
     pub result_code: Option<i32>,
 }

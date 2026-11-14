@@ -122,7 +122,7 @@ async fn cancellation_interrupts_a_pending_body_and_cleans_staging_before_join_r
     let worker = tokio::spawn(async move {
         save_stream(
             &worker_state,
-            "cancelled",
+            "canceled",
             &identity,
             body,
             None,

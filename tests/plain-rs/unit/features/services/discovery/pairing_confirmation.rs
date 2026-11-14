@@ -106,7 +106,7 @@ async fn signed_reply_commits_both_peers_and_retries_keep_original_key() {
 }
 
 #[tokio::test]
-async fn a_cancelled_attempt_cannot_commit_a_late_reply() {
+async fn a_canceled_attempt_cannot_commit_a_late_reply() {
     let (_ad, a) = fixture("a");
     let (_bd, b) = fixture("b");
     let a = a.runtime_state();

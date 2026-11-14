@@ -1,6 +1,6 @@
 use super::{
     header,
-    rewrite::{check_cancelled, copy},
+    rewrite::{check_canceled, copy},
     samples::VideoTrack,
 };
 use std::{
@@ -70,25 +70,25 @@ fn entry(reader: &mut (impl Read + Seek), length: u64, description: u32) -> io::
 pub fn canonicalize_hev1(
     reader: &mut (impl Read + Seek),
     writer: &mut (impl Read + Write + Seek),
-    cancelled: &AtomicBool,
+    canceled: &AtomicBool,
 ) -> io::Result<()> {
-    check_cancelled(cancelled)?;
+    check_canceled(canceled)?;
     let length = reader.seek(SeekFrom::End(0))?;
     reader.seek(SeekFrom::Start(0))?;
     writer.seek(SeekFrom::Start(0))?;
-    copy(reader, writer, length, cancelled)?;
+    copy(reader, writer, length, canceled)?;
     let track = VideoTrack::read_hevc(writer)?;
     if &track.sample_entry != b"hev1" {
         return Err(invalid());
     }
     track.visit_samples(|range| {
-        check_cancelled(cancelled)?;
+        check_canceled(canceled)?;
         let mut offset = range.start;
         if offset == range.end {
             return Err(invalid());
         }
         while offset < range.end {
-            check_cancelled(cancelled)?;
+            check_canceled(canceled)?;
             if range.end - offset < track.nal_length_size as u64 + 2 {
                 return Err(invalid());
             }
@@ -115,7 +115,7 @@ pub fn canonicalize_hev1(
         }
         Ok(())
     })?;
-    check_cancelled(cancelled)?;
+    check_canceled(canceled)?;
     let (kind, configuration) = entry(writer, length, track.description)?;
     writer.seek(SeekFrom::Start(kind))?;
     writer.write_all(b"hvc1")?;

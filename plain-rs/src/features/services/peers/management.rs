@@ -98,18 +98,18 @@ impl Runtime {
         ensure!(slot.is_none(), "Management runtime already started");
         let mut changed = state.db.peer_changes();
         let mut network = state.network_revision.subscribe();
-        let (cancel, mut cancelled) = watch::channel(false);
+        let (cancel, mut canceled) = watch::channel(false);
         let coordinator = tokio::spawn(async move {
             let mut stop = state.stop.clone();
             let mut workers = HashMap::new();
             loop {
-                if *stop.borrow() || *cancelled.borrow() {
+                if *stop.borrow() || *canceled.borrow() {
                     break;
                 }
                 let wanted = tokio::select! {
                     biased;
                     _ = stop.changed() => break,
-                    _ = cancelled.changed() => break,
+                    _ = canceled.changed() => break,
                     wanted = desired(&state, &actor) => wanted,
                 };
                 let retry = match wanted {
@@ -132,7 +132,7 @@ impl Runtime {
                     tokio::select! {
                         biased;
                         _ = stop.changed() => break false,
-                        _ = cancelled.changed() => break false,
+                        _ = canceled.changed() => break false,
                         result = changed.changed() => break result.is_ok(),
                         _ = &mut retry_delay, if retry => break true,
                         result = network.changed() => break result.is_ok(),
@@ -226,11 +226,11 @@ async fn reconcile(
     }
     for (id, identity) in wanted {
         workers.entry(id.clone()).or_insert_with(|| {
-            let (cancel, cancelled) = watch::channel(false);
+            let (cancel, canceled) = watch::channel(false);
             let context = state.clone();
             let connection = identity.clone();
             let job = tokio::spawn(async move {
-                run(context, id, connection, cancelled).await;
+                run(context, id, connection, canceled).await;
             });
             Worker {
                 identity,
@@ -253,15 +253,15 @@ async fn publish_clipboard_change(
     state: &CoreRuntime,
     peer_id: &str,
     identity: &Identity,
-    cancelled: &watch::Receiver<bool>,
+    canceled: &watch::Receiver<bool>,
 ) -> Result<bool> {
     let state = state.clone();
     let peer_id = peer_id.to_owned();
     let identity = identity.clone();
-    let cancelled = cancelled.clone();
+    let canceled = canceled.clone();
     tokio::task::spawn_blocking(move || {
         state.db.with_conn(|connection| -> Result<bool> {
-            if !current(connection, &state, &peer_id, &identity, &cancelled)? {
+            if !current(connection, &state, &peer_id, &identity, &canceled)? {
                 return Ok(false);
             }
             Runtime::notify_clipboard(&state, &peer_id);
@@ -276,7 +276,7 @@ pub fn current(
     state: &CoreRuntime,
     peer_id: &str,
     identity: &Identity,
-    cancelled: &watch::Receiver<bool>,
+    canceled: &watch::Receiver<bool>,
 ) -> Result<bool> {
     let current = connection
         .query_row(
@@ -291,7 +291,7 @@ pub fn current(
             },
         )
         .optional()?;
-    Ok(!*cancelled.borrow()
+    Ok(!*canceled.borrow()
         && !*state.stop.borrow()
         && current.as_ref().is_some_and(|(token, ip, port)| {
             token == &identity.token && ip == &identity.ip && port == &identity.port
@@ -302,18 +302,18 @@ pub async fn current_peer(
     state: &CoreRuntime,
     peer_id: &str,
     identity: &Identity,
-    cancelled: &watch::Receiver<bool>,
+    canceled: &watch::Receiver<bool>,
 ) -> Result<bool> {
-    let (state, peer_id, identity, cancelled) = (
+    let (state, peer_id, identity, canceled) = (
         state.clone(),
         peer_id.to_owned(),
         identity.clone(),
-        cancelled.clone(),
+        canceled.clone(),
     );
     tokio::task::spawn_blocking(move || {
         state
             .db
-            .with_conn(|connection| current(connection, &state, &peer_id, &identity, &cancelled))
+            .with_conn(|connection| current(connection, &state, &peer_id, &identity, &canceled))
     })
     .await?
 }
@@ -326,11 +326,11 @@ pub async fn refresh_data(
     state: &CoreRuntime,
     id: &str,
     identity: &Identity,
-    cancelled: &watch::Receiver<bool>,
+    canceled: &watch::Receiver<bool>,
     clipboard_access: Option<&watch::Sender<Option<bool>>>,
 ) -> Result<()> {
     let app =
-        match crate::features::services::peers::metadata::refresh(state, id, identity, cancelled)
+        match crate::features::services::peers::metadata::refresh(state, id, identity, canceled)
             .await
         {
             Ok(Some(app)) => Ok(app),
@@ -352,7 +352,7 @@ pub async fn refresh_data(
         access.send_replace(clipboard);
     }
     crate::features::services::peers::notifications::refresh_from_app(
-        state, id, identity, cancelled, app,
+        state, id, identity, canceled, app,
     )
     .await
 }
@@ -361,7 +361,7 @@ async fn follow_data(
     state: &CoreRuntime,
     id: &str,
     identity: &Identity,
-    cancelled: &watch::Receiver<bool>,
+    canceled: &watch::Receiver<bool>,
     changed: &tokio::sync::Notify,
     clipboard_access: watch::Sender<Option<bool>>,
 ) {
@@ -372,7 +372,7 @@ async fn follow_data(
     interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     loop {
         if let Err(error) =
-            refresh_data(state, id, identity, cancelled, Some(&clipboard_access)).await
+            refresh_data(state, id, identity, canceled, Some(&clipboard_access)).await
         {
             log::debug!("Peer data refresh failed: {error}");
         }
@@ -387,20 +387,20 @@ async fn run(
     state: CoreRuntime,
     id: String,
     identity: Identity,
-    mut cancelled: watch::Receiver<bool>,
+    mut canceled: watch::Receiver<bool>,
 ) {
     let changed = tokio::sync::Notify::new();
     let clipboard_changed = tokio::sync::Notify::new();
     let (clipboard_access, access) = watch::channel(None);
     let mut stop = state.stop.clone();
-    let publication_cancelled = cancelled.clone();
+    let publication_canceled = canceled.clone();
     tokio::select! {
         biased;
         _ = stop.wait_for(|stopped| *stopped) => {},
-        _ = cancelled.wait_for(|cancelled| *cancelled) => {},
-        _ = follow_data(&state, &id, &identity, &publication_cancelled, &changed, clipboard_access) => {},
-        _ = connection_loop(state.clone(), id.clone(), identity.clone(), publication_cancelled.clone(), &changed, &clipboard_changed) => {},
-        _ = crate::features::services::peers::clipboard::follow(&state, &id, &identity, &publication_cancelled, &clipboard_changed, access) => {},
+        _ = canceled.wait_for(|canceled| *canceled) => {},
+        _ = follow_data(&state, &id, &identity, &publication_canceled, &changed, clipboard_access) => {},
+        _ = connection_loop(state.clone(), id.clone(), identity.clone(), publication_canceled.clone(), &changed, &clipboard_changed) => {},
+        _ = crate::features::services::peers::clipboard::follow(&state, &id, &identity, &publication_canceled, &clipboard_changed, access) => {},
     }
 }
 
@@ -408,7 +408,7 @@ async fn connection_loop(
     state: CoreRuntime,
     id: String,
     identity: Identity,
-    mut cancelled: watch::Receiver<bool>,
+    mut canceled: watch::Receiver<bool>,
     data_changed: &tokio::sync::Notify,
     clipboard_changed: &tokio::sync::Notify,
 ) {
@@ -416,17 +416,17 @@ async fn connection_loop(
     let mut stop = state.stop.clone();
     let mut delay = Duration::from_secs(1);
     loop {
-        if *stop.borrow() || *cancelled.borrow() {
+        if *stop.borrow() || *canceled.borrow() {
             break;
         }
         let connected = tokio::select! {
             biased;
             _ = stop.changed() => break,
-            _ = cancelled.changed() => break,
+            _ = canceled.changed() => break,
             connected = tokio::time::timeout(Duration::from_secs(10), crate::features::services::peers::status_socket::connect_management(&identity.url)) => connected,
         };
         if let Ok(Ok(mut socket)) = connected {
-            let publication_cancelled = cancelled.clone();
+            let publication_canceled = canceled.clone();
             let exchange = async {
                 use crate::features::services::peers::management_wire;
                 use crate::features::services::peers::management_wire::Incoming;
@@ -506,7 +506,7 @@ async fn connection_loop(
                                                 &state,
                                                 &id,
                                                 &identity,
-                                                &publication_cancelled,
+                                                &publication_canceled,
                                             )
                                             .await?
                                             {
@@ -536,14 +536,14 @@ async fn connection_loop(
             tokio::select! {
                 biased;
                 _ = stop.changed() => break,
-                _ = cancelled.changed() => break,
+                _ = canceled.changed() => break,
                 result = exchange => if let Err(error) = result { log::debug!("Management peer connection ended: {error}"); },
             }
         }
         tokio::select! {
             biased;
             _ = stop.changed() => break,
-            _ = cancelled.changed() => break,
+            _ = canceled.changed() => break,
             _ = tokio::time::sleep(delay) => {},
         }
         delay = next_delay(delay);

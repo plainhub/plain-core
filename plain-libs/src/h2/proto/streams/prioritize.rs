@@ -350,7 +350,7 @@ impl Prioritize {
         match mem::replace(&mut self.in_flight_data_frame, InFlightData::Nothing) {
             InFlightData::Nothing => panic!("wasn't expecting a frame to reclaim"),
             InFlightData::Drop => {
-                tracing::trace!("not reclaiming frame for cancelled stream");
+                tracing::trace!("not reclaiming frame for canceled stream");
                 return false;
             }
             InFlightData::DataFrame(k) => {

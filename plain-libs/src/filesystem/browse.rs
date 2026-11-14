@@ -180,11 +180,11 @@ impl Plan {
     pub fn walk(
         &self,
         mut progress: impl FnMut(Page) -> bool,
-        cancelled: impl Fn() -> bool,
+        canceled: impl Fn() -> bool,
     ) -> io::Result<Page> {
         self.walk_inner(
             Some(&mut progress),
-            cancelled,
+            canceled,
             Instant::now,
             crate::filesystem::count_dir_entries,
         )
@@ -192,7 +192,7 @@ impl Plan {
     fn walk_inner(
         &self,
         mut progress: Option<&mut dyn FnMut(Page) -> bool>,
-        cancelled: impl Fn() -> bool,
+        canceled: impl Fn() -> bool,
         mut now: impl FnMut() -> Instant,
         mut count_entries: impl FnMut(&Path, bool) -> io::Result<usize>,
     ) -> io::Result<Page> {
@@ -210,10 +210,10 @@ impl Plan {
         let mut last_progress = None;
         let mut last_count = 0;
         while let Some(directory) = directories.last_mut() {
-            if cancelled() {
+            if canceled() {
                 return Err(io::Error::new(
                     io::ErrorKind::Interrupted,
-                    "File search cancelled",
+                    "File search canceled",
                 ));
             }
             let Some(entry) = directory.next() else {
@@ -240,7 +240,7 @@ impl Plan {
                     if !progress(snapshot) {
                         return Err(io::Error::new(
                             io::ErrorKind::Interrupted,
-                            "File search cancelled",
+                            "File search canceled",
                         ));
                     }
                     last_progress = Some(now());
@@ -335,10 +335,10 @@ impl Plan {
                 .collect(),
         };
         for item in &mut page.items {
-            if cancelled() {
+            if canceled() {
                 return Err(io::Error::new(
                     io::ErrorKind::Interrupted,
-                    "File search cancelled",
+                    "File search canceled",
                 ));
             }
             if self.count_children && item.is_dir {

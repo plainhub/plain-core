@@ -27,7 +27,7 @@ fn read_line(terminal: &mut impl Read) -> io::Result<String> {
             3 | 4 | 26 => {
                 return Err(io::Error::new(
                     io::ErrorKind::Interrupted,
-                    "Password entry cancelled",
+                    "Password entry canceled",
                 ));
             }
             8 | 127 => while bytes.pop().is_some_and(|byte| byte & 0xc0 == 0x80) {},

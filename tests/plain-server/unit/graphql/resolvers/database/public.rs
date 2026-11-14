@@ -74,14 +74,91 @@ async fn owned_database_browser_works_without_a_connected_host() {
     assert_eq!(response.data.into_json().unwrap()["dbTableRowCount"], 1);
 }
 #[tokio::test]
-async fn invalid_row_is_false_and_empty_delete_is_false() {
+async fn invalid_row_returns_an_error_and_empty_delete_is_false() {
     let (_dir, schema) = fixture();
-    let response=schema.execute(r#"mutation {createDbTableRow(table:"test_rows",row:{}) deleteDbTableRows(table:"test_rows",ids:[])}"#).await;
+    let response = schema
+        .execute(r#"mutation {createDbTableRow(table:"test_rows",row:{})}"#)
+        .await;
+    assert_eq!(response.errors.len(), 1);
+    assert_eq!(response.errors[0].message, "row must not be empty");
+    let response = schema
+        .execute(r#"mutation {deleteDbTableRows(table:"test_rows",ids:[])}"#)
+        .await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     assert_eq!(
         response.data.into_json().unwrap(),
-        json!({"createDbTableRow":false,"deleteDbTableRows":false})
+        json!({"deleteDbTableRows":false})
     );
+}
+
+#[tokio::test]
+async fn json_null_is_stored_as_sql_null_and_null_text_is_preserved() {
+    let (_dir, schema) = fixture();
+    let response = schema
+        .execute(r#"mutation {createDbTableRow(table:"test_rows",row:{key:"c",title:"null",size:null,bytes:null})}"#)
+        .await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    assert_eq!(response.data.into_json().unwrap()["createDbTableRow"], true);
+    let db = schema.data::<Arc<plain_rs::infrastructure::db::Db>>().unwrap();
+    let stored: (bool, bool, String) = db.with_conn(|conn| {
+        conn.query_row(
+            "SELECT size IS NULL, bytes IS NULL, title FROM test_rows WHERE key='c'",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )
+        .unwrap()
+    });
+    assert_eq!(stored, (true, true, "null".into()));
+}
+
+#[tokio::test]
+async fn database_write_errors_are_returned_without_changing_rows() {
+    let (_dir, schema) = fixture();
+    for (document, message) in [
+        (
+            r#"mutation {createDbTableRow(table:"test_rows",row:{key:"a",title:"Duplicate"})}"#,
+            "UNIQUE constraint failed",
+        ),
+        (
+            r#"mutation {createDbTableRow(table:"test_rows",row:{key:"c",title:null})}"#,
+            "NOT NULL constraint failed",
+        ),
+        (
+            r#"mutation {createDbTableRow(table:"missing_table",row:{key:"c"})}"#,
+            "Table not found or invalid identifier",
+        ),
+        (
+            r#"mutation {deleteDbTableRows(table:"missing_table",ids:["a"])}"#,
+            "Table not found or invalid identifier",
+        ),
+    ] {
+        let response = schema.execute(document).await;
+        assert_eq!(response.errors.len(), 1, "{document}");
+        assert!(
+            response.errors[0].message.contains(message),
+            "{document}: {:?}",
+            response.errors
+        );
+    }
+    let db = schema.data::<Arc<plain_rs::infrastructure::db::Db>>().unwrap();
+    db.with_conn(|conn| {
+        conn.execute_batch("CREATE TRIGGER reject_test_row_delete BEFORE DELETE ON test_rows BEGIN SELECT RAISE(ABORT, 'test deletion rejected'); END;")
+            .unwrap();
+    });
+    let response = schema
+        .execute(r#"mutation {deleteDbTableRows(table:"test_rows",ids:["a"])}"#)
+        .await;
+    assert_eq!(response.errors.len(), 1);
+    assert!(response.errors[0].message.contains("test deletion rejected"));
+    let rows: Vec<(String, String)> = db.with_conn(|conn| {
+        let mut statement = conn.prepare("SELECT key,title FROM test_rows ORDER BY key").unwrap();
+        statement
+            .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap()
+    });
+    assert_eq!(rows, vec![("a".into(), "First".into()), ("b".into(), "Second".into())]);
 }
 #[test]
 fn an_unknown_column_type_is_unknown() {

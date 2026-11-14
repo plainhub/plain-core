@@ -7,7 +7,7 @@ pub(super) fn entries(
     data_directory: PathBuf,
     policy: Arc<Policy>,
     background: bool,
-    cancelled: watch::Receiver<bool>,
+    canceled: watch::Receiver<bool>,
     stopped: watch::Receiver<bool>,
 ) -> (
     mpsc::Receiver<PathBuf>,
@@ -42,8 +42,8 @@ pub(super) fn entries(
                 })
             },
             || {
-                *cancelled.borrow()
-                    || cancelled.has_changed().is_err()
+                *canceled.borrow()
+                    || canceled.has_changed().is_err()
                     || *stopped.borrow()
                     || stopped.has_changed().is_err()
             },

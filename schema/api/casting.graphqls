@@ -10,7 +10,7 @@ input DlnaMediaInput {
 	albumArt: String! = ""
 	artist: String! = ""
 	durationMs: Long! = 0
-	audio: Boolean! = false
+	type: DlnaCastType!
 }
 
 type DlnaRenderer {
@@ -34,7 +34,7 @@ type DlnaSenderMedia {
 	albumArt: String!
 	artist: String!
 	durationMs: Long!
-	audio: Boolean!
+	type: DlnaCastType!
 }
 
 type DlnaSenderState {

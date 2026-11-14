@@ -190,7 +190,7 @@ async fn stop_interrupts_a_pipe_without_waiting_for_its_producer_to_close() {
 }
 
 #[test]
-fn cancelling_a_metadata_reader_stops_reads_and_seeks_without_retrying_interrupted_errors() {
+fn canceling_a_metadata_reader_stops_reads_and_seeks_without_retrying_interrupted_errors() {
     let (cancel, stop) = watch::channel(false);
     let guard = ReadCancellation(cancel);
     let mut input = CancellableReader {

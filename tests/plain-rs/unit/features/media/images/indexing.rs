@@ -94,14 +94,14 @@ impl Provider for Mock {
 }
 #[derive(Default)]
 struct Guard {
-    cancelled: AtomicBool,
+    canceled: AtomicBool,
     progress: Mutex<Vec<Progress>>,
     cancel_after_save: bool,
 }
 impl Control for Guard {
     fn check(&self) -> DomainResult<()> {
-        if self.cancelled.load(Ordering::SeqCst) {
-            Err(invalid("cancelled"))
+        if self.canceled.load(Ordering::SeqCst) {
+            Err(invalid("canceled"))
         } else {
             Ok(())
         }
@@ -110,7 +110,7 @@ impl Control for Guard {
         self.check()?;
         image_embeddings::save(db, items)?;
         if self.cancel_after_save {
-            self.cancelled.store(true, Ordering::SeqCst);
+            self.canceled.store(true, Ordering::SeqCst);
         }
         Ok(())
     }

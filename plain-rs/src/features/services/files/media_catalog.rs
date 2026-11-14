@@ -1,5 +1,5 @@
 use crate::features::enums::DataType;
-use crate::features::prefs::settings::FileSortBy;
+use crate::features::prefs::settings::MediaSortBy;
 use crate::features::services::files::provider_query::{self as query, Provider};
 use crate::infrastructure::db::Db;
 use crate::infrastructure::db::MediaFileRow;
@@ -96,7 +96,7 @@ pub fn rows(
     db: &Db,
     data_type: DataType,
     query: &str,
-    sort: FileSortBy,
+    sort: MediaSortBy,
     limit: u32,
     offset: u32,
 ) -> Result<Vec<MediaFileRow>> {
@@ -114,7 +114,7 @@ pub fn rows_with_plan(
     db: &Db,
     data_type: DataType,
     plan: query::Plan,
-    sort: FileSortBy,
+    sort: MediaSortBy,
     limit: u32,
     offset: u32,
 ) -> Result<Vec<MediaFileRow>> {
@@ -132,20 +132,20 @@ fn selected_rows(
     db: &Db,
     data_type: DataType,
     (sql, mut args): (String, Vec<Value>),
-    sort: FileSortBy,
+    sort: MediaSortBy,
     limit: u32,
     offset: u32,
 ) -> Result<Vec<MediaFileRow>> {
     let order = match sort {
-        FileSortBy::DateAsc => "updated_at ASC,file_id",
-        FileSortBy::DateDesc => "updated_at DESC,file_id",
-        FileSortBy::SizeAsc => "size_bytes ASC,file_id",
-        FileSortBy::SizeDesc => "size_bytes DESC,file_id",
-        FileSortBy::NameAsc if data_type == DataType::Audio => "title COLLATE NOCASE ASC,file_id",
-        FileSortBy::NameAsc => "file_name COLLATE NOCASE ASC,file_id",
-        FileSortBy::NameDesc if data_type == DataType::Audio => "title COLLATE NOCASE DESC,file_id",
-        FileSortBy::NameDesc => "file_name COLLATE NOCASE DESC,file_id",
-        FileSortBy::TakenAtDesc => "taken_at DESC,updated_at DESC,file_id",
+        MediaSortBy::UpdatedAtAsc => "updated_at ASC,file_id",
+        MediaSortBy::UpdatedAtDesc => "updated_at DESC,file_id",
+        MediaSortBy::SizeAsc => "size_bytes ASC,file_id",
+        MediaSortBy::SizeDesc => "size_bytes DESC,file_id",
+        MediaSortBy::TitleAsc => "title COLLATE NOCASE ASC,file_id",
+        MediaSortBy::NameAsc => "file_name COLLATE NOCASE ASC,file_id",
+        MediaSortBy::TitleDesc => "title COLLATE NOCASE DESC,file_id",
+        MediaSortBy::NameDesc => "file_name COLLATE NOCASE DESC,file_id",
+        MediaSortBy::TakenAtDesc => "COALESCE(taken_at,created_at) DESC,updated_at DESC,file_id",
     };
     args.extend([
         Value::Integer(i64::from(limit)),

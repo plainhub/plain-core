@@ -1,3 +1,4 @@
+use super::inputs::ChatContentInput;
 use super::public::{ChatItem, item};
 use crate::server::ServerState;
 use plain_graphql::{Context, ID, Object, SimpleObject};
@@ -21,11 +22,13 @@ impl ChatHostQuery {
             &ctx.data::<ServerState>()?.db,
         )?
         .into_iter()
-        .map(|(id, chat)| ChatConversation {
-            id: ID::from(id),
-            chat: item(&chat),
+        .map(|(id, chat)| {
+            Ok(ChatConversation {
+                id: ID::from(id),
+                chat: item(&chat)?,
+            })
         })
-        .collect())
+        .collect::<plain_graphql::Result<Vec<_>>>()?)
     }
     fn chat_records(
         &self,
@@ -37,9 +40,10 @@ impl ChatHostQuery {
         let state = ctx.data::<ServerState>()?;
         let filter = filter(&query, offset, limit, false);
         let value = plain_rs::infrastructure::db::chat_store::messages::list(&state.db, &filter)?;
-        let rows: Vec<plain_rs::infrastructure::db::DChat> = plain_libs::serde_json::from_value(value)?;
+        let rows: Vec<plain_rs::infrastructure::db::DChat> =
+            plain_libs::serde_json::from_value(value)?;
         plain_rs::features::services::chat::prewarm::prepare_conversation(state, &filter);
-        Ok(rows.iter().map(item).collect())
+        rows.iter().map(item).collect()
     }
     fn chat_count(&self, ctx: &Context<'_>, query: String) -> plain_graphql::Result<i32> {
         let state = ctx.data::<ServerState>()?;
@@ -59,20 +63,21 @@ pub struct ChatTextEdit {
 pub struct ChatHostMutation;
 #[Object]
 impl ChatHostMutation {
-    /// Send the same ChatItem.content JSON to one or more peer:<id> or channel:<id> targets.
     async fn send_chat_items(
         &self,
         ctx: &Context<'_>,
         targets: Vec<String>,
-        content: String,
+        content: ChatContentInput,
     ) -> plain_graphql::Result<Vec<ChatItem>> {
-        Ok(
-            chat_actions::send_many(ctx.data::<ServerState>()?, targets, content)
-                .await?
-                .iter()
-                .map(item)
-                .collect(),
+        Ok(chat_actions::send_many(
+            ctx.data::<ServerState>()?,
+            targets,
+            plain_libs::serde_json::to_string(&content.content()?)?,
         )
+        .await?
+        .iter()
+        .map(item)
+        .collect::<plain_graphql::Result<Vec<_>>>()?)
     }
 
     async fn send_share(
@@ -91,7 +96,7 @@ impl ChatHostMutation {
         .await?
         .iter()
         .map(item)
-        .collect())
+        .collect::<plain_graphql::Result<Vec<_>>>()?)
     }
 
     async fn send_folder_share(
@@ -109,12 +114,15 @@ impl ChatHostMutation {
             targets,
             path,
             name,
-            expires_at.map(|time| time.0.to_rfc3339_opts(plain_libs::chrono::SecondsFormat::Millis, true)),
+            expires_at.map(|time| {
+                time.0
+                    .to_rfc3339_opts(plain_libs::chrono::SecondsFormat::Millis, true)
+            }),
         )
         .await?
         .iter()
         .map(item)
-        .collect())
+        .collect::<plain_graphql::Result<Vec<_>>>()?)
     }
 
     async fn forward_chat_items(
@@ -128,7 +136,7 @@ impl ChatHostMutation {
                 .await?
                 .iter()
                 .map(item)
-                .collect(),
+                .collect::<plain_graphql::Result<Vec<_>>>()?,
         )
     }
     fn edit_chat_text(
@@ -154,7 +162,7 @@ impl ChatHostMutation {
         }
         Ok(ChatTextEdit {
             changed: result.changed,
-            chat: item(&result.chat),
+            chat: item(&result.chat)?,
         })
     }
 }

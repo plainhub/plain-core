@@ -53,10 +53,10 @@ struct Stream {
     finished: bool,
 }
 
-pub fn transcode(source: &Path, destination: &Path, cancelled: &AtomicBool) -> Result<bool> {
+pub fn transcode(source: &Path, destination: &Path, canceled: &AtomicBool) -> Result<bool> {
     ensure!(
-        !cancelled.load(Ordering::Acquire),
-        "Video conversion cancelled"
+        !canceled.load(Ordering::Acquire),
+        "Video conversion canceled"
     );
     let normalized = if plain_libs::media::isobmff::tracks(source)
         .and_then(|tracks| tracks.first_video_codec)
@@ -71,7 +71,7 @@ pub fn transcode(source: &Path, destination: &Path, cancelled: &AtomicBool) -> R
         plain_libs::media::isobmff::canonicalize_hev1(
             &mut std::fs::File::open(source)?,
             temporary.as_file_mut(),
-            cancelled,
+            canceled,
         )?;
         #[cfg(test)]
         NORMALIZED_SOURCES.set(NORMALIZED_SOURCES.get() + 1);
@@ -82,17 +82,17 @@ pub fn transcode(source: &Path, destination: &Path, cancelled: &AtomicBool) -> R
     transcode_file(
         normalized.as_ref().map_or(source, |file| file.path()),
         destination,
-        cancelled,
+        canceled,
     )
 }
 
-fn transcode_file(source: &Path, destination: &Path, cancelled: &AtomicBool) -> Result<bool> {
+fn transcode_file(source: &Path, destination: &Path, canceled: &AtomicBool) -> Result<bool> {
     autoreleasepool(|_| {
         // SAFETY: Objects stay on this worker and settings use AVFoundation's documented types.
         unsafe {
             ensure!(
-                !cancelled.load(Ordering::Acquire),
-                "Video conversion cancelled"
+                !canceled.load(Ordering::Acquire),
+                "Video conversion canceled"
             );
             let video_type =
                 AVMediaTypeVideo.context("AVFoundation video media type unavailable")?;
@@ -246,8 +246,8 @@ fn transcode_file(source: &Path, destination: &Path, cancelled: &AtomicBool) -> 
             }
             while streams.iter().any(|stream| !stream.finished) {
                 ensure!(
-                    !cancelled.load(Ordering::Acquire),
-                    "Video conversion cancelled"
+                    !canceled.load(Ordering::Acquire),
+                    "Video conversion canceled"
                 );
                 ensure!(
                     session.writer.status() == AVAssetWriterStatus::Writing,
@@ -319,8 +319,8 @@ fn transcode_file(source: &Path, destination: &Path, cancelled: &AtomicBool) -> 
             session.writer.finishWritingWithCompletionHandler(&finished);
             while session.writer.status() == AVAssetWriterStatus::Writing {
                 ensure!(
-                    !cancelled.load(Ordering::Acquire),
-                    "Video conversion cancelled"
+                    !canceled.load(Ordering::Acquire),
+                    "Video conversion canceled"
                 );
                 match receiver.recv_timeout(Duration::from_millis(20)) {
                     Ok(()) => break,

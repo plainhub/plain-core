@@ -107,8 +107,8 @@ async fn complete_stream_is_published_with_identity_and_restored_without_client_
     .await
     .unwrap();
     assert_eq!(snapshot["filePath"], path);
-    let cancelled = execute(&state, Command::Cancel).await.unwrap();
-    assert_eq!(cancelled.status, AppUpdateDownloadStatus::Idle);
+    let canceled = execute(&state, Command::Cancel).await.unwrap();
+    assert_eq!(canceled.status, AppUpdateDownloadStatus::Idle);
     assert!(!Path::new(&path).exists());
     core.stop_core().await;
     serving.await.unwrap().unwrap();

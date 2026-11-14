@@ -69,7 +69,7 @@ async fn pause_seek_and_transient_stopped_preserve_links_but_confirmed_end_revok
     assert!(state.cast.media.lookup(&name, peer).is_some());
     apply_poll(&state, &fields("STOPPED")).await.unwrap();
     assert!(state.cast.media.lookup(&name, peer).is_none());
-    stream.cancelled().await;
+    stream.canceled().await;
     assert_eq!(state.cast.snapshot().current_uri, "/fixture.mp4");
     assert!(!state.cast.snapshot().active);
     core.stop_core().await;

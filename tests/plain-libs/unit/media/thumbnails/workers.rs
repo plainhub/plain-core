@@ -50,7 +50,7 @@ async fn panic_is_reported_and_the_worker_remains_available() {
 }
 
 #[tokio::test]
-async fn cancelled_queued_job_releases_captures_without_execution() {
+async fn canceled_queued_job_releases_captures_without_execution() {
     let workers = Workers::new(1).unwrap();
     let (started, running) = mpsc::channel();
     let (release, wait) = mpsc::channel();
@@ -78,7 +78,7 @@ async fn cancelled_queued_job_releases_captures_without_execution() {
 }
 
 #[tokio::test]
-async fn cancelled_running_job_releases_unreceived_output() {
+async fn canceled_running_job_releases_unreceived_output() {
     let workers = Workers::new(1).unwrap();
     let buffer = Arc::new(vec![7_u8; 4096]);
     let weak = Arc::downgrade(&buffer);

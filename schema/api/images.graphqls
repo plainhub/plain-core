@@ -45,6 +45,16 @@ enum ImageSearchStatusType {
 	ERROR
 }
 
+enum ImageSortBy {
+	UPDATED_AT_ASC
+	UPDATED_AT_DESC
+	SIZE_ASC
+	SIZE_DESC
+	NAME_ASC
+	NAME_DESC
+	TAKEN_AT_DESC
+}
+
 extend type Mutation {
 	broadcastImageEditorUpdate(id: ID!, update: String!): Boolean!
 	cancelImageIndex: Boolean!
@@ -65,5 +75,5 @@ extend type Query {
 	imageEditorProject(id: ID!): ImageEditorProject
 	imageEditorProjects: [ImageEditorProjectSummary!]!
 	imageSearchStatus: ImageSearchStatus!
-	images(query: String!, offset: Int!, limit: Int!, sortBy: FileSortBy!): [Image!]!
+	images(query: String!, offset: Int!, limit: Int!, sortBy: ImageSortBy!): [Image!]!
 }

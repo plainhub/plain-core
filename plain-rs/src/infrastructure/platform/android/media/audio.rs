@@ -72,7 +72,7 @@ fn audio_aac(
     while !encoder_eos {
         ensure!(
             !cancel.load(std::sync::atomic::Ordering::Acquire),
-            "Video conversion cancelled"
+            "Video conversion canceled"
         );
         let mut progress = false;
         if pcm.is_empty() {
@@ -197,7 +197,7 @@ pub(super) fn convert_3gp(
     while extractor.track() >= 0 {
         ensure!(
             !cancel.load(std::sync::atomic::Ordering::Acquire),
-            "Video conversion cancelled"
+            "Video conversion canceled"
         );
         let info = extractor.sample(&mut bytes)?;
         if let Some(audio) = &mut audio {

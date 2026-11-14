@@ -53,10 +53,10 @@ fn collect(
     roots: &[(PathBuf, String)],
     excluded: &HashSet<PathBuf>,
     files: &mut Vec<(PathBuf, String)>,
-    cancelled: &impl Fn() -> bool,
+    canceled: &impl Fn() -> bool,
 ) -> Result<(), String> {
-    if cancelled() {
-        return Err("Backup cancelled".into());
+    if canceled() {
+        return Err("Backup canceled".into());
     }
     if roots.iter().any(|(root, _)| {
         folder.parent() == Some(root.as_path())
@@ -87,7 +87,7 @@ fn collect(
             .map_err(|error| error.to_string())?;
         children.sort_by_key(|entry| entry.file_name());
         for child in children {
-            collect(&child.path(), roots, excluded, files, cancelled)?;
+            collect(&child.path(), roots, excluded, files, canceled)?;
         }
     }
     Ok(())
@@ -97,10 +97,10 @@ fn snapshot(
     prefs: &Prefs,
     directory: &Path,
     roots: &Roots,
-    cancelled: impl Fn() -> bool,
+    canceled: impl Fn() -> bool,
 ) -> Result<(plain_libs::temporary::TempDir, Vec<(PathBuf, String)>), String> {
-    if cancelled() {
-        return Err("Backup cancelled".into());
+    if canceled() {
+        return Err("Backup canceled".into());
     }
     std::fs::create_dir_all(&roots.cache).map_err(|error| error.to_string())?;
     let staging = plain_libs::temporary::Builder::new()
@@ -133,11 +133,11 @@ fn snapshot(
     }
     let mut files = Vec::new();
     let database = staging.path().join("database.db");
-    db.backup_to(&database, &cancelled)?;
+    db.backup_to(&database, &canceled)?;
     files.push((database, name(&source_db, &roots.folders)?));
     for (index, path, entries) in [(0, prefs.path(), prefs.entries())] {
-        if cancelled() {
-            return Err("Backup cancelled".into());
+        if canceled() {
+            return Err("Backup canceled".into());
         }
         let target = staging.path().join(format!("prefs-{index}.json"));
         let values: plain_libs::serde_json::Map<String, plain_libs::serde_json::Value> = entries.into_iter().collect();
@@ -149,7 +149,7 @@ fn snapshot(
         files.push((target, name(path, &roots.folders)?));
     }
     for (folder, _) in &roots.folders {
-        collect(folder, &roots.folders, &excluded, &mut files, &cancelled)?;
+        collect(folder, &roots.folders, &excluded, &mut files, &canceled)?;
     }
     let mut names = HashSet::new();
     if !files.iter().all(|(_, name)| names.insert(name.clone())) {
@@ -167,15 +167,15 @@ pub async fn export(
     let roots = roots(&directory, &cache);
     let output = roots.cache.join("backup.zip");
     let cancel = Cancel(Arc::new(AtomicBool::new(false)));
-    let cancelled = cancel.0.clone();
+    let canceled = cancel.0.clone();
     let stopped = stop.clone();
     let preparation = tokio::task::spawn_blocking(move || {
         snapshot(&db, &prefs, &directory, &roots, || {
-            cancelled.load(Ordering::Acquire) || *stopped.borrow()
+            canceled.load(Ordering::Acquire) || *stopped.borrow()
         })
     });
     let (staging, files) = tokio::select! {
-        _ = stop.changed() => return Err("Backup cancelled".into()),
+        _ = stop.changed() => return Err("Backup canceled".into()),
         result = preparation => result.map_err(|error| error.to_string())??,
     };
     let archive =

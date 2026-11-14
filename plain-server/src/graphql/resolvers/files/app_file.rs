@@ -72,9 +72,7 @@ impl AppFileQuery {
         offset: i32,
         limit: i32,
     ) -> plain_graphql::Result<Vec<AppFile>> {
-        if offset < 0 || limit < 0 {
-            return Err(plain_graphql::Error::new("invalid pagination"));
-        }
+        crate::graphql::resolvers::common::validate_pagination(offset, limit)?;
         let db = ctx.data::<Arc<Db>>()?;
         let files = db.app_file_items(offset, limit, &query)?;
         let names = file_name_map(&db.get_all_chats());

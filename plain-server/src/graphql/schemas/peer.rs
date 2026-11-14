@@ -1,46 +1,13 @@
 use crate::graphql::resolvers::peers::query::Query;
 use crate::server::ServerState;
-use plain_graphql::{Context, EmptySubscription, ID, Object, Schema, SimpleObject};
+use plain_graphql::{Context, EmptySubscription, Object, Schema};
 
 use plain_libs::serde_json::json;
 use plain_rs::features::chat::enums::ChannelSystemMessageType;
-use plain_rs::features::chat::enums::ChatStatus;
-use plain_rs::infrastructure::db::DChat;
 use plain_rs::infrastructure::transport::auth::AuthenticatedPeer;
-use plain_rs::infrastructure::types::Instant;
 
-#[derive(SimpleObject)]
-struct ChatItem {
-    from_id: ID,
-    to_id: ID,
-    channel_id: Option<ID>,
-    id: ID,
-    content: String,
-    created_at: Instant,
-    updated_at: Instant,
-    status: ChatStatus,
-    status_data: String,
-}
-impl TryFrom<DChat> for ChatItem {
-    type Error = plain_libs::anyhow::Error;
-    fn try_from(row: DChat) -> plain_libs::anyhow::Result<Self> {
-        Ok(Self {
-            from_id: ID(row.from_id),
-            to_id: ID(row.to_id),
-            channel_id: row.channel_id.map(ID),
-            id: ID(row.id),
-            content: row.content,
-            created_at: Instant(
-                plain_libs::chrono::DateTime::parse_from_rfc3339(&row.created_at)?.into(),
-            ),
-            updated_at: Instant(
-                plain_libs::chrono::DateTime::parse_from_rfc3339(&row.updated_at)?.into(),
-            ),
-            status: row.status,
-            status_data: row.status_data.unwrap_or_default(),
-        })
-    }
-}
+use crate::graphql::resolvers::chat::public::{ChatItem, item};
+
 struct PeerContext {
     state: ServerState,
     authenticated: AuthenticatedPeer,
@@ -55,6 +22,9 @@ impl Mutation {
         content: String,
     ) -> plain_graphql::Result<Vec<ChatItem>> {
         let c = ctx.data_unchecked::<PeerContext>();
+        plain_libs::serde_json::from_str::<crate::graphql::resolvers::chat::content::ChatContent>(
+            &content,
+        )?;
         let Some(received) = plain_rs::features::chat::messages::message_lifecycle::receive(
             &c.state.db,
             &c.authenticated.peer.id,
@@ -66,7 +36,7 @@ impl Mutation {
         else {
             return Ok(vec![]);
         };
-        let item = ChatItem::try_from(received.chat.clone())?;
+        let item = item(&received.chat)?;
         let _ = c
             .state
             .events

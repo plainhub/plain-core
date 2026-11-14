@@ -149,7 +149,7 @@ async fn stop_revokes_media_before_waiting_for_an_in_flight_control_operation() 
         let state = state.clone();
         tokio::spawn(async move { run(&state, Command::Stop).await })
     };
-    tokio::time::timeout(std::time::Duration::from_secs(2), stream.cancelled())
+    tokio::time::timeout(std::time::Duration::from_secs(2), stream.canceled())
         .await
         .unwrap();
     assert!(state.cast.media.lookup(&name, peer).is_none());
@@ -175,7 +175,30 @@ async fn stop_cancels_a_play_command_already_queued_behind_an_operation() {
     let mut stopping = std::pin::pin!(run(&state, Command::Stop));
     assert!(std::future::Future::poll(stopping.as_mut(), &mut context).is_pending());
     drop(operation);
-    assert_eq!(playing.await.err().unwrap(), "Cast cancelled");
+    assert_eq!(playing.await.err().unwrap(), "Cast canceled");
     stopping.await.unwrap();
     core.stop_core().await;
+}
+
+#[test]
+fn queue_items_preserve_named_media_types_in_serialized_snapshots() {
+    for (kind, wire) in [
+        (DlnaCastType::Audio, "AUDIO"),
+        (DlnaCastType::Video, "VIDEO"),
+        (DlnaCastType::Image, "IMAGE"),
+    ] {
+        let input = json!({"path":"synthetic","title":"Synthetic","type":wire});
+        let item: Item = plain_libs::serde_json::from_value(input).unwrap();
+        assert_eq!(item.media_type, kind);
+        let output = plain_libs::serde_json::to_value(item).unwrap();
+        assert_eq!(output["type"], wire);
+        assert!(output.get("audio").is_none());
+    }
+    for item in [
+        json!({"path":"synthetic","title":"Synthetic","type":"DOC"}),
+        json!({"path":"synthetic","title":"Synthetic","audio":false}),
+        json!({"path":"synthetic","title":"Synthetic"}),
+    ] {
+        assert!(plain_libs::serde_json::from_value::<Item>(item).is_err());
+    }
 }

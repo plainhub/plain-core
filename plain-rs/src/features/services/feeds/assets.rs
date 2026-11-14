@@ -49,7 +49,7 @@ impl Drop for ImportedAsset {
                 &self.directory,
                 &self.file.id,
             ) {
-                log::warn!("Cancelled feed asset release failed: {error}");
+                log::warn!("Canceled feed asset release failed: {error}");
             }
         }
     }

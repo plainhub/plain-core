@@ -6,7 +6,7 @@
 //!
 //! Behaviour mirrors plain-app's `UploadRoutes.kt`: file bodies stream to a
 //! temp file, the received size is verified against `info.size`, and the final
-//! placement is an atomic rename so a cancelled upload never leaves a partial
+//! placement is an atomic rename so a canceled upload never leaves a partial
 //! file at the destination.
 //!
 //! A chunk that declares `size > 0` is written through the shared

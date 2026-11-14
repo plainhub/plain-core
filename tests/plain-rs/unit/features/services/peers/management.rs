@@ -79,7 +79,7 @@ fn chat_only_self_invalid_token_and_missing_address_records_do_not_open_manageme
 async fn reconciliation_reuses_unchanged_workers_and_retires_replaced_and_removed_workers() {
     let (_directory, core, state) = fixture().await;
     let identity = identity(&peer(), "actor", "https://[::1]:18443").unwrap();
-    let (cancel, cancelled) = watch::channel(false);
+    let (cancel, canceled) = watch::channel(false);
     let job = tokio::spawn(std::future::pending::<()>());
     let id = job.id();
     let mut workers = HashMap::from([(
@@ -97,7 +97,7 @@ async fn reconciliation_reuses_unchanged_workers_and_retires_replaced_and_remove
     )
     .await;
     assert_eq!(workers["peer"].job.id(), id);
-    assert!(!*cancelled.borrow());
+    assert!(!*canceled.borrow());
     core.stop_core().await;
     let mut replacement = identity;
     replacement.token = plain_libs::utils::base64::base64_encode(&[8; 32]);
@@ -108,7 +108,7 @@ async fn reconciliation_reuses_unchanged_workers_and_retires_replaced_and_remove
     )
     .await;
     assert_ne!(workers["peer"].job.id(), id);
-    assert!(*cancelled.borrow());
+    assert!(*canceled.borrow());
     let removed = workers["peer"].cancel.subscribe();
     reconcile(&state, &mut workers, HashMap::new()).await;
     assert!(workers.is_empty());
@@ -217,15 +217,15 @@ async fn peer_snapshot_waits_for_the_database_without_blocking_the_async_thread(
 }
 
 #[tokio::test]
-async fn a_cancelled_worker_cannot_publish_even_while_credentials_still_match() {
+async fn a_canceled_worker_cannot_publish_even_while_credentials_still_match() {
     let (_directory, core, state) = fixture().await;
     let peer = peer();
     peers::save(&state.db, &[peer.clone()], SaveMode::Insert).unwrap();
     let expected = identity(&peer, "actor", "https://[::1]:18443").unwrap();
     let (generation, mut requests) = state.host.connect();
-    let (_cancel, cancelled) = watch::channel(true);
+    let (_cancel, canceled) = watch::channel(true);
     assert!(
-        !publish_clipboard_change(&state, "peer", &expected, &cancelled)
+        !publish_clipboard_change(&state, "peer", &expected, &canceled)
             .await
             .unwrap()
     );

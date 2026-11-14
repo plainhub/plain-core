@@ -1,4 +1,14 @@
+enum VideoSortBy {
+	UPDATED_AT_ASC
+	UPDATED_AT_DESC
+	SIZE_ASC
+	SIZE_DESC
+	NAME_ASC
+	NAME_DESC
+	TAKEN_AT_DESC
+}
+
 extend type Query {
 	videoCount(query: String!): Int!
-	videos(query: String!, offset: Int!, limit: Int!, sortBy: FileSortBy!): [Video!]!
+	videos(query: String!, offset: Int!, limit: Int!, sortBy: VideoSortBy!): [Video!]!
 }

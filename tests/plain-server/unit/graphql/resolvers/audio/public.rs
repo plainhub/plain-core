@@ -685,7 +685,7 @@ async fn an_ungranted_library_counts_zero_and_refuses_to_list() {
 
     let listed = query(
         &schema,
-        r#"query { audios(offset: 0, limit: 10, query: "", sortBy: NAME_ASC) { title } }"#,
+        r#"query { audios(offset: 0, limit: 10, query: "", sortBy: TITLE_ASC) { title } }"#,
     )
     .await;
     assert!(
@@ -729,7 +729,7 @@ async fn a_library_row_keeps_the_album_art_reference() {
             .unwrap(),
     )
     .unwrap();
-    let document = r#"query { audios(offset: 0, limit: 10, query: "", sortBy: NAME_ASC) {
+    let document = r#"query { audios(offset: 0, limit: 10, query: "", sortBy: TITLE_ASC) {
         id title artist path durationMs size bucketId albumFileId createdAt updatedAt isFavorite tags { name }
     } }"#;
     let unauthenticated = query(&schema, document).await;
@@ -1519,7 +1519,7 @@ async fn replace_queue_returns_one_selected_track_and_keeps_remote_state_separat
     let playlist = domain::create_playlist(db, "Replace").unwrap();
     let tracks = domain::queue_page(db, 0, 10, "").unwrap();
     domain::add_playlist_items(db, &playlist.id, &tracks).unwrap();
-    let selected = query(&schema, &format!(r#"mutation {{ replaceAudioQueue(query:"playlist_id:{}",sortBy:NAME_DESC,shuffle:false) {{ mediaId title }} }}"#, playlist.id)).await;
+    let selected = query(&schema, &format!(r#"mutation {{ replaceAudioQueue(query:"playlist_id:{}",sortBy:TITLE_DESC,shuffle:false) {{ mediaId title }} }}"#, playlist.id)).await;
     assert_eq!(
         selected["data"]["replaceAudioQueue"]["title"], "One",
         "{selected}"
@@ -1533,7 +1533,7 @@ async fn replace_queue_returns_one_selected_track_and_keeps_remote_state_separat
     let (_dir, denied) = fixture_with("[]", |method, _| panic!("unauthorized host call {method}"));
     let result = query(
         &denied,
-        r#"mutation { replaceAudioQueue(query:"playlist_id:unknown",sortBy:NAME_ASC,shuffle:false) { mediaId } }"#,
+        r#"mutation { replaceAudioQueue(query:"playlist_id:unknown",sortBy:TITLE_ASC,shuffle:false) { mediaId } }"#,
     )
     .await;
     assert_eq!(result["errors"][0]["message"], "no_permission");
@@ -1566,7 +1566,7 @@ async fn replace_queue_uses_the_requested_sort_instead_of_target_preferences() {
         updated_at: "2026-10-30T00:00:00Z".into(),
     });
     database(&schema).record_media_files(&files).unwrap();
-    let result = query(&schema, r#"mutation { replaceAudioQueue(query:"artist:=Sort\\ Artist",sortBy:NAME_DESC,shuffle:false) { title } }"#).await;
+    let result = query(&schema, r#"mutation { replaceAudioQueue(query:"artist:=Sort\\ Artist",sortBy:TITLE_DESC,shuffle:false) { title } }"#).await;
     assert!(result["errors"].is_null(), "{result}");
     assert_eq!(result["data"]["replaceAudioQueue"]["title"], "Zulu");
     let queue = domain::queue_page(&database(&schema).remote_audio(), 0, 10, "").unwrap();

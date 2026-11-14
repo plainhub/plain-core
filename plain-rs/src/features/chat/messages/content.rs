@@ -36,3 +36,34 @@ pub fn peer_content(content: &str, client_id: &str, db: &Db) -> plain_libs::anyh
 #[cfg(test)]
 #[path = "../../../../../tests/plain-rs/unit/features/chat/messages/content.rs"]
 mod tests;
+
+pub fn attachment_duration_ms(item: &Value) -> plain_libs::anyhow::Result<i64> {
+    let read = |name: &str| -> plain_libs::anyhow::Result<Option<i64>> {
+        match item.get(name) {
+            None | Some(Value::Null) => Ok(None),
+            Some(value) => value
+                .as_i64()
+                .filter(|value| *value >= 0)
+                .map(Some)
+                .ok_or_else(|| plain_libs::anyhow::anyhow!("invalid attachment duration")),
+        }
+    };
+    let milliseconds = read("durationMs")?;
+    let legacy_seconds = read("legacyDurationSec")?;
+    let seconds = read("duration")?;
+    if let Some(value) = milliseconds {
+        return Ok(value);
+    }
+    let scale = |value: Option<i64>| -> plain_libs::anyhow::Result<Option<i64>> {
+        value
+            .map(|value| {
+                value
+                    .checked_mul(1000)
+                    .ok_or_else(|| plain_libs::anyhow::anyhow!("invalid attachment duration"))
+            })
+            .transpose()
+    };
+    let legacy = scale(legacy_seconds)?;
+    let duration = scale(seconds)?;
+    Ok(legacy.or(duration).unwrap_or_default())
+}

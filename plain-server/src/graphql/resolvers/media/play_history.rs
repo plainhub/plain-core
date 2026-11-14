@@ -10,7 +10,7 @@ use plain_graphql::{Context, Enum, ID, Object, Result, SimpleObject};
 
 use plain_libs::utils::search_dsl;
 use plain_rs::features::{enums::DataType, media::play_history};
-use plain_rs::features::prefs::settings::FileSortBy;
+use plain_rs::features::prefs::settings::MediaSortBy;
 use plain_rs::infrastructure::db::Db;
 use plain_rs::infrastructure::types::Instant;
 use plain_rs::infrastructure::types::Long;
@@ -98,7 +98,7 @@ impl MediaPlayHistoryQuery {
                     ctx,
                     kind.data_type(),
                     query,
-                    FileSortBy::NameAsc,
+                    MediaSortBy::NameAsc,
                     0,
                     ids.len() as u32,
                 )

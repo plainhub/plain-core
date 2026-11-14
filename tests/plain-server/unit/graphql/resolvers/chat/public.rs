@@ -60,7 +60,7 @@ fn seed(db: &Arc<Db>, id: &str, from: &str, to: &str, channel: &str, content: &s
         from_id: from.to_string(),
         to_id: to.to_string(),
         channel_id: (!channel.is_empty()).then(|| channel.to_string()),
-        content: content.to_string(),
+        content: json!({"type":"TEXT","value":{"text":content}}).to_string(),
         status: plain_rs::features::chat::enums::ChatStatus::Sent,
         status_data: None,
         created_at: at.to_string(),
@@ -83,7 +83,7 @@ async fn a_direct_message_has_no_channel_id() {
     let items = query(
         &schema,
         r#"query { chatItems(target: "peer:peer-1", offset: 0, limit: 10, query: "") {
-            id fromId toId channelId content status statusData createdAt updatedAt
+            id fromId toId channelId content { ... on ChatTextContent { __typename text } ... on ChatImagesContent { __typename items { id uri fileName size width height durationMs summary } } ... on ChatFilesContent { __typename items { id uri fileName size width height durationMs summary } } ... on ChatShareContent { __typename shareId urlToken peerInfo { id ip port } name itemCount totalSize expiresAt } } status deliveryResults {peerId peerName error} createdAt updatedAt
         } }"#,
     )
     .await;
@@ -93,7 +93,7 @@ async fn a_direct_message_has_no_channel_id() {
     assert!(row["channelId"].is_null(), "{items}");
     assert_eq!(row["fromId"], "me");
     assert_eq!(row["toId"], "peer-1");
-    assert_eq!(row["content"], "hello");
+    assert_eq!(row["content"]["text"], "hello");
     assert_eq!(row["status"], "SENT");
 }
 
@@ -157,7 +157,7 @@ async fn a_page_comes_back_oldest_first() {
 
     let items = query(
         &schema,
-        r#"query { chatItems(target: "peer:peer-1", offset: 0, limit: 10, query: "") { id content } }"#,
+        r#"query { chatItems(target: "peer:peer-1", offset: 0, limit: 10, query: "") { id content { ... on ChatTextContent { __typename text } ... on ChatImagesContent { __typename items { id uri fileName size width height durationMs summary } } ... on ChatFilesContent { __typename items { id uri fileName size width height durationMs summary } } ... on ChatShareContent { __typename shareId urlToken peerInfo { id ip port } name itemCount totalSize expiresAt } } } }"#,
     )
     .await;
     let rows = items["data"]["chatItems"].as_array().unwrap();
@@ -175,7 +175,7 @@ async fn the_text_field_filters_before_the_page_is_cut() {
 
     let items = query(
         &schema,
-        r#"query { chatItems(target: "peer:peer-1", offset: 0, limit: 10, query: "text:buy") { content } }"#,
+        r#"query { chatItems(target: "peer:peer-1", offset: 0, limit: 10, query: "text:buy") { content { ... on ChatTextContent { __typename text } ... on ChatImagesContent { __typename items { id uri fileName size width height durationMs summary } } ... on ChatFilesContent { __typename items { id uri fileName size width height durationMs summary } } ... on ChatShareContent { __typename shareId urlToken peerInfo { id ip port } name itemCount totalSize expiresAt } } } }"#,
     )
     .await;
     let rows = items["data"]["chatItems"].as_array().unwrap();
@@ -204,7 +204,7 @@ async fn the_latest_page_covers_every_conversation() {
     db.insert_channel(&channel).unwrap();
     let latest = channel_query(
         &state,
-        r#"query { chatConversations { id chat { id content } } }"#,
+        r#"query { chatConversations { id chat { id content { ... on ChatTextContent { __typename text } ... on ChatImagesContent { __typename items { id uri fileName size width height durationMs summary } } ... on ChatFilesContent { __typename items { id uri fileName size width height durationMs summary } } ... on ChatShareContent { __typename shareId urlToken peerInfo { id ip port } name itemCount totalSize expiresAt } } } } }"#,
     )
     .await;
     assert!(latest.get("errors").is_none(), "{latest}");
@@ -243,7 +243,7 @@ async fn sending_persists_and_emits_without_native_business_callbacks() {
     let (_dir, server) = chat_fixture();
     let state = server.runtime_state();
     let mut events = state.events.subscribe();
-    let sent = channel_query(&state, r#"mutation { sendChatItems(targets:["peer:local"], content: "{\"type\":\"TEXT\",\"value\":{\"text\":\"hello\"}}") { id fromId toId channelId status } }"#).await;
+    let sent = channel_query(&state, r#"mutation { sendChatItems(targets:["peer:local"], content:{text:{text:"hello"}}) { id fromId toId channelId status } }"#).await;
     let rows = sent["data"]["sendChatItems"].as_array().unwrap();
     assert_eq!(rows.len(), 1, "{sent}");
     assert!(rows[0]["channelId"].is_null(), "{sent}");

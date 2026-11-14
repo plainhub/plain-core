@@ -27,7 +27,7 @@ pub enum AppUpdateDownloadStatus {
     Downloading,
     Completed,
     Failed,
-    Cancelled,
+    Canceled,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize, plain_graphql::SimpleObject)]
@@ -313,7 +313,7 @@ fn client() -> Result<&'static http_client::Client> {
         .as_ref()
         .map_err(|error| anyhow!(error.clone()))
 }
-async fn cancelled(cancel: &mut watch::Receiver<bool>, stop: &mut watch::Receiver<bool>) {
+async fn canceled(cancel: &mut watch::Receiver<bool>, stop: &mut watch::Receiver<bool>) {
     if *cancel.borrow() || *stop.borrow() {
         return;
     }
@@ -338,7 +338,7 @@ async fn run(
         Err(error) => AppUpdateDownload {
             task_id: id.into(),
             status: if *cancel.borrow() || *state.stop.borrow() {
-                AppUpdateDownloadStatus::Cancelled
+                AppUpdateDownloadStatus::Canceled
             } else {
                 AppUpdateDownloadStatus::Failed
             },
@@ -357,7 +357,7 @@ async fn transfer(
     let mut stop = state.stop.clone();
     let response = tokio::select! {
         biased;
-        _=cancelled(cancel, &mut stop)=>return Err(anyhow!("Update download cancelled")),
+        _=canceled(cancel, &mut stop)=>return Err(anyhow!("Update download canceled")),
         response=client()?.get(validate_url(&identity.url)?).send()=>response?,
     }
     .error_for_status()?;
@@ -399,7 +399,7 @@ async fn save_stream<B: AsRef<[u8]>>(
         loop {
             let chunk = tokio::select! {
                 biased;
-                _=cancelled(cancel, &mut stop)=>return Err(anyhow!("Update download cancelled")),
+                _=canceled(cancel, &mut stop)=>return Err(anyhow!("Update download canceled")),
                 chunk=stream.next()=>chunk,
             };
             let Some(chunk) = chunk else {
@@ -446,21 +446,21 @@ async fn save_stream<B: AsRef<[u8]>>(
     result?;
     let _settings = tokio::select! {
         biased;
-        _=cancelled(cancel, &mut stop)=>return Err(anyhow!("Update download cancelled")),
+        _=canceled(cancel, &mut stop)=>return Err(anyhow!("Update download canceled")),
         settings=state.update_checks.cache.lock()=>settings,
     };
     ensure!(
         !*cancel.borrow() && !*stop.borrow(),
-        "Update download cancelled"
+        "Update download canceled"
     );
     tokio::select! {
         biased;
-        _=cancelled(cancel, &mut stop)=>return Err(anyhow!("Update download cancelled")),
+        _=canceled(cancel, &mut stop)=>return Err(anyhow!("Update download canceled")),
         result=crate::features::services::capabilities::require(&state.host, "APP_UPDATES")=>result?,
     }
     ensure!(
         !*cancel.borrow() && !*stop.borrow(),
-        "Update download cancelled"
+        "Update download canceled"
     );
     let current = updates::info(&state)?;
     let version = &state.host.startup().app_version;

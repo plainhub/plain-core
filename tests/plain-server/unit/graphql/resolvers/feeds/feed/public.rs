@@ -176,10 +176,10 @@ async fn entries_carry_their_feed_and_the_contract_entry_counts() {
     assert_eq!(first["feed"]["id"], "counts");
     assert_eq!(first["tags"].as_array().map(Vec::len), Some(0));
 
-    let counts = query(&schema, r#"query { feedEntryCounts { id count } }"#).await;
+    let counts = query(&schema, r#"query { feedEntryCounts { feedId count } }"#).await;
     let rows = counts["data"]["feedEntryCounts"].as_array().unwrap();
     assert_eq!(rows.len(), 1);
-    assert_eq!(rows[0]["id"], "counts");
+    assert_eq!(rows[0]["feedId"], "counts");
     assert_eq!(rows[0]["count"], 3);
 
     let total = query(&schema, r#"query { feedEntryCount(query: "") }"#).await;
@@ -321,7 +321,7 @@ async fn opml_round_trips_through_export_and_import() {
     let db = database(&schema);
     seed_feed(db, "round", "Round trip");
 
-    let exported = query(&schema, r#"mutation { exportFeeds }"#).await;
+    let exported = query(&schema, r#"query { exportFeeds }"#).await;
     let opml = exported["data"]["exportFeeds"]
         .as_str()
         .unwrap()
@@ -375,7 +375,7 @@ async fn graphql_feed_entry_joins_and_counts() {
         updated_at: at,
     }])
     .unwrap();
-    let response = schema.execute(Request::new(r#"{ feedEntry(id: "entry") { title tags { id } feed { name } } feedEntries(offset: 0, limit: 10, query: "feed_id:feed") { id feedId } feedEntryCount(query: "feed_id:feed") feedEntryCounts { id count } }"#).data(db)).await;
+    let response = schema.execute(Request::new(r#"{ feedEntry(id: "entry") { title tags { id } feed { name } } feedEntries(offset: 0, limit: 10, query: "feed_id:feed") { id feedId } feedEntryCount(query: "feed_id:feed") feedEntryCounts { feedId count } }"#).data(db)).await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     let data = response.data.into_json().unwrap();
     assert_eq!(data["feedEntry"]["feed"]["name"], "News");

@@ -645,7 +645,7 @@ async fn execute_request(
             if let Some(pending) = pending {
                 record_failure(state, &pending.client_id, reason)?;
             }
-            return Ok(json!({"cancelled":true}));
+            return Ok(json!({"canceled":true}));
         }
         Request::Complete { request_id } => {
             let pending = {
@@ -741,8 +741,8 @@ async fn execute_request(
                     attempts
                         .pending
                         .retain(|_, item| item.at.elapsed() < Duration::from_secs(300));
-                    for cancelled in attempts.cancel_client(&pending.client_id) {
-                        notify_closed(state, &mut attempts, &cancelled);
+                    for canceled in attempts.cancel_client(&pending.client_id) {
+                        notify_closed(state, &mut attempts, &canceled);
                     }
                     attempts.pending.insert(id.clone(), pending);
                 }

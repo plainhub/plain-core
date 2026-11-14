@@ -17,7 +17,7 @@ async fn sdk_summary_batches_the_full_catalog_without_metadata_or_per_row_host_c
             assert_eq!(request["params"]["dataType"], "AUDIO");
             assert_eq!(request["params"]["limit"], 512);
             assert_eq!(request["params"]["offset"], expected);
-            assert_eq!(request["params"]["sortBy"], "NAME_ASC");
+            assert_eq!(request["params"]["sortBy"], "TITLE_ASC");
             assert_eq!(request["params"]["includeRevision"], true);
             offsets.push(expected);
             let rows = (expected..(expected + 512).min(1025))

@@ -94,7 +94,7 @@ fn remove_persists_and_reports_presence() {
 #[test]
 fn clear_empties_and_persists() {
     let (dir, prefs) = tmp_prefs("clear");
-    prefs.set("audio_sort_by", "DATE_DESC").unwrap();
+    prefs.set("audio_sort_by", "UPDATED_AT_DESC").unwrap();
     prefs.set("locale", "x").unwrap();
     prefs.clear().unwrap();
     assert_eq!(prefs.entries(), vec![]);

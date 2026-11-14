@@ -97,7 +97,7 @@ impl SocketSession {
     pub fn close(&self) {
         self.closed.send_replace(true);
     }
-    async fn cancelled(&self) {
+    async fn canceled(&self) {
         let mut closed = self.closed.subscribe();
         tokio::select! { _ = self.scope.wait_closed() => {}, _ = closed.wait_for(|v| *v) => {} }
     }
@@ -126,7 +126,7 @@ impl SocketSession {
             .map_err(|_| "Socket command backpressure")?;
         tokio::select! {
             biased;
-            _ = self.cancelled() => Err("Socket session closed".into()),
+            _ = self.canceled() => Err("Socket session closed".into()),
             result = reply => result.map_err(|_| "Socket session closed".to_owned())?,
         }
     }
@@ -138,7 +138,7 @@ impl SocketSession {
             .map_err(|_| "Concurrent socket reader")?;
         let bytes = tokio::select! {
             biased;
-            _ = self.cancelled() => return Err(self.error.lock().unwrap().clone().unwrap_or_else(|| "Socket session closed".into())),
+            _ = self.canceled() => return Err(self.error.lock().unwrap().clone().unwrap_or_else(|| "Socket session closed".into())),
             frame = frames.recv() => frame.ok_or("Socket session closed")?,
         };
         self.current()?;
@@ -192,7 +192,7 @@ impl NativeSockets {
             let mut stop = state.stop.clone();
             let result = tokio::select! {
                 biased;
-                _ = session.cancelled() => Ok(()),
+                _ = session.canceled() => Ok(()),
                 _ = stop.wait_for(|v| *v) => Err(anyhow!("Server stopped")),
                 result = async {
                     match peer_id {

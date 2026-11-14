@@ -647,7 +647,7 @@ async fn directory_scanning_waits_for_watch_registration_and_remains_cancellable
         assert_eq!(
             result.status,
             if cancel {
-                Status::Cancelled
+                Status::Canceled
             } else {
                 Status::Completed
             }

@@ -60,7 +60,7 @@ pub(super) async fn run(
             let _commit = state.pairing_runtime.commit.lock().unwrap();
             ensure!(
                 state.pairing_runtime.attempts.contains(peer_id),
-                "cancelled"
+                "canceled"
             );
             let name = text(&metadata, "deviceName")?;
             let changed = state.db.with_conn(|connection| {
@@ -117,7 +117,7 @@ pub(super) async fn run(
             trust
                 .changed()
                 .await
-                .map_err(|_| plain_libs::anyhow::anyhow!("cancelled"))?;
+                .map_err(|_| plain_libs::anyhow::anyhow!("canceled"))?;
         }
     }
     let password = if password_required {
@@ -283,7 +283,7 @@ pub(super) async fn run(
     let _commit = state.pairing_runtime.commit.lock().unwrap();
     ensure!(
         state.pairing_runtime.attempts.contains(peer_id),
-        "cancelled"
+        "canceled"
     );
     let current = crate::infrastructure::db::chat_store::peers::get(&state.db, &remote_id)?;
     ensure!(

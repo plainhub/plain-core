@@ -12,7 +12,7 @@ pub async fn stage(
     mut stop: watch::Receiver<bool>,
 ) -> Result<plain_libs::temporary::NamedTempFile, String> {
     if *stop.borrow() {
-        return Err("File input cancelled".into());
+        return Err("File input canceled".into());
     }
     tokio::fs::create_dir_all(parent)
         .await
@@ -20,7 +20,7 @@ pub async fn stage(
     let temporary = plain_libs::temporary::NamedTempFile::new_in(parent).map_err(|error| error.to_string())?;
     let mut output =
         tokio::fs::File::from_std(temporary.reopen().map_err(|error| error.to_string())?);
-    let mut cancelled = stop.clone();
+    let mut canceled = stop.clone();
     let copy = async {
         if source.starts_with("content://") || source.starts_with("ph://") {
             let mut input = resources
@@ -60,12 +60,12 @@ pub async fn stage(
     };
     tokio::select! {
         biased;
-        _ = cancelled.changed() => return Err("File input cancelled".into()),
+        _ = canceled.changed() => return Err("File input canceled".into()),
         result = copy => result?,
     }
     drop(output);
     if *stop.borrow_and_update() {
-        return Err("File input cancelled".into());
+        return Err("File input canceled".into());
     }
     Ok(temporary)
 }

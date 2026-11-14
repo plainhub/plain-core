@@ -70,7 +70,7 @@ type Doc implements MediaItem {
 type FeedSyncChange {
 	feedId: ID!
 	error: String
-	cancelled: Boolean
+	canceled: Boolean
 }
 
 type FileSearchResults {
@@ -81,13 +81,12 @@ type FileSearchResults {
 }
 
 enum FileSortBy {
-	DATE_ASC
-	DATE_DESC
+	UPDATED_AT_ASC
+	UPDATED_AT_DESC
 	SIZE_ASC
 	SIZE_DESC
 	NAME_ASC
 	NAME_DESC
-	TAKEN_AT_DESC
 }
 
 type Image implements MediaItem {
@@ -190,7 +189,7 @@ type SmsProviderChange {
 }
 
 type SmsSendResult {
-	requestId: ID!
+	requestId: String!
 	success: Boolean!
 	resultCode: Int
 }

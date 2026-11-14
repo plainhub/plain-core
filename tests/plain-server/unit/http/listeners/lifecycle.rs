@@ -235,7 +235,7 @@ async fn stopping_public_discovery_cancels_pending_start_and_runs_withdrawal_onc
     let (_core, core_stop) = watch::channel(false);
     let (public, public_stop) = watch::channel(false);
     let (entered, started) = tokio::sync::oneshot::channel();
-    let (cancelled, cancellation) = tokio::sync::oneshot::channel();
+    let (canceled, cancellation) = tokio::sync::oneshot::channel();
     struct CancelSignal(Option<tokio::sync::oneshot::Sender<()>>);
     impl Drop for CancelSignal {
         fn drop(&mut self) {
@@ -248,7 +248,7 @@ async fn stopping_public_discovery_cancels_pending_start_and_runs_withdrawal_onc
         core_stop,
         public_stop,
         async move {
-            let _guard = CancelSignal(Some(cancelled));
+            let _guard = CancelSignal(Some(canceled));
             entered.send(()).unwrap();
             std::future::pending::<plain_libs::anyhow::Result<()>>().await
         },

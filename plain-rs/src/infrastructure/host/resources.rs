@@ -81,7 +81,7 @@ impl NativeResources {
         pending
             .attached
             .send(())
-            .map_err(|_| "resource stream cancelled")?;
+            .map_err(|_| "resource stream canceled")?;
         Ok(NativeResourceStream {
             host: self.host.clone(),
             generation,

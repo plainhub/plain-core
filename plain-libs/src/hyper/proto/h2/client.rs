@@ -339,7 +339,7 @@ where
         let cancel_result = this.cancel_rx.as_mut().map(|rx| Pin::new(rx).poll(cx));
         match cancel_result {
             Some(Poll::Ready(Ok(()))) => {
-                debug!("client request body send cancelled, resetting stream");
+                debug!("client request body send canceled, resetting stream");
                 this.pipe.as_mut().send_reset(crate::h2::Reason::CANCEL);
                 drop(this.conn_drop_ref.take().expect("Future polled twice"));
                 drop(this.ping.take().expect("Future polled twice"));

@@ -323,7 +323,7 @@ async fn media_entries(
     .rows(
         kind,
         query,
-        crate::features::prefs::settings::FileSortBy::DateDesc,
+        crate::features::prefs::settings::MediaSortBy::UpdatedAtDesc,
         i32::MAX as u32,
         0,
     )

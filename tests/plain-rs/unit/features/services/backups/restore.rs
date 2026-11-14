@@ -166,7 +166,7 @@ fn invalid_backup_paths_duplicates_and_missing_stores_never_publish_a_restore() 
     }
 }
 #[test]
-fn cancelled_and_competing_restores_preserve_the_published_snapshot() {
+fn canceled_and_competing_restores_preserve_the_published_snapshot() {
     let directory = plain_libs::temporary::tempdir().unwrap();
     let bytes = archive();
     let (_stop, stopped) = watch::channel(false);

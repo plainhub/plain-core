@@ -33,6 +33,15 @@ type AudioPlaylist {
 	updatedAt: Instant!
 }
 
+enum AudioSortBy {
+	UPDATED_AT_ASC
+	UPDATED_AT_DESC
+	SIZE_ASC
+	SIZE_DESC
+	TITLE_ASC
+	TITLE_DESC
+}
+
 enum MediaPlayMode {
 	REPEAT
 	REPEAT_ONE
@@ -48,7 +57,7 @@ extend type Mutation {
 	removeAudioFromQueue(mediaId: ID!): Boolean!
 	removeAudioPlaylistItems(id: ID!, query: String!): ActionResult!
 	reorderAudioQueue(mediaIds: [ID!]!): Boolean!
-	replaceAudioQueue(query: String!, sortBy: FileSortBy!, shuffle: Boolean!): AudioItem
+	replaceAudioQueue(query: String!, sortBy: AudioSortBy!, shuffle: Boolean!): AudioItem
 	selectAudio(mediaId: ID!): AudioItem!
 	selectAudioByPath(path: String!): AudioItem!
 	updateAudioPlayMode(mode: MediaPlayMode!): Boolean!
@@ -68,5 +77,5 @@ extend type Query {
 	audioPlaylists: [AudioPlaylist!]!
 	audioQueueItemCount(query: String!): Int!
 	audioQueueItems(query: String!, offset: Int!, limit: Int!): [AudioItem!]!
-	audios(query: String!, offset: Int!, limit: Int!, sortBy: FileSortBy!): [Audio!]!
+	audios(query: String!, offset: Int!, limit: Int!, sortBy: AudioSortBy!): [Audio!]!
 }

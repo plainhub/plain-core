@@ -59,7 +59,7 @@ pub async fn prepare(
     mut stop: watch::Receiver<bool>,
 ) -> Result<NativeResourceFile, String> {
     if *stop.borrow() {
-        return Err("Media input cancelled".into());
+        return Err("Media input canceled".into());
     }
     if source.offset < 0
         || source.length < -1
@@ -138,7 +138,7 @@ pub async fn prepare(
     };
     tokio::select! {
         biased;
-        _ = stop.changed() => Err("Media input cancelled".into()),
+        _ = stop.changed() => Err("Media input canceled".into()),
         result = copy => result,
     }
 }
@@ -159,7 +159,7 @@ impl<R: std::io::Read> std::io::Read for CancellableReader<R> {
         if *self.stop.borrow() {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::ConnectionAborted,
-                "Media read cancelled",
+                "Media read canceled",
             ));
         }
         self.reader.read(bytes)
@@ -170,7 +170,7 @@ impl<R: Seek> Seek for CancellableReader<R> {
         if *self.stop.borrow() {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::ConnectionAborted,
-                "Media read cancelled",
+                "Media read canceled",
             ));
         }
         self.reader.seek(from)
@@ -215,7 +215,7 @@ pub async fn read_source<T: Send + 'static>(
         };
         let result = read(&mut reader)?;
         if *reader.stop.borrow() {
-            return Err("Media read cancelled".into());
+            return Err("Media read canceled".into());
         }
         Ok(result)
     })

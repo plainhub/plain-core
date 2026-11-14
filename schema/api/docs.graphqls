@@ -3,8 +3,17 @@ type DocExtGroup {
 	count: Int!
 }
 
+enum DocSortBy {
+	UPDATED_AT_ASC
+	UPDATED_AT_DESC
+	SIZE_ASC
+	SIZE_DESC
+	NAME_ASC
+	NAME_DESC
+}
+
 extend type Query {
 	docCount(query: String!): Int!
 	docExtGroups(query: String! = ""): [DocExtGroup!]!
-	docs(query: String!, offset: Int!, limit: Int!, sortBy: FileSortBy!): [Doc!]!
+	docs(query: String!, offset: Int!, limit: Int!, sortBy: DocSortBy!): [Doc!]!
 }

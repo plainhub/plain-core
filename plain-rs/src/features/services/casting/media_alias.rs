@@ -11,12 +11,12 @@ pub struct Resource {
 }
 
 impl Resource {
-    pub async fn cancelled(self) {
-        cancelled(self.lease).await;
+    pub async fn canceled(self) {
+        canceled(self.lease).await;
     }
 }
 
-async fn cancelled(mut lease: watch::Receiver<Option<Instant>>) {
+async fn canceled(mut lease: watch::Receiver<Option<Instant>>) {
     let mut deadline = *lease.borrow_and_update();
     while let Some(expires_at) = deadline {
         tokio::select! {
@@ -68,8 +68,8 @@ impl Session {
 pub struct PendingSession(Option<watch::Sender<Option<Instant>>>);
 
 impl PendingSession {
-    pub fn cancelled(&self) -> impl std::future::Future<Output = ()> + Send + 'static {
-        cancelled(self.0.as_ref().unwrap().subscribe())
+    pub fn canceled(&self) -> impl std::future::Future<Output = ()> + Send + 'static {
+        canceled(self.0.as_ref().unwrap().subscribe())
     }
 
     pub fn keep(mut self) {

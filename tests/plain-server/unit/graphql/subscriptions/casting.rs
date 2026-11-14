@@ -52,7 +52,7 @@ async fn query_and_subscription_share_sender_state_without_starting_scan_or_chan
     ).unwrap();
     assert_eq!(ready["payload"]["extensions"]["subscriptionReady"], true, "{ready}");
     assert_eq!(snapshot(&executor, handle).await, queried);
-    let changed = executor.execute(r#"mutation { addDlnaItem(item:{path:"owned.mp3",title:"owned"}) { version items {path} } }"#.into()).await;
+    let changed = executor.execute(r#"mutation { addDlnaItem(item:{path:"owned.mp3",title:"owned",type:AUDIO}) { version items {path} } }"#.into()).await;
     assert!(changed.errors.is_empty(), "{:?}", changed.errors);
     let change = snapshot(&executor, handle).await;
     assert_eq!(change["version"], before + 1);

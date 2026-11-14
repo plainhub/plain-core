@@ -29,7 +29,7 @@ type FeedEntry {
 }
 
 type FeedEntryCount {
-	id: ID!
+	feedId: ID!
 	count: Int!
 }
 
@@ -67,7 +67,6 @@ extend type Mutation {
 	createFeed(url: String!, fetchContent: Boolean!, name: String): Feed!
 	deleteFeed(id: ID!): Boolean!
 	deleteFeedEntries(query: String!): ActionResult!
-	exportFeeds: String!
 	importFeeds(content: String!): Boolean!
 	markFeedEntriesRead(query: String!, read: Boolean!): ActionResult!
 	syncFeedEntryContent(id: ID!): FeedEntry!
@@ -76,6 +75,7 @@ extend type Mutation {
 }
 
 extend type Query {
+	exportFeeds: String!
 	feed(id: ID!): Feed
 	feedEntries(query: String!, offset: Int!, limit: Int!): [FeedEntry!]!
 	feedEntry(id: ID!): FeedEntry

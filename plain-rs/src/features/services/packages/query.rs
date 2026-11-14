@@ -73,8 +73,8 @@ fn sort_packages(
     match sort_by {
         "SIZE_ASC" => items.sort_by_key(|item| item["size"].as_i64()),
         "SIZE_DESC" => items.sort_by_key(|item| std::cmp::Reverse(item["size"].as_i64())),
-        "DATE_ASC" => items.sort_by_cached_key(|item| instant(item, "updatedAt")),
-        "DATE_DESC" => {
+        "UPDATED_AT_ASC" => items.sort_by_cached_key(|item| instant(item, "updatedAt")),
+        "UPDATED_AT_DESC" => {
             items.sort_by_cached_key(|item| std::cmp::Reverse(instant(item, "updatedAt")))
         }
         _ => {

@@ -388,6 +388,16 @@ async fn wait_merge(schema: &PublicSchema, id: &str) -> Value {
 #[tokio::test]
 async fn graphql_uploads_list_merge_and_recover_the_same_rust_job() {
     let (temp, schema, base) = upload_fixture();
+    assert!(schema.sdl().contains("uploadedChunks(fileId: String!): [UploadedChunk!]!"));
+    let fields = schema
+        .execute(r#"{__type(name:"UploadedChunk"){fields{name type{kind ofType{name}}}}}"#)
+        .await;
+    assert!(fields.errors.is_empty(), "{:?}", fields.errors);
+    let fields = fields.data.into_json().unwrap();
+    assert_eq!(fields["__type"]["fields"], json!([
+        {"name":"index","type":{"kind":"NON_NULL","ofType":{"name":"Int"}}},
+        {"name":"sizeBytes","type":{"kind":"NON_NULL","ofType":{"name":"Long"}}}
+    ]));
     let chunks = base.join("abc");
     tokio::fs::create_dir_all(&chunks).await.unwrap();
     tokio::fs::write(chunks.join("chunk_1"), b"def")
@@ -396,11 +406,11 @@ async fn graphql_uploads_list_merge_and_recover_the_same_rust_job() {
     tokio::fs::write(chunks.join("chunk_0"), b"abc")
         .await
         .unwrap();
-    let response = schema.execute(r#"{uploadedChunks(fileId:"abc")}"#).await;
+    let response = schema.execute(r#"{uploadedChunks(fileId:"abc"){index sizeBytes}}"#).await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     assert_eq!(
         response.data.into_json().unwrap()["uploadedChunks"],
-        json!(["0:3", "1:3"])
+        json!([{"index":0,"sizeBytes":3}, {"index":1,"sizeBytes":3}])
     );
     assert_eq!(merge_status(&schema, "abc").await["status"], "NONE");
     let target = temp.path().join("result.bin");
@@ -643,7 +653,7 @@ async fn main_upload_resume_query_observes_only_completed_native_byte_streams() 
     let state = core.runtime_state();
     let (_generation, mut requests) = state.host.connect();
     let executor = core.native_graphql().unwrap();
-    let query = r#"{uploadedChunks(fileId:"stream-fixture")}"#;
+    let query = r#"{uploadedChunks(fileId:"stream-fixture"){index sizeBytes}}"#;
     let uploads = core.native_uploads().unwrap();
     let mut pending = uploads.open_chunk("stream-fixture", 0, 3).await.unwrap();
     pending.write(b"abc").await.unwrap();
@@ -661,7 +671,7 @@ async fn main_upload_resume_query_observes_only_completed_native_byte_streams() 
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     assert_eq!(
         response.data.into_json().unwrap()["uploadedChunks"],
-        json!(["0:3"])
+        json!([{"index":0,"sizeBytes":3}])
     );
     assert!(requests.try_recv().is_err());
     core.stop_core().await;

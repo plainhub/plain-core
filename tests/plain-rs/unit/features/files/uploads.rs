@@ -174,18 +174,20 @@ async fn saved_chunks_are_listed_in_numeric_order_with_sizes_and_reject_invalid_
         (2, b"!".as_slice()),
         (0, b"hello".as_slice()),
         (1, b"world".as_slice()),
+        (3, b"".as_slice()),
     ] {
         save_chunk(directory.path(), "upload", index, bytes)
             .await
             .unwrap();
     }
     assert_eq!(
-        chunks(directory.path(), "upload").await.unwrap(),
-        vec![(0, 5), (1, 5), (2, 1)]
-    );
-    assert_eq!(
         list(directory.path(), "upload").await.unwrap(),
-        vec!["0:5", "1:5", "2:1"]
+        vec![
+            UploadedChunk { index: 0, size_bytes: 5 },
+            UploadedChunk { index: 1, size_bytes: 5 },
+            UploadedChunk { index: 2, size_bytes: 1 },
+            UploadedChunk { index: 3, size_bytes: 0 },
+        ]
     );
     for id in ["", "../escape", "nested/child"] {
         assert!(save_chunk(directory.path(), id, 0, b"bytes").await.is_err());

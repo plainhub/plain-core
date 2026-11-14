@@ -40,7 +40,7 @@ impl RemoteCache {
         client: Option<&http_client::Client>,
     ) -> Result<String, String> {
         if *stop.borrow() {
-            return Err("Download cancelled".into());
+            return Err("Download canceled".into());
         }
         let work = async {
             let url = url(raw)?;
@@ -80,7 +80,7 @@ impl RemoteCache {
         };
         tokio::select! {
             biased;
-            _ = stop.changed() => Err("Download cancelled".into()),
+            _ = stop.changed() => Err("Download canceled".into()),
             result = work => result,
         }
     }
@@ -90,7 +90,7 @@ impl RemoteCache {
         mut stop: watch::Receiver<bool>,
     ) -> Result<plain_libs::temporary::NamedTempFile, String> {
         if *stop.borrow() {
-            return Err("Download cancelled".into());
+            return Err("Download canceled".into());
         }
         let url = url(raw)?;
         let work = async {
@@ -131,7 +131,7 @@ impl RemoteCache {
         };
         tokio::select! {
             biased;
-            _ = stop.changed() => Err("Download cancelled".into()),
+            _ = stop.changed() => Err("Download canceled".into()),
             result = work => result,
         }
     }

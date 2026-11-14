@@ -1,6 +1,6 @@
 mod enum_value;
 mod sort;
-pub use sort::FileSortBy;
+pub use sort::{AudioSortBy, DocSortBy, FileSortBy, ImageSortBy, MediaSortBy, VideoSortBy};
 mod play_mode;
 pub use play_mode::MediaPlayMode;
 mod theme;

@@ -189,7 +189,7 @@ async fn encrypted_public_and_ble_rpc_share_auth_executor_and_receipts() {
     let mut received_events = server.runtime_state().events.subscribe();
     let public_url = format!("https://127.0.0.1:{https}/peer_graphql");
     let body = wire(
-        json!({"query":"mutation Incoming($content:String!) { renamed:createChatItem(content:$content) { ...Fields } } fragment Fields on ChatItem { id fromId channelId content createdAt updatedAt status }", "operationName":"Incoming", "variables":{"content":json!({"type":"TEXT","value":{"text":"hello"}}).to_string()}}),
+        json!({"query":"mutation Incoming($content:String!) { renamed:createChatItem(content:$content) { ...Fields } } fragment Fields on ChatItem { id fromId channelId content { ... on ChatTextContent { __typename text } ... on ChatImagesContent { __typename items { id uri fileName size width height durationMs summary } } ... on ChatFilesContent { __typename items { id uri fileName size width height durationMs summary } } ... on ChatShareContent { __typename shareId urlToken peerInfo { id ip port } name itemCount totalSize expiresAt } } createdAt updatedAt status }", "operationName":"Incoming", "variables":{"content":json!({"type":"TEXT","value":{"text":"hello"}}).to_string()}}),
     );
     let response = client
         .post(&public_url)

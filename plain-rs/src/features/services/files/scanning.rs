@@ -50,7 +50,7 @@ pub async fn progress(state: &CoreRuntime) -> Result<Progress> {
             state: match snapshot.status {
                 Status::Running => FileIndexScanState::Running,
                 Status::Paused => FileIndexScanState::Paused,
-                Status::Cancelling | Status::Cancelled => FileIndexScanState::Stopped,
+                Status::Canceling | Status::Canceled => FileIndexScanState::Stopped,
                 Status::Completed => FileIndexScanState::Idle,
                 Status::Failed => FileIndexScanState::Failed,
             },

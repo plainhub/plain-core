@@ -683,7 +683,7 @@ async fn fs_thumbnail_conditionals_and_downloads_keep_their_http_contract() {
 }
 
 #[tokio::test]
-async fn session_urls_revoke_new_requests_without_cancelling_started_transfers() {
+async fn session_urls_revoke_new_requests_without_canceling_started_transfers() {
     use plain_rs::features::files::resource_link::{self, Resource, Scope};
     let directory = plain_libs::temporary::tempdir().unwrap();
     let data = directory.path().join("data");

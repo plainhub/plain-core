@@ -8,8 +8,8 @@ use tokio::sync::watch;
 pub enum Status {
     Running,
     Paused,
-    Cancelling,
-    Cancelled,
+    Canceling,
+    Canceled,
     Completed,
     Failed,
 }
@@ -113,7 +113,7 @@ impl MediaScans {
         let state = match snapshot.status {
             Status::Running => "RUNNING",
             Status::Paused => "PAUSED",
-            Status::Cancelling | Status::Cancelled => "STOPPED",
+            Status::Canceling | Status::Canceled => "STOPPED",
             Status::Completed => "IDLE",
             Status::Failed => "FAILED",
         };
@@ -154,7 +154,7 @@ impl MediaScans {
         if guard.job.as_ref().is_some_and(|job| {
             matches!(
                 job.snapshot.status,
-                Status::Running | Status::Paused | Status::Cancelling
+                Status::Running | Status::Paused | Status::Canceling
             )
         }) {
             return Err("Media scan already running".into());
@@ -257,7 +257,7 @@ impl MediaScans {
     }
 
     pub async fn wait_idle(&self) -> Result<bool, String> {
-        let Some((id, mut activity, cancelled)) = self
+        let Some((id, mut activity, canceled)) = self
             .state
             .lock()
             .map_err(|_| "Media scan state unavailable")?
@@ -266,7 +266,7 @@ impl MediaScans {
             .filter(|job| {
                 matches!(
                     job.snapshot.status,
-                    Status::Running | Status::Paused | Status::Cancelling
+                    Status::Running | Status::Paused | Status::Canceling
                 )
             })
             .map(|job| {
@@ -289,7 +289,7 @@ impl MediaScans {
                 job.snapshot.id == id
                     && matches!(
                         job.snapshot.status,
-                        Status::Running | Status::Paused | Status::Cancelling
+                        Status::Running | Status::Paused | Status::Canceling
                     )
             })
         {
@@ -298,7 +298,7 @@ impl MediaScans {
                 .await
                 .map_err(|_| "Media scan session closed")?;
         }
-        let completed = !*cancelled.borrow();
+        let completed = !*canceled.borrow();
         Ok(completed)
     }
 
@@ -316,7 +316,7 @@ impl MediaScans {
         if guard.job.as_ref().is_some_and(|job| {
             matches!(
                 job.snapshot.status,
-                Status::Running | Status::Paused | Status::Cancelling
+                Status::Running | Status::Paused | Status::Canceling
             )
         }) {
             return Err("Media scan already running".into());
@@ -427,7 +427,7 @@ impl MediaScans {
         if let Some(job) = guard.job.as_mut()
             && matches!(job.snapshot.status, Status::Running | Status::Paused)
         {
-            job.snapshot.status = Status::Cancelling;
+            job.snapshot.status = Status::Canceling;
             let _ = job.cancel.send(true);
             job.activity.send_replace(());
         }
@@ -445,7 +445,7 @@ impl MediaScans {
         if let Some(job) = guard.job.as_mut()
             && matches!(job.snapshot.status, Status::Running | Status::Paused)
         {
-            job.snapshot.status = Status::Cancelling;
+            job.snapshot.status = Status::Canceling;
             let _ = job.cancel.send(true);
             job.activity.send_replace(());
         }
@@ -482,7 +482,7 @@ impl Session {
                 match job.snapshot.status {
                     Status::Running => return Ok(()),
                     Status::Paused => job.activity.subscribe(),
-                    _ => return Err("Media scan cancelled".into()),
+                    _ => return Err("Media scan canceled".into()),
                 }
             };
             activity
@@ -521,7 +521,7 @@ impl Session {
                         return Ok(value);
                     }
                     Status::Paused => job.activity.subscribe(),
-                    _ => return Err("Media scan cancelled".into()),
+                    _ => return Err("Media scan canceled".into()),
                 }
             };
             activity
@@ -543,7 +543,7 @@ impl Session {
             .filter(|job| job.snapshot.id == self.id)
             .ok_or("Media scan replaced")?;
         if job.snapshot.status != Status::Running {
-            return Err("Media scan cancelled".into());
+            return Err("Media scan canceled".into());
         }
         let value = record()?;
         job.snapshot.processed_files += 1;
@@ -614,7 +614,7 @@ impl Session {
             .filter(|job| job.snapshot.id == self.id)
             .ok_or("Media scan replaced")?;
         if !matches!(job.snapshot.status, Status::Running | Status::Paused) {
-            return Err("Media scan cancelled".into());
+            return Err("Media scan canceled".into());
         }
         job.snapshot.total_files = Some(total_files);
         self.scans.publish(job);
@@ -632,8 +632,8 @@ impl Session {
             .as_mut()
             .filter(|job| job.snapshot.id == self.id)
             .ok_or("Media scan replaced")?;
-        if job.snapshot.status == Status::Cancelling {
-            job.snapshot.status = Status::Cancelled;
+        if job.snapshot.status == Status::Canceling {
+            job.snapshot.status = Status::Canceled;
         } else if matches!(job.snapshot.status, Status::Running | Status::Paused) {
             match result {
                 Ok(()) => job.snapshot.status = Status::Completed,
@@ -643,7 +643,7 @@ impl Session {
                 }
             }
         }
-        if matches!(job.snapshot.status, Status::Cancelled | Status::Failed) {
+        if matches!(job.snapshot.status, Status::Canceled | Status::Failed) {
             let _ = job.cancel.send(true);
         }
         job.activity.send_replace(());
@@ -658,12 +658,12 @@ impl Drop for Session {
             && let Some(job) = guard.job.as_mut().filter(|job| job.snapshot.id == self.id)
             && matches!(
                 job.snapshot.status,
-                Status::Running | Status::Paused | Status::Cancelling
+                Status::Running | Status::Paused | Status::Canceling
             )
         {
             let _ = job.cancel.send(true);
             job.activity.send_replace(());
-            job.snapshot.status = Status::Cancelled;
+            job.snapshot.status = Status::Canceled;
             self.scans.publish(job);
         }
     }

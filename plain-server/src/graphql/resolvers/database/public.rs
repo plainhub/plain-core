@@ -135,17 +135,7 @@ impl DbMutation {
         if !has_path(&file) {
             return Ok(false);
         }
-        Ok(spawn(move || {
-            let mut row = row.0;
-            for value in row.values_mut() {
-                if value.is_null() {
-                    *value = plain_libs::serde_json::Value::String("null".into());
-                }
-            }
-            file.insert_table_row(&table, &row).map(|_| true)
-        })
-        .await
-        .unwrap_or(false))
+        spawn(move || file.insert_table_row(&table, &row.0).map(|_| true)).await
     }
 
     async fn delete_db_table_rows(
@@ -161,11 +151,7 @@ impl DbMutation {
         if !has_path(&file) {
             return Ok(false);
         }
-        Ok(
-            spawn(move || file.delete_table_rows(&table, &ids).map(|_| true))
-                .await
-                .unwrap_or(false),
-        )
+        spawn(move || file.delete_table_rows(&table, &ids).map(|_| true)).await
     }
 }
 

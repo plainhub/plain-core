@@ -237,7 +237,7 @@ async fn run(
     permit: UnauthenticatedConnection,
 ) {
     let mut permit = Some(permit);
-    let mut cancel_reason = "cancelled";
+    let mut cancel_reason = "canceled";
     if !enabled(&state) || !plain_rs::features::client_identity::is_valid(&params.cid) {
         let reason = if !plain_rs::features::client_identity::is_valid(&params.cid) {
             "invalid_login_request"
@@ -358,7 +358,7 @@ async fn run(
                 };
                 if !enabled(&state) { let _ = socket.send(close(1008,"remote_access_disabled")).await; break; }
                 if channel == Channel::Auth {
-                    if let Some(request_id) = pending.take() { if let Err(error) = crate::http::auth::ws_login::execute(&state, crate::http::auth::ws_login::Request::Cancel { request_id, reason: "cancelled" }).await { log::error!("Cannot record login cancellation: {error}"); } }
+                    if let Some(request_id) = pending.take() { if let Err(error) = crate::http::auth::ws_login::execute(&state, crate::http::auth::ws_login::Request::Cancel { request_id, reason: "canceled" }).await { log::error!("Cannot record login cancellation: {error}"); } }
                     let previous = std::mem::replace(&mut handshake, LoginHandshake::Submitted);
                     let resolved = (|| -> plain_libs::anyhow::Result<_> {
                         use crate::http::auth::ws_login::{LoginChannel, OpaqueChannel};

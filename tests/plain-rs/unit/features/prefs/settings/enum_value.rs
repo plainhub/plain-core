@@ -9,23 +9,25 @@ fn published_integer_preferences_decode_to_current_names_without_rewriting_stora
     let themes: &[&str] = &["USE_DEVICE_THEME", "ON", "OFF"];
     let modes: &[&str] = &["REPEAT", "REPEAT_ONE", "SHUFFLE"];
     let sorts: &[&str] = &[
-        "DATE_ASC",
-        "DATE_DESC",
+        "UPDATED_AT_ASC",
+        "UPDATED_AT_DESC",
         "SIZE_ASC",
         "SIZE_DESC",
         "NAME_ASC",
         "NAME_DESC",
         "TAKEN_AT_DESC",
     ];
+    let ordinary = &sorts[..6];
+    let audio: &[&str] = &["UPDATED_AT_ASC", "UPDATED_AT_DESC", "SIZE_ASC", "SIZE_DESC", "TITLE_ASC", "TITLE_DESC"];
     for (key, names) in [
         (keys::DARK_THEME, themes),
         (keys::AUDIO_PLAY_MODE, modes),
-        (keys::AUDIO_SORT_BY, sorts),
+        (keys::AUDIO_SORT_BY, audio),
         (keys::VIDEO_SORT_BY, sorts),
         (keys::IMAGE_SORT_BY, sorts),
-        (keys::DOC_SORT_BY, sorts),
-        (keys::FILE_SORT_BY, sorts),
-        (keys::PACKAGE_SORT_BY, sorts),
+        (keys::DOC_SORT_BY, ordinary),
+        (keys::FILE_SORT_BY, ordinary),
+        (keys::PACKAGE_SORT_BY, ordinary),
     ] {
         for (number, name) in names.iter().enumerate() {
             prefs.set(key, number).unwrap();
@@ -54,7 +56,7 @@ fn invalid_enum_preferences_are_rejected_and_preserved() {
     for (key, limit) in [
         (keys::DARK_THEME, 3),
         (keys::AUDIO_PLAY_MODE, 3),
-        (keys::FILE_SORT_BY, 7),
+        (keys::FILE_SORT_BY, 6),
     ] {
         for value in [
             json!(-1),

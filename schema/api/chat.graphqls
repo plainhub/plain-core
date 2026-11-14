@@ -1,6 +1,59 @@
+type ChatAttachment {
+	id: ID!
+	uri: String!
+	size: Long!
+	durationMs: Long!
+	width: Int!
+	height: Int!
+	summary: String!
+	fileName: String!
+}
+
+input ChatAttachmentInput {
+	id: ID!
+	uri: String!
+	size: Long!
+	durationMs: Long! = 0
+	width: Int! = 0
+	height: Int! = 0
+	summary: String! = ""
+	fileName: String! = ""
+}
+
+union ChatContent = ChatTextContent | ChatImagesContent | ChatFilesContent | ChatShareContent
+
+input ChatContentInput @oneOf {
+	text: ChatTextInput
+	images: ChatImagesInput
+	files: ChatFilesInput
+	share: ChatShareInput
+}
+
 type ChatConversation {
 	id: ID!
 	chat: ChatItem!
+}
+
+type ChatDeliveryResult {
+	peerId: ID!
+	peerName: String!
+	error: String
+}
+
+type ChatFilesContent {
+	items: [ChatAttachment!]!
+}
+
+input ChatFilesInput {
+	items: [ChatAttachmentInput!]!
+}
+
+type ChatImagesContent {
+	items: [ChatAttachment!]!
+}
+
+input ChatImagesInput {
+	items: [ChatAttachmentInput!]!
 }
 
 type ChatItem {
@@ -20,20 +73,69 @@ type ChatItem {
 	"""
 	channelId: ID
 	id: ID!
-	"""
-	Message envelope JSON: `{type: TEXT|IMAGES|FILES|SHARE, value: {…}}` —
-	parse `value` according to `type`.
-	"""
-	content: String!
+	content: ChatContent!
 	createdAt: Instant!
 	updatedAt: Instant!
 	status: ChatStatus!
-	"""
-	Per-recipient delivery details as JSON (peer delivery results);
-	empty when the message has no delivery failures. Drives
-	SENT/PARTIAL/FAILED alongside `status`.
-	"""
-	statusData: String!
+	deliveryResults: [ChatDeliveryResult!]!
+}
+
+type ChatLinkPreview {
+	url: String!
+	title: String
+	description: String
+	imageUrl: String
+	imageLocalPath: String
+	imageWidth: Int!
+	imageHeight: Int!
+	siteName: String
+	domain: String
+	createdAt: Instant!
+}
+
+input ChatLinkPreviewInput {
+	url: String!
+	title: String
+	description: String
+	imageUrl: String
+	imageLocalPath: String
+	imageWidth: Int! = 0
+	imageHeight: Int! = 0
+	siteName: String
+	domain: String
+	createdAt: Instant!
+}
+
+type ChatShareContent {
+	shareId: ID!
+	urlToken: String!
+	peerInfo: ChatSharePeer!
+	name: String!
+	itemCount: Long!
+	totalSize: Long!
+	expiresAt: Instant
+}
+
+input ChatShareInput {
+	shareId: ID!
+	urlToken: String!
+	peerInfo: ChatSharePeerInput!
+	name: String!
+	itemCount: Long! = 0
+	totalSize: Long! = 0
+	expiresAt: Instant
+}
+
+type ChatSharePeer {
+	id: ID!
+	ip: String!
+	port: Int!
+}
+
+input ChatSharePeerInput {
+	id: ID!
+	ip: String!
+	port: Int!
 }
 
 enum ChatStatus {
@@ -43,9 +145,19 @@ enum ChatStatus {
 	PENDING
 }
 
+type ChatTextContent {
+	text: String!
+	linkPreviews: [ChatLinkPreview!]!
+}
+
 type ChatTextEdit {
 	changed: Boolean!
 	chat: ChatItem!
+}
+
+input ChatTextInput {
+	text: String!
+	linkPreviews: [ChatLinkPreviewInput!]! = []
 }
 
 extend type Mutation {
@@ -58,10 +170,7 @@ extend type Mutation {
 	editChatText(id: ID!, text: String!): ChatTextEdit!
 	forwardChatItems(id: ID!, targets: [String!]!): [ChatItem!]!
 	retryChatItem(id: ID!, recipientIds: [ID!]): ChatItem!
-	"""
-	Send the same ChatItem.content JSON to one or more peer:<id> or channel:<id> targets.
-	"""
-	sendChatItems(targets: [String!]!, content: String!): [ChatItem!]!
+	sendChatItems(targets: [String!]!, content: ChatContentInput!): [ChatItem!]!
 	sendFolderShare(targets: [String!]!, path: String!, name: String!, expiresAt: Instant): [ChatItem!]!
 	sendShare(targets: [String!]!, shareId: ID!): [ChatItem!]!
 }

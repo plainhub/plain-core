@@ -77,7 +77,7 @@ async fn native_file_metadata_reaches_catalog_without_any_host_request() {
         .search(
             plain_rs::features::enums::DataType::Doc,
             "ext:txt",
-            plain_rs::features::prefs::settings::FileSortBy::NameAsc,
+            plain_rs::features::prefs::settings::MediaSortBy::NameAsc,
             10,
             0,
         )
@@ -294,7 +294,7 @@ async fn directory_scan_uses_core_policy_real_walker_and_existing_catalog() {
 #[tokio::test]
 async fn rescanning_ts_files_keeps_only_transport_streams_in_video_search() {
     use plain_rs::features::enums::DataType;
-    use plain_rs::features::prefs::settings::FileSortBy;
+    use plain_rs::features::prefs::settings::MediaSortBy;
     use plain_rs::infrastructure::db::FileKind;
 
     let directory = directory_scan_fixture();
@@ -327,7 +327,7 @@ async fn rescanning_ts_files_keeps_only_transport_streams_in_video_search() {
         .await
         .unwrap();
     let hits = catalog
-        .search(DataType::Video, "example", FileSortBy::NameAsc, 10, 0)
+        .search(DataType::Video, "example", MediaSortBy::NameAsc, 10, 0)
         .unwrap();
     assert_eq!(
         hits.iter()

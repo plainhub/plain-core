@@ -72,34 +72,34 @@ impl Runtime {
             || async { Ok(capabilities().into_iter().map(str::to_owned).collect()) },
             |input, output| async move {
                 if operation == Operation::Remux {
-                    return media_task(move |cancelled| {
+                    return media_task(move |canceled| {
                         let mut input = std::fs::File::open(input)?;
                         let mut writer = std::fs::OpenOptions::new().write(true).open(&output.0)?;
                         Ok(plain_libs::media::isobmff::remove_mebx_tracks(
                             &mut input,
                             &mut writer,
-                            cancelled,
+                            canceled,
                         )?)
                     })
                     .await;
                 }
                 #[cfg(any(target_os = "macos", target_os = "ios", target_os = "windows"))]
                 {
-                    return media_task(move |cancelled| {
+                    return media_task(move |canceled| {
                         crate::infrastructure::platform::video::transcode(
-                            &input, &output.0, cancelled,
+                            &input, &output.0, canceled,
                         )
                     })
                     .await;
                 }
                 #[cfg(target_os = "android")]
                 {
-                    return media_task(move |cancelled| {
+                    return media_task(move |canceled| {
                         crate::infrastructure::platform::android::media::encode(
                             &input,
                             &output.0,
                             crate::infrastructure::platform::android::media::Operation::Transcode,
-                            cancelled,
+                            canceled,
                         )
                     })
                     .await;
@@ -330,7 +330,7 @@ pub async fn encode_android_file(
     let mut stop = stop;
     tokio::select! {
         biased;
-        _ = stop.changed() => Err("Video conversion cancelled".into()),
+        _ = stop.changed() => Err("Video conversion canceled".into()),
         result = encoding => result,
     }
 }
@@ -345,9 +345,9 @@ where
             self.0.store(true, std::sync::atomic::Ordering::Release);
         }
     }
-    let cancelled = Arc::new(std::sync::atomic::AtomicBool::new(false));
-    let _cancellation = Cancellation(cancelled.clone());
-    tokio::task::spawn_blocking(move || encode(&cancelled))
+    let canceled = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let _cancellation = Cancellation(canceled.clone());
+    tokio::task::spawn_blocking(move || encode(&canceled))
         .await
         .map_err(|error| error.to_string())?
         .map_err(|error| error.to_string())

@@ -184,7 +184,7 @@ async fn encrypted_clipboard_sync_seeds_baseline_retries_failed_writes_and_reche
         &format!("https://127.0.0.1:{port}"),
     )
     .unwrap();
-    let (cancel, cancelled) = watch::channel(false);
+    let (cancel, canceled) = watch::channel(false);
     let (generation, mut requests) = crate::test_support::HostRequests::connect(&state.host);
     let writes = Arc::new(AtomicUsize::new(0));
     let succeeds = Arc::new(AtomicBool::new(false));
@@ -218,22 +218,22 @@ async fn encrypted_clipboard_sync_seeds_baseline_retries_failed_writes_and_reche
         }
     });
     seed(&remote_state.db, "old clipboard", false, 1);
-    synchronize_clipboard(&state, &peer.id, &expected, &cancelled)
+    synchronize_clipboard(&state, &peer.id, &expected, &canceled)
         .await
         .unwrap();
     assert_eq!(writes.load(Ordering::SeqCst), 0);
     seed(&remote_state.db, "new clipboard", false, 2);
     assert!(
-        synchronize_clipboard(&state, &peer.id, &expected, &cancelled)
+        synchronize_clipboard(&state, &peer.id, &expected, &canceled)
             .await
             .is_err()
     );
     assert_eq!(writes.load(Ordering::SeqCst), 1);
     succeeds.store(true, Ordering::SeqCst);
-    synchronize_clipboard(&state, &peer.id, &expected, &cancelled)
+    synchronize_clipboard(&state, &peer.id, &expected, &canceled)
         .await
         .unwrap();
-    synchronize_clipboard(&state, &peer.id, &expected, &cancelled)
+    synchronize_clipboard(&state, &peer.id, &expected, &canceled)
         .await
         .unwrap();
     assert_eq!(writes.load(Ordering::SeqCst), 2);
@@ -253,13 +253,13 @@ async fn encrypted_clipboard_sync_seeds_baseline_retries_failed_writes_and_reche
     .unwrap();
     assert!(echoes.try_recv().is_err());
     seed(&remote_state.db, "private clipboard", true, 3);
-    synchronize_clipboard(&state, &peer.id, &expected, &cancelled)
+    synchronize_clipboard(&state, &peer.id, &expected, &canceled)
         .await
         .unwrap();
     assert_eq!(writes.load(Ordering::SeqCst), 2);
     seed(&remote_state.db, "must not apply", false, 4);
     supports.store(false, Ordering::SeqCst);
-    synchronize_clipboard(&state, &peer.id, &expected, &cancelled)
+    synchronize_clipboard(&state, &peer.id, &expected, &canceled)
         .await
         .unwrap();
     supports.store(true, Ordering::SeqCst);
@@ -267,12 +267,12 @@ async fn encrypted_clipboard_sync_seeds_baseline_retries_failed_writes_and_reche
         .prefs
         .set("clipboard_directions", json!({peer.id.clone():"off"}))
         .unwrap();
-    synchronize_clipboard(&state, &peer.id, &expected, &cancelled)
+    synchronize_clipboard(&state, &peer.id, &expected, &canceled)
         .await
         .unwrap();
     state.prefs.set("clipboard_directions", json!({})).unwrap();
     cancel.send_replace(true);
-    synchronize_clipboard(&state, &peer.id, &expected, &cancelled)
+    synchronize_clipboard(&state, &peer.id, &expected, &canceled)
         .await
         .unwrap();
     cancel.send_replace(false);
@@ -281,7 +281,7 @@ async fn encrypted_clipboard_sync_seeds_baseline_retries_failed_writes_and_reche
             .execute("UPDATE peers SET token='' WHERE id=?1", [&peer.id])
             .unwrap()
     });
-    synchronize_clipboard(&state, &peer.id, &expected, &cancelled)
+    synchronize_clipboard(&state, &peer.id, &expected, &canceled)
         .await
         .unwrap();
     assert_eq!(writes.load(Ordering::SeqCst), 2);

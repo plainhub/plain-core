@@ -213,9 +213,9 @@ async fn inactive_runtime_cleanup_and_updates_do_not_request_platform_capabiliti
 }
 
 #[tokio::test]
-async fn refused_or_cancelled_multicast_grants_release_the_next_acquisition() {
+async fn refused_or_canceled_multicast_grants_release_the_next_acquisition() {
     let _runtime = TEST_LOCK.lock().await;
-    for (cancelled, reuse_runtime) in [(false, false), (true, false), (true, true)] {
+    for (canceled, reuse_runtime) in [(false, false), (true, false), (true, true)] {
         let directory = plain_libs::temporary::tempdir().unwrap();
         let core = crate::test_runtime::Core::open(directory.path()).unwrap();
         let state = core.runtime_state();
@@ -242,7 +242,7 @@ async fn refused_or_cancelled_multicast_grants_release_the_next_acquisition() {
             .unwrap();
         assert_eq!(request["method"], "mdnsMulticast");
         assert_eq!(request["params"]["acquire"], true);
-        if cancelled {
+        if canceled {
             pending.abort();
             assert!(pending.await.unwrap_err().is_cancelled());
         } else {
@@ -252,7 +252,7 @@ async fn refused_or_cancelled_multicast_grants_release_the_next_acquisition() {
                 .unwrap();
             assert!(pending.await.unwrap().is_err());
         }
-        if cancelled {
+        if canceled {
             let release = requests.try_recv().unwrap();
             assert_eq!(release["method"], "mdnsMulticast");
             assert_eq!(release["params"]["acquire"], false);
@@ -290,13 +290,13 @@ async fn refused_or_cancelled_multicast_grants_release_the_next_acquisition() {
         core.stop_core().await;
         assert!(
             result.is_ok(),
-            "A rejected or cancelled grant must not own the global runtime: {result:?}"
+            "A rejected or canceled grant must not own the global runtime: {result:?}"
         );
     }
 }
 
 #[tokio::test]
-async fn cancelled_multicast_release_leaves_the_next_runtime_available() {
+async fn canceled_multicast_release_leaves_the_next_runtime_available() {
     let _runtime = TEST_LOCK.lock().await;
     let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::test_runtime::Core::open(directory.path()).unwrap();
@@ -349,7 +349,7 @@ async fn cancelled_multicast_release_leaves_the_next_runtime_available() {
     core.stop_core().await;
     assert!(
         result.is_ok(),
-        "A cancelled release must not retain the global runtime: {result:?}"
+        "A canceled release must not retain the global runtime: {result:?}"
     );
 }
 
@@ -491,10 +491,10 @@ async fn concurrent_permission_grants_keep_the_winning_owner_and_release_only_th
             .to_string()
             .contains("mDNS is owned by another runtime")
     );
-    let cancelled = requests.try_recv().unwrap();
-    assert_eq!(cancelled["params"]["acquire"], false);
+    let canceled = requests.try_recv().unwrap();
+    assert_eq!(canceled["params"]["acquire"], false);
     assert_eq!(
-        cancelled["params"]["lease"],
+        canceled["params"]["lease"],
         acquire_second["params"]["lease"]
     );
     assert_eq!(

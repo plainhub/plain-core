@@ -62,7 +62,7 @@ fn cancellation_removes_only_the_new_snapshot() {
     let directory = temporary();
     let root = directory.path();
     let db = Db::open(&root.join("source.db")).unwrap();
-    let target = root.join("cancelled.db");
+    let target = root.join("canceled.db");
     let samples = AtomicUsize::new(0);
     assert!(
         db.backup_to(&target, || samples.fetch_add(1, Ordering::SeqCst) > 0)

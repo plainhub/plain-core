@@ -98,7 +98,7 @@ async fn all_and_single_requests_share_the_same_in_flight_feed_and_only_emit_fee
 }
 #[tokio::test]
 async fn shutdown_cancels_owned_fetches_without_late_sync_completion_or_detached_tasks() {
-    let (_dir, service, calls, started, _release, server, _events) = fixture().await;
+    let (_dir, service, calls, started, _release, server, mut events) = fixture().await;
     service.queue(Some("feed".into())).unwrap();
     started.acquire().await.unwrap().forget();
     let receiver = service.state.lock().unwrap().tasks["feed"]
@@ -125,6 +125,10 @@ async fn shutdown_cancels_owned_fetches_without_late_sync_completion_or_detached
     assert_eq!(scheduler_exits.load(Ordering::SeqCst), 1);
     assert!(service.scheduler.lock().unwrap().is_none());
     assert_eq!(finished(receiver).await.status, FeedWorkerStatus::Canceled);
+    let event = events.try_recv().unwrap();
+    assert_eq!(event.event_type, "FEEDS_FETCHED");
+    assert_eq!(plain_libs::serde_json::from_str::<plain_libs::serde_json::Value>(&event.payload).unwrap(),
+        plain_libs::serde_json::json!({"feedId":"feed","canceled":true}));
     assert!(
         service
             .db
@@ -208,7 +212,7 @@ async fn transient_fetches_retry_three_times_with_owned_cancellable_delays() {
 }
 
 #[tokio::test(start_paused = true)]
-async fn cancelling_backoff_prevents_later_fetch_attempts() {
+async fn canceling_backoff_prevents_later_fetch_attempts() {
     let calls = Arc::new(AtomicUsize::new(0));
     let worker = {
         let calls = calls.clone();

@@ -24,3 +24,10 @@ pub(crate) fn require_remote_developer_mode(ctx: &Context<'_>) -> Result<()> {
     }
     Ok(())
 }
+
+pub(crate) fn validate_pagination(offset: i32, limit: i32) -> Result<()> {
+    if offset < 0 || limit < 0 {
+        return Err(Error::new("invalid pagination"));
+    }
+    Ok(())
+}

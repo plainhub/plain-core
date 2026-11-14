@@ -69,6 +69,10 @@ pub struct NoteQuery;
 
 #[Object]
 impl NoteQuery {
+    fn export_notes(&self, ctx: &Context<'_>, query: String) -> GqlResult<String> {
+        Ok(notes::export(ctx.data::<Arc<Db>>()?, &query)?)
+    }
+
     fn note_count(&self, ctx: &Context<'_>, query: String) -> GqlResult<i32> {
         Ok(notes::count(ctx.data::<Arc<Db>>()?, &query)?)
     }
@@ -138,10 +142,6 @@ impl NoteMutation {
         Ok(ActionResult {
             affected_count: notes::delete(ctx.data::<Arc<Db>>()?, &query)? as i32,
         })
-    }
-
-    fn export_notes(&self, ctx: &Context<'_>, query: String) -> GqlResult<String> {
-        Ok(notes::export(ctx.data::<Arc<Db>>()?, &query)?)
     }
 }
 

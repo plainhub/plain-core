@@ -1,4 +1,4 @@
-use crate::features::services::casting::dlna_sender_runtime::Item;
+use crate::features::services::casting::dlna_sender_runtime::{DlnaCastType, Item};
 use crate::runtime::Runtime as CoreRuntime;
 use plain_libs::dlna::didl;
 use plain_libs::dlna::soap as protocol;
@@ -66,7 +66,7 @@ pub async fn cast_with_mime(
     };
     let pending = session.pending();
     if !runtime.media.replace_current(session, generation) {
-        return Err("Cast cancelled".into());
+        return Err("Cast canceled".into());
     }
     *runtime.transport.lock().unwrap() = super::dlna_sender_runtime::Transport {
         uri: url.clone(),
@@ -75,14 +75,10 @@ pub async fn cast_with_mime(
         ..Default::default()
     };
     let sending = async {
-        let media_type = if mime.starts_with("audio/") {
-            MediaType::Audio
-        } else if mime.starts_with("image/") {
-            MediaType::Image
-        } else if mime.starts_with("video/") {
-            MediaType::Video
-        } else {
-            MediaType::Unknown
+        let media_type = match item.media_type {
+            DlnaCastType::Audio => MediaType::Audio,
+            DlnaCastType::Video => MediaType::Video,
+            DlnaCastType::Image => MediaType::Image,
         };
         let meta = if item.title.is_empty() {
             String::new()
@@ -114,7 +110,7 @@ pub async fn cast_with_mime(
         )
         .await?;
         runtime.transport.lock().unwrap().started = true;
-        if item.audio {
+        if item.media_type == DlnaCastType::Audio {
             let track = item.clone();
             state
                 .audio
@@ -129,7 +125,7 @@ pub async fn cast_with_mime(
         }
         {
             let mut s = runtime.snapshot.lock().unwrap();
-            s.current_audio = item.audio || media_type == MediaType::Audio;
+            s.current_audio = item.media_type == DlnaCastType::Audio;
             s.current_uri = item.path;
             s.playing = true;
             s.active = true;
@@ -157,7 +153,7 @@ pub async fn cast_with_mime(
     };
     let outcome = tokio::select! {
         biased;
-        _ = pending.cancelled() => Err("Cast cancelled".to_owned()),
+        _ = pending.canceled() => Err("Cast canceled".to_owned()),
         outcome = sending => outcome,
     };
     if outcome.is_err() {

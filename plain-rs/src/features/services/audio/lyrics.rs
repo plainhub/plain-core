@@ -84,11 +84,11 @@ pub async fn read(
     if *stopped.borrow() {
         return Err("Server stopped".into());
     }
-    let (cancel, cancelled) = watch::channel(false);
+    let (cancel, canceled) = watch::channel(false);
     let _cancel = Cancellation(cancel);
     let reader = tokio::select! {
         _ = stopped.changed() => return Err("Server stopped".into()),
-        reader = resources.read_native(&path, cancelled) => reader.map_err(|error| error.to_string())?,
+        reader = resources.read_native(&path, canceled) => reader.map_err(|error| error.to_string())?,
     };
     let runtime = tokio::runtime::Handle::current();
     let task = tokio::task::spawn_blocking(move || {

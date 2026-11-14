@@ -84,8 +84,8 @@ extend type Mutation {
 
 extend type Query {
 	fileIndexDefaults: FileIndexDefaults!
+	fileIndexScanProgress: FileIndexScanProgress!
 	fileIndexVolumes: [FileIndexVolume!]!
 	mediaBuckets(type: MediaDataType!): [MediaBucket!]!
 	mediaPlayHistory(query: String!, offset: Int!, limit: Int!): [MediaPlayHistory!]!
-	fileIndexScanProgress: FileIndexScanProgress!
 }

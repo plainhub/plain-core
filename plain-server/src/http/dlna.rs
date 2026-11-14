@@ -162,10 +162,10 @@ pub(crate) async fn media(
         return StatusCode::NOT_FOUND.into_response();
     };
     let (parts, _) = request.into_parts();
-    let cancelled = resource.clone().cancelled();
+    let canceled = resource.clone().canceled();
     let mut response = tokio::select! {
         biased;
-        _ = cancelled => return StatusCode::NOT_FOUND.into_response(),
+        _ = canceled => return StatusCode::NOT_FOUND.into_response(),
         response = media_response(&state, &resource, &parts.method, &parts.headers) => response,
     };
     response
@@ -188,7 +188,7 @@ pub(crate) async fn media(
     let body = if head {
         plain_libs::axum::body::Body::empty()
     } else {
-        plain_libs::axum::body::Body::from_stream(body.into_data_stream().take_until(resource.cancelled()))
+        plain_libs::axum::body::Body::from_stream(body.into_data_stream().take_until(resource.canceled()))
     };
     Response::from_parts(parts, body)
 }

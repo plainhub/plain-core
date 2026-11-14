@@ -332,7 +332,7 @@ impl IndexControl {
         if s.generation == self.generation {
             Ok(())
         } else {
-            Err(DomainError::Other("image index cancelled".into()))
+            Err(DomainError::Other("image index canceled".into()))
         }
     }
 }

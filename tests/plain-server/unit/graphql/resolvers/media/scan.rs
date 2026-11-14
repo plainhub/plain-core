@@ -32,7 +32,12 @@ async fn native_media_controls_share_the_main_contract_and_remote_permissions() 
         }
     });
     let native = core.native_graphql().unwrap();
-    let source = plain_libs::temporary::tempdir().unwrap();
+    let source = plain_libs::temporary::Builder::new()
+        .prefix("plain-index-scan-")
+        .tempdir_in(std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" })
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(|| std::env::current_dir().unwrap()))
+        .unwrap();
     let source_path = source.path().canonicalize().unwrap();
     let id = state.db.register_volume(&source_path).unwrap().unwrap();
     let query = native.execute(Request::new("{ fileIndexVolumes { id path indexMode includedDirs excludedDirs isAvailable } fileIndexDefaults { excludedDirs excludedNames } }")).await;
@@ -123,7 +128,8 @@ async fn native_media_controls_share_the_main_contract_and_remote_permissions() 
             "disabled or unknown volume accepted"
         );
     }
-    std::fs::write(source_path.join("included.txt"), "generated index fixture").unwrap();
+    std::fs::create_dir(source_path.join("included")).unwrap();
+    std::fs::write(source_path.join("included/included.txt"), "generated index fixture").unwrap();
     std::fs::create_dir(source_path.join("excluded")).unwrap();
     std::fs::write(
         source_path.join("excluded/ignored.txt"),
@@ -133,7 +139,7 @@ async fn native_media_controls_share_the_main_contract_and_remote_permissions() 
     let configured = native.execute(Request::new(
         "mutation($id:ID!,$dirs:[String!]!,$excluded:[String!]!){setFileIndexVolume(id:$id,indexMode:ALLOWLIST,includedDirs:$dirs,excludedDirs:$excluded)}"
     ).variables(plain_graphql::Variables::from_json(plain_libs::serde_json::json!({
-        "id":id,"dirs":[source_path.to_str().unwrap()],
+        "id":id,"dirs":[source_path.join("included").to_str().unwrap()],
         "excluded":[source_path.join("excluded").to_str().unwrap()]
     })))).await;
     assert!(configured.errors.is_empty(), "{:?}", configured.errors);

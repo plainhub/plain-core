@@ -169,7 +169,7 @@ fn cancellation_and_invalid_input_preserve_the_reserved_destination() {
     fs::write(&source, H264).unwrap();
     fs::write(&destination, b"reserved").unwrap();
     let error = transcode(&source, &destination, &AtomicBool::new(true)).unwrap_err();
-    assert!(error.to_string().contains("cancelled"));
+    assert!(error.to_string().contains("canceled"));
     assert_eq!(fs::read(&destination).unwrap(), b"reserved");
     fs::write(&source, b"invalid media").unwrap();
     assert!(transcode(&source, &destination, &AtomicBool::new(false)).is_err());

@@ -57,6 +57,13 @@ pub(crate) fn validate_content(content: &str) -> Result<()> {
     {
         bail!("invalid chat content envelope");
     }
+    match value["type"].as_str() {
+        Some("TEXT") if !value["value"]["text"].is_string() => bail!("invalid text content"),
+        Some("SHARE") => {
+            plain_libs::serde_json::from_value::<crate::features::chat::messages::share_card::Card>(value["value"].clone())?;
+        }
+        _ => {}
+    }
     if matches!(value["type"].as_str(), Some("FILES" | "IMAGES")) {
         let items = value["value"]["items"]
             .as_array()
@@ -94,25 +101,8 @@ fn validate_attachment(item: &plain_libs::serde_json::Value) -> Result<()> {
             bail!("invalid attachment {field}");
         }
     }
-    for field in ["durationMs", "duration", "legacyDurationSec"] {
-        if item
-            .get(field)
-            .is_some_and(|v| !v.is_null() && !v.as_i64().is_some_and(|n| n >= 0))
-        {
-            bail!("invalid attachment duration");
-        }
-    }
-    if item
-        .get("durationMs")
-        .is_none_or(plain_libs::serde_json::Value::is_null)
-        && ["duration", "legacyDurationSec"].iter().any(|field| {
-            item.get(field)
-                .and_then(plain_libs::serde_json::Value::as_i64)
-                .is_some_and(|n| n.checked_mul(1000).is_none())
-        })
-    {
-        bail!("invalid attachment duration");
-    }
+    crate::features::chat::messages::content::attachment_duration_ms(item)?;
+
     Ok(())
 }
 #[derive(serde::Deserialize)]

@@ -75,7 +75,7 @@ impl FeedEntry {
 
 #[derive(SimpleObject, Clone)]
 pub struct FeedEntryCount {
-    pub id: ID,
+    pub feed_id: ID,
     pub count: i32,
 }
 
@@ -120,6 +120,12 @@ pub struct FeedQuery;
 
 #[Object]
 impl FeedQuery {
+    fn export_feeds(&self, ctx: &Context<'_>) -> GqlResult<String> {
+        Ok(plain_rs::features::feeds::export_opml(
+            ctx.data::<Arc<Db>>()?,
+        )?)
+    }
+
     async fn fetch_feed_title(&self, ctx: &Context<'_>, url: String) -> GqlResult<String> {
         Ok(feeds::preview_title(ctx.data::<Arc<Db>>()?, &url).await?)
     }
@@ -142,7 +148,10 @@ impl FeedQuery {
         Ok(
             plain_rs::features::feeds::entry_counts(ctx.data::<Arc<Db>>()?)?
                 .into_iter()
-                .map(|(id, count)| FeedEntryCount { id: ID(id), count })
+                .map(|(feed_id, count)| FeedEntryCount {
+                    feed_id: ID(feed_id),
+                    count,
+                })
                 .collect(),
         )
     }
@@ -237,11 +246,6 @@ impl FeedMutation {
         Ok(true)
     }
 
-    fn export_feeds(&self, ctx: &Context<'_>) -> GqlResult<String> {
-        Ok(plain_rs::features::feeds::export_opml(
-            ctx.data::<Arc<Db>>()?,
-        )?)
-    }
 
     async fn delete_feed(&self, ctx: &Context<'_>, id: ID) -> GqlResult<bool> {
         Ok(sync_service(ctx)?.delete(id.as_str()).await?)

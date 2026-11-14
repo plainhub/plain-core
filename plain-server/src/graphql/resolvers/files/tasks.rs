@@ -77,9 +77,7 @@ impl FileTaskQuery {
         limit: i32,
     ) -> Result<Vec<FileTaskResult>> {
         let client_id = caller(ctx)?;
-        if offset < 0 || limit < 0 {
-            return Err("invalid pagination".into());
-        }
+        crate::graphql::resolvers::common::validate_pagination(offset, limit)?;
         let text = query.to_lowercase();
         Ok(ctx
             .data::<Arc<FileTasks>>()?

@@ -1,4 +1,4 @@
-use crate::features::prefs::settings::FileSortBy;
+use crate::features::prefs::settings::MediaSortBy;
 use crate::features::services::files::catalog::MediaCatalog;
 use crate::features::services::images::models::Runtime;
 use crate::features::services::images::status::ImageSearchStatusType;
@@ -11,7 +11,7 @@ fn enabled(models: &Runtime, text: &str) -> bool {
     !text.trim().is_empty() && models.snapshot().status.status == ImageSearchStatusType::Ready
 }
 
-fn sort_by(value: &str) -> Result<FileSortBy, String> {
+fn sort_by(value: &str) -> Result<MediaSortBy, String> {
     plain_libs::serde_json::from_value(Value::String(value.to_owned())).map_err(|error| error.to_string())
 }
 
@@ -20,7 +20,7 @@ async fn filename_rows(
     query: &str,
     offset: i32,
     limit: i32,
-    sort: FileSortBy,
+    sort: MediaSortBy,
 ) -> Result<Vec<Value>, String> {
     catalog
         .rows(

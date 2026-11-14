@@ -277,7 +277,7 @@ impl Confirmations {
                         .pairing
                         .remaining_ms(&ticket.target.device_id, &ticket.generation)
                         .is_some(),
-                "Pairing expired or cancelled"
+                "Pairing expired or canceled"
             );
             let response = match reply {
                 PairingReply::Reject(_) => {
@@ -342,7 +342,7 @@ impl Confirmations {
                     .pairing
                     .remaining_ms(&ticket.target.device_id, &ticket.generation)
                     .is_some(),
-            "Pairing expired or cancelled"
+            "Pairing expired or canceled"
         );
         let (_, facts) = pending
             .as_ref()

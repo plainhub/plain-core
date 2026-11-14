@@ -32,12 +32,12 @@ fn directory_round_trip_preserves_structure_bytes_and_modified_time() {
         .unwrap()
         .set_modified(std::time::UNIX_EPOCH + std::time::Duration::from_secs(1700000000))
         .unwrap();
-    let (_sender, stop, cancelled) = running_state();
+    let (_sender, stop, canceled) = running_state();
     let (packed, _) = pack_files(
         vec![source.to_string_lossy().into_owned()],
         directory.path().join("packed.zip"),
         &stop,
-        &cancelled,
+        &canceled,
     )
     .unwrap()
     .keep();
@@ -45,7 +45,7 @@ fn directory_round_trip_preserves_structure_bytes_and_modified_time() {
     assert!(zip.by_name("source/empty/").unwrap().is_dir());
     assert!(zip.by_name("source/nested/note.txt").unwrap().is_file());
     let (extracted, files) =
-        unpack_files(&packed, &directory.path().join("out"), &stop, &cancelled)
+        unpack_files(&packed, &directory.path().join("out"), &stop, &canceled)
             .unwrap()
             .keep();
     assert_eq!(files.len(), 1);
@@ -71,12 +71,12 @@ fn archive_destinations_never_overwrite_existing_files_or_directories() {
     std::fs::write(&file, b"source").unwrap();
     let target = directory.path().join("packed.zip");
     std::fs::write(&target, b"keep original").unwrap();
-    let (_sender, stop, cancelled) = running_state();
+    let (_sender, stop, canceled) = running_state();
     let (packed, _) = pack_files(
         vec![file.to_string_lossy().into_owned()],
         target.clone(),
         &stop,
-        &cancelled,
+        &canceled,
     )
     .unwrap()
     .keep();
@@ -85,7 +85,7 @@ fn archive_destinations_never_overwrite_existing_files_or_directories() {
     let target = directory.path().join("out");
     std::fs::create_dir(&target).unwrap();
     std::fs::write(target.join("keep"), b"existing").unwrap();
-    let (extracted, _) = unpack_files(&packed, &target, &stop, &cancelled)
+    let (extracted, _) = unpack_files(&packed, &target, &stop, &canceled)
         .unwrap()
         .keep();
     assert_eq!(extracted, directory.path().join("out (1)"));
@@ -98,8 +98,8 @@ fn traversal_is_rejected_before_creating_an_output_directory() {
     let source = directory.path().join("source.zip");
     archive(&source, "../escape.txt", b"bad");
     let target = directory.path().join("out");
-    let (_sender, stop, cancelled) = running_state();
-    assert!(unpack_files(&source, &target, &stop, &cancelled).is_err());
+    let (_sender, stop, canceled) = running_state();
+    assert!(unpack_files(&source, &target, &stop, &canceled).is_err());
     assert!(!target.exists());
     assert!(!directory.path().join("escape.txt").exists());
     assert_eq!(
@@ -121,9 +121,9 @@ fn corrupted_archive_removes_all_new_outputs() {
         .unwrap();
     bytes[offset] ^= 1;
     std::fs::write(&source, bytes).unwrap();
-    let (_sender, stop, cancelled) = running_state();
+    let (_sender, stop, canceled) = running_state();
     let target = directory.path().join("out");
-    assert!(unpack_files(&source, &target, &stop, &cancelled).is_err());
+    assert!(unpack_files(&source, &target, &stop, &canceled).is_err());
     assert!(!target.exists());
 }
 
@@ -140,14 +140,14 @@ fn cancellation_during_chunk_copy_removes_the_reserved_file() {
     }
     let directory = plain_libs::temporary::tempdir().unwrap();
     let path = directory.path().join("partial.zip");
-    let (_sender, stop, cancelled) = running_state();
+    let (_sender, stop, canceled) = running_state();
     let (output, mut file) = reserve(&path, false).unwrap();
     assert!(
         copy(
-            &mut Reader(&cancelled),
+            &mut Reader(&canceled),
             file.as_mut().unwrap(),
             &stop,
-            &cancelled
+            &canceled
         )
         .is_err()
     );
@@ -159,14 +159,14 @@ fn cancellation_during_chunk_copy_removes_the_reserved_file() {
 #[test]
 fn a_stopped_core_does_not_create_archive_outputs() {
     let directory = plain_libs::temporary::tempdir().unwrap();
-    let (sender, stop, cancelled) = running_state();
+    let (sender, stop, canceled) = running_state();
     sender.send_replace(true);
     assert!(
         pack_files(
             Vec::new(),
             directory.path().join("out.zip"),
             &stop,
-            &cancelled
+            &canceled
         )
         .is_err()
     );
@@ -180,12 +180,12 @@ fn an_archive_inside_its_source_uses_the_snapshot_before_output_creation() {
     std::fs::create_dir(&source).unwrap();
     std::fs::write(source.join("note.txt"), b"source bytes").unwrap();
     let target = source.join("packed.zip");
-    let (_sender, stop, cancelled) = running_state();
+    let (_sender, stop, canceled) = running_state();
     let (output, _) = pack_files(
         vec![source.to_string_lossy().into_owned()],
         target.clone(),
         &stop,
-        &cancelled,
+        &canceled,
     )
     .unwrap()
     .keep();
@@ -207,11 +207,11 @@ fn links_preserve_the_alias_name_and_can_reference_the_same_target_twice() {
     std::fs::write(real.join("note.txt"), b"linked bytes").unwrap();
     std::os::unix::fs::symlink(&real, source.join("one")).unwrap();
     std::os::unix::fs::symlink(&real, source.join("two")).unwrap();
-    let (_sender, stop, cancelled) = running_state();
+    let (_sender, stop, canceled) = running_state();
     let entries = collect_entries(
         vec![source.to_string_lossy().into_owned()],
         &stop,
-        &cancelled,
+        &canceled,
     )
     .unwrap();
     let paths = entries
@@ -225,7 +225,7 @@ fn links_preserve_the_alias_name_and_can_reference_the_same_target_twice() {
         entries,
         directory.path().join("packed.zip"),
         &stop,
-        &cancelled,
+        &canceled,
     )
     .unwrap();
     let mut archive = plain_libs::zip::ZipArchive::new(File::open(&output.path).unwrap()).unwrap();
@@ -248,12 +248,12 @@ fn a_directory_link_cycle_is_rejected_before_reserving_output() {
     std::fs::create_dir(&source).unwrap();
     std::os::unix::fs::symlink(&source, source.join("cycle")).unwrap();
     let target = directory.path().join("packed.zip");
-    let (_sender, stop, cancelled) = running_state();
+    let (_sender, stop, canceled) = running_state();
     let error = pack_files(
         vec![source.to_string_lossy().into_owned()],
         target.clone(),
         &stop,
-        &cancelled,
+        &canceled,
     )
     .err()
     .unwrap();
@@ -267,16 +267,16 @@ fn a_literal_backslash_filename_round_trips_on_filesystems_that_support_it() {
     let directory = plain_libs::temporary::tempdir().unwrap();
     let source = directory.path().join("note\\name.txt");
     std::fs::write(&source, b"literal filename").unwrap();
-    let (_sender, stop, cancelled) = running_state();
+    let (_sender, stop, canceled) = running_state();
     let (packed, _) = pack_files(
         vec![source.to_string_lossy().into_owned()],
         directory.path().join("packed.zip"),
         &stop,
-        &cancelled,
+        &canceled,
     )
     .unwrap()
     .keep();
-    let (output, _) = unpack_files(&packed, &directory.path().join("out"), &stop, &cancelled)
+    let (output, _) = unpack_files(&packed, &directory.path().join("out"), &stop, &canceled)
         .unwrap()
         .keep();
     assert_eq!(
@@ -343,8 +343,8 @@ fn special_entries_are_rejected_before_output_reservation() {
         let neighbor = directory.path().join("neighbor.txt");
         std::fs::write(&neighbor, b"preserved neighbor").unwrap();
         let target = directory.path().join("out");
-        let (_sender, stop, cancelled) = running_state();
-        let result = unpack_files(&source, &target, &stop, &cancelled);
+        let (_sender, stop, canceled) = running_state();
+        let result = unpack_files(&source, &target, &stop, &canceled);
         assert!(
             matches!(result, Err(ref error) if error == "Unsupported archive entry type"),
             "mode {mode:o}"
@@ -370,8 +370,8 @@ fn extraction_does_not_restore_privileged_archive_permissions() {
     bytes[central + 5] = 3;
     bytes[central + 38..central + 42].copy_from_slice(&(0o107777u32 << 16).to_le_bytes());
     std::fs::write(&source, bytes).unwrap();
-    let (_sender, stop, cancelled) = running_state();
-    let (output, _) = unpack_files(&source, &directory.path().join("out"), &stop, &cancelled)
+    let (_sender, stop, canceled) = running_state();
+    let (output, _) = unpack_files(&source, &directory.path().join("out"), &stop, &canceled)
         .unwrap()
         .keep();
     let file = output.join("entry");

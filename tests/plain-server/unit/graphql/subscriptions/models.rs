@@ -82,3 +82,29 @@ async fn clipboard_event_time_is_an_instant() {
     );
     assert!(schema.sdl().contains("time: Instant!"));
 }
+
+#[tokio::test]
+async fn feed_sync_change_uses_canceled_and_rejects_the_retired_field() {
+    struct Query;
+    #[plain_graphql::Object]
+    impl Query {
+        fn change(&self) -> FeedSyncChange {
+            plain_libs::serde_json::from_value(json!({"feedId":"fixture","canceled":true})).unwrap()
+        }
+    }
+    let schema = plain_graphql::Schema::build(
+        Query,
+        plain_graphql::EmptyMutation,
+        plain_graphql::EmptySubscription,
+    ).finish();
+    let response = schema.execute("{ change { feedId canceled } }").await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    assert_eq!(response.data.into_json().unwrap(), json!({"change":{"feedId":"fixture","canceled":true}}));
+    let response = schema.execute("{ change { cancelled } }").await;
+    assert_eq!(response.errors.len(), 1);
+    assert!(response.errors[0].message.contains("Unknown field"));
+    assert!(response.errors[0].message.contains("cancelled"));
+    let spec = plain_rs::infrastructure::protocols::graphql::events::EVENTS.iter()
+        .find(|spec| spec.field == "feedsFetched").unwrap();
+    assert_eq!(spec.selection, "{ feedId error canceled }");
+}

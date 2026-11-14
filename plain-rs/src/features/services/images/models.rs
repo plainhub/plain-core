@@ -58,7 +58,7 @@ pub struct Runtime {
     engine: Mutex<Option<Arc<plain_libs::ai_image_search::embedding::Engine>>>,
     task: Mutex<Option<tokio::task::JoinHandle<()>>>,
     operations: tokio::sync::Mutex<()>,
-    cancelled: AtomicBool,
+    canceled: AtomicBool,
     observing: AtomicBool,
     catalog_task: Mutex<Option<tokio::task::JoinHandle<()>>>,
     events: tokio::sync::broadcast::Sender<WsEvent>,
@@ -92,7 +92,7 @@ impl Runtime {
             engine: Mutex::new(None),
             task: Mutex::new(None),
             operations: tokio::sync::Mutex::new(()),
-            cancelled: AtomicBool::new(false),
+            canceled: AtomicBool::new(false),
             observing: AtomicBool::new(false),
             catalog_task: Mutex::new(None),
         })
@@ -232,7 +232,7 @@ impl Runtime {
         {
             return Ok(());
         }
-        self.cancelled.store(false, Ordering::Release);
+        self.canceled.store(false, Ordering::Release);
         let runtime = self.clone();
         *self.task.lock().unwrap() = Some(tokio::spawn(async move {
             if let Err(error) = runtime.load(selection).await {
@@ -288,8 +288,8 @@ impl Runtime {
         })
         .await
         .map_err(|e| e.to_string())??;
-        if self.cancelled.load(Ordering::Acquire) {
-            return Err("Model activation cancelled".into());
+        if self.canceled.load(Ordering::Acquire) {
+            return Err("Model activation canceled".into());
         }
         let previous = self.directory.join("previous");
         if source != active {
@@ -357,8 +357,8 @@ impl Runtime {
         let total = manifest.size();
         let mut downloaded = 0u64;
         for (asset, url) in crate::features::services::images::default_model::downloads(&manifest) {
-            if self.cancelled.load(Ordering::Acquire) {
-                return Err("Model download cancelled".into());
+            if self.canceled.load(Ordering::Acquire) {
+                return Err("Model download canceled".into());
             }
             let name = asset.name.as_str();
             let expected = asset.size;
@@ -375,8 +375,8 @@ impl Runtime {
                 .map_err(|e| e.to_string())?;
             let mut size = 0u64;
             while let Some(bytes) = response.chunk().await.map_err(|e| e.to_string())? {
-                if self.cancelled.load(Ordering::Acquire) {
-                    return Err("Model download cancelled".into());
+                if self.canceled.load(Ordering::Acquire) {
+                    return Err("Model download canceled".into());
                 }
                 file.write_all(&bytes).await.map_err(|e| e.to_string())?;
                 size += bytes.len() as u64;
@@ -451,7 +451,7 @@ impl Runtime {
             .map_err(|e| e.to_string())
     }
     async fn stop_task(&self) {
-        self.cancelled.store(true, Ordering::Release);
+        self.canceled.store(true, Ordering::Release);
         let task = self.task.lock().unwrap().take();
         if let Some(task) = task {
             let _ = task.await;

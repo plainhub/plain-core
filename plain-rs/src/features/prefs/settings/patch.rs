@@ -1,4 +1,4 @@
-use super::{DarkTheme, FileSortBy, MediaPlayMode};
+use super::{AudioSortBy, DarkTheme, DocSortBy, FileSortBy, ImageSortBy, MediaPlayMode, VideoSortBy};
 use serde::{Deserialize, Serialize};
 use plain_libs::serde_json::Value;
 
@@ -39,10 +39,10 @@ pub struct SettingsPatch {
     pub pomodoro_settings: Option<Value>,
     pub app_home_features: Option<String>,
     pub launcher_shortcuts: Option<String>,
-    pub audio_sort_by: Option<FileSortBy>,
-    pub video_sort_by: Option<FileSortBy>,
-    pub image_sort_by: Option<FileSortBy>,
-    pub doc_sort_by: Option<FileSortBy>,
+    pub audio_sort_by: Option<AudioSortBy>,
+    pub video_sort_by: Option<VideoSortBy>,
+    pub image_sort_by: Option<ImageSortBy>,
+    pub doc_sort_by: Option<DocSortBy>,
     pub file_sort_by: Option<FileSortBy>,
     pub package_sort_by: Option<FileSortBy>,
 }

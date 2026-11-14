@@ -16,7 +16,6 @@ input NoteInput {
 extend type Mutation {
 	createNote(input: NoteInput!): Note!
 	deleteNotes(query: String!): ActionResult!
-	exportNotes(query: String!): String!
 	restoreNotes(query: String!): ActionResult!
 	saveFeedEntriesToNotes(query: String!): [ID!]!
 	trashNotes(query: String!): ActionResult!
@@ -24,6 +23,7 @@ extend type Mutation {
 }
 
 extend type Query {
+	exportNotes(query: String!): String!
 	note(id: ID!): Note
 	noteCount(query: String!): Int!
 	notes(query: String!, offset: Int!, limit: Int!): [Note!]!

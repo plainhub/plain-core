@@ -7,7 +7,7 @@ async fn peer_targets_require_prefix_before_effects() {
     let state = server.runtime_state();
     let content = json!({"type":"TEXT","value":{"text":"fixture"}}).to_string();
     let source = execute(&server, format!(
-        "mutation {{ sendChatItems(targets:[\"peer:local\"],content:{}) {{id}} }}", json!(content)
+        "mutation {{ sendChatItems(targets:[\"peer:local\"],content:{}) {{id}} }}", content_input(&content)
     )).await;
     let id = json!(source["sendChatItems"][0]["id"].as_str().unwrap());
     let folder = json!(dir.path().to_string_lossy());
@@ -16,7 +16,7 @@ async fn peer_targets_require_prefix_before_effects() {
         let targets = json!(["peer:local", raw]);
         let documents = [
             format!("{{ chatItems(target:{target},query:\"\",offset:0,limit:10) {{id}} }}"),
-            format!("mutation {{ sendChatItems(targets:{targets},content:{}) {{id}} }}", json!(content)),
+            format!("mutation {{ sendChatItems(targets:{targets},content:{}) {{id}} }}", content_input(&content)),
             format!("mutation {{ forwardChatItems(id:{id},targets:{targets}) {{id}} }}"),
             format!("mutation {{ sendShare(shareId:\"missing\",targets:{targets}) {{id}} }}"),
             format!("mutation {{ sendFolderShare(path:{folder},name:\"fixture\",targets:{targets}) {{id}} }}"),

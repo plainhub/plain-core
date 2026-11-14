@@ -11,10 +11,10 @@ pub async fn receive(
     state: &CoreRuntime,
     peer_id: &str,
     identity: &Identity,
-    cancelled: &watch::Receiver<bool>,
+    canceled: &watch::Receiver<bool>,
 ) -> Result<()> {
     if !crate::features::clipboard::sync::receives(&state.prefs, peer_id)?
-        || !current_peer(state, peer_id, identity, cancelled).await?
+        || !current_peer(state, peer_id, identity, canceled).await?
     {
         return Ok(());
     }
@@ -43,7 +43,7 @@ pub async fn receive(
     ensure!(items.len() <= 1, "Invalid clipboard snapshot");
     if let Some(item) = items.first() {
         if !state.host.is_current(host_generation)
-            || !current_peer(state, peer_id, identity, cancelled).await?
+            || !current_peer(state, peer_id, identity, canceled).await?
             || !crate::features::clipboard::sync::prepare(
                 &state.prefs,
                 state.store.get()?.as_ref(),
@@ -81,12 +81,12 @@ pub async fn send(
     state: &CoreRuntime,
     peer_id: &str,
     identity: &Identity,
-    cancelled: &watch::Receiver<bool>,
+    canceled: &watch::Receiver<bool>,
     text: &str,
     access: &watch::Receiver<Option<bool>>,
 ) -> Result<bool> {
     crate::features::clipboard::validate_text(text).map_err(plain_libs::anyhow::Error::msg)?;
-    if !current_peer(state, peer_id, identity, cancelled).await?
+    if !current_peer(state, peer_id, identity, canceled).await?
         || *access.borrow() != Some(true)
         || !crate::features::clipboard::sync::sends(&state.prefs, peer_id)?
         || !crate::features::services::device::access::is_enabled(&state.prefs, &[AccessFeature::Clipboard])
@@ -106,14 +106,14 @@ pub async fn send(
         data["setClipboard"].as_bool() == Some(true),
         "Remote clipboard write failed"
     );
-    current_peer(state, peer_id, identity, cancelled).await
+    current_peer(state, peer_id, identity, canceled).await
 }
 
 pub async fn follow(
     state: &CoreRuntime,
     peer_id: &str,
     identity: &Identity,
-    cancelled: &watch::Receiver<bool>,
+    canceled: &watch::Receiver<bool>,
     changed: &tokio::sync::Notify,
     mut access: watch::Receiver<Option<bool>>,
 ) {
@@ -121,7 +121,7 @@ pub async fn follow(
     let mut preferences = state.events.subscribe();
     let mut host_changes = state.host.connection_changes();
     let mut stop = state.stop.clone();
-    let mut cancellation = cancelled.clone();
+    let mut cancellation = canceled.clone();
     let mut receiving =
         crate::features::clipboard::sync::receives(&state.prefs, peer_id).unwrap_or(false);
     let mut pending: Option<std::sync::Arc<crate::features::services::clipboard::Capture>> = None;
@@ -169,7 +169,7 @@ pub async fn follow(
             _ = changed.notified() => refresh = true,
             _ = tokio::time::sleep_until(retry_at), if pending.is_some() && can_push => {
                 let capture = pending.take().unwrap();
-                if let Err(error) = send(state, peer_id, identity, cancelled, &capture.text, &access).await {
+                if let Err(error) = send(state, peer_id, identity, canceled, &capture.text, &access).await {
                     log::debug!("Peer clipboard send failed: {error}");
                     pending = Some(capture);
                     retry_at = tokio::time::Instant::now() + delay;
@@ -178,7 +178,7 @@ pub async fn follow(
             },
         }
         if refresh {
-            if let Err(error) = receive(state, peer_id, identity, cancelled).await {
+            if let Err(error) = receive(state, peer_id, identity, canceled).await {
                 log::debug!("Peer clipboard receive failed: {error}");
             }
         }

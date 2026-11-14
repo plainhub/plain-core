@@ -311,7 +311,7 @@ async fn managed_proxy_keeps_the_browser_session_and_streams_a_peer_range() {
     let chunks = http_request::encrypt(
         &key,
         "/graphql",
-        r#"{"query":"{ uploadedChunks(fileId: \"fixture\") }"}"#,
+        r#"{"query":"{ uploadedChunks(fileId: \"fixture\"){index sizeBytes} }"}"#,
     )
     .unwrap();
     let response = post(chunks.clone()).send().await.unwrap();
@@ -321,7 +321,7 @@ async fn managed_proxy_keeps_the_browser_session_and_streams_a_peer_range() {
     assert_eq!(
         plain_libs::serde_json::from_slice::<plain_libs::serde_json::Value>(&plaintext).unwrap()["data"]
             ["uploadedChunks"],
-        json!([format!("0:{}", data.len())])
+        json!([{"index":0,"sizeBytes":data.len()}])
     );
     let clean = http_request::encrypt(
         &key,
@@ -421,7 +421,7 @@ async fn managed_proxy_keeps_the_browser_session_and_streams_a_peer_range() {
     let chunks = http_request::encrypt(
         &key,
         "/graphql",
-        r#"{"query":"{ uploadedChunks(fileId: \"fixture\") }"}"#,
+        r#"{"query":"{ uploadedChunks(fileId: \"fixture\"){index sizeBytes} }"}"#,
     )
     .unwrap();
     let response = post(chunks.clone()).send().await.unwrap();

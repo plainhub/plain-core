@@ -98,7 +98,7 @@ async fn host_errors_are_visible_and_release_the_engine() {
     task.abort();
 }
 #[tokio::test]
-async fn cancelled_generation_cannot_resurrect_deleted_embeddings() {
+async fn canceled_generation_cannot_resurrect_deleted_embeddings() {
     let (service, task, _) = setup(false);
     let control = IndexControl {
         generation: 0,

@@ -128,9 +128,9 @@ async fn encrypted_app_observations_work_without_notification_support_and_cannot
             )
             .unwrap()
     });
-    let (_cancel, cancelled) = watch::channel(false);
+    let (_cancel, canceled) = watch::channel(false);
     let mut events = state.events.subscribe();
-    let pending = refresh(&state, &peer.id, &identity, &cancelled);
+    let pending = refresh(&state, &peer.id, &identity, &canceled);
     tokio::pin!(pending);
     tokio::select! {
         _=&mut pending=>panic!("Observation must wait for permission sample"),
@@ -156,7 +156,7 @@ async fn encrypted_app_observations_work_without_notification_support_and_cannot
             )
             .unwrap()
     });
-    let snapshot = refresh(&state, &peer.id, &identity, &cancelled)
+    let snapshot = refresh(&state, &peer.id, &identity, &canceled)
         .await
         .unwrap()
         .unwrap();
@@ -175,7 +175,7 @@ async fn encrypted_app_observations_work_without_notification_support_and_cannot
         events.try_recv().unwrap().event_type,
         plain_rs::features::chat::events::WS_PEER_UPDATED
     );
-    refresh(&state, &peer.id, &identity, &cancelled)
+    refresh(&state, &peer.id, &identity, &canceled)
         .await
         .unwrap()
         .unwrap();

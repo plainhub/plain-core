@@ -47,28 +47,28 @@ async fn fixture() -> (
 #[tokio::test]
 async fn observed_names_update_only_the_current_peer_and_identical_or_empty_names_do_not_write() {
     let (_directory, core, state, before, identity) = fixture().await;
-    let (_cancel, cancelled) = watch::channel(false);
+    let (_cancel, canceled) = watch::channel(false);
     let mut events = state.events.subscribe();
     state.db.with_conn(|connection| {
         let writes = connection.total_changes();
         assert!(
             apply(
-                connection, &state, &before.id, &identity, &cancelled, "Original"
+                connection, &state, &before.id, &identity, &canceled, "Original"
             )
             .unwrap()
         );
-        assert!(apply(connection, &state, &before.id, &identity, &cancelled, "").unwrap());
+        assert!(apply(connection, &state, &before.id, &identity, &canceled, "").unwrap());
         assert_eq!(connection.total_changes(), writes);
         assert!(
             apply(
-                connection, &state, &before.id, &identity, &cancelled, "Renamed"
+                connection, &state, &before.id, &identity, &canceled, "Renamed"
             )
             .unwrap()
         );
         assert_eq!(connection.total_changes(), writes + 1);
         assert!(
             apply(
-                connection, &state, &before.id, &identity, &cancelled, "Renamed"
+                connection, &state, &before.id, &identity, &canceled, "Renamed"
             )
             .unwrap()
         );
@@ -112,7 +112,7 @@ async fn observed_names_update_only_the_current_peer_and_identical_or_empty_name
 #[tokio::test]
 async fn cancellation_credentials_and_address_changes_reject_stale_observations_without_writes() {
     let (_directory, core, state, peer, identity) = fixture().await;
-    let (cancel, cancelled) = watch::channel(false);
+    let (cancel, canceled) = watch::channel(false);
     let mut events = state.events.subscribe();
     for field in ["token", "ip", "port", "cancel"] {
         let mut old = identity.clone();
@@ -126,7 +126,7 @@ async fn cancellation_credentials_and_address_changes_reject_stale_observations_
         }
         state.db.with_conn(|connection| {
             let before = connection.total_changes();
-            assert!(!apply(connection, &state, &peer.id, &old, &cancelled, "Stale").unwrap());
+            assert!(!apply(connection, &state, &peer.id, &old, &canceled, "Stale").unwrap());
             assert_eq!(connection.total_changes(), before);
         });
         cancel.send_replace(false);
@@ -140,7 +140,7 @@ async fn cancellation_credentials_and_address_changes_reject_stale_observations_
     state.db.with_conn(|connection| {
         assert!(
             !apply(
-                connection, &state, &peer.id, &identity, &cancelled, "Stopped"
+                connection, &state, &peer.id, &identity, &canceled, "Stopped"
             )
             .unwrap()
         )

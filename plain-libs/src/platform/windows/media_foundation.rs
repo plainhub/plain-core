@@ -14,10 +14,10 @@ struct Stream {
     finished: bool,
 }
 
-pub fn transcode(source: &Path, destination: &Path, cancelled: &AtomicBool) -> Result<bool> {
+pub fn transcode(source: &Path, destination: &Path, canceled: &AtomicBool) -> Result<bool> {
     ensure!(
-        !cancelled.load(Ordering::Acquire),
-        "Video conversion cancelled"
+        !canceled.load(Ordering::Acquire),
+        "Video conversion canceled"
     );
     let _session = Session::start()?;
     let attributes = create_attributes()?;
@@ -95,8 +95,8 @@ pub fn transcode(source: &Path, destination: &Path, cancelled: &AtomicBool) -> R
     writer.begin()?;
     while streams.iter().any(|stream| !stream.finished) {
         ensure!(
-            !cancelled.load(Ordering::Acquire),
-            "Video conversion cancelled"
+            !canceled.load(Ordering::Acquire),
+            "Video conversion canceled"
         );
         let (index, flags, timestamp, sample) = reader.read_sample()?;
         ensure!(flags & SOURCE_ERROR == 0, "Media Foundation source failed");
@@ -119,8 +119,8 @@ pub fn transcode(source: &Path, destination: &Path, cancelled: &AtomicBool) -> R
         }
     }
     ensure!(
-        !cancelled.load(Ordering::Acquire),
-        "Video conversion cancelled"
+        !canceled.load(Ordering::Acquire),
+        "Video conversion canceled"
     );
     writer.finish()?;
     Ok(true)

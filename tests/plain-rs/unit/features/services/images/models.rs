@@ -657,7 +657,7 @@ async fn semantic_search_pages_all_matches_and_filters_before_pagination() {
             let count = request["method"] == "systemMediaCount";
             assert!(count || request["method"] == "systemMediaRows");
             let sort = if count {
-                crate::features::prefs::settings::FileSortBy::NameAsc
+                crate::features::prefs::settings::MediaSortBy::NameAsc
             } else {
                 plain_libs::serde_json::from_value(params["sortBy"].clone()).unwrap()
             };

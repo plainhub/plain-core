@@ -6,7 +6,7 @@ use plain_graphql::{Context, Object, SimpleObject};
 use plain_rs::features::enums::DataType;
 use plain_rs::features::media::audio::queue as domain;
 use plain_rs::features::media::audio::queue::AudioTrack;
-use plain_rs::features::prefs::settings::FileSortBy;
+use plain_rs::features::prefs::settings::AudioSortBy;
 use plain_rs::features::services::audio::host::Audio as AudioService;
 use plain_rs::infrastructure::db::Playlist;
 use plain_rs::infrastructure::host::bridge::Host;
@@ -181,7 +181,7 @@ impl AudioQuery {
         query: String,
         offset: i32,
         limit: i32,
-        sort_by: FileSortBy,
+        sort_by: AudioSortBy,
     ) -> plain_graphql::Result<Vec<Audio>> {
         public_gate::require(ctx, prefs(ctx), &[FEATURE])?;
         let items = crate::graphql::types::facts::rows(
@@ -403,7 +403,7 @@ impl AudioMutation {
         &self,
         ctx: &Context<'_>,
         query: String,
-        sort_by: FileSortBy,
+        sort_by: AudioSortBy,
         shuffle: bool,
     ) -> plain_graphql::Result<Option<AudioItem>> {
         public_gate::require(ctx, prefs(ctx), &[FEATURE])?;
@@ -614,7 +614,7 @@ fn notify_playback(ctx: &Context<'_>) -> plain_graphql::Result<()> {
 pub(crate) async fn search_tracks(
     ctx: &Context<'_>,
     query: &str,
-    sort_by: FileSortBy,
+    sort_by: AudioSortBy,
 ) -> plain_graphql::Result<Vec<AudioTrack>> {
     if query.trim().is_empty() {
         return Err(plain_graphql::Error::new("bulk_query_required"));
@@ -633,7 +633,7 @@ pub(crate) async fn search_tracks(
             ctx,
             DataType::Audio,
             query.to_owned(),
-            sort_by,
+            sort_by.into(),
             offset,
             500,
         )
@@ -754,7 +754,7 @@ pub(crate) fn audio(ctx: &Context<'_>) -> plain_graphql::Result<AudioService> {
     })
 }
 
-fn library_sort(ctx: &Context<'_>) -> plain_graphql::Result<FileSortBy> {
+fn library_sort(ctx: &Context<'_>) -> plain_graphql::Result<AudioSortBy> {
     Ok(plain_rs::features::prefs::settings::snapshot(prefs(ctx))?.audio_sort_by)
 }
 

@@ -119,7 +119,7 @@ async fn native_peer_requests_reject_invalid_target_scope_and_size_before_creati
 }
 
 #[tokio::test]
-async fn cancelling_an_owner_interrupts_pending_route_resolution() {
+async fn canceling_an_owner_interrupts_pending_route_resolution() {
     let dir = plain_libs::temporary::tempdir().unwrap();
     let server = start(dir.path(), "local");
     let state = server.runtime_state();

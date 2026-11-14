@@ -32,7 +32,7 @@ fn visited(root: &Path) -> Vec<String> {
     names
 }
 
-fn is_cancelled_error(error: &crate::anyhow::Error) -> bool {
+fn is_canceled_error(error: &crate::anyhow::Error) -> bool {
     error
         .downcast_ref::<std::io::Error>()
         .is_some_and(|io_error| io_error.kind() == std::io::ErrorKind::Interrupted)
@@ -150,7 +150,7 @@ fn a_visit_error_stops_the_walk_and_surfaces() {
 }
 
 #[test]
-fn cancelling_before_the_root_stops_every_visit() {
+fn canceling_before_the_root_stops_every_visit() {
     let dir = crate::temporary::tempdir().unwrap();
     let root = dir.path();
     write_file(&root.join("one.txt"), "1");
@@ -167,12 +167,12 @@ fn cancelling_before_the_root_stops_every_visit() {
     )
     .unwrap_err();
 
-    assert!(is_cancelled_error(&error));
+    assert!(is_canceled_error(&error));
     assert!(seen.is_empty());
 }
 
 #[test]
-fn cancelling_during_the_walk_stops_every_further_visit() {
+fn canceling_during_the_walk_stops_every_further_visit() {
     let dir = crate::temporary::tempdir().unwrap();
     let root = dir.path();
     for index in 0..8 {
@@ -193,7 +193,7 @@ fn cancelling_during_the_walk_stops_every_further_visit() {
     )
     .unwrap_err();
 
-    assert!(is_cancelled_error(&error));
+    assert!(is_canceled_error(&error));
     assert_eq!(seen.len(), 2);
 }
 

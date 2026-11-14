@@ -16,7 +16,10 @@ impl UploadChunks {
         &self.directory
     }
 
-    pub async fn list(&self, id: &str) -> Result<Vec<String>, String> {
+    pub async fn list(
+        &self,
+        id: &str,
+    ) -> Result<Vec<crate::features::files::uploads::UploadedChunk>, String> {
         crate::features::files::uploads::list(&self.directory, id)
             .await
             .map_err(|error| error.to_string())

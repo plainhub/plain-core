@@ -1,4 +1,4 @@
-use super::{DarkTheme, FileSortBy, MediaPlayMode};
+use super::{AudioSortBy, DarkTheme, DocSortBy, FileSortBy, ImageSortBy, MediaPlayMode, VideoSortBy};
 use serde::{Deserialize, Serialize};
 use plain_libs::serde_json::Value;
 
@@ -39,10 +39,10 @@ pub struct Settings {
     pub pomodoro_settings: Value,
     pub app_home_features: String,
     pub launcher_shortcuts: String,
-    pub audio_sort_by: FileSortBy,
-    pub video_sort_by: FileSortBy,
-    pub image_sort_by: FileSortBy,
-    pub doc_sort_by: FileSortBy,
+    pub audio_sort_by: AudioSortBy,
+    pub video_sort_by: VideoSortBy,
+    pub image_sort_by: ImageSortBy,
+    pub doc_sort_by: DocSortBy,
     pub file_sort_by: FileSortBy,
     pub package_sort_by: FileSortBy,
 }
@@ -82,10 +82,10 @@ impl Default for Settings {
             pomodoro_settings: plain_libs::serde_json::json!({"workDurationMin":25,"shortBreakDurationMin":5,"longBreakDurationMin":15,"pomodorosBeforeLongBreak":4,"showNotification":true,"playSoundOnComplete":true,"soundPath":"","originalSoundName":""}),
             app_home_features: "IMAGES|VIDEOS|AUDIO|DOCS|FILES|NOTES|FEEDS".into(),
             launcher_shortcuts: "NOTES|DOCS|FEEDS|POMODORO_TIMER".into(),
-            audio_sort_by: FileSortBy::DateDesc,
-            video_sort_by: FileSortBy::TakenAtDesc,
-            image_sort_by: FileSortBy::TakenAtDesc,
-            doc_sort_by: FileSortBy::DateDesc,
+            audio_sort_by: AudioSortBy::UpdatedAtDesc,
+            video_sort_by: VideoSortBy::TakenAtDesc,
+            image_sort_by: ImageSortBy::TakenAtDesc,
+            doc_sort_by: DocSortBy::UpdatedAtDesc,
             file_sort_by: FileSortBy::NameAsc,
             package_sort_by: FileSortBy::NameAsc,
         }

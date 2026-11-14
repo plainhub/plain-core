@@ -107,7 +107,7 @@ pub async fn cancel(state: &CoreRuntime, peer_id: &str) -> Result<bool> {
     } else {
         pairing_runtime::event(
             state,
-            crate::features::chat::events::WS_PAIRING_CANCELLED,
+            crate::features::chat::events::WS_PAIRING_CANCELED,
             plain_libs::serde_json::json!({"deviceId":peer_id,"deviceName":""}),
         );
     }
@@ -143,7 +143,7 @@ pub async fn start(
     } else {
         None
     };
-    let mut cancelled = {
+    let mut canceled = {
         let _commit = state.pairing_runtime.commit.lock().unwrap();
         state.pairing.cancel(&peer_id, None);
         state.pairing_runtime.attempts.begin(&peer_id, mode)?
@@ -200,7 +200,7 @@ pub async fn start(
         };
         let result = tokio::select! { biased;
             _ = scope_closed => { let _ = cancel(&state, &peer_id).await; return; },
-            _ = cancelled.changed() => return,
+            _ = canceled.changed() => return,
             _ = stop.changed() => Err(plain_libs::anyhow::anyhow!("Core stopped")),
             result = tokio::time::timeout(deadline, work) => result.unwrap_or_else(|_| Err(plain_libs::anyhow::anyhow!("Pairing timed out"))),
         };

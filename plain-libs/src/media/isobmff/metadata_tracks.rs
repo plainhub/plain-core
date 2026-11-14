@@ -1,4 +1,4 @@
-use super::{atoms, child, header, payload, u32_at, rewrite::{check_cancelled, copy}};
+use super::{atoms, child, header, payload, u32_at, rewrite::{check_canceled, copy}};
 use std::{
     collections::HashSet,
     io::{self, Cursor, Read, Seek, SeekFrom, Write},
@@ -130,13 +130,13 @@ fn retire_random_access_tracks(bytes: &mut [u8], dropped: &HashSet<u32>) -> io::
 pub fn remove_mebx_tracks(
     reader: &mut (impl Read + Seek),
     writer: &mut (impl Write + Seek),
-    cancelled: &AtomicBool,
+    canceled: &AtomicBool,
 ) -> io::Result<bool> {
     let length = reader.seek(SeekFrom::End(0))?;
     let mut offset = 0;
     let mut movie = None;
     while offset < length {
-        check_cancelled(cancelled)?;
+        check_canceled(canceled)?;
         let (kind, start, end) = required(header(reader, offset, length))?;
         if &kind == b"moov" {
             if movie.is_some() {
@@ -154,7 +154,7 @@ pub fn remove_mebx_tracks(
     writer.seek(SeekFrom::Start(0))?;
     offset = 0;
     while offset < length {
-        check_cancelled(cancelled)?;
+        check_canceled(canceled)?;
         let (kind, start, end) = required(header(reader, offset, length))?;
         let rewritten = match &kind {
             b"moov" => Some(std::mem::take(&mut movie)),
@@ -181,7 +181,7 @@ pub fn remove_mebx_tracks(
                         end: bytes.len(),
                     };
                     retire(&mut bytes, &span);
-                    check_cancelled(cancelled)?;
+                    check_canceled(canceled)?;
                     writer.write_all(&bytes)?;
                     offset = end;
                     continue;
@@ -196,9 +196,9 @@ pub fn remove_mebx_tracks(
         } else {
             end - offset
         };
-        copy(reader, writer, copy_length, cancelled)?;
+        copy(reader, writer, copy_length, canceled)?;
         if let Some(bytes) = rewritten {
-            check_cancelled(cancelled)?;
+            check_canceled(canceled)?;
             writer.write_all(&bytes)?;
         }
         offset = end;

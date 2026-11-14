@@ -78,7 +78,7 @@ fn background_failure_cancellation_drop_and_close_preserve_the_rebuild_result() 
                 assert_eq!(writes.load(Ordering::SeqCst), 0);
                 assert_eq!(
                     reconciliation.finish(Ok(())).unwrap().status,
-                    Status::Cancelled
+                    Status::Canceled
                 );
             }
             "drop" => drop(reconciliation),
@@ -108,11 +108,11 @@ fn reconciliation_without_a_rebuild_has_no_home_progress_and_cannot_replace_a_pa
     assert_eq!(scans.snapshot().unwrap().unwrap().status, Status::Paused);
     scans.cancel().unwrap();
     let stopped = rebuild.finish(Ok(())).unwrap();
-    assert_eq!(stopped.status, Status::Cancelled);
+    assert_eq!(stopped.status, Status::Canceled);
     let background = scans.begin_discovery(Purpose::Reconcile).unwrap();
     background.finish(Ok(())).unwrap();
     assert_eq!(scans.snapshot().unwrap().unwrap().id, stopped.id);
-    assert_eq!(scans.snapshot().unwrap().unwrap().status, Status::Cancelled);
+    assert_eq!(scans.snapshot().unwrap().unwrap().status, Status::Canceled);
 }
 
 #[test]
@@ -127,7 +127,7 @@ fn cancellation_is_a_commit_barrier_and_busy_or_stale_sessions_do_not_change_job
             Ok(())
         })
         .unwrap();
-    assert_eq!(scans.cancel().unwrap().unwrap().status, Status::Cancelling);
+    assert_eq!(scans.cancel().unwrap().unwrap().status, Status::Canceling);
     assert!(
         session
             .record(|| {
@@ -136,9 +136,9 @@ fn cancellation_is_a_commit_barrier_and_busy_or_stale_sessions_do_not_change_job
             })
             .is_err()
     );
-    let cancelled = session.finish(Ok(())).unwrap();
-    assert_eq!(cancelled.status, Status::Cancelled);
-    assert_eq!(cancelled.processed_files, 1);
+    let canceled = session.finish(Ok(())).unwrap();
+    assert_eq!(canceled.status, Status::Canceled);
+    assert_eq!(canceled.processed_files, 1);
     assert_eq!(writes.load(Ordering::SeqCst), 1);
     let replacement = scans.begin(1).unwrap();
     let replacement_id = scans.snapshot().unwrap().unwrap().id;
@@ -146,7 +146,7 @@ fn cancellation_is_a_commit_barrier_and_busy_or_stale_sessions_do_not_change_job
     assert_eq!(scans.snapshot().unwrap().unwrap().id, replacement_id);
     assert_eq!(scans.snapshot().unwrap().unwrap().status, Status::Running);
     drop(replacement);
-    assert_eq!(scans.snapshot().unwrap().unwrap().status, Status::Cancelled);
+    assert_eq!(scans.snapshot().unwrap().unwrap().status, Status::Canceled);
 }
 
 #[test]
@@ -165,7 +165,7 @@ fn failed_and_completed_jobs_are_distinct_and_close_prevents_new_commits_or_scan
     scans.close().unwrap();
     assert!(scans.begin(1).is_err());
     assert!(active.record(|| Ok(())).is_err());
-    assert_eq!(active.finish(Ok(())).unwrap().status, Status::Cancelled);
+    assert_eq!(active.finish(Ok(())).unwrap().status, Status::Canceled);
 }
 
 #[tokio::test]
@@ -244,7 +244,7 @@ async fn pause_is_a_commit_barrier_and_resume_keeps_the_same_session() {
 }
 
 #[tokio::test]
-async fn cancelling_or_closing_a_paused_scan_wakes_it_without_a_write() {
+async fn canceling_or_closing_a_paused_scan_wakes_it_without_a_write() {
     use std::future::Future;
     use std::task::{Context, Poll, Waker};
     for close in [false, true] {
@@ -265,7 +265,7 @@ async fn cancelling_or_closing_a_paused_scan_wakes_it_without_a_write() {
         }
         assert!(record.await.is_err());
         assert_eq!(writes.load(Ordering::SeqCst), 0);
-        assert_eq!(session.finish(Ok(())).unwrap().status, Status::Cancelled);
+        assert_eq!(session.finish(Ok(())).unwrap().status, Status::Canceled);
     }
 }
 
@@ -283,7 +283,7 @@ async fn background_session_is_reserved_before_running_and_shutdown_joins_it() {
                     started.send(()).unwrap();
                     let mut cancel = session.cancel.clone();
                     wait_stop(&mut cancel).await;
-                    session.finish(Err("cancelled".into())).unwrap();
+                    session.finish(Err("canceled".into())).unwrap();
                 })
             },
         )
@@ -293,7 +293,7 @@ async fn background_session_is_reserved_before_running_and_shutdown_joins_it() {
     running.await.unwrap();
     scans.close().unwrap();
     scans.wait_background().await.unwrap();
-    assert_eq!(scans.snapshot().unwrap().unwrap().status, Status::Cancelled);
+    assert_eq!(scans.snapshot().unwrap().unwrap().status, Status::Canceled);
     assert!(scans.begin_discovery(Purpose::Rebuild).is_err());
 }
 

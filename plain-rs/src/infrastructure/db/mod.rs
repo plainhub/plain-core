@@ -150,9 +150,9 @@ impl Db {
             .map_err(|_| std::io::Error::other("app file store lock poisoned"))
     }
 
-    pub fn backup_to(&self, path: &Path, cancelled: impl Fn() -> bool) -> Result<(), String> {
-        if cancelled() {
-            return Err("Backup cancelled".into());
+    pub fn backup_to(&self, path: &Path, canceled: impl Fn() -> bool) -> Result<(), String> {
+        if canceled() {
+            return Err("Backup canceled".into());
         }
         std::fs::OpenOptions::new()
             .write(true)
@@ -165,8 +165,8 @@ impl Db {
                 let backup = plain_libs::rusqlite::backup::Backup::new(source, &mut destination)
                     .map_err(|error| error.to_string())?;
                 loop {
-                    if cancelled() {
-                        return Err("Backup cancelled".into());
+                    if canceled() {
+                        return Err("Backup canceled".into());
                     }
                     match backup.step(128).map_err(|error| error.to_string())? {
                         plain_libs::rusqlite::backup::StepResult::Done => break,

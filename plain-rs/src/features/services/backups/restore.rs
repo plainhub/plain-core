@@ -157,9 +157,9 @@ fn stage_reader(
     source: impl Read + Seek,
     directory: &Path,
     stop: &watch::Receiver<bool>,
-    cancelled: &AtomicBool,
+    canceled: &AtomicBool,
 ) -> Result<(), String> {
-    running(stop, cancelled)?;
+    running(stop, canceled)?;
     let paths = crate::infrastructure::data_paths::DataPaths::new(directory);
     if exists(&paths.pending_restore())? {
         return Err("A restore is already pending".into());
@@ -174,7 +174,7 @@ fn stage_reader(
     let mut names = std::collections::HashSet::new();
     let mut entries = BTreeSet::new();
     for index in 0..zip.len() {
-        running(stop, cancelled)?;
+        running(stop, canceled)?;
         let mut entry = zip.by_index(index).map_err(|error| error.to_string())?;
         let name = relative(&entry.name().map_err(|error| error.to_string())?)?;
         if !names.insert(name.clone()) {
@@ -205,11 +205,11 @@ fn stage_reader(
                 .create_new(true)
                 .open(&target)
                 .map_err(|error| error.to_string())?;
-            copy(&mut entry, &mut output, stop, cancelled)?;
+            copy(&mut entry, &mut output, stop, canceled)?;
             output.sync_all().map_err(|error| error.to_string())?;
         }
     }
-    running(stop, cancelled)?;
+    running(stop, canceled)?;
     validate(&payload)?;
     sync_tree(&payload)?;
     std::fs::create_dir(staging.path().join("old")).map_err(|error| error.to_string())?;
@@ -234,7 +234,7 @@ fn stage_reader(
         .flush()
         .and_then(|_| marker.as_file().sync_all())
         .map_err(|error| error.to_string())?;
-    running(stop, cancelled)?;
+    running(stop, canceled)?;
     let mut publication = Publication {
         path: staging.keep(),
         committed: false,
@@ -358,15 +358,15 @@ pub async fn stage(
     if exists(&crate::infrastructure::data_paths::DataPaths::new(&directory).pending_restore())? {
         return Err("A restore is already pending".into());
     }
-    let cancelled = cancel.0.clone();
+    let canceled = cancel.0.clone();
     let stopped = stop.clone();
     let preparation = crate::features::services::files::input::read_source(
         &resources,
         &cache,
         &path,
-        move |source| stage_reader(source, &directory, &stopped, &cancelled),
+        move |source| stage_reader(source, &directory, &stopped, &canceled),
     );
-    tokio::select! { _=stop.changed()=>Err("Restore cancelled".into()), result=preparation=>result }
+    tokio::select! { _=stop.changed()=>Err("Restore canceled".into()), result=preparation=>result }
 }
 
 #[cfg(test)]

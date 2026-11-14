@@ -214,12 +214,12 @@ async fn cancellation_retains_the_temporary_output_until_the_worker_exits() {
     let (entered, entry) = tokio::sync::oneshot::channel();
     let (release, resume) = std::sync::mpsc::channel();
     let (finished, exit) = tokio::sync::oneshot::channel();
-    let worker = tokio::spawn(media_task(move |cancelled| {
+    let worker = tokio::spawn(media_task(move |canceled| {
         entered.send(()).unwrap();
         resume
             .recv_timeout(std::time::Duration::from_secs(5))
             .unwrap();
-        assert!(cancelled.load(Ordering::Acquire));
+        assert!(canceled.load(Ordering::Acquire));
         std::fs::write(&output.0, b"last native write")?;
         drop(output);
         finished.send(()).unwrap();

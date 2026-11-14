@@ -271,7 +271,7 @@ impl FileTasks {
         src: String,
         directory: String,
         name: String,
-    ) -> Result<Option<String>> {
+    ) -> Result<String> {
         let directory = named_directory(&directory, &name)?;
         let src = plain_libs::utils::file_uri::local_path(&src).map_err(plain_libs::anyhow::Error::msg)?;
         let destination = directory.join(name);
@@ -290,13 +290,14 @@ impl FileTasks {
                 }],
             )
             .await?;
-        Ok(if task.status == FileTaskStatus::Done {
-            task.completed_ops
-                .first()
-                .map(|operation| operation.dst.clone())
-        } else {
-            None
-        })
+        if task.status == FileTaskStatus::Error {
+            bail!(task.error);
+        }
+        task.completed_ops
+            .into_iter()
+            .next()
+            .map(|operation| operation.dst)
+            .ok_or_else(|| anyhow!("copy task completed without a destination path"))
     }
     pub async fn list(&self, client_id: String) -> Result<Vec<FileTask>> {
         let service = self.service()?;

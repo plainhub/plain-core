@@ -219,7 +219,7 @@ async fn native_upload_chunks_use_the_main_identity_key_and_the_owned_chunk_dire
     assert_eq!(response.status(), 400);
     assert_eq!(
         state.upload_chunks.list("fixture").await.unwrap(),
-        vec![format!("0:{}", data.len())]
+        vec![plain_rs::features::files::uploads::UploadedChunk { index: 0, size_bytes: data.len() as u64 }]
     );
     let response = multipart_upload(
         &core,
@@ -236,11 +236,11 @@ async fn native_upload_chunks_use_the_main_identity_key_and_the_owned_chunk_dire
     assert_eq!(response.text().await.unwrap(), "0:0");
     assert_eq!(
         state.upload_chunks.list("empty").await.unwrap(),
-        vec!["0:0"]
+        vec![plain_rs::features::files::uploads::UploadedChunk { index: 0, size_bytes: 0 }]
     );
     assert_eq!(
         state.upload_chunks.list("fixture").await.unwrap(),
-        vec![format!("0:{}", data.len())]
+        vec![plain_rs::features::files::uploads::UploadedChunk { index: 0, size_bytes: data.len() as u64 }]
     );
     core.shutdown().await;
 }

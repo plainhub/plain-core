@@ -35,7 +35,7 @@ async fn scoped_native_peer_uploads_preserve_empty_small_and_multiple_window_byt
         assert_eq!(writers.finish(&scope, &handle).await.unwrap(), size as u64);
         assert_eq!(
             remote.upload_chunks.list(&id).await.unwrap(),
-            vec![format!("0:{size}")]
+            vec![plain_rs::features::files::uploads::UploadedChunk { index: 0, size_bytes: size as u64 }]
         );
         let chunk = remote.upload_chunks.directory().join(&id).join("chunk_0");
         assert_eq!(std::fs::read(chunk).unwrap(), bytes);
@@ -363,7 +363,7 @@ async fn peer_upload_uses_progress_timeout_instead_of_inherited_header_deadline(
             .list("slow")
             .await
             .unwrap(),
-        vec!["0:0"]
+        vec![plain_rs::features::files::uploads::UploadedChunk { index: 0, size_bytes: 0 }]
     );
     fixture.stop().await;
 }

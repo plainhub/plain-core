@@ -103,7 +103,7 @@ pub(super) fn transcode_with_audio(
     while !encoder_eos {
         ensure!(
             !cancel.load(std::sync::atomic::Ordering::Acquire),
-            "Video conversion cancelled"
+            "Video conversion canceled"
         );
         let mut progress = false;
         while !video_eos {
@@ -159,7 +159,7 @@ pub(super) fn transcode_with_audio(
         while !encoder_eos {
             ensure!(
                 !cancel.load(std::sync::atomic::Ordering::Acquire),
-                "Video conversion cancelled"
+                "Video conversion canceled"
             );
             let Some((index, info)) = encoder.output(timeout)? else {
                 break;

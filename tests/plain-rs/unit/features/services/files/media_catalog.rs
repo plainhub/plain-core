@@ -39,7 +39,7 @@ fn rows_and_count_share_literal_filters_and_stable_pagination() {
             &db,
             DataType::Audio,
             "text:100%",
-            FileSortBy::NameAsc,
+            MediaSortBy::NameAsc,
             10,
             0
         )
@@ -47,7 +47,7 @@ fn rows_and_count_share_literal_filters_and_stable_pagination() {
         .len(),
         1
     );
-    let rows = rows(&db, DataType::Audio, "", FileSortBy::SizeAsc, 1, 1).unwrap();
+    let rows = rows(&db, DataType::Audio, "", MediaSortBy::SizeAsc, 1, 1).unwrap();
     assert_eq!(rows[0].size_bytes, 30);
     assert_eq!(count(&db, DataType::Audio, "artist:Artist").unwrap(), 2);
     assert!(count(&db, DataType::Audio, "unknown:selection").is_err());
@@ -77,7 +77,7 @@ fn document_filters_and_explicit_trash_selection_use_current_catalog() {
     .unwrap();
     assert_eq!(count(&db, DataType::Doc, "").unwrap(), 1);
     assert_eq!(count(&db, DataType::Doc, "trash:true ext:pdf").unwrap(), 1);
-    let trashed = rows(&db, DataType::Doc, "trash:true", FileSortBy::NameAsc, 10, 0).unwrap();
+    let trashed = rows(&db, DataType::Doc, "trash:true", MediaSortBy::NameAsc, 10, 0).unwrap();
     assert_eq!(trashed[0].id, created[0].id);
     assert_eq!(trashed[0].title, "one.pdf");
 }
@@ -323,4 +323,27 @@ fn counts_and_bucket_facts_use_a_covering_index_without_sorting_all_media() {
             .len(),
         1000
     );
+}
+
+#[test]
+fn name_title_modified_and_capture_time_have_distinct_ordering() {
+    let directory = plain_libs::temporary::tempdir().unwrap();
+    let db = Db::open(&directory.path().join("sort.db")).unwrap();
+    let mut a = file(DataType::Audio, "/audio/a.mp3", "Zulu", 10);
+    let mut b = file(DataType::Audio, "/audio/b.mp3", "Alpha", 20);
+    a.updated_at = "2026-01-02T00:00:00.000Z".into();
+    b.updated_at = "2026-01-01T00:00:00.000Z".into();
+    let mut photo = file(DataType::Image, "/photos/captured.jpg", "Captured", 10);
+    photo.taken_at = Some("2026-01-01T00:00:00.000Z".into());
+    let mut undated = file(DataType::Image, "/photos/undated.jpg", "Undated", 10);
+    undated.created_at = "2026-01-03T00:00:00.000Z".into();
+    db.record_media_files(&[a, b, photo, undated]).unwrap();
+    for (sort, expected) in [
+        (MediaSortBy::NameAsc, "/audio/a.mp3"),
+        (MediaSortBy::TitleAsc, "/audio/b.mp3"),
+        (MediaSortBy::UpdatedAtAsc, "/audio/b.mp3"),
+    ] {
+        assert_eq!(rows(&db, DataType::Audio, "", sort, 10, 0).unwrap()[0].path, expected);
+    }
+    assert_eq!(rows(&db, DataType::Image, "", MediaSortBy::TakenAtDesc, 10, 0).unwrap()[0].path, "/photos/undated.jpg");
 }

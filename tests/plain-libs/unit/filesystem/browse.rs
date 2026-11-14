@@ -265,7 +265,7 @@ fn progressive_search_keeps_exact_counts_and_sorted_pages_and_cancels_before_mor
     assert_eq!(error.kind(), io::ErrorKind::Interrupted);
     assert_eq!(reads, 1);
     assert_eq!(
-        plan.walk(|_| panic!("cancelled before traversal"), || true)
+        plan.walk(|_| panic!("canceled before traversal"), || true)
             .err()
             .unwrap()
             .kind(),

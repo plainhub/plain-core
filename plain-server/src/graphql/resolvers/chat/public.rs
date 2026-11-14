@@ -1,10 +1,11 @@
+use super::content::{ChatContent, ChatDeliveryResult};
 use crate::graphql::types::ActionResult;
 use plain_graphql::{Context, Enum, Object, SimpleObject};
 
+use plain_libs::serde_json::{Value, json};
 use plain_rs::infrastructure::db::DChat;
 use plain_rs::infrastructure::db::Db;
 use plain_rs::infrastructure::types::Instant;
-use plain_libs::serde_json::{Value, json};
 use std::sync::Arc;
 
 pub use plain_rs::features::chat::enums::ChatStatus;
@@ -92,19 +93,18 @@ pub struct ChatItem {
     #[graphql(name = "channelId")]
     pub channel_id: Option<plain_graphql::ID>,
     pub id: plain_graphql::ID,
-    /// Message envelope JSON: `{type: TEXT|IMAGES|FILES|SHARE, value: {…}}` —
-    /// parse `value` according to `type`.
-    pub content: String,
+    #[serde(deserialize_with = "super::content::read_content")]
+    pub content: ChatContent,
     #[graphql(name = "createdAt")]
     pub created_at: Instant,
     #[graphql(name = "updatedAt")]
     pub updated_at: Instant,
     pub status: ChatStatus,
-    /// Per-recipient delivery details as JSON (peer delivery results);
-    /// empty when the message has no delivery failures. Drives
-    /// SENT/PARTIAL/FAILED alongside `status`.
-    #[graphql(name = "statusData")]
-    pub status_data: String,
+    #[serde(
+        rename = "statusData",
+        deserialize_with = "super::content::read_deliveries"
+    )]
+    pub delivery_results: Vec<ChatDeliveryResult>,
 }
 
 #[derive(Default)]
@@ -128,7 +128,7 @@ impl ChatQuery {
                 state, &target, &text, offset, limit,
             );
         }
-        Ok(rows.iter().map(item).collect())
+        rows.iter().map(item).collect()
     }
 
     fn chat_item(
@@ -139,7 +139,8 @@ impl ChatQuery {
         Ok(
             plain_rs::infrastructure::db::chat_store::messages::get(db(ctx)?, id.as_str())?
                 .as_ref()
-                .map(item),
+                .map(item)
+                .transpose()?,
         )
     }
 
@@ -194,7 +195,7 @@ impl ChatMutation {
             recipient_ids.map(|ids| ids.into_iter().map(|id| id.to_string()).collect()),
         )
         .await?;
-        Ok(item(&row))
+        item(&row)
     }
 
     async fn create_chat_channel(
@@ -332,29 +333,10 @@ async fn flag(
     Ok(true)
 }
 
-pub(crate) fn item(row: &DChat) -> ChatItem {
-    from_json(&plain_rs::features::chat::service::chat_to_json(row))
-}
-
-fn from_json(value: &Value) -> ChatItem {
-    ChatItem {
-        from_id: crate::graphql::types::facts::id(value, "fromId"),
-        to_id: crate::graphql::types::facts::id(value, "toId"),
-        channel_id: Some(crate::graphql::types::facts::id(value, "channelId"))
-            .filter(|id| !id.is_empty()),
-        id: crate::graphql::types::facts::id(value, "id"),
-        content: crate::graphql::types::facts::text(value, "content"),
-        created_at: crate::graphql::types::facts::stored_instant(
-            &crate::graphql::types::facts::text(value, "createdAt"),
-        ),
-        updated_at: crate::graphql::types::facts::stored_instant(
-            &crate::graphql::types::facts::text(value, "updatedAt"),
-        ),
-        status: crate::graphql::types::facts::text(value, "status")
-            .parse()
-            .unwrap_or(ChatStatus::Sent),
-        status_data: crate::graphql::types::facts::text(value, "statusData"),
-    }
+pub(crate) fn item(row: &DChat) -> plain_graphql::Result<ChatItem> {
+    Ok(plain_libs::serde_json::from_value(
+        plain_rs::features::chat::service::chat_to_json(row),
+    )?)
 }
 
 fn channel(value: &Value) -> ChatChannel {

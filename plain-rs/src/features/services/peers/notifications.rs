@@ -337,10 +337,10 @@ pub async fn refresh_from_app(
     state: &CoreRuntime,
     id: &str,
     identity: &Identity,
-    cancelled: &watch::Receiver<bool>,
+    canceled: &watch::Receiver<bool>,
     app: Result<AppSnapshot>,
 ) -> Result<()> {
-    if !current_peer(state, id, identity, cancelled).await? {
+    if !current_peer(state, id, identity, canceled).await? {
         return Ok(());
     }
     let base = identity.http_url()?;
@@ -359,10 +359,10 @@ pub async fn refresh_from_app(
     let state = state.clone();
     let id = id.to_owned();
     let identity = identity.clone();
-    let cancelled = cancelled.clone();
+    let canceled = canceled.clone();
     tokio::task::spawn_blocking(move || {
         state.db.with_conn(|connection| {
-            if super::management::current(connection, &state, &id, &identity, &cancelled)? {
+            if super::management::current(connection, &state, &id, &identity, &canceled)? {
                 state.management.notifications.apply(
                     &client_id,
                     &id,

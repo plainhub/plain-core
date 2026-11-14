@@ -1,9 +1,10 @@
 use crate::graphql::resolvers::app::capability_types::DlnaRenderer;
 use crate::server::ServerState;
-use plain_graphql::{Context, Enum, InputObject, Object, Result, SimpleObject};
+use plain_graphql::{Context, InputObject, Object, Result, SimpleObject};
 
 use plain_rs::features::services::casting::dlna_sender_runtime as sender;
 use plain_rs::features::services::casting::dlna_sender_runtime::Command;
+use plain_rs::features::services::casting::dlna_sender_runtime::DlnaCastType;
 use plain_rs::infrastructure::types::Long;
 
 #[derive(SimpleObject, serde::Deserialize)]
@@ -32,7 +33,9 @@ pub(crate) struct DlnaSenderMedia {
     album_art: String,
     artist: String,
     duration_ms: Long,
-    audio: bool,
+    #[graphql(name = "type")]
+    #[serde(rename = "type")]
+    media_type: DlnaCastType,
 }
 impl From<sender::Item> for DlnaSenderMedia {
     fn from(row: sender::Item) -> Self {
@@ -42,7 +45,7 @@ impl From<sender::Item> for DlnaSenderMedia {
             album_art: row.album_art,
             artist: row.artist,
             duration_ms: Long(row.duration_ms),
-            audio: row.audio,
+            media_type: row.media_type,
         }
     }
 }
@@ -56,8 +59,8 @@ struct DlnaMediaInput {
     artist: String,
     #[graphql(default)]
     duration_ms: Long,
-    #[graphql(default)]
-    audio: bool,
+    #[graphql(name = "type")]
+    media_type: DlnaCastType,
 }
 impl From<DlnaMediaInput> for sender::Item {
     fn from(row: DlnaMediaInput) -> Self {
@@ -67,7 +70,7 @@ impl From<DlnaMediaInput> for sender::Item {
             album_art: row.album_art,
             artist: row.artist,
             duration_ms: row.duration_ms.0,
-            audio: row.audio,
+            media_type: row.media_type,
         }
     }
 }
@@ -136,13 +139,6 @@ impl DlnaSenderQuery {
         Ok(rows)
     }
 }
-#[derive(Enum, Copy, Clone, Eq, PartialEq)]
-enum DlnaCastType {
-    Audio,
-    Video,
-    Image,
-}
-
 #[derive(Default)]
 pub struct DlnaSenderMutation;
 #[Object]
@@ -161,7 +157,7 @@ impl DlnaSenderMutation {
         let interruption = runtime.media.interruption();
         let _guard = runtime.operations.lock().await;
         if interruption != runtime.media.interruption() {
-            return Err("Cast cancelled".into());
+            return Err("Cast canceled".into());
         }
         let result = async {
             sender::execute(state, &runtime, Command::Select { id: renderer_udn }).await?;
@@ -170,7 +166,7 @@ impl DlnaSenderMutation {
                 sender::Item {
                     path: url,
                     title,
-                    audio: media_type == DlnaCastType::Audio,
+                    media_type,
                     ..Default::default()
                 },
                 false,

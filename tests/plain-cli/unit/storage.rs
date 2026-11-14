@@ -67,7 +67,7 @@ async fn startup_scan_indexes_configured_directories_through_the_headless_host()
             let snapshot = catalog.file_scan_status().unwrap().unwrap();
             if matches!(
                 snapshot.status,
-                Status::Completed | Status::Failed | Status::Cancelled
+                Status::Completed | Status::Failed | Status::Canceled
             ) {
                 break snapshot;
             }

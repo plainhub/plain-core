@@ -334,10 +334,10 @@ async fn file_scan_cancel_aborts_pending_reads_and_keeps_catalog_unchanged() {
     );
     assert_eq!(
         catalog.cancel_file_scan().unwrap().unwrap().status,
-        Status::Cancelling
+        Status::Canceling
     );
     let result = worker.await.unwrap().unwrap();
-    assert_eq!(result.status, Status::Cancelled);
+    assert_eq!(result.status, Status::Canceled);
     assert_eq!(result.processed_files, 0);
     assert!(requests.try_recv().is_err());
     assert_eq!(
@@ -391,7 +391,7 @@ async fn aborted_scan_future_releases_the_shared_job_and_failed_scans_report_par
     assert!(worker.await.unwrap_err().is_cancelled());
     assert_eq!(
         catalog.file_scan_status().unwrap().unwrap().status,
-        Status::Cancelled
+        Status::Canceled
     );
     catalog.read_gate = None;
     let result = catalog
@@ -450,7 +450,7 @@ async fn directory_scan_cancellation_preserves_basic_facts_before_metadata() {
     assert!(catalog.configure_scan_directories(None).is_err());
     catalog.cancel_file_scan().unwrap();
     let result = worker.await.unwrap().unwrap();
-    assert_eq!(result.status, Status::Cancelled);
+    assert_eq!(result.status, Status::Canceled);
     assert_eq!(result.processed_files, 0);
     assert_eq!(
         catalog
@@ -503,7 +503,7 @@ async fn directory_scan_cancellation_after_discovery_preserves_all_basic_facts()
         .unwrap();
     catalog.cancel_file_scan().unwrap();
     let result = worker.await.unwrap().unwrap();
-    assert_eq!(result.status, Status::Cancelled);
+    assert_eq!(result.status, Status::Canceled);
     assert_eq!(result.processed_files, 0);
     assert_eq!(result.total_files, Some(96));
     assert!(requests.try_recv().is_err());
@@ -657,7 +657,7 @@ async fn background_source_scan_is_busy_before_the_first_read_and_core_stop_join
             .unwrap()
             .unwrap()
             .status,
-        crate::features::services::files::media_scans::Status::Cancelled
+        crate::features::services::files::media_scans::Status::Canceled
     );
     assert!(requests.try_recv().is_err());
     assert_eq!(
@@ -1363,7 +1363,7 @@ async fn directory_scan_counts_filtered_files_before_the_first_index_write() {
 
 #[cfg(feature = "runtime-media")]
 #[tokio::test]
-async fn watcher_reconciliation_does_not_restart_a_cancelled_scan() {
+async fn watcher_reconciliation_does_not_restart_a_canceled_scan() {
     use crate::features::services::files::media_scans::Status;
     let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::test_runtime::Core::open(directory.path()).unwrap();
@@ -1376,11 +1376,11 @@ async fn watcher_reconciliation_does_not_restart_a_cancelled_scan() {
     tokio::pin!(reconcile);
     assert!(futures_util::poll!(reconcile.as_mut()).is_pending());
     catalog.cancel_file_scan().unwrap();
-    active.finish(Err("Media scan cancelled".into())).unwrap();
+    active.finish(Err("Media scan canceled".into())).unwrap();
     reconcile.await.unwrap();
     let stopped = state.media_scans.snapshot().unwrap().unwrap();
     assert_eq!(stopped.id, id);
-    assert_eq!(stopped.status, Status::Cancelled);
+    assert_eq!(stopped.status, Status::Canceled);
     let mut progress = state.events.subscribe();
     catalog
         .apply_watch_event(plain_libs::file_events::Event::new(plain_libs::file_events::EventKind::Other))

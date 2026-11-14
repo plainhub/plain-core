@@ -648,7 +648,7 @@ impl<'a> Decoder<'a> {
         let (w, h) = super::scale::crop_size(ow as u32, oh as u32, crop);
         let (w, h) = (w as usize, h as usize);
         let left = (ow - w) / 2;
-        let rounded_columns = if self.sequential && self.six_bit_color {
+        let rounded_columns = if self.six_bit_color {
             (ow / 8).saturating_sub(1) * 8
         } else {
             0

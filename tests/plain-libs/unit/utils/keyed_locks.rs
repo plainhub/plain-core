@@ -77,7 +77,7 @@ async fn cancellation_releases_waiting_and_running_keys() {
         let entered = entered.clone();
         async move {
             locks
-                .with_lock("cancelled".into(), async {
+                .with_lock("canceled".into(), async {
                     entered.notify_one();
                     std::future::pending::<()>().await
                 })
@@ -87,7 +87,7 @@ async fn cancellation_releases_waiting_and_running_keys() {
     entered.notified().await;
     let second = tokio::spawn({
         let locks = locks.clone();
-        async move { locks.with_lock("cancelled".into(), async {}).await }
+        async move { locks.with_lock("canceled".into(), async {}).await }
     });
     tokio::task::yield_now().await;
     second.abort();
@@ -95,12 +95,12 @@ async fn cancellation_releases_waiting_and_running_keys() {
     first.abort();
     let _ = first.await;
     assert_eq!(locks.in_flight_keys(), 0);
-    locks.with_lock("cancelled".into(), async {}).await;
+    locks.with_lock("canceled".into(), async {}).await;
     assert_eq!(locks.in_flight_keys(), 0);
 }
 
 #[tokio::test]
-async fn owned_and_borrowed_locks_share_exclusion_and_cancelled_waiters_leave_no_keys() {
+async fn owned_and_borrowed_locks_share_exclusion_and_canceled_waiters_leave_no_keys() {
     use std::future::Future;
     let locks = Arc::new(KeyedLocks::new());
     let held = locks.acquire("image".into()).await;

@@ -147,7 +147,7 @@ fn canceled(state: &CoreRuntime, value: &Value) {
     let ticket = &value["ticket"];
     event(
         state,
-        crate::features::chat::events::WS_PAIRING_CANCELLED,
+        crate::features::chat::events::WS_PAIRING_CANCELED,
         json!({"deviceId":ticket["deviceId"],"deviceName":ticket["deviceName"]}),
     );
 }
@@ -544,7 +544,7 @@ pub async fn execute(state: &CoreRuntime, request: Request) -> plain_libs::anyho
                 state.pairing_runtime.forget(&id);
                 event(
                     state,
-                    crate::features::chat::events::WS_PAIRING_CANCELLED,
+                    crate::features::chat::events::WS_PAIRING_CANCELED,
                     result.clone(),
                 );
             }

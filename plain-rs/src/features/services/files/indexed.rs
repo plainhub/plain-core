@@ -157,8 +157,8 @@ pub fn native(
         }
         let order = match sort {
             FileSortBy::SizeAsc => "size_bytes ASC,file_id", FileSortBy::SizeDesc => "size_bytes DESC,file_id",
-            FileSortBy::DateAsc => "updated_at ASC,file_id", FileSortBy::DateDesc => "updated_at DESC,file_id",
-            FileSortBy::NameDesc => "file_name COLLATE NOCASE DESC,file_id", _ => "file_name COLLATE NOCASE ASC,file_id",
+            FileSortBy::UpdatedAtAsc => "updated_at ASC,file_id", FileSortBy::UpdatedAtDesc => "updated_at DESC,file_id",
+            FileSortBy::NameDesc => "file_name COLLATE NOCASE DESC,file_id", FileSortBy::NameAsc => "file_name COLLATE NOCASE ASC,file_id",
         };
         let sql = format!("{} ORDER BY {order} LIMIT ? OFFSET ?",selection.replace("{columns}","id,file_name,path,size_bytes,created_at,updated_at,kind"));
         args.extend([SqlValue::Integer(limit.max(0).into()),SqlValue::Integer(offset.max(0).into())]);
