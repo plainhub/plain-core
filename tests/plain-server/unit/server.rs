@@ -186,7 +186,6 @@ async fn core_startup_persists_complete_identity_and_regenerates_the_native_sess
         CLIENT_ID,
         SIGNATURE_KEY_PAIR,
         MASTER_SECRET,
-        ADB_TOKEN,
         MDNS_HOSTNAME,
     ] {
         assert!(
@@ -194,6 +193,7 @@ async fn core_startup_persists_complete_identity_and_regenerates_the_native_sess
             "{key}"
         );
     }
+    assert!(prefs.get::<String>(ADB_TOKEN).unwrap().is_none());
     assert_eq!(
         prefs.get::<String>(PASSWORD_TYPE).unwrap().as_deref(),
         Some("NONE")
