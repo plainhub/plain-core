@@ -12,7 +12,7 @@ use crate::audio_tags::util::text::utf8_decode_str;
 
 use std::io::{Read, Seek, SeekFrom};
 
-use crate::utils::binary::{BigEndian, ReadBytesExt};
+use crate::binary::{BigEndian, ReadBytesExt};
 
 pub(super) use atom_reader::AtomReader;
 

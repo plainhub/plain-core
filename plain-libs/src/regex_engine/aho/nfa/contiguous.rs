@@ -4,13 +4,13 @@ use crate::regex_engine::aho::{
     util::{
         alphabet::ByteClasses,
         error::{BuildError, MatchError},
-        int::{U16, U32, Usize},
         prefilter::Prefilter,
         primitives::{IteratorIndexExt, PatternID, SmallIndex, StateID},
         search::{Anchored, MatchKind},
         special::Special,
     },
 };
+use crate::regex_engine::int::{U16, U32, Usize};
 use std::{vec, vec::Vec};
 #[derive(Clone)]
 pub struct NFA {

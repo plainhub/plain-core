@@ -7,8 +7,8 @@ use std::borrow::Cow;
 use std::fmt::{Debug, Display, Formatter};
 use std::io::{Cursor, Read, Seek, SeekFrom};
 
+use crate::binary::{BigEndian, ReadBytesExt as _};
 use crate::utils::base64::{base64_decode_standard, base64_encode};
-use crate::utils::binary::{BigEndian, ReadBytesExt as _};
 
 pub const APE_PICTURE_TYPES: [&str; 21] = [
     "Cover Art (Other)",

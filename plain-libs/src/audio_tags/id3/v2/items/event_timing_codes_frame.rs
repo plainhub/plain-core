@@ -6,7 +6,7 @@ use std::cmp::Ordering;
 use std::hash::Hash;
 use std::io::Read;
 
-use crate::utils::binary::{BigEndian, ReadBytesExt};
+use crate::binary::{BigEndian, ReadBytesExt};
 
 const FRAME_ID: FrameId<'static> = FrameId::Valid(Cow::Borrowed("ETCO"));
 

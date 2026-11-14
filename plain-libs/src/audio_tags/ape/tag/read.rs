@@ -11,7 +11,7 @@ use crate::audio_tags::util::text::utf8_decode;
 
 use std::io::{Read, Seek, SeekFrom};
 
-use crate::utils::binary::{LittleEndian, ReadBytesExt};
+use crate::binary::{LittleEndian, ReadBytesExt};
 
 pub(crate) fn read_ape_tag_with_header<R>(
     data: &mut R,

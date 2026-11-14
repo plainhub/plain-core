@@ -4,7 +4,7 @@ use crate::audio_tags::id3::v2::header::Id3v2Version;
 use crate::audio_tags::id3::v2::{FrameFlags, FrameHeader, FrameId};
 use crate::audio_tags::util::text::{TextDecodeOptions, TextEncoding, decode_text, encode_text};
 
-use crate::utils::binary::ReadBytesExt;
+use crate::binary::ReadBytesExt;
 
 use std::hash::Hash;
 use std::io::Read;

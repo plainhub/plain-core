@@ -18,3 +18,7 @@ impl<T> Pointer for *mut T {
         (self as *const T).as_usize()
     }
 }
+
+#[cfg(test)]
+#[path = "../../../tests/unit/memchr/ext.rs"]
+mod tests;

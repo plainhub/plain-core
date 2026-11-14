@@ -9,8 +9,6 @@ pub use crate::regex_engine::aho::{
         search::{Anchored, Input, Match, MatchKind, Span, StartKind},
     },
 };
-#[macro_use]
-mod macros;
 mod ahocorasick;
 pub mod automaton;
 pub mod dfa;

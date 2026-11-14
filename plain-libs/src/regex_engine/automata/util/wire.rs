@@ -1,6 +1,6 @@
-use crate::regex_engine::automata::util::{
-    int::Pointer,
-    primitives::{PatternID, PatternIDError, StateID, StateIDError},
+use crate::memchr::ext::Pointer;
+use crate::regex_engine::automata::util::primitives::{
+    PatternID, PatternIDError, StateID, StateIDError,
 };
 use core::{cmp, mem::size_of};
 use std::{vec, vec::Vec};

@@ -7,7 +7,7 @@ use crate::audio_tags::util::text::utf8_decode;
 use std::borrow::Cow;
 use std::io::{Read, Seek, SeekFrom};
 
-use crate::utils::binary::{BigEndian, ReadBytesExt};
+use crate::binary::{BigEndian, ReadBytesExt};
 
 pub(super) const FOURCC_LEN: u64 = 4;
 pub(super) const IDENTIFIER_LEN: u64 = 4;

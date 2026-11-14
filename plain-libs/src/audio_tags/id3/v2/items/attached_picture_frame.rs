@@ -8,7 +8,7 @@ use crate::audio_tags::util::text::{TextDecodeOptions, TextEncoding, encode_text
 use std::borrow::Cow;
 use std::io::{Read, Write as _};
 
-use crate::utils::binary::{ReadBytesExt as _, WriteBytesExt as _};
+use crate::binary::{ReadBytesExt as _, WriteBytesExt as _};
 
 const FRAME_ID: FrameId<'static> = FrameId::Valid(Cow::Borrowed("APIC"));
 

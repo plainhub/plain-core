@@ -24,7 +24,7 @@
 // SUCH DAMAGE.
 //
 
-use crate::utils::binary::{LittleEndian, ByteOrder};
+use crate::binary::{ByteOrder, LittleEndian};
 use std::io::{BufRead, ErrorKind};
 
 use super::error::Error;

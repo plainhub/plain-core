@@ -9,7 +9,7 @@ use crate::audio_tags::macros::{decode_err, err};
 
 use std::io::{Read, Seek, SeekFrom};
 
-use crate::utils::binary::{LittleEndian, ReadBytesExt};
+use crate::binary::{LittleEndian, ReadBytesExt};
 
 // Verifies that the stream is a WAV file and returns the stream length
 pub(crate) fn verify_wav<T>(data: &mut T) -> Result<u32>

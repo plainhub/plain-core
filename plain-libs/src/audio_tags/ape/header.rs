@@ -5,7 +5,7 @@ use crate::audio_tags::util::io::SeekStreamLen;
 use std::io::{Read, Seek, SeekFrom};
 use std::ops::Neg;
 
-use crate::utils::binary::{LittleEndian, ReadBytesExt};
+use crate::binary::{LittleEndian, ReadBytesExt};
 
 #[derive(Copy, Clone)]
 pub(crate) struct ApeHeader {

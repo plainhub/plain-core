@@ -1,8 +1,5 @@
-use crate::regex_engine::automata::util::{
-    int::Pointer,
-    memchr,
-    wire::{self, DeserializeError, Endian, SerializeError},
-};
+use crate::memchr::ext::Pointer;
+use crate::regex_engine::automata::util::wire::{self, DeserializeError, Endian, SerializeError};
 use std::{vec, vec::Vec};
 type AccelTy = u32;
 const ACCEL_TY_SIZE: usize = core::mem::size_of::<AccelTy>();

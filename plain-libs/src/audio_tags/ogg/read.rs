@@ -11,8 +11,8 @@ use std::borrow::Cow;
 use std::io::{Read, Seek};
 
 use crate::audio_tags::ogg::page::{Packets, PageHeader};
+use crate::binary::{LittleEndian, ReadBytesExt};
 use crate::utils::base64::base64_decode_standard;
-use crate::utils::binary::{LittleEndian, ReadBytesExt};
 
 pub type OGGTags = (Option<VorbisComments>, PageHeader, Packets);
 

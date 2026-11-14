@@ -1,9 +1,9 @@
 use crate::regex_engine::automata::util::{
-    int::{I32, U32},
     look::LookSet,
     primitives::{PatternID, StateID},
     wire::{self, Endian},
 };
+use crate::regex_engine::int::{I32, U32};
 use core::mem;
 use std::{sync::Arc, vec::Vec};
 #[derive(Clone, Eq, Hash, PartialEq, PartialOrd, Ord)]

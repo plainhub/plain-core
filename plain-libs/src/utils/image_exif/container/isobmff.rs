@@ -28,7 +28,7 @@ use std::io::{BufRead, ErrorKind, Seek, SeekFrom};
 
 use super::error::Error;
 use super::util::{BufReadExt as _, ReadExt as _};
-use crate::utils::binary::{BigEndian, ByteOrder, ReadBytesExt};
+use crate::binary::{BigEndian, ByteOrder, ReadBytesExt};
 
 // Checking "mif1" in the compatible brands should be enough, because
 // the "heic", "heix", "heim", and "heis" files shall include "mif1"

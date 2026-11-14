@@ -1,4 +1,4 @@
-use crate::regex_engine::automata::util::int::{U16, U32, U64, Usize};
+use crate::regex_engine::int::{U16, U32, U64, Usize};
 use core::num::NonZeroUsize;
 use std::vec::Vec;
 #[derive(Clone, Copy, Eq, Hash, PartialEq, PartialOrd, Ord)]

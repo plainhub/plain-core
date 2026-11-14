@@ -1,3 +1,4 @@
+// Shared conversions from aho-corasick and regex-automata; see aho/SOURCE.json and automata/SOURCE.json.
 pub(crate) trait U8 {
     fn as_usize(self) -> usize;
 }
@@ -29,6 +30,7 @@ pub(crate) trait U32 {
     fn high_u16(self) -> u16;
 }
 impl U32 for u32 {
+    #[inline]
     fn as_usize(self) -> usize {
         #[cfg(debug_assertions)]
         {
@@ -80,6 +82,29 @@ impl U64 for u64 {
         (self >> 32) as u32
     }
 }
+pub(crate) trait I8 {
+    fn as_usize(self) -> usize;
+    fn to_bits(self) -> u8;
+    fn from_bits(n: u8) -> i8;
+}
+impl I8 for i8 {
+    fn as_usize(self) -> usize {
+        #[cfg(debug_assertions)]
+        {
+            usize::try_from(self).expect("i8 overflowed usize")
+        }
+        #[cfg(not(debug_assertions))]
+        {
+            self as usize
+        }
+    }
+    fn to_bits(self) -> u8 {
+        self as u8
+    }
+    fn from_bits(n: u8) -> i8 {
+        n as i8
+    }
+}
 pub(crate) trait I32 {
     fn as_usize(self) -> usize;
     fn to_bits(self) -> u32;
@@ -101,6 +126,29 @@ impl I32 for i32 {
     }
     fn from_bits(n: u32) -> i32 {
         n as i32
+    }
+}
+pub(crate) trait I64 {
+    fn as_usize(self) -> usize;
+    fn to_bits(self) -> u64;
+    fn from_bits(n: u64) -> i64;
+}
+impl I64 for i64 {
+    fn as_usize(self) -> usize {
+        #[cfg(debug_assertions)]
+        {
+            usize::try_from(self).expect("i64 overflowed usize")
+        }
+        #[cfg(not(debug_assertions))]
+        {
+            self as usize
+        }
+    }
+    fn to_bits(self) -> u64 {
+        self as u64
+    }
+    fn from_bits(n: u64) -> i64 {
+        n as i64
     }
 }
 pub(crate) trait Usize {
@@ -151,11 +199,7 @@ impl Usize for usize {
         }
     }
 }
-pub(crate) trait Pointer {
-    fn as_usize(self) -> usize;
-}
-impl<T> Pointer for *const T {
-    fn as_usize(self) -> usize {
-        self as usize
-    }
-}
+
+#[cfg(test)]
+#[path = "../../../tests/unit/regex_engine/int.rs"]
+mod tests;

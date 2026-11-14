@@ -1,4 +1,4 @@
-use crate::regex_engine::aho::util::int::{U16, U32, U64, Usize};
+use crate::regex_engine::int::{U16, U32, U64, Usize};
 use std::vec::Vec;
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, PartialOrd, Ord)]
 #[repr(transparent)]

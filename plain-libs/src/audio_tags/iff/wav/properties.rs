@@ -5,7 +5,7 @@ use crate::audio_tags::util::math::RoundedDivision;
 
 use std::time::Duration;
 
-use crate::utils::binary::{LittleEndian, ReadBytesExt};
+use crate::binary::{LittleEndian, ReadBytesExt};
 
 const PCM: u16 = 0x0001;
 const IEEE_FLOAT: u16 = 0x0003;

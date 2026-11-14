@@ -39,6 +39,4 @@ pub mod config;
 
 pub mod write_batch;
 
-pub mod binary;
-
 pub mod uuid;

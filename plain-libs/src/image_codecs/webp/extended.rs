@@ -1,5 +1,5 @@
 use super::lossless::LosslessDecoder;
-use crate::byte_order::ReadBytesExt;
+use crate::binary::ReadBytesExt;
 use crate::image_codecs::webp::alpha_blending::do_alpha_blending;
 use crate::image_codecs::webp::decoder::DecodingError;
 use std::io::{BufRead, Read};

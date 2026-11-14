@@ -9,7 +9,7 @@ use std::borrow::Cow;
 use std::convert::TryFrom;
 use std::io::{SeekFrom, Write};
 
-use crate::utils::binary::BigEndian;
+use crate::binary::BigEndian;
 
 #[derive(Default, Clone, Debug, PartialEq, Eq)]
 pub struct Comment {

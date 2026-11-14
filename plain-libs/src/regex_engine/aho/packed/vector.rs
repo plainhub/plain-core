@@ -36,7 +36,7 @@ pub(crate) trait FatVector: Vector {
 #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
 mod x86_64_ssse3 {
     use super::Vector;
-    use crate::regex_engine::aho::util::int::{I8, I32};
+    use crate::regex_engine::int::{I8, I32};
     use core::arch::x86_64::*;
     impl Vector for __m128i {
         const BITS: usize = 128;
@@ -112,7 +112,7 @@ mod x86_64_ssse3 {
 #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
 mod x86_64_avx2 {
     use super::{FatVector, Vector};
-    use crate::regex_engine::aho::util::int::{I8, I32, I64};
+    use crate::regex_engine::int::{I8, I32, I64};
     use core::arch::x86_64::*;
     impl Vector for __m256i {
         const BITS: usize = 256;

@@ -1,4 +1,4 @@
-use crate::regex_engine::automata::util::memchr::memchr;
+use crate::memchr::memchr;
 use std::{string::String, vec::Vec};
 pub fn string(
     mut replacement: &str,

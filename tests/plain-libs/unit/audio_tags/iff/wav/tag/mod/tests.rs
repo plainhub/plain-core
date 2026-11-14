@@ -4,7 +4,7 @@ use crate::audio_tags::iff::wav::RiffInfoList;
 use crate::audio_tags::prelude::*;
 use crate::audio_tags::tag::{Tag, TagType};
 
-use crate::utils::binary::LittleEndian;
+use crate::binary::LittleEndian;
 
 use std::io::Cursor;
 

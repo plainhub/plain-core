@@ -12,7 +12,7 @@ use crate::audio_tags::mpeg::header::HEADER_MASK;
 
 use std::io::{Read, Seek, SeekFrom};
 
-use crate::utils::binary::{BigEndian, ReadBytesExt};
+use crate::binary::{BigEndian, ReadBytesExt};
 
 pub(super) fn read_from<R>(reader: &mut R, parse_options: ParseOptions) -> Result<MpegFile>
 where

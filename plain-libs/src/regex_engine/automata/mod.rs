@@ -6,8 +6,6 @@
 compile_error!("not supported on non-{16,32,64}, please file an issue");
 pub use crate::regex_engine::automata::util::primitives::PatternID;
 pub use crate::regex_engine::automata::util::search::*;
-#[macro_use]
-mod macros;
 pub mod dfa;
 pub mod hybrid;
 pub mod meta;

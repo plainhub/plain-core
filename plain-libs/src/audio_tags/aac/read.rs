@@ -10,7 +10,7 @@ use crate::audio_tags::mpeg::header::{HeaderCmpResult, cmp_header, search_for_fr
 
 use std::io::{Read, Seek, SeekFrom};
 
-use crate::utils::binary::ReadBytesExt;
+use crate::binary::ReadBytesExt;
 
 pub(super) fn read_from<R>(reader: &mut R, parse_options: ParseOptions) -> Result<AacFile>
 where

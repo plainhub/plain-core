@@ -1,12 +1,11 @@
 use crate::regex_engine::aho::{
     PatternID,
     packed::{
-        ext::Pointer,
         pattern::Patterns,
         vector::{FatVector, Vector},
     },
-    util::int::U32,
 };
+use crate::{memchr::ext::Pointer, regex_engine::int::U32};
 use core::fmt::Debug;
 use std::{boxed::Box, collections::BTreeMap, format, sync::Arc, vec, vec::Vec};
 #[derive(Clone, Copy, Debug)]

@@ -3,7 +3,7 @@ use crate::audio_tags::macros::try_vec;
 
 use std::io::{Read, Seek, SeekFrom};
 
-use crate::utils::binary::{BigEndian, ReadBytesExt};
+use crate::binary::{BigEndian, ReadBytesExt};
 
 pub(in crate::audio_tags::flac) const BLOCK_ID_STREAMINFO: u8 = 0;
 pub(in crate::audio_tags::flac) const BLOCK_ID_PADDING: u8 = 1;

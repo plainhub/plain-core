@@ -9,7 +9,7 @@ use crate::audio_tags::macros::{decode_err, err};
 
 use std::io::{Read, Seek, SeekFrom};
 
-use crate::utils::binary::{BigEndian, ReadBytesExt};
+use crate::binary::{BigEndian, ReadBytesExt};
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub(in crate::audio_tags::iff) enum CompressionPresent {

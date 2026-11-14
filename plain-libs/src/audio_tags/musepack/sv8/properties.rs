@@ -9,7 +9,7 @@ use crate::audio_tags::util::math::RoundedDivision;
 use std::io::Read;
 use std::time::Duration;
 
-use crate::utils::binary::{BigEndian, ReadBytesExt};
+use crate::binary::{BigEndian, ReadBytesExt};
 
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct MpcSv8Properties {

@@ -25,7 +25,7 @@
 //
 
 use super::error::Error;
-use crate::utils::binary::{BigEndian, ByteOrder, LittleEndian};
+use crate::binary::{BigEndian, ByteOrder, LittleEndian};
 use std::collections::HashSet;
 
 const TIFF_BE: u16 = 0x4d4d;

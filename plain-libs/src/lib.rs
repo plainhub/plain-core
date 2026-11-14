@@ -56,8 +56,6 @@ pub mod test_apk;
 
 #[cfg(not(target_arch = "wasm32"))]
 pub mod assertions;
-#[cfg(not(target_arch = "wasm32"))]
-pub mod case;
 #[cfg(feature = "compound-file")]
 pub mod compound_file;
 #[cfg(feature = "peg")]
@@ -86,8 +84,8 @@ pub mod xml;
 mod h264;
 
 pub mod anyhow;
-#[cfg(feature = "image")]
-mod byte_order;
+#[cfg(any(not(target_arch = "wasm32"), feature = "image"))]
+mod binary;
 #[cfg(feature = "time")]
 pub mod chrono;
 pub mod fnv;

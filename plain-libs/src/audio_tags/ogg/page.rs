@@ -1,5 +1,5 @@
 // Read-only framing adapted from ogg_pager 0.7.2 (ogg_pager/SOURCE.json).
-use crate::utils::binary::{LittleEndian, ReadBytesExt};
+use crate::binary::{LittleEndian, ReadBytesExt};
 use std::io::{self, Read, Seek, SeekFrom};
 
 type Result<T> = std::result::Result<T, PageError>;

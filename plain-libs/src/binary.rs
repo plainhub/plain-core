@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use std::io::{Read, Result, Write};
 
 pub trait ByteOrder {
@@ -57,7 +59,12 @@ pub trait ReadBytesExt: Read {
     }
 
     fn read_u24<B: ByteOrder>(&mut self) -> Result<u32> {
-        self.read_uint::<B>(3).map(|n| n as u32)
+        let [a, b, c] = self.read_fixed()?;
+        Ok(if B::LITTLE {
+            u32::from_le_bytes([a, b, c, 0])
+        } else {
+            u32::from_be_bytes([0, a, b, c])
+        })
     }
 
     fn read_u32<B: ByteOrder>(&mut self) -> Result<u32> {
@@ -123,5 +130,5 @@ pub trait WriteBytesExt: Write {
 impl<W: Write + ?Sized> WriteBytesExt for W {}
 
 #[cfg(test)]
-#[path = "../../../tests/plain-libs/unit/utils/binary.rs"]
+#[path = "../../tests/unit/binary.rs"]
 mod tests;

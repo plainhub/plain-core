@@ -98,3 +98,51 @@ fn slice_reads_support_both_byte_orders_and_ignore_trailing_bytes() {
         0x0807060504030201
     );
 }
+
+#[test]
+fn fixed_width_reads_preserve_exact_values() {
+    let bytes = [0x12, 0x34, 0x56, 0x78];
+    assert_eq!(
+        Cursor::new(bytes).read_u16::<LittleEndian>().unwrap(),
+        0x3412
+    );
+    assert_eq!(Cursor::new(bytes).read_u16::<BigEndian>().unwrap(), 0x1234);
+    assert_eq!(
+        Cursor::new(bytes).read_u24::<LittleEndian>().unwrap(),
+        0x563412
+    );
+    assert_eq!(
+        Cursor::new(bytes).read_u24::<BigEndian>().unwrap(),
+        0x123456
+    );
+    assert_eq!(
+        Cursor::new(bytes).read_u32::<LittleEndian>().unwrap(),
+        0x78563412
+    );
+    assert_eq!(
+        Cursor::new(bytes).read_u32::<BigEndian>().unwrap(),
+        0x12345678
+    );
+}
+#[test]
+fn short_inputs_remain_errors_for_each_width() {
+    for size in 0..4 {
+        let bytes = vec![0; size];
+        assert_eq!(
+            Cursor::new(&bytes)
+                .read_u32::<LittleEndian>()
+                .unwrap_err()
+                .kind(),
+            ErrorKind::UnexpectedEof
+        );
+        if size < 3 {
+            assert!(Cursor::new(&bytes).read_u24::<BigEndian>().is_err());
+        }
+        if size < 2 {
+            assert!(Cursor::new(&bytes).read_u16::<LittleEndian>().is_err());
+        }
+        if size == 0 {
+            assert!(Cursor::new(&bytes).read_u8().is_err());
+        }
+    }
+}

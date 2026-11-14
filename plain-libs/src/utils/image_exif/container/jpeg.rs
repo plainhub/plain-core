@@ -27,7 +27,7 @@
 use std::io::{BufRead, ErrorKind};
 
 use super::error::Error;
-use crate::utils::binary::{BigEndian, ReadBytesExt};
+use crate::binary::{BigEndian, ReadBytesExt};
 
 mod marker {
     // The first byte of a marker.

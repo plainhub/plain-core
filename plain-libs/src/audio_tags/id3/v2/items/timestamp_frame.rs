@@ -7,7 +7,7 @@ use crate::audio_tags::util::text::{TextDecodeOptions, TextEncoding, decode_text
 
 use std::io::Read;
 
-use crate::utils::binary::ReadBytesExt;
+use crate::binary::ReadBytesExt;
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 

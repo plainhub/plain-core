@@ -4,7 +4,7 @@ use crate::audio_tags::properties::FileProperties;
 use std::io::Read;
 use std::time::Duration;
 
-use crate::utils::binary::{BigEndian, ReadBytesExt};
+use crate::binary::{BigEndian, ReadBytesExt};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Default)]
 #[non_exhaustive]

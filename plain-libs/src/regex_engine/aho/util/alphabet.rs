@@ -1,4 +1,4 @@
-use crate::regex_engine::aho::util::int::Usize;
+use crate::regex_engine::int::Usize;
 #[derive(Clone, Copy)]
 pub(crate) struct ByteClasses([u8; 256]);
 impl ByteClasses {

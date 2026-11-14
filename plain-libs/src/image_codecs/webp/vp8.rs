@@ -1,6 +1,6 @@
 use super::vp8_arithmetic_decoder::ArithmeticDecoder;
 use super::{loop_filter, transform};
-use crate::byte_order::{LittleEndian, ReadBytesExt};
+use crate::binary::{LittleEndian, ReadBytesExt};
 use crate::image_codecs::webp::decoder::{DecodingError, UpsamplingMethod};
 use crate::image_codecs::webp::yuv;
 use std::default::Default;

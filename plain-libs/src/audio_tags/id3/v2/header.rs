@@ -5,7 +5,7 @@ use crate::audio_tags::macros::err;
 
 use std::io::Read;
 
-use crate::utils::binary::{BigEndian, ByteOrder, ReadBytesExt};
+use crate::binary::{BigEndian, ByteOrder, ReadBytesExt};
 
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
 pub enum Id3v2Version {

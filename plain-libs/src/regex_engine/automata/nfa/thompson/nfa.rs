@@ -490,7 +490,7 @@ impl DenseTransitions {
         }
     }
     pub(crate) fn iter(&self) -> impl Iterator<Item = Transition> + '_ {
-        use crate::regex_engine::automata::util::int::Usize;
+        use crate::regex_engine::int::Usize;
         self.transitions
             .iter()
             .enumerate()

@@ -6,7 +6,7 @@ use std::fmt::Display;
 use std::io::Read;
 use std::str::FromStr;
 
-use crate::utils::binary::ReadBytesExt;
+use crate::binary::ReadBytesExt;
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash, Default)]
 

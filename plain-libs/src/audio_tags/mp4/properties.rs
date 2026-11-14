@@ -10,7 +10,7 @@ use crate::audio_tags::util::math::RoundedDivision;
 use std::io::{Cursor, Read, Seek, SeekFrom};
 use std::time::Duration;
 
-use crate::utils::binary::{BigEndian, ReadBytesExt};
+use crate::binary::{BigEndian, ReadBytesExt};
 
 #[derive(Default, Debug, Copy, Clone, PartialEq, Eq)]
 #[non_exhaustive]

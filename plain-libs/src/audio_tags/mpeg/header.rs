@@ -4,7 +4,7 @@ use crate::audio_tags::macros::decode_err;
 
 use std::io::{Read, Seek, SeekFrom};
 
-use crate::utils::binary::{BigEndian, ReadBytesExt};
+use crate::binary::{BigEndian, ReadBytesExt};
 
 pub(crate) fn verify_frame_sync(frame_sync: [u8; 2]) -> bool {
     frame_sync[0] == 0xFF && frame_sync[1] >> 5 == 0b111

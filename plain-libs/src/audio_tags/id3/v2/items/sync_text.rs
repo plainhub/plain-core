@@ -9,7 +9,7 @@ use crate::audio_tags::util::text::{
 use std::borrow::Cow;
 use std::io::{Cursor, Read, Seek, SeekFrom, Write};
 
-use crate::utils::binary::{BigEndian, ReadBytesExt, WriteBytesExt};
+use crate::binary::{BigEndian, ReadBytesExt, WriteBytesExt};
 
 const FRAME_ID: FrameId<'static> = FrameId::Valid(Cow::Borrowed("SYLT"));
 

@@ -1,3 +1,4 @@
+use crate::memchr::ext::Pointer;
 use crate::regex_engine::automata::{
     dfa::{
         DEAD,
@@ -8,7 +9,6 @@ use crate::regex_engine::automata::{
     },
     util::{
         alphabet::{self, ByteClasses, ByteSet},
-        int::{Pointer, Usize},
         prefilter::Prefilter,
         primitives::{PatternID, StateID},
         search::Anchored,
@@ -21,6 +21,7 @@ use crate::regex_engine::automata::{
     nfa::thompson,
     util::{look::LookMatcher, search::MatchKind},
 };
+use crate::regex_engine::int::Usize;
 use core::cmp;
 use core::{fmt, iter, mem::size_of, slice};
 use std::{

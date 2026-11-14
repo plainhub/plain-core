@@ -5,13 +5,13 @@ use crate::regex_engine::automata::{
         alphabet::ByteClasses,
         captures::Captures,
         escape::DebugByte,
-        int::{U8, U32, U64, Usize},
         look::{Look, LookSet, UnicodeWordBoundaryError},
         primitives::{NonMaxUsize, PatternID, StateID},
         search::{Anchored, Input, Match, MatchError, MatchKind, Span},
         sparse_set::SparseSet,
     },
 };
+use crate::regex_engine::int::{U8, U32, U64, Usize};
 use std::{vec, vec::Vec};
 #[derive(Clone, Debug, Default)]
 pub struct Config {

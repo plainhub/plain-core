@@ -6,7 +6,7 @@ use crate::audio_tags::util::io::SeekStreamLen;
 
 use std::io::{Read, Seek, SeekFrom};
 
-use crate::utils::binary::{BigEndian, ReadBytesExt};
+use crate::binary::{BigEndian, ReadBytesExt};
 
 pub(crate) struct AtomReader<R>
 where

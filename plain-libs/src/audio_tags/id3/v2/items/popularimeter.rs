@@ -7,7 +7,7 @@ use std::borrow::Cow;
 use std::hash::{Hash, Hasher};
 use std::io::Read;
 
-use crate::utils::binary::ReadBytesExt;
+use crate::binary::ReadBytesExt;
 
 const FRAME_ID: FrameId<'static> = FrameId::Valid(Cow::Borrowed("POPM"));
 

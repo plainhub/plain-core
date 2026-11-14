@@ -12,7 +12,7 @@ pub use crate::memchr::memchr::{
 mod macros;
 pub mod arch;
 mod cow;
-mod ext;
+pub(crate) mod ext;
 mod memchr;
 pub mod memmem;
 pub(crate) mod vector;

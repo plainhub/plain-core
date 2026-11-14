@@ -25,3 +25,7 @@ pub fn captures(regex: &Regex, text: &str) -> Option<Captures> {
 #[cfg(test)]
 #[path = "../../tests/plain-libs/unit/regex.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "../../tests/unit/regex.rs"]
+mod consolidation_tests;

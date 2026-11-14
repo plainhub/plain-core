@@ -7,7 +7,7 @@ use crate::audio_tags::util::text::utf8_decode;
 use std::io::{Read, Seek, SeekFrom};
 use std::marker::PhantomData;
 
-use crate::utils::binary::{ByteOrder, ReadBytesExt};
+use crate::binary::{ByteOrder, ReadBytesExt};
 
 const RIFF_CHUNK_HEADER_SIZE: u64 = 8;
 

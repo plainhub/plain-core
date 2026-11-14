@@ -3,7 +3,7 @@ use crate::audio_tags::macros::err;
 
 use std::io::Read;
 
-use crate::utils::binary::ReadBytesExt;
+use crate::binary::ReadBytesExt;
 
 #[derive(Debug, Clone, Eq, PartialEq, Copy, Hash)]
 #[repr(u8)]

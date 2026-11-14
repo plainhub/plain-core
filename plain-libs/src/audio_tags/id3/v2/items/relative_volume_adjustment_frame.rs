@@ -9,7 +9,7 @@ use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::io::Read;
 
-use crate::utils::binary::{BigEndian, ReadBytesExt};
+use crate::binary::{BigEndian, ReadBytesExt};
 
 const FRAME_ID: FrameId<'static> = FrameId::Valid(Cow::Borrowed("RVA2"));
 

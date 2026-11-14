@@ -1,7 +1,5 @@
-use crate::regex_engine::aho::{
-    PatternID,
-    packed::{api::MatchKind, ext::Pointer},
-};
+use crate::memchr::ext::Pointer;
+use crate::regex_engine::aho::{PatternID, packed::api::MatchKind};
 use core::{cmp, fmt, mem, u16, usize};
 use std::{boxed::Box, string::String, vec, vec::Vec};
 #[derive(Clone, Debug)]

@@ -9,7 +9,7 @@ use std::io::Read;
 use std::time::Duration;
 
 use crate::audio_tags::io::ReadExt;
-use crate::utils::binary::{BigEndian, ReadBytesExt};
+use crate::binary::{BigEndian, ReadBytesExt};
 
 #[derive(Clone, Eq, PartialEq, Default, Debug)]
 pub enum AiffCompressionType {

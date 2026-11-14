@@ -7,7 +7,7 @@ use crate::audio_tags::util::text::utf8_decode_str;
 
 use std::io::{Read, Seek};
 
-use crate::utils::binary::LittleEndian;
+use crate::binary::LittleEndian;
 
 pub(in crate::audio_tags::iff::wav) fn parse_riff_info<R>(
     data: &mut R,

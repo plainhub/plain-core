@@ -8,7 +8,7 @@ use crate::audio_tags::util::math::RoundedDivision;
 use std::io::Read;
 use std::time::Duration;
 
-use crate::utils::binary::{LittleEndian, ReadBytesExt};
+use crate::binary::{LittleEndian, ReadBytesExt};
 
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct MpcSv4to6Properties {

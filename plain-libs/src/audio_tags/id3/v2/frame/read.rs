@@ -11,7 +11,7 @@ use crate::audio_tags::macros::try_vec;
 
 use std::io::Read;
 
-use crate::utils::binary::{BigEndian, ReadBytesExt};
+use crate::binary::{BigEndian, ReadBytesExt};
 
 pub(crate) enum ParsedFrame<'a> {
     Next(Frame<'a>),

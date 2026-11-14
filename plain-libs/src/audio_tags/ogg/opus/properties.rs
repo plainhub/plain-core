@@ -8,7 +8,7 @@ use std::io::{Read, Seek, SeekFrom};
 use std::time::Duration;
 
 use crate::audio_tags::ogg::page::{Packets, PageHeader};
-use crate::utils::binary::{LittleEndian, ReadBytesExt};
+use crate::binary::{LittleEndian, ReadBytesExt};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Default)]
 #[non_exhaustive]

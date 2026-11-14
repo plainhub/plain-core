@@ -1,6 +1,6 @@
 use super::lossless::LosslessDecoder;
 use super::vp8::Vp8Decoder;
-use crate::byte_order::{LittleEndian, ReadBytesExt};
+use crate::binary::{LittleEndian, ReadBytesExt};
 use crate::image_codecs::webp::extended::{
     self, WebPExtendedInfo, get_alpha_predictor, read_alpha_chunk,
 };

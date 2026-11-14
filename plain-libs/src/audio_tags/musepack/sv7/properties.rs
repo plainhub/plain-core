@@ -8,7 +8,7 @@ use crate::audio_tags::properties::FileProperties;
 use std::io::Read;
 use std::time::Duration;
 
-use crate::utils::binary::{LittleEndian, ReadBytesExt};
+use crate::binary::{LittleEndian, ReadBytesExt};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Profile {

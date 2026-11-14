@@ -1,4 +1,5 @@
-use crate::regex_engine::aho::packed::{ext::Pointer, pattern::Patterns, teddy::generic::Match};
+use crate::memchr::ext::Pointer;
+use crate::regex_engine::aho::packed::{pattern::Patterns, teddy::generic::Match};
 use core::{
     fmt::Debug,
     panic::{RefUnwindSafe, UnwindSafe},
@@ -257,8 +258,8 @@ trait SearcherT: Debug + Send + Sync + UnwindSafe + RefUnwindSafe + 'static {
 #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
 mod x86_64 {
     use super::{Searcher, SearcherT};
+    use crate::memchr::ext::Pointer;
     use crate::regex_engine::aho::packed::{
-        ext::Pointer,
         pattern::Patterns,
         teddy::generic::{self, Match},
     };

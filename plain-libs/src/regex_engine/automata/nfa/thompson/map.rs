@@ -1,10 +1,5 @@
-use crate::regex_engine::automata::{
-    nfa::thompson::Transition,
-    util::{
-        int::{U64, Usize},
-        primitives::StateID,
-    },
-};
+use crate::regex_engine::automata::{nfa::thompson::Transition, util::primitives::StateID};
+use crate::regex_engine::int::{U64, Usize};
 use std::{vec, vec::Vec};
 const PRIME: u64 = 1099511628211;
 const INIT: u64 = 14695981039346656037;

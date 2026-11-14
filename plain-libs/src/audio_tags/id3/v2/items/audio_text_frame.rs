@@ -5,7 +5,7 @@ use crate::audio_tags::util::text::{TextDecodeOptions, TextEncoding, decode_text
 use std::borrow::Cow;
 use std::hash::{Hash, Hasher};
 
-use crate::utils::binary::ReadBytesExt as _;
+use crate::binary::ReadBytesExt as _;
 
 const FRAME_ID: FrameId<'static> = FrameId::Valid(Cow::Borrowed("ATXT"));
 

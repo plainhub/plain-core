@@ -3,7 +3,7 @@ pub use self::cicp::{
     Cicp, CicpColorPrimaries, CicpMatrixCoefficients, CicpTransferCharacteristics,
     CicpVideoFullRangeFlag,
 };
-use crate::byte_order::{BigEndian, LittleEndian, ReadBytesExt, WriteBytesExt};
+use crate::binary::{BigEndian, LittleEndian, ReadBytesExt};
 use std::{
     io::{Cursor, Read},
     num::NonZeroU32,
@@ -73,7 +73,7 @@ impl Orientation {
     }
     fn locate_orientation_entry<B>(reader: &mut Cursor<&[u8]>) -> Option<(Self, u64)>
     where
-        B: crate::byte_order::ByteOrder,
+        B: crate::binary::ByteOrder,
     {
         let ifd_offset = reader.read_u32::<B>().ok()?;
         reader.set_position(u64::from(ifd_offset));

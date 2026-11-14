@@ -5,7 +5,7 @@ use crate::audio_tags::macros::{decode_err, parse_mode_choice};
 
 use std::io::Read;
 
-use crate::utils::binary::ReadBytesExt;
+use crate::binary::ReadBytesExt;
 
 // TODO: Support chapter packets?
 const STREAM_HEADER_KEY: [u8; 2] = *b"SH";
