@@ -205,14 +205,71 @@ For local frontend tests, `run --web-root <directory>` serves files from disk wi
 
 ### Configuration
 
-The service runs as root. Data defaults to `$HOME/.plainapp/data`; cache uses the OS cache location. Ports default to `8080` and `8443` and can be changed in user settings.
-
+Ports default to `8080` and `8443` and can be changed in user settings.
 Linux root services automatically mount eligible unmounted filesystems at stable `/mnt/usbX` paths and monitor block-device changes.
 
-Environment variables: `PLAINAPP_DATA_DIR`, `PLAINAPP_CACHE_DIR`, `PLAINAPP_TLS_CERT` and `PLAINAPP_TLS_KEY`.
-System service installation requires default data/cache paths and rejects those two environment overrides.
+### Data and cache directories
 
-For isolated instances, `run` accepts `--data-dir`, `--cache-dir`, repeated `--media-dir` and `--web-root`.
+Without path overrides, CLI data is stored in `~/.plainapp/data` for the user running the process. For the root service installed by `plainapp install`, this is normally `/root/.plainapp/data`.
+
+```text
+<data-dir>/                     Persistent data; default: ~/.plainapp/data
+├── plain.db                    SQLite database: application records and indexes
+├── plain.db-wal                SQLite write-ahead log, when present
+├── plain.db-shm                SQLite shared-memory file, when present
+├── prefs.json                  Settings, device identity and login credentials
+├── tls.pem                     HTTPS certificate, unless overridden
+├── tls.key                     HTTPS private key, unless overridden
+├── tls-identity.json           TLS identity metadata
+├── files/                      App-managed file contents, including chat attachments
+│   └── <hash[0:2]>/
+│       └── <hash[2:4]>/
+│           └── <sha256>[.<ext>]
+├── note-images/                Images attached to notes
+├── audio/
+│   └── pomodoro_sound.mp3      Custom Pomodoro sound
+├── logs/
+│   ├── latest.log
+│   └── rust.log
+├── crash_report.txt
+└── crash_log.txt
+```
+
+Default cache directories:
+
+- Linux: `$XDG_CACHE_HOME/plain/<data-dir-hash>`, or `~/.cache/plain/<data-dir-hash>` when no absolute `XDG_CACHE_HOME` is set.
+- macOS: `~/Library/Caches/plain/<data-dir-hash>`.
+- Windows: `%LOCALAPPDATA%/plain/<data-dir-hash>`.
+
+```text
+<cache-dir>/                    Disposable application cache
+├── image_cache/                Image processing cache
+├── video_cache/                Video processing cache
+├── thumbs/
+│   └── rust/                   Generated thumbnails
+├── share_open/                 Temporary shared-file previews
+├── updates/                    Downloaded application updates
+└── crash_report.txt            Temporary crash-report export
+```
+
+Set custom directories with `--data-dir` and `--cache-dir`:
+
+```sh
+plainapp --data-dir /var/lib/plainapp --cache-dir /var/cache/plainapp run
+```
+
+Use the same directories for `run`, `passwd` and `dev on/off`.
+
+Check systemd service paths:
+
+```sh
+systemctl show plainapp -p ExecStart -p Environment
+```
+
+Environment overrides: `PLAINAPP_DATA_DIR`, `PLAINAPP_CACHE_DIR`, `PLAINAPP_TLS_CERT`, `PLAINAPP_TLS_KEY`. Command-line paths take precedence.
+`plainapp install` requires default data/cache paths.
+
+For isolated instances, `run` also accepts repeated `--media-dir` and `--web-root`.
 Use `<command> --help` for options on other commands.
 
 ### Upgrade and removal
