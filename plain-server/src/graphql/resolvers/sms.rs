@@ -34,7 +34,7 @@ pub struct SmsSendReceipt {
     pub requires_confirmation: bool,
 }
 
-const READ: AccessFeature = AccessFeature::Sms;
+const SMS: AccessFeature = AccessFeature::Sms;
 
 #[derive(Enum, Copy, Clone, Eq, PartialEq, Debug, Default)]
 pub enum SmsType {
@@ -156,7 +156,7 @@ impl SmsQuery {
         offset: i32,
         limit: i32,
     ) -> plain_graphql::Result<Vec<Sms>> {
-        if !public_gate::require_granted(ctx, &[READ]).await? {
+        if !public_gate::require_granted(ctx, &[SMS]).await? {
             return Ok(Vec::new());
         }
         let receipt = sms_query::execute(
@@ -178,14 +178,14 @@ impl SmsQuery {
     }
 
     async fn sms_count(&self, ctx: &Context<'_>, query: String) -> plain_graphql::Result<i32> {
-        if !public_gate::require_granted(ctx, &[READ]).await? {
+        if !public_gate::require_granted(ctx, &[SMS]).await? {
             return Ok(0);
         }
         count(ctx, sms_query::Request::Count { query }).await
     }
 
     async fn sms_box_counts(&self, ctx: &Context<'_>) -> plain_graphql::Result<SmsCounts> {
-        if !public_gate::require_granted(ctx, &[READ]).await? {
+        if !public_gate::require_granted(ctx, &[SMS]).await? {
             return Ok(SmsCounts::default());
         }
         let receipt = sms_query::execute(
@@ -210,7 +210,7 @@ impl SmsQuery {
         offset: i32,
         limit: i32,
     ) -> plain_graphql::Result<Vec<SmsConversation>> {
-        if !public_gate::require_granted(ctx, &[READ]).await? {
+        if !public_gate::require_granted(ctx, &[SMS]).await? {
             return Ok(Vec::new());
         }
         conversations(ctx, query, offset, limit, false).await
@@ -221,7 +221,7 @@ impl SmsQuery {
         ctx: &Context<'_>,
         query: String,
     ) -> plain_graphql::Result<i32> {
-        if !public_gate::require_granted(ctx, &[READ]).await? {
+        if !public_gate::require_granted(ctx, &[SMS]).await? {
             return Ok(0);
         }
         count(ctx, sms_query::Request::ConversationCount { query }).await
@@ -234,7 +234,7 @@ impl SmsQuery {
         offset: i32,
         limit: i32,
     ) -> plain_graphql::Result<Vec<SmsConversation>> {
-        if !public_gate::require_granted(ctx, &[READ]).await? {
+        if !public_gate::require_granted(ctx, &[SMS]).await? {
             return Ok(Vec::new());
         }
         conversations(ctx, query, offset, limit, true).await
@@ -252,6 +252,7 @@ impl SmsMutation {
         id: ID,
         date: Option<plain_rs::infrastructure::types::Instant>,
     ) -> plain_graphql::Result<bool> {
+        public_gate::require(ctx, ctx.data_unchecked::<Arc<Prefs>>(), &[SMS])?;
         let date = if let Some(date) = date {
             date.0
                 .to_rfc3339_opts(plain_libs::chrono::SecondsFormat::Millis, true)
@@ -277,6 +278,7 @@ impl SmsMutation {
     }
 
     fn unarchive_sms_conversation(&self, ctx: &Context<'_>, id: ID) -> plain_graphql::Result<bool> {
+        public_gate::require(ctx, ctx.data_unchecked::<Arc<Prefs>>(), &[SMS])?;
         sms_state::unarchive(ctx.data_unchecked::<Arc<Db>>(), id.as_str())
             .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
         Ok(true)
@@ -401,6 +403,7 @@ async fn bulk(
     action: plain_rs::features::services::sms::mutations::Action,
     query: String,
 ) -> plain_graphql::Result<ActionResult> {
+    public_gate::require(ctx, ctx.data_unchecked::<Arc<Prefs>>(), &[SMS])?;
     let affected_count = ctx
         .data_unchecked::<Arc<plain_rs::features::services::sms::mutations::Mutations>>()
         .execute(action, query)
