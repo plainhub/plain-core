@@ -1,7 +1,11 @@
 use crate::{Context, Error, OutputType, ServerResult, Value};
 use std::future::Future;
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+#[path = "../../../tests/unit/plain-graphql/resolver_utils/object.rs"]
+mod tests;
+
 #[doc(hidden)]
-#[inline(never)]
 pub fn resolve_field_async<'a, T, E, F>(
     ctx: &'a Context<'a>,
     fut: F,
@@ -11,6 +15,8 @@ where
     E: Into<Error> + Send + Sync,
     F: Future<Output = Result<T, E>> + Send + 'a,
 {
+    // Keep the polling body out of generated resolver callers to limit LLVM code size.
+    #[inline(never)]
     async move {
         let obj: T = fut.await.map_err(|err| {
             let err = ::std::convert::Into::<Error>::into(err).into_server_error(ctx.item.pos);
