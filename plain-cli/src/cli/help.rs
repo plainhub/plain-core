@@ -3,7 +3,7 @@ use super::parser::Scope;
 pub(super) fn render(scope: Scope) -> &'static str {
     match scope {
         Scope::Root => {
-            "PlainApp server and command-line tools\n\nUsage: plainapp [OPTIONS] <COMMAND>\n\nCommands:\n  install    \n  uninstall  \n  run        \n  passwd     \n  login      \n  update     \n  bench      \n  help       Print this message or the help of the given subcommand(s)\n\nOptions:\n      --data-dir <DATA_DIR>    \n      --cache-dir <CACHE_DIR>  \n  -h, --help                   Print help\n  -V, --version                Print version\n"
+            "PlainApp server and command-line tools\n\nUsage: plainapp [OPTIONS] <COMMAND>\n\nCommands:\n  install    \n  uninstall  \n  run        \n  passwd     \n  login      \n  update     \n  dev        Enable or disable developer mode\n  help       Print this message or the help of the given subcommand(s)\n\nOptions:\n      --data-dir <DATA_DIR>    \n      --cache-dir <CACHE_DIR>  \n  -h, --help                   Print help\n  -V, --version                Print version\n"
         }
         Scope::Install => {
             "Usage: plainapp install [OPTIONS]\n\nOptions:\n  -h, --help                   Print help\n"
@@ -32,8 +32,14 @@ pub(super) fn render(scope: Scope) -> &'static str {
         Scope::Update => {
             "Usage: plainapp update [OPTIONS]\n\nOptions:\n  -h, --help                   Print help\n"
         }
-        Scope::Bench => {
-            "Usage: plainapp bench [OPTIONS]\n\nOptions:\n  -h, --help                   Print help\n"
+        Scope::Dev => {
+            "Usage: plainapp dev [OPTIONS] <COMMAND>\n\nCommands:\n  on   Enable developer mode\n  off  Disable developer mode\n\nOptions:\n      --data-dir <DATA_DIR>    \n      --cache-dir <CACHE_DIR>  \n  -h, --help                   Print help\n"
+        }
+        Scope::DevOn => {
+            "Usage: plainapp dev on [OPTIONS]\n\nOptions:\n      --data-dir <DATA_DIR>    \n      --cache-dir <CACHE_DIR>  \n  -h, --help                   Print help\n"
+        }
+        Scope::DevOff => {
+            "Usage: plainapp dev off [OPTIONS]\n\nOptions:\n      --data-dir <DATA_DIR>    \n      --cache-dir <CACHE_DIR>  \n  -h, --help                   Print help\n"
         }
         Scope::RootHelp => {
             "Print this message or the help of the given subcommand(s)\n\nUsage: plainapp help [COMMAND]...\n\nArguments:\n  [COMMAND]...  Print help for the subcommand(s)\n"

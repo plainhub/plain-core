@@ -2,7 +2,7 @@ mod help;
 mod options;
 mod parser;
 
-pub mod bench;
+pub mod dev;
 pub mod install;
 pub mod login;
 pub mod passwd;
@@ -69,7 +69,9 @@ pub(crate) enum Cmd {
         command: login::Command,
     },
     Update,
-    Bench,
+    Dev {
+        enabled: bool,
+    },
 }
 
 #[cfg(test)]

@@ -18,7 +18,9 @@ pub(super) enum Scope {
     Allow,
     Deny,
     Update,
-    Bench,
+    Dev,
+    DevOn,
+    DevOff,
     RootHelp,
     LoginHelp,
 }
@@ -84,7 +86,9 @@ impl Cli {
                     (Scope::Root, "passwd") => Scope::Passwd,
                     (Scope::Root, "login") => Scope::Login,
                     (Scope::Root, "update") => Scope::Update,
-                    (Scope::Root, "bench") => Scope::Bench,
+                    (Scope::Root, "dev") => Scope::Dev,
+                    (Scope::Dev, "on") => Scope::DevOn,
+                    (Scope::Dev, "off") => Scope::DevOff,
                     (Scope::Login, "requests") => Scope::Requests,
                     (Scope::Login, "allow") => Scope::Allow,
                     (Scope::Login, "deny") => Scope::Deny,
@@ -132,8 +136,10 @@ impl Cli {
                 }
             }
             Scope::Update => Cmd::Update,
-            Scope::Bench => Cmd::Bench,
-            Scope::Root | Scope::Login | Scope::RootHelp | Scope::LoginHelp => {
+            Scope::DevOn | Scope::DevOff => Cmd::Dev {
+                enabled: scope == Scope::DevOn,
+            },
+            Scope::Root | Scope::Login | Scope::Dev | Scope::RootHelp | Scope::LoginHelp => {
                 return Err(ParseError {
                     code: 2,
                     message: super::help::render(scope).to_owned(),
@@ -146,6 +152,8 @@ impl Cli {
                 Scope::Run
                     | Scope::Uninstall
                     | Scope::Passwd
+                    | Scope::DevOn
+                    | Scope::DevOff
                     | Scope::Requests
                     | Scope::Allow
                     | Scope::Deny
@@ -155,7 +163,12 @@ impl Cli {
                 "--data-dir is not used by this command",
             ));
         }
-        if values.cache_dir.is_some() && !matches!(scope, Scope::Run | Scope::Passwd) {
+        if values.cache_dir.is_some()
+            && !matches!(
+                scope,
+                Scope::Run | Scope::Passwd | Scope::DevOn | Scope::DevOff
+            )
+        {
             return Err(ParseError::invalid(
                 "--cache-dir is not used by this command",
             ));

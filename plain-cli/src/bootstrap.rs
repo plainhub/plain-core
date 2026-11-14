@@ -24,8 +24,8 @@ pub fn run() -> Result<()> {
             .enable_all()
             .build()?
             .block_on(crate::cli::login::run(&paths, command)),
+        crate::cli::Cmd::Dev { enabled } => crate::cli::dev::run(&paths, enabled),
         crate::cli::Cmd::Update => crate::cli::update::run(&paths),
-        crate::cli::Cmd::Bench => crate::cli::bench::run(&paths),
         crate::cli::Cmd::Run {
             media_directories,
             web_root,

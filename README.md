@@ -167,6 +167,20 @@ sudo plainapp passwd   # change the admin password while the service is stopped
 - `http://<host>:8080` — HTTP
 - `https://<host>:8443` — HTTPS with a self-signed certificate created on first start for `plainapp.local` and `localhost`
 
+### Developer mode
+
+The `plain-cli/` package builds the `plainapp` executable. Stop the service before changing its persisted developer mode setting, then start it again:
+
+```sh
+sudo systemctl stop plainapp
+sudo plainapp dev on       # enable developerMode
+sudo systemctl start plainapp
+```
+
+Use `sudo plainapp dev off` to disable it while the service is stopped.
+For a custom instance, use the same `--data-dir` and `--cache-dir` as `plainapp run`.
+`plainapp dev` displays usage; `plainapp dev --help` lists the commands and options.
+
 ### Install manually
 
 ```sh
