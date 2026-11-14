@@ -75,10 +75,6 @@ impl Audio {
         .await
     }
 
-    pub async fn cover(&self, path: &str) -> Result<Option<std::path::PathBuf>, String> {
-        crate::features::services::audio::covers::cache(&self.resources, &self.cache, path).await
-    }
-
     async fn execute<T: Send + 'static>(
         &self,
         preparation: Preparation,

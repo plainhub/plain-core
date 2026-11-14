@@ -22,7 +22,7 @@ async fn batch_resolution_preserves_order_and_handles_invalid_numbers_without_a_
     assert_eq!(rows.len(), 3);
     let first = rows[0].as_ref().unwrap();
     assert_eq!(first.country, "US");
-    assert_eq!(first.number_type, "TOLL_FREE");
+    assert_eq!(first.number_type, crate::phone::NumberType::TollFree);
     assert!(first.carrier.is_empty());
     assert!(rows[1].is_none());
     assert_eq!(rows[2].as_ref().unwrap().country, first.country);

@@ -139,6 +139,28 @@ pub async fn read(
             return Ok(Content::TranscodingUnavailable);
         }
 
+        if preview && options.size.is_some() && path.starts_with("content://") {
+            let mime = super::resources::read(&state.host, "mime", &path, json!({}))
+                .await
+                .map_err(plain_libs::anyhow::Error::msg)?;
+            if mime.as_str().is_some_and(|value| value.starts_with("audio/"))
+                || plain_libs::utils::mime::mime_from_ext(filename).starts_with("audio/")
+            {
+                let cover = crate::features::services::audio::covers::read(
+                    &state.resources, state.cache.root(), &path,
+                )
+                .await
+                .map_err(plain_libs::anyhow::Error::msg)?;
+                return Ok(match cover {
+                    Some(bytes) => Content::Thumbnail {
+                        bytes: Ok(Some(bytes.into())),
+                        name: filename.to_owned(),
+                    },
+                    None => Content::NotFound,
+                });
+            }
+        }
+
         if preview && options.size.is_none() {
             let document = if super::docs_preview::supports_name(filename) {
                 true

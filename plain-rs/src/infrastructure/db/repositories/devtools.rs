@@ -103,7 +103,12 @@ impl SqliteFile {
         browse::row_count(&conn, table).map_err(browse_err)
     }
 
-    pub fn table_rows_text(&self, table: &str, offset: i64, limit: i64) -> Result<Vec<String>> {
+    pub fn table_rows_text(
+        &self,
+        table: &str,
+        offset: i64,
+        limit: i64,
+    ) -> Result<Vec<Map<String, Value>>> {
         let conn = self.open()?;
         self.checked(&conn, table)?;
         browse::rows_page_text(&conn, table, offset, limit).map_err(browse_err)

@@ -2,6 +2,7 @@ use plain_libs::rusqlite::{OptionalExtension, params, params_from_iter, types::V
 
 use crate::infrastructure::db::Db;
 pub use crate::infrastructure::db::models::notes_feeds::FeedEntryRow;
+pub use crate::infrastructure::db::models::notes_feeds::{FeedError, FeedErrorCode};
 pub use crate::infrastructure::db::models::notes_feeds::FeedRow;
 pub use crate::infrastructure::db::models::notes_feeds::NoteRow;
 
@@ -31,7 +32,13 @@ fn feed_from_row(row: &plain_libs::rusqlite::Row<'_>) -> plain_libs::rusqlite::R
         logo: row.get(3)?,
         fetch_full_content: row.get::<_, i64>(4)? != 0,
         last_sync_at: row.get(5)?,
-        last_error: row.get(6)?,
+        last_error: plain_libs::serde_json::from_str(&row.get::<_, String>(6)?).map_err(|error| {
+            plain_libs::rusqlite::Error::FromSqlConversionFailure(
+                6,
+                plain_libs::rusqlite::types::Type::Text,
+                Box::new(error),
+            )
+        })?,
         created_at: row.get(7)?,
         updated_at: row.get(8)?,
     })
@@ -352,7 +359,7 @@ impl Db {
         now: &str,
     ) -> plain_libs::rusqlite::Result<FeedRow> {
         self.with_conn(|c| {
-            c.execute("INSERT INTO feeds(id,name,url,logo,fetch_full_content,last_error,created_at,updated_at) VALUES(?1,?2,?3,'',?4,'',?5,?5) ON CONFLICT(id) DO UPDATE SET name=excluded.name,url=excluded.url,fetch_full_content=excluded.fetch_full_content,updated_at=excluded.updated_at", params![id,name,url,fetch_full_content,now])?;
+            c.execute("INSERT INTO feeds(id,name,url,logo,fetch_full_content,created_at,updated_at) VALUES(?1,?2,?3,'',?4,?5,?5) ON CONFLICT(id) DO UPDATE SET name=excluded.name,url=excluded.url,fetch_full_content=excluded.fetch_full_content,updated_at=excluded.updated_at", params![id,name,url,fetch_full_content,now])?;
             c.query_row(&format!("SELECT {FEED_COLUMNS} FROM feeds WHERE id=?"), [id], feed_from_row)
         })
     }

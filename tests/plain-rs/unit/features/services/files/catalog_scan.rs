@@ -801,7 +801,7 @@ async fn exclusion_changes_remove_results_and_reinclude_without_touching_origina
     crate::features::services::files::indexing::set(
         &state,
         &volume.id,
-        crate::infrastructure::db::IndexMode::Blocklist,
+        crate::infrastructure::db::FileIndexMode::Blocklist,
         included.clone(),
         vec![private.to_string_lossy().into_owned()],
     )
@@ -846,7 +846,7 @@ async fn exclusion_changes_remove_results_and_reinclude_without_touching_origina
     crate::features::services::files::indexing::set(
         &state,
         &volume.id,
-        crate::infrastructure::db::IndexMode::Allowlist,
+        crate::infrastructure::db::FileIndexMode::Allowlist,
         included,
         vec![],
     )
@@ -1210,7 +1210,7 @@ async fn changed_index_directories_refresh_all_shared_media_lists_without_copyin
         crate::features::services::files::indexing::set(
             &state,
             &volume_id,
-            crate::infrastructure::db::IndexMode::Allowlist,
+            crate::infrastructure::db::FileIndexMode::Allowlist,
             included,
             Vec::new(),
         )
@@ -1282,7 +1282,7 @@ async fn directory_scan_counts_filtered_files_before_the_first_index_write() {
         .db
         .set_volume_index(
             &volume.id,
-            crate::infrastructure::db::IndexMode::Blocklist,
+            crate::infrastructure::db::FileIndexMode::Blocklist,
             &[],
             &[relative],
         )

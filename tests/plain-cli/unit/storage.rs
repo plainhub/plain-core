@@ -9,7 +9,7 @@ fn explicit_directories_are_persisted_on_the_containing_volume() {
     assert_eq!(volumes.len(), 1);
     assert_eq!(
         volumes[0].index_mode,
-        plain_rs::infrastructure::db::IndexMode::Allowlist
+        plain_rs::infrastructure::db::FileIndexMode::Allowlist
     );
     let roots = plain_rs::features::files::index_scope::source_directories(&volumes);
     assert_eq!(

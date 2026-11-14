@@ -34,7 +34,7 @@ fn audit_events_preserve_optional_client_ids() {
     let db = Db::open(std::path::Path::new(":memory:")).unwrap();
     let system_id = db.audit_event_add("mount", "/mnt/example", None).unwrap();
     let client_id = db
-        .audit_event_add("set_hostname", "server", Some("client"))
+        .audit_event_add("update_device_name", "server", Some("client"))
         .unwrap();
     let rows = db.audit_events(0, 10, None).unwrap();
     assert_eq!(

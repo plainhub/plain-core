@@ -138,11 +138,7 @@ pub async fn execute(
         "Invalid SMS part count"
     );
     let request_id = &receipt.request_id;
-    sends.register(
-        request_id.to_owned(),
-        Some(receipt.request_id.clone()),
-        parts.len(),
-    )?;
+    sends.register(request_id.to_owned(), parts.len())?;
     let sent = host.call("systemSendSmsParts", json!({"requestId":request_id,"number":request.number,"parts":parts,"subscriptionId":request.subscription_id})).await;
     match sent {
         Ok(Value::Bool(true)) => {}

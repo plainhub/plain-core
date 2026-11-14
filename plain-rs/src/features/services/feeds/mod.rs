@@ -2,7 +2,7 @@ mod preview;
 pub use preview::title as preview_title;
 
 use plain_libs::protocols::http_client;
-use crate::features::feeds::{error, now, require_url};
+use crate::features::feeds::{FeedError, FeedErrorCode, error, now, require_url};
 use crate::infrastructure::db::Db;
 use crate::infrastructure::db::notes_feeds::FeedEntryRow;
 use crate::infrastructure::db::notes_feeds::FeedRow;
@@ -403,24 +403,24 @@ pub(super) async fn sync_feed(
         .map(ToString::to_string)
         .unwrap_or_default();
     let code = if detail.is_empty() {
-        ""
+        FeedErrorCode::None
     } else if detail.contains("TIMEOUT:") || detail.contains("timed out") {
-        "TIMEOUT"
+        FeedErrorCode::Timeout
     } else if detail.contains("SERVER:") {
-        "SERVER"
+        FeedErrorCode::Server
     } else if detail.contains("DNS:") {
-        "DNS"
+        FeedErrorCode::Dns
     } else if detail.contains("invalid_feed_content")
         || detail.contains("decode")
         || detail.contains("XML")
     {
-        "PARSE"
+        FeedErrorCode::Parse
     } else {
-        "UNKNOWN"
+        FeedErrorCode::Unknown
     };
-    let stored = plain_libs::serde_json::json!({"code":code,"detail":detail}).to_string();
+    let stored = FeedError { code, detail };
     let persist = db.feed_set_sync_status(&feed.id, &now(), &stored);
-    let detail = persist.err().map(|e| e.to_string()).unwrap_or(detail);
+    let detail = persist.err().map(|e| e.to_string()).unwrap_or(stored.detail);
     let _ = events.send(WsEvent::broadcast(
         "FEEDS_FETCHED",
         plain_libs::serde_json::json!({"feedId":feed.id,"error":detail}).to_string(),

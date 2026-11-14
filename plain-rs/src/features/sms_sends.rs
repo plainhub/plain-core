@@ -10,7 +10,6 @@ pub const RETENTION_MS: u64 = 5 * 60 * 1000;
 #[serde(rename_all = "camelCase")]
 pub struct Pending {
     pub request_id: String,
-    pub client_request_id: Option<String>,
     pub part_count: usize,
     pub completed_parts: BTreeSet<usize>,
     pub created_at_millis: u64,
@@ -22,14 +21,14 @@ pub struct Pending {
 #[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Outcome {
-    pub request_id: Option<String>,
+    pub request_id: String,
     pub success: bool,
     pub result_code: i32,
 }
 impl Pending {
     pub fn result(&self) -> Option<Outcome> {
         Some(Outcome {
-            request_id: self.client_request_id.clone(),
+            request_id: self.request_id.clone(),
             success: self.terminal_success?,
             result_code: self.terminal_result_code?,
         })
@@ -63,13 +62,11 @@ pub fn pending(store: &Db) -> plain_libs::anyhow::Result<Vec<Pending>> {
 pub fn register(
     store: &Db,
     request_id: String,
-    client_request_id: Option<String>,
     part_count: usize,
     now: u64,
 ) -> plain_libs::anyhow::Result<()> {
     let value = Pending {
         request_id,
-        client_request_id,
         part_count: part_count.max(1),
         completed_parts: BTreeSet::new(),
         created_at_millis: now,
@@ -87,7 +84,7 @@ pub fn cancel(store: &Db, id: &str) -> plain_libs::anyhow::Result<()> {
 
 fn finish(value: &mut Pending, success: bool, result_code: i32, now: u64) -> Outcome {
     let result = Outcome {
-        request_id: value.client_request_id.clone(),
+        request_id: value.request_id.clone(),
         success,
         result_code,
     };

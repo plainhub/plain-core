@@ -10,7 +10,7 @@ pub(crate) use rules::{
     macos_application_directory, macos_cloud_documents_ancestor, macos_cloud_documents_root,
 };
 
-use crate::infrastructure::db::{Db, IndexMode, VolumeRow};
+use crate::infrastructure::db::{Db, FileIndexMode, VolumeRow};
 use std::path::Path;
 
 #[derive(Clone)]
@@ -51,7 +51,7 @@ impl Scope {
         scope.directories = source_directories(std::slice::from_ref(volume));
         for other in &mut scope.volumes {
             if other.id != id {
-                other.index_mode = IndexMode::Disabled;
+                other.index_mode = FileIndexMode::Disabled;
             }
         }
         Ok(scope)
@@ -89,9 +89,9 @@ impl Scope {
                             .any(|dir| under(&path, &absolute_directory(&volume.path, dir)))
                     };
                     match volume.index_mode {
-                        IndexMode::Unconfigured | IndexMode::Disabled => true,
-                        IndexMode::Allowlist => !listed(&volume.included_dirs),
-                        IndexMode::Blocklist => listed(&volume.excluded_dirs),
+                        FileIndexMode::Unconfigured | FileIndexMode::Disabled => true,
+                        FileIndexMode::Allowlist => !listed(&volume.included_dirs),
+                        FileIndexMode::Blocklist => listed(&volume.excluded_dirs),
                     }
                 })
     }
@@ -104,9 +104,9 @@ pub fn source_directories(volumes: &[VolumeRow]) -> Vec<String> {
         .filter(|volume| volume.is_available && !volume.path.contains("://"))
     {
         match volume.index_mode {
-            IndexMode::Unconfigured | IndexMode::Disabled => {}
-            IndexMode::Blocklist => directories.push(volume.path.clone()),
-            IndexMode::Allowlist => directories.extend(
+            FileIndexMode::Unconfigured | FileIndexMode::Disabled => {}
+            FileIndexMode::Blocklist => directories.push(volume.path.clone()),
+            FileIndexMode::Allowlist => directories.extend(
                 volume
                     .included_dirs
                     .iter()

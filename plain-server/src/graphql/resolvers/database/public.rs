@@ -2,7 +2,8 @@
 //! view over the app's SQLite file.
 //!
 
-use plain_graphql::{Context, Enum, Object, SimpleObject};
+use plain_graphql::{Context, Enum, Json, Object, SimpleObject};
+use plain_libs::serde_json::{Map, Value};
 
 use plain_rs::infrastructure::db::devtools::SqliteFile;
 use plain_rs::infrastructure::types::Long;
@@ -102,21 +103,20 @@ impl DbQuery {
         spawn(move || file.table_row_count(&table).map(Long)).await
     }
 
-    /// Rows come back as pre-rendered JSON strings, one per row — the
-    /// column set differs per table, so there is no single row type to
-    /// model.
     async fn db_table_rows(
         &self,
         ctx: &Context<'_>,
         table: String,
         offset: i32,
         limit: i32,
-    ) -> plain_graphql::Result<Vec<String>> {
+    ) -> plain_graphql::Result<Vec<Json<Map<String, Value>>>> {
         let file = app_db(ctx).await?;
         if !has_path(&file) {
             return Ok(vec![]);
         }
-        spawn(move || file.table_rows_text(&table, offset as i64, limit as i64)).await
+        spawn(move || file.table_rows_text(&table, offset as i64, limit as i64))
+            .await
+            .map(|rows| rows.into_iter().map(Json).collect())
     }
 }
 
@@ -125,22 +125,18 @@ pub struct DbMutation;
 
 #[Object]
 impl DbMutation {
-    /// `row` is a JSON object of column values. A malformed one is reported
-    /// as `false` rather than an error: this is a developer console, and the
-    /// operator is the one who typed it.
     async fn create_db_table_row(
         &self,
         ctx: &Context<'_>,
         table: String,
-        row: String,
+        row: Json<Map<String, Value>>,
     ) -> plain_graphql::Result<bool> {
         let file = app_db(ctx).await?;
         if !has_path(&file) {
             return Ok(false);
         }
         Ok(spawn(move || {
-            let mut row: plain_libs::serde_json::Map<String, plain_libs::serde_json::Value> =
-                plain_libs::serde_json::from_str(&row)?;
+            let mut row = row.0;
             for value in row.values_mut() {
                 if value.is_null() {
                     *value = plain_libs::serde_json::Value::String("null".into());

@@ -12,7 +12,7 @@ use tokio::sync::{Semaphore, broadcast, watch};
 pub enum FeedWorkerStatus {
     Queued,
     Running,
-    Cancelled,
+    Canceled,
     Completed,
     Error,
 }
@@ -273,14 +273,14 @@ impl SyncService {
                         }
                     }
                     let state = receiver.borrow().clone();
-                    cancelled |= state.status == FeedWorkerStatus::Cancelled;
+                    cancelled |= state.status == FeedWorkerStatus::Canceled;
                     if !state.error.is_empty() {
                         errors.push(state.error);
                     }
                 }
                 let mut result = batch.borrow().clone();
                 result.status = if cancelled {
-                    FeedWorkerStatus::Cancelled
+                    FeedWorkerStatus::Canceled
                 } else if errors.is_empty() {
                     FeedWorkerStatus::Completed
                 } else {
@@ -344,7 +344,7 @@ impl SyncService {
         let mut state = task.state.borrow().clone();
         match result {
             None => {
-                state.status = FeedWorkerStatus::Cancelled;
+                state.status = FeedWorkerStatus::Canceled;
                 state.error.clear();
                 let _ = self.events.send(WsEvent::broadcast(
                     "FEEDS_FETCHED",

@@ -565,7 +565,7 @@ impl Db {
     pub fn set_volume_index(
         &self,
         id: &str,
-        mode: crate::infrastructure::db::IndexMode,
+        mode: crate::infrastructure::db::FileIndexMode,
         included_dirs: &[String],
         excluded_dirs: &[String],
     ) -> plain_libs::rusqlite::Result<bool> {

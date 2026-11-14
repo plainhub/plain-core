@@ -364,7 +364,7 @@ fn public_schema_exposes_the_contract_it_has_to_serve() {
         "audios(query: String!, offset: Int!, limit: Int!, sortBy: FileSortBy!): [Audio!]!",
         "audioLyrics(mediaId: ID!): String",
         "audioQueueItems(query: String!, offset: Int!, limit: Int!): [AudioItem!]!",
-        "audioQueueItemCount: Int!",
+        "audioQueueItemCount(query: String!): Int!",
         "audioPlayback: AudioPlayback!",
         "audioPlaylists: [AudioPlaylist!]!",
         "audioPlaylistItems(id: ID!, query: String!, offset: Int!, limit: Int!): [AudioItem!]!",
@@ -384,7 +384,7 @@ fn public_schema_exposes_the_contract_it_has_to_serve() {
         "updateAudioPlaylist(id: ID!, name: String!): AudioPlaylist!",
         "deleteAudioPlaylist(id: ID!): Boolean!",
         "addAudioPlaylistItems(id: ID!, query: String!): Boolean!",
-        "removeAudioPlaylistItem(id: ID!, query: String!): ActionResult!",
+        "removeAudioPlaylistItems(id: ID!, query: String!): ActionResult!",
         "chatChannels: [ChatChannel!]!",
         "chatItems(target: String!, query: String!, offset: Int!, limit: Int!): [ChatItem!]!",
         "chatConversations: [ChatConversation!]!",
@@ -925,7 +925,7 @@ fn closed_fields_keep_named_enums_and_required_wrappers() {
         ("MdnsPacketDirection", "IN OUT"),
         (
             "FeedWorkerStatus",
-            "QUEUED RUNNING CANCELLED COMPLETED ERROR",
+            "QUEUED RUNNING CANCELED COMPLETED ERROR",
         ),
     ] {
         let header = format!("enum {name} {{");
@@ -997,7 +997,12 @@ fn sms_sending_has_one_mutation_and_one_result_subscription() {
     assert!(schema.contains("sendSms(number: String!, body: String!, attachmentPaths: [String!]! = [], subscriptionId: Int, requestId: String!): SmsSendReceipt!"));
     let receipt = schema.split("type SmsSendReceipt {").nth(1).unwrap().split('}').next().unwrap();
     assert_eq!(receipt.lines().map(str::trim).filter(|line| !line.is_empty()).collect::<Vec<_>>(), ["requestId: String!", "requiresConfirmation: Boolean!"]);
+    let result = schema.split("type SmsSendResult {").nth(1).unwrap().split('}').next().unwrap();
+    assert!(result.lines().any(|line| line.trim() == "requestId: ID!"));
     for retired in ["sendMms(", "mmsSendResult:", "mmsSent:", "type MmsSendResult {"] {
         assert!(!schema.contains(retired), "retired contract remains: {retired}");
     }
 }
+
+#[path = "file_index.rs"]
+mod file_index;

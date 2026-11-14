@@ -8,6 +8,8 @@ use plain_libs::utils::http_url::parse_http_url;
 use plain_libs::utils::xml;
 use plain_libs::utils::xml::Event;
 
+pub use crate::infrastructure::db::notes_feeds::{FeedError, FeedErrorCode};
+
 pub fn now() -> String {
     Utc::now().to_rfc3339_opts(plain_libs::chrono::SecondsFormat::Millis, true)
 }

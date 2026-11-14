@@ -300,6 +300,7 @@ impl FileOpsMutation {
         file_name: String,
         total_size: plain_rs::infrastructure::types::Long,
     ) -> plain_graphql::Result<MergeTask> {
+        public_gate::require(ctx, prefs(ctx), &[STORAGE])?;
         start_merge(
             ctx,
             file_id,

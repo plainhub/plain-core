@@ -288,3 +288,76 @@ async fn empty_call_page_does_not_request_locale_or_number_metadata() {
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     assert_eq!(response.data.into_json().unwrap()["calls"], json!([]));
 }
+
+#[tokio::test]
+async fn phone_number_type_is_a_non_null_named_enum_with_all_domain_values() {
+    use plain_libs::phone::NumberType;
+    let (_dir, schema) = fixture(json!(["CALLS"]));
+    let response = schema
+        .execute(
+            r#"{
+        geo: __type(name: "PhoneGeo") { fields { name type { kind ofType { kind name } } } }
+        kinds: __type(name: "PhoneNumberType") { kind enumValues { name } }
+    }"#,
+        )
+        .await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    let value = plain_libs::serde_json::to_value(response.data).unwrap();
+    let fields = value["geo"]["fields"].as_array().unwrap();
+    let kind = fields
+        .iter()
+        .find(|field| field["name"] == "numberType")
+        .unwrap();
+    assert_eq!(
+        kind["type"],
+        json!({"kind":"NON_NULL","ofType":{"kind":"ENUM","name":"PhoneNumberType"}})
+    );
+    assert_eq!(value["kinds"]["kind"], "ENUM");
+    let mut names: Vec<_> = value["kinds"]["enumValues"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|value| value["name"].as_str().unwrap())
+        .collect();
+    names.sort_unstable();
+    assert_eq!(
+        names,
+        [
+            "FIXED_LINE",
+            "FIXED_LINE_OR_MOBILE",
+            "MOBILE",
+            "PAGER",
+            "PERSONAL_NUMBER",
+            "PREMIUM_RATE",
+            "SHARED_COST",
+            "TOLL_FREE",
+            "UAN",
+            "VOICEMAIL",
+            "VOIP"
+        ]
+    );
+    for (kind, wire) in [
+        (NumberType::FixedLine, "FIXED_LINE"),
+        (NumberType::Mobile, "MOBILE"),
+        (NumberType::FixedLineOrMobile, "FIXED_LINE_OR_MOBILE"),
+        (NumberType::TollFree, "TOLL_FREE"),
+        (NumberType::PremiumRate, "PREMIUM_RATE"),
+        (NumberType::SharedCost, "SHARED_COST"),
+        (NumberType::PersonalNumber, "PERSONAL_NUMBER"),
+        (NumberType::Voip, "VOIP"),
+        (NumberType::Pager, "PAGER"),
+        (NumberType::Uan, "UAN"),
+        (NumberType::Voicemail, "VOICEMAIL"),
+    ] {
+        let geo = PhoneGeo::from(plain_libs::phone::Metadata {
+            country: "GB".into(),
+            number_type: kind,
+            carrier: String::new(),
+            description: String::new(),
+        });
+        assert_eq!(
+            plain_graphql::InputType::to_value(&geo.number_type).to_string(),
+            wire
+        );
+    }
+}

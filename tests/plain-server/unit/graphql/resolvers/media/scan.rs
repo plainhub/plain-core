@@ -77,7 +77,7 @@ async fn native_media_controls_share_the_main_contract_and_remote_permissions() 
         .unwrap();
     assert_eq!(
         saved.index_mode,
-        plain_rs::infrastructure::db::IndexMode::Disabled
+        plain_rs::infrastructure::db::FileIndexMode::Disabled
     );
     assert_eq!(saved.included_dirs.len(), 1);
     let query = native
@@ -106,9 +106,75 @@ async fn native_media_controls_share_the_main_contract_and_remote_permissions() 
     .await;
     assert!(!remote.errors.is_empty());
     let main = native
-        .execute(Request::new("{ scanProgress { state } }"))
+        .execute(Request::new("{ fileIndexScanProgress { state } }"))
         .await;
     assert!(main.errors.is_empty(), "{:?}", main.errors);
+    for volume_id in [id.as_str(), "missing-volume"] {
+        let denied = native
+            .execute(
+                Request::new("mutation($volumeId:ID){rebuildFileIndex(volumeId:$volumeId)}")
+                    .variables(plain_graphql::Variables::from_json(
+                        plain_libs::serde_json::json!({"volumeId":volume_id}),
+                    )),
+            )
+            .await;
+        assert!(
+            !denied.errors.is_empty(),
+            "disabled or unknown volume accepted"
+        );
+    }
+    std::fs::write(source_path.join("included.txt"), "generated index fixture").unwrap();
+    std::fs::create_dir(source_path.join("excluded")).unwrap();
+    std::fs::write(
+        source_path.join("excluded/ignored.txt"),
+        "generated exclusion fixture",
+    )
+    .unwrap();
+    let configured = native.execute(Request::new(
+        "mutation($id:ID!,$dirs:[String!]!,$excluded:[String!]!){setFileIndexVolume(id:$id,indexMode:ALLOWLIST,includedDirs:$dirs,excludedDirs:$excluded)}"
+    ).variables(plain_graphql::Variables::from_json(plain_libs::serde_json::json!({
+        "id":id,"dirs":[source_path.to_str().unwrap()],
+        "excluded":[source_path.join("excluded").to_str().unwrap()]
+    })))).await;
+    assert!(configured.errors.is_empty(), "{:?}", configured.errors);
+    state.media_scans.wait_background().await.unwrap();
+    for (document, variables) in [
+        (
+            "mutation { rebuildFileIndex }",
+            plain_libs::serde_json::json!({}),
+        ),
+        (
+            "mutation($volumeId:ID){rebuildFileIndex(volumeId:$volumeId)}",
+            plain_libs::serde_json::json!({"volumeId":null}),
+        ),
+        (
+            "mutation($volumeId:ID){rebuildFileIndex(volumeId:$volumeId)}",
+            plain_libs::serde_json::json!({"volumeId":id}),
+        ),
+    ] {
+        let rebuilt = native
+            .execute(
+                Request::new(document).variables(plain_graphql::Variables::from_json(variables)),
+            )
+            .await;
+        assert!(rebuilt.errors.is_empty(), "{:?}", rebuilt.errors);
+        assert_eq!(rebuilt.data.into_json().unwrap()["rebuildFileIndex"], true);
+        state.media_scans.wait_background().await.unwrap();
+        let files = native.execute(Request::new(
+            "{ indexedFiles(query:\"\",offset:0,limit:100,sortBy:NAME_ASC){name} fileIndexScanProgress{state} }"
+        )).await;
+        assert!(files.errors.is_empty(), "{:?}", files.errors);
+        let files = files.data.into_json().unwrap();
+        let names = files["indexedFiles"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|file| file["name"].as_str().unwrap())
+            .collect::<Vec<_>>();
+        assert!(names.contains(&"included.txt"));
+        assert!(!names.contains(&"ignored.txt"));
+        assert_eq!(files["fileIndexScanProgress"]["state"], "IDLE");
+    }
     provider.abort();
     core.stop_core().await;
 }
@@ -127,7 +193,9 @@ async fn public_scans_require_opt_in_and_grants_then_read_the_same_core() {
         })
         .unwrap();
     let request = || {
-        Request::new("{ fileIndexVolumes { id indexMode } scanProgress { indexed total state } }")
+        Request::new(
+            "{ fileIndexVolumes { id indexMode } fileIndexScanProgress { indexed total state } }",
+        )
     };
     let denied = crate::graphql::executor::execute_graphql(
         &state.public,
@@ -164,7 +232,10 @@ async fn public_scans_require_opt_in_and_grants_then_read_the_same_core() {
                 continue;
             }
             assert_eq!(request["method"], "systemAccessFacts");
-            assert_eq!(request["params"]["features"], plain_libs::serde_json::json!(["FILES"]));
+            assert_eq!(
+                request["params"]["features"],
+                plain_libs::serde_json::json!(["FILES"])
+            );
             host.reply(
                 generation,
                 plain_libs::serde_json::json!({"id":request["id"], "result":{"granted":{"FILES":granted}}}),
@@ -181,7 +252,7 @@ async fn public_scans_require_opt_in_and_grants_then_read_the_same_core() {
     assert!(allowed.errors.is_empty(), "{:?}", allowed.errors);
     let data = allowed.data.into_json().unwrap();
     assert!(data["fileIndexVolumes"].is_array());
-    assert_eq!(data["scanProgress"]["state"], "IDLE");
+    assert_eq!(data["fileIndexScanProgress"]["state"], "IDLE");
     grants.store(false, std::sync::atomic::Ordering::SeqCst);
     let denied = crate::graphql::executor::execute_graphql(
         &state.public,

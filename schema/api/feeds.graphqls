@@ -34,8 +34,17 @@ type FeedEntryCount {
 }
 
 type FeedError {
-	code: String!
+	code: FeedErrorCode!
 	detail: String!
+}
+
+enum FeedErrorCode {
+	NONE
+	TIMEOUT
+	SERVER
+	DNS
+	PARSE
+	UNKNOWN
 }
 
 type FeedSyncState {
@@ -49,7 +58,7 @@ type FeedSyncState {
 enum FeedWorkerStatus {
 	QUEUED
 	RUNNING
-	CANCELLED
+	CANCELED
 	COMPLETED
 	ERROR
 }

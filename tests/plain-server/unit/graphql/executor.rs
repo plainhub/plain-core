@@ -256,7 +256,7 @@ async fn sms_subscription_replays_results_after_its_receiver_is_ready() {
                 .unwrap();
         }
     });
-    state.sms_sends.register("send".into(), Some("request".into()), 1).unwrap();
+    state.sms_sends.register("send".into(), 1).unwrap();
     state
         .sms_sends
         .report(
@@ -280,7 +280,7 @@ async fn sms_subscription_replays_results_after_its_receiver_is_ready() {
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     assert_eq!(
         response.data.into_json().unwrap()["smsSendResult"],
-        json!({"requestId":"request","success":true,"resultCode":-1})
+        json!({"requestId":"send","success":true,"resultCode":-1})
     );
     drop(stream);
     state.host.disconnect(generation);

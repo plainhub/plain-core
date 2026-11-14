@@ -25,9 +25,23 @@ enum CallType {
 
 type PhoneGeo {
 	country: String!
-	numberType: String!
+	numberType: PhoneNumberType!
 	carrier: String!
 	description: String!
+}
+
+enum PhoneNumberType {
+	FIXED_LINE
+	MOBILE
+	FIXED_LINE_OR_MOBILE
+	TOLL_FREE
+	PREMIUM_RATE
+	SHARED_COST
+	PERSONAL_NUMBER
+	VOIP
+	PAGER
+	UAN
+	VOICEMAIL
 }
 
 extend type Mutation {

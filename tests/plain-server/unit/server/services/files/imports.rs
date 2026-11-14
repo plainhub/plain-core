@@ -2,18 +2,32 @@ use plain_libs::serde_json::json;
 use std::sync::Arc;
 
 #[tokio::test]
-async fn main_import_keeps_its_staged_source_until_the_database_commit_before_cache_clear() {
+async fn internal_import_keeps_its_staged_source_until_the_database_commit_before_cache_clear() {
     let directory = plain_libs::temporary::tempdir().unwrap();
     let core =
         Arc::new(crate::server::ContentServer::open(&directory.path().join("data")).unwrap());
     let state = core.runtime_state().core;
     let (generation, mut requests) = state.host.connect();
     let importing = {
-        let core = core.clone();
+        let state = state.clone();
         tokio::spawn(async move {
-            core.native_graphql().unwrap().execute(plain_graphql::Request::new(
-            "mutation {importAppFile(source:\"content://fixture/picked\",fileName:\"picked.txt\",mimeType:\"text/plain\",deleteSource:false){id}}",
-        )).await
+            plain_rs::features::services::files::imports::import(
+                &plain_rs::features::files::app_files::FileStore::new(
+                    state.db.clone(),
+                    state.directory.clone(),
+                ),
+                &state.resources,
+                state.cache.root(),
+                plain_rs::features::services::files::imports::Import {
+                    source: "content://fixture/picked".into(),
+                    name: "picked.txt".into(),
+                    mime: "text/plain".into(),
+                    delete_source: false,
+                },
+                state.stop.clone(),
+                state.cache_changes.clone(),
+            )
+            .await
         })
     };
     let request = loop {
@@ -42,14 +56,7 @@ async fn main_import_keeps_its_staged_source_until_the_database_commit_before_ca
     assert!(futures_util::poll!(&mut clearing).is_pending());
     stream.write(b" clear".to_vec()).await.unwrap();
     stream.finish().await.unwrap();
-    let response = importing.await.unwrap();
-    assert!(response.errors.is_empty(), "{:?}", response.errors);
-    let data = response.data.into_json().unwrap();
-    let row = state
-        .db
-        .app_file_get(data["importAppFile"]["id"].as_str().unwrap())
-        .unwrap()
-        .unwrap();
+    let row = importing.await.unwrap().unwrap();
     clearing.await.unwrap();
     assert_eq!(
         std::fs::read(state.directory.join(row.real_path)).unwrap(),

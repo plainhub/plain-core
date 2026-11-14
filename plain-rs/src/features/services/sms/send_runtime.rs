@@ -44,13 +44,11 @@ impl Runtime {
     pub fn register(
         &self,
         id: String,
-        client_request_id: Option<String>,
         parts: usize,
     ) -> plain_libs::anyhow::Result<()> {
         sms_sends::register(
             self.store.get()?.as_ref(),
             id,
-            client_request_id,
             parts,
             now(),
         )?;

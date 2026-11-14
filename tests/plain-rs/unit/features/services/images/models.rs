@@ -628,7 +628,7 @@ async fn semantic_search_pages_all_matches_and_filters_before_pagination() {
     for volume in db.volumes().unwrap() {
         db.set_volume_index(
             &volume.id,
-            crate::infrastructure::db::IndexMode::Blocklist,
+            crate::infrastructure::db::FileIndexMode::Blocklist,
             &[],
             &[],
         )
@@ -716,7 +716,7 @@ async fn semantic_search_pages_all_matches_and_filters_before_pagination() {
     for volume in db.volumes().unwrap() {
         db.set_volume_index(
             &volume.id,
-            crate::infrastructure::db::IndexMode::Allowlist,
+            crate::infrastructure::db::FileIndexMode::Allowlist,
             &[std::path::Path::new("/synthetic/selected")
                 .strip_prefix(&volume.path)
                 .unwrap()

@@ -1,7 +1,7 @@
 use super::events;
 use super::models::{FeedSyncChange, MediaChange, UploadMergeResult};
 use crate::graphql::resolvers::bookmarks::bookmark_types::Bookmark;
-use crate::graphql::resolvers::media::types::ScanProgress;
+use crate::graphql::resolvers::media::types::FileIndexScanProgress;
 use futures_util::stream::BoxStream;
 use plain_graphql::{Context, Result, Subscription};
 
@@ -15,10 +15,10 @@ impl LibrarySubscriptions {
     ) -> Result<BoxStream<'static, Result<MediaChange>>> {
         events::stream(ctx, plain_rs::infrastructure::events::MEDIA_UPDATED).await
     }
-    async fn media_scan_progress(
+    async fn file_index_scan_progress_updated(
         &self,
         ctx: &Context<'_>,
-    ) -> Result<BoxStream<'static, Result<ScanProgress>>> {
+    ) -> Result<BoxStream<'static, Result<FileIndexScanProgress>>> {
         events::stream(ctx, "MEDIA_SCAN_PROGRESS").await
     }
     async fn bookmarks_updated(

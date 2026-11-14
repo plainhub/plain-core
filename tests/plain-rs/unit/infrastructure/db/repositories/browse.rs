@@ -252,7 +252,10 @@ fn insert_row_binds_json_object_as_text_with_null() {
         SqliteBrowseError::Invalid(_)
     ));
     let mut bad = plain_libs::serde_json::Map::new();
-    bad.insert("id; DROP TABLE items".into(), plain_libs::serde_json::json!("a"));
+    bad.insert(
+        "id; DROP TABLE items".into(),
+        plain_libs::serde_json::json!("a"),
+    );
     assert!(matches!(
         insert_row(&conn, "items", &bad).unwrap_err(),
         SqliteBrowseError::Invalid(_)

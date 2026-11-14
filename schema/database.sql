@@ -152,7 +152,7 @@ CREATE TABLE IF NOT EXISTS feeds (
     logo TEXT NOT NULL DEFAULT '',
     fetch_full_content INTEGER NOT NULL CHECK(fetch_full_content IN (0,1)),
     last_sync_at TEXT,
-    last_error TEXT NOT NULL DEFAULT '',
+    last_error TEXT NOT NULL DEFAULT '{"code":"NONE","detail":""}',
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );

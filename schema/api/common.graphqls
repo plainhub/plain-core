@@ -128,12 +128,11 @@ scalar JSON
 scalar Long
 
 type MediaChange {
-	types: [DataType!]!
+	types: [MediaDataType!]!
 }
 
 """
 Media-library item kinds accepted by media item actions and buckets
-(plain-app `MediaDataType`).
 """
 enum MediaDataType {
 	AUDIO
@@ -191,7 +190,7 @@ type SmsProviderChange {
 }
 
 type SmsSendResult {
-	requestId: ID
+	requestId: ID!
 	success: Boolean!
 	resultCode: Int
 }
@@ -224,7 +223,7 @@ type Subscription {
 	messagesUpdated: [ChatItem!]!
 	messagesDeleted: String!
 	mediaUpdated: MediaChange!
-	mediaScanProgress: ScanProgress!
+	fileIndexScanProgressUpdated: FileIndexScanProgress!
 	bookmarksUpdated: [Bookmark!]!
 	feedsFetched: FeedSyncChange!
 	uploadMergeResult: UploadMergeResult!

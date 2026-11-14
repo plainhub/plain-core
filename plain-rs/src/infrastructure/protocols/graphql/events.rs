@@ -160,7 +160,7 @@ pub const EVENTS: &[EventSpec] = &[
         capability: None,
     },
     EventSpec {
-        field: "mediaScanProgress",
+        field: "fileIndexScanProgressUpdated",
         event: "MEDIA_SCAN_PROGRESS",
         aliases: &[],
         invalidation: false,

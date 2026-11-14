@@ -1,46 +1,15 @@
-use plain_graphql::{Enum, ID, SimpleObject};
+use plain_graphql::{ID, SimpleObject};
 
-use plain_rs::features::enums::DataType;
+pub use plain_rs::features::enums::MediaDataType;
 
-/// Media-library item kinds accepted by media item actions and buckets
-/// (plain-app `MediaDataType`).
-#[derive(Enum, Copy, Clone, Eq, PartialEq, Debug)]
-#[allow(non_camel_case_types)] // plain-app SDL contract names
-pub enum MediaDataType {
-    AUDIO,
-    VIDEO,
-    IMAGE,
-    DOC,
-}
-
-impl MediaDataType {
-    pub(crate) fn as_str(self) -> &'static str {
-        match self {
-            Self::AUDIO => "AUDIO",
-            Self::VIDEO => "VIDEO",
-            Self::IMAGE => "IMAGE",
-            Self::DOC => "DOC",
-        }
-    }
-
-    pub fn data_type(self) -> DataType {
-        match self {
-            MediaDataType::DOC => DataType::Doc,
-            MediaDataType::AUDIO => DataType::Audio,
-            MediaDataType::VIDEO => DataType::Video,
-            MediaDataType::IMAGE => DataType::Image,
-        }
-    }
-}
-
-pub use plain_rs::features::services::files::scanning::ScanState;
+pub use plain_rs::features::services::files::scanning::FileIndexScanState;
 
 #[derive(SimpleObject, Clone, Debug, serde::Deserialize)]
-pub struct ScanProgress {
+pub struct FileIndexScanProgress {
     pub indexed: i32,
     pub pending: Option<i32>,
     pub total: Option<i32>,
-    pub state: ScanState,
+    pub state: FileIndexScanState,
     pub error: Option<String>,
 }
 

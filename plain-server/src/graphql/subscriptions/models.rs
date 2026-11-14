@@ -1,6 +1,6 @@
 use plain_graphql::{ID, SimpleObject};
 
-use plain_rs::features::enums::DataType;
+use plain_rs::features::enums::MediaDataType;
 use plain_rs::infrastructure::types::{Instant, Long};
 use serde::Deserialize;
 
@@ -10,7 +10,7 @@ pub struct MirrorState {
 }
 #[derive(SimpleObject, Deserialize)]
 pub struct MediaChange {
-    pub types: Vec<DataType>,
+    pub types: Vec<MediaDataType>,
 }
 #[derive(SimpleObject, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -35,7 +35,7 @@ pub struct SmsProviderChange {
 #[derive(SimpleObject, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SmsSendResult {
-    pub request_id: Option<ID>,
+    pub request_id: ID,
     pub success: bool,
     pub result_code: Option<i32>,
 }

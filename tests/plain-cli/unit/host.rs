@@ -375,7 +375,7 @@ async fn audio_queue_uses_the_registered_host_and_keeps_unindexed_playback_tempo
         response.data.into_json().unwrap()["selectAudio"]["mediaId"],
         id
     );
-    let response=executor.execute("{ audioQueueItemCount audioQueueItems(query:\"\",offset:0,limit:200) { mediaId } audioPlayback { mediaId path } }".into()).await;
+    let response=executor.execute("{ audioQueueItemCount(query:\"\") audioQueueItems(query:\"\",offset:0,limit:200) { mediaId } audioPlayback { mediaId path } }".into()).await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     let page = response.data.into_json().unwrap();
     assert_eq!(page["audioQueueItemCount"], 1);

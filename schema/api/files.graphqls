@@ -220,7 +220,6 @@ extend type Mutation {
 	deleteMediaItems(type: MediaDataType!, query: String!): ActionResult!
 	deleteTrashedFile(path: String!): Boolean!
 	extractZipArchive(path: String!, target: String!): String!
-	importAppFile(source: String!, fileName: String!, mimeType: String!, deleteSource: Boolean!): AppFile!
 	mergeAppFileChunks(fileId: String!, totalChunks: Int!, fileName: String!, totalSize: Long!): MergeTask!
 	"""
 	Starts the merge and returns immediately; completion arrives over the

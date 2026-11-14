@@ -424,6 +424,17 @@ pub fn queue_total(db: &Db) -> DomainResult<usize> {
     })?)
 }
 
+pub fn queue_filtered_count(db: &Db, query: &str) -> DomainResult<usize> {
+    if query.trim().is_empty() {
+        return queue_total(db);
+    }
+    Ok(crate::infrastructure::db::audio_queue::all_queue_items(db)?
+        .into_iter()
+        .map(AudioTrack::from)
+        .filter(|item| matches_query(item, query))
+        .count())
+}
+
 pub fn queue_page(db: &Db, offset: i64, limit: i64, query: &str) -> DomainResult<Vec<AudioTrack>> {
     validate_page(offset, limit)?;
     Ok(crate::infrastructure::db::audio_queue::all_queue_items(db)?

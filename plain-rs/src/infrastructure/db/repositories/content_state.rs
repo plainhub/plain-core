@@ -10,7 +10,14 @@ impl Db {
             .map(|_| ())
         })
     }
-    pub fn feed_set_sync_status(&self, id: &str, at: &str, error: &str) -> plain_libs::rusqlite::Result<()> {
+    pub fn feed_set_sync_status(
+        &self,
+        id: &str,
+        at: &str,
+        error: &crate::infrastructure::db::models::notes_feeds::FeedError,
+    ) -> plain_libs::rusqlite::Result<()> {
+        let error = plain_libs::serde_json::to_string(error)
+            .map_err(|error| plain_libs::rusqlite::Error::ToSqlConversionFailure(Box::new(error)))?;
         self.with_conn(|c| {
             c.execute(
                 "UPDATE feeds SET last_sync_at=?2,last_error=?3 WHERE id=?1",

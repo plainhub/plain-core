@@ -51,11 +51,44 @@ impl CallType {
     }
 }
 
+#[derive(Enum, Copy, Clone, Eq, PartialEq, Debug)]
+pub enum PhoneNumberType {
+    FixedLine,
+    Mobile,
+    FixedLineOrMobile,
+    TollFree,
+    PremiumRate,
+    SharedCost,
+    PersonalNumber,
+    Voip,
+    Pager,
+    Uan,
+    Voicemail,
+}
+
+impl From<plain_libs::phone::NumberType> for PhoneNumberType {
+    fn from(value: plain_libs::phone::NumberType) -> Self {
+        match value {
+            plain_libs::phone::NumberType::FixedLine => Self::FixedLine,
+            plain_libs::phone::NumberType::Mobile => Self::Mobile,
+            plain_libs::phone::NumberType::FixedLineOrMobile => Self::FixedLineOrMobile,
+            plain_libs::phone::NumberType::TollFree => Self::TollFree,
+            plain_libs::phone::NumberType::PremiumRate => Self::PremiumRate,
+            plain_libs::phone::NumberType::SharedCost => Self::SharedCost,
+            plain_libs::phone::NumberType::PersonalNumber => Self::PersonalNumber,
+            plain_libs::phone::NumberType::Voip => Self::Voip,
+            plain_libs::phone::NumberType::Pager => Self::Pager,
+            plain_libs::phone::NumberType::Uan => Self::Uan,
+            plain_libs::phone::NumberType::Voicemail => Self::Voicemail,
+        }
+    }
+}
+
 #[derive(SimpleObject, Clone, Debug)]
 pub struct PhoneGeo {
     pub country: String,
     #[graphql(name = "numberType")]
-    pub number_type: String,
+    pub number_type: PhoneNumberType,
     pub carrier: String,
     pub description: String,
 }
@@ -82,7 +115,7 @@ impl From<plain_libs::phone::Metadata> for PhoneGeo {
     fn from(value: plain_libs::phone::Metadata) -> Self {
         Self {
             country: value.country,
-            number_type: value.number_type,
+            number_type: value.number_type.into(),
             carrier: value.carrier,
             description: value.description,
         }

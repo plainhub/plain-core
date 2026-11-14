@@ -75,6 +75,47 @@ impl DataType {
     }
 }
 
+/// Media-library item kinds accepted by media item actions and buckets
+#[derive(Copy, Clone, Eq, PartialEq, Debug, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "graphql", derive(plain_graphql::Enum))]
+#[allow(non_camel_case_types)] // plain-app SDL contract names
+pub enum MediaDataType {
+    AUDIO,
+    VIDEO,
+    IMAGE,
+    DOC,
+}
+
+impl MediaDataType {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::AUDIO => "AUDIO",
+            Self::VIDEO => "VIDEO",
+            Self::IMAGE => "IMAGE",
+            Self::DOC => "DOC",
+        }
+    }
+
+    pub fn from_data_type(kind: DataType) -> Option<Self> {
+        match kind {
+            DataType::Audio => Some(Self::AUDIO),
+            DataType::Video => Some(Self::VIDEO),
+            DataType::Image => Some(Self::IMAGE),
+            DataType::Doc => Some(Self::DOC),
+            _ => None,
+        }
+    }
+
+    pub fn data_type(self) -> DataType {
+        match self {
+            MediaDataType::DOC => DataType::Doc,
+            MediaDataType::AUDIO => DataType::Audio,
+            MediaDataType::VIDEO => DataType::Video,
+            MediaDataType::IMAGE => DataType::Image,
+        }
+    }
+}
+
 #[cfg(test)]
 #[path = "../../../tests/plain-rs/unit/features/enums.rs"]
 mod tests;

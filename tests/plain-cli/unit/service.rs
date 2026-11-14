@@ -131,7 +131,7 @@ async fn service_grants_remote_file_features_and_preserves_other_settings_across
                 .await
                 .unwrap();
             let body = plain_libs::serde_json::json!({
-                "query": "{ app { capabilities access } fileIndexVolumes { id } fileIndexDefaults { excludedDirs } scanProgress { state } audios(query:\"\",offset:0,limit:1,sortBy:NAME_ASC) { id } }"
+                "query": "{ app { capabilities access } fileIndexVolumes { id } fileIndexDefaults { excludedDirs } fileIndexScanProgress { state } audios(query:\"\",offset:0,limit:1,sortBy:NAME_ASC) { id } }"
             })
             .to_string();
             let request = format!(
@@ -163,7 +163,7 @@ async fn service_grants_remote_file_features_and_preserves_other_settings_across
             );
             assert!(data["fileIndexVolumes"].is_array());
             assert!(data["fileIndexDefaults"]["excludedDirs"].is_array());
-            assert!(data["scanProgress"]["state"].is_string());
+            assert!(data["fileIndexScanProgress"]["state"].is_string());
             assert!(data["audios"].is_array());
             let prefs = service.core.shared_preferences().unwrap();
             assert_eq!(

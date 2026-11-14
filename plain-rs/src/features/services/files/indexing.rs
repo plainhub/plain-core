@@ -4,18 +4,18 @@ pub use directories::set_directories;
 pub use discovery::{discover, discover_native};
 
 use crate::features::files::index_scope;
-use crate::infrastructure::db::IndexMode;
+use crate::infrastructure::db::FileIndexMode;
 use crate::runtime::Runtime;
 
 pub async fn set(
     state: &Runtime,
     id: &str,
-    mode: IndexMode,
+    mode: FileIndexMode,
     included_dirs: Vec<String>,
     excluded_dirs: Vec<String>,
 ) -> Result<(), String> {
     state.native_client_id()?;
-    if mode == IndexMode::Unconfigured {
+    if mode == FileIndexMode::Unconfigured {
         return Err("Select an index mode".into());
     }
     if plain_libs::serde_json::to_vec(&(&included_dirs, &excluded_dirs))

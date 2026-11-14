@@ -103,13 +103,18 @@ pub fn rows_page(conn: &Connection, table: &str, offset: i64, limit: i64) -> Res
         limit.clamp(0, MAX_PAGE_LIMIT),
         false,
     )
+    .map(|rows| {
+        rows.into_iter()
+            .map(|row| plain_libs::serde_json::Value::Object(row).to_string())
+            .collect()
+    })
 }
 pub fn rows_page_text(
     conn: &Connection,
     table: &str,
     offset: i64,
     limit: i64,
-) -> Result<Vec<String>> {
+) -> Result<Vec<plain_libs::serde_json::Map<String, plain_libs::serde_json::Value>>> {
     rows_page_values(conn, table, offset, limit, true)
 }
 fn rows_page_values(
@@ -118,7 +123,7 @@ fn rows_page_values(
     offset: i64,
     limit: i64,
     text: bool,
-) -> Result<Vec<String>> {
+) -> Result<Vec<plain_libs::serde_json::Map<String, plain_libs::serde_json::Value>>> {
     check_table(table)?;
     let mut stmt = conn.prepare(&format!("SELECT * FROM `{table}` LIMIT ?1 OFFSET ?2"))?;
     let col_names: Vec<String> = stmt.column_names().map(|s| s.to_string()).collect();
@@ -129,7 +134,9 @@ fn rows_page_values(
             let value = if text {
                 match val {
                     plain_libs::rusqlite::types::Value::Null => plain_libs::serde_json::Value::Null,
-                    plain_libs::rusqlite::types::Value::Text(value) => plain_libs::serde_json::Value::String(value),
+                    plain_libs::rusqlite::types::Value::Text(value) => {
+                        plain_libs::serde_json::Value::String(value)
+                    }
                     plain_libs::rusqlite::types::Value::Integer(value) => {
                         plain_libs::serde_json::Value::String(value.to_string())
                     }
@@ -137,7 +144,9 @@ fn rows_page_values(
                         plain_libs::serde_json::Value::String(value.to_string())
                     }
                     plain_libs::rusqlite::types::Value::Blob(value) => {
-                        plain_libs::serde_json::Value::String(String::from_utf8_lossy(&value).into_owned())
+                        plain_libs::serde_json::Value::String(
+                            String::from_utf8_lossy(&value).into_owned(),
+                        )
                     }
                 }
             } else {
@@ -145,7 +154,7 @@ fn rows_page_values(
             };
             obj.insert(col.clone(), value);
         }
-        Ok(plain_libs::serde_json::Value::Object(obj).to_string())
+        Ok(obj)
     })?;
     let mut out = Vec::new();
     for row in &mut rows {
@@ -269,7 +278,9 @@ pub fn insert_row(
 fn value_to_json(val: plain_libs::rusqlite::types::Value) -> plain_libs::serde_json::Value {
     match val {
         plain_libs::rusqlite::types::Value::Null => plain_libs::serde_json::Value::Null,
-        plain_libs::rusqlite::types::Value::Integer(n) => plain_libs::serde_json::Value::Number(n.into()),
+        plain_libs::rusqlite::types::Value::Integer(n) => {
+            plain_libs::serde_json::Value::Number(n.into())
+        }
         plain_libs::rusqlite::types::Value::Real(f) => plain_libs::serde_json::Number::from_f64(f)
             .map(plain_libs::serde_json::Value::Number)
             .unwrap_or(plain_libs::serde_json::Value::Null),

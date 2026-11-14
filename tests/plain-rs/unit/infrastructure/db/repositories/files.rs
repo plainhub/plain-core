@@ -393,17 +393,17 @@ fn scan_paths_commit_one_transaction_and_roll_back_a_failed_batch() {
 
 #[test]
 fn volume_index_defaults_and_configuration_survive_rebinding_and_disconnect() {
-    use crate::infrastructure::db::IndexMode;
+    use crate::infrastructure::db::FileIndexMode;
     let directory = plain_libs::temporary::tempdir().unwrap();
     let db = Db::open(&directory.path().join("index.db")).unwrap();
     let id = db.register_volume(directory.path()).unwrap().unwrap();
     let volume = db.volumes().unwrap().remove(0);
-    assert_eq!(volume.index_mode, IndexMode::Unconfigured);
+    assert_eq!(volume.index_mode, FileIndexMode::Unconfigured);
     assert!(volume.included_dirs.is_empty());
     assert!(volume.excluded_dirs.is_empty());
     db.set_volume_index(
         &id,
-        IndexMode::Allowlist,
+        FileIndexMode::Allowlist,
         &["Photos".into()],
         &["Cache".into()],
     )
@@ -413,7 +413,7 @@ fn volume_index_defaults_and_configuration_survive_rebinding_and_disconnect() {
         .unwrap();
     let offline = db.volumes().unwrap().remove(0);
     assert!(!offline.is_available);
-    assert_eq!(offline.index_mode, IndexMode::Allowlist);
+    assert_eq!(offline.index_mode, FileIndexMode::Allowlist);
     assert_eq!(offline.included_dirs, vec!["Photos"]);
     assert_eq!(offline.excluded_dirs, vec!["Cache"]);
     assert_eq!(db.register_volume(directory.path()).unwrap().unwrap(), id);

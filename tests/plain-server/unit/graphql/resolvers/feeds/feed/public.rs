@@ -110,7 +110,7 @@ async fn feeds_are_listed_with_the_fields_the_contract_promises() {
     assert_eq!(rows[0]["name"], "Daily news");
     assert_eq!(rows[0]["url"], "https://example.com/one.xml");
     assert_eq!(rows[0]["fetchContent"], false);
-    assert_eq!(rows[0]["lastError"]["code"], "");
+    assert_eq!(rows[0]["lastError"]["code"], "NONE");
     // `feed_save` never stamps a sync time, so this is the null branch and
     // not a default zero wearing an Instant.
     assert!(rows[0]["lastSyncAt"].is_null(), "{listed}");
@@ -500,5 +500,79 @@ async fn preview_and_atomic_patch_use_main_schema_without_host_calls() {
             .unwrap()
             .name,
         "Neighbor"
+    );
+}
+
+#[tokio::test]
+async fn feed_error_code_is_a_non_null_named_enum_and_keeps_storage_values() {
+    use plain_rs::features::feeds::{FeedError, FeedErrorCode};
+    let (_dir, schema) = fixture();
+    let response = query(
+        &schema,
+        r#"{
+        field: __type(name: "FeedError") { fields { name type { kind ofType { kind name } } } }
+        codes: __type(name: "FeedErrorCode") { kind enumValues { name } }
+    }"#,
+    )
+    .await;
+    let fields = response["data"]["field"]["fields"].as_array().unwrap();
+    let code = fields.iter().find(|field| field["name"] == "code").unwrap();
+    assert_eq!(
+        code["type"],
+        json!({"kind":"NON_NULL","ofType":{"kind":"ENUM","name":"FeedErrorCode"}})
+    );
+    assert_eq!(response["data"]["codes"]["kind"], "ENUM");
+    let mut names: Vec<_> = response["data"]["codes"]["enumValues"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|value| value["name"].as_str().unwrap())
+        .collect();
+    names.sort_unstable();
+    assert_eq!(
+        names,
+        ["DNS", "NONE", "PARSE", "SERVER", "TIMEOUT", "UNKNOWN"]
+    );
+    let db = database(&schema);
+    seed_feed(db, "typed", "Typed");
+    for (code, wire) in [
+        (FeedErrorCode::None, "NONE"),
+        (FeedErrorCode::Timeout, "TIMEOUT"),
+        (FeedErrorCode::Server, "SERVER"),
+        (FeedErrorCode::Dns, "DNS"),
+        (FeedErrorCode::Parse, "PARSE"),
+        (FeedErrorCode::Unknown, "UNKNOWN"),
+        (FeedErrorCode::None, "NONE"),
+    ] {
+        db.feed_set_sync_status(
+            "typed",
+            NOW,
+            &FeedError {
+                code,
+                detail: "fixture".into(),
+            },
+        )
+        .unwrap();
+        let response = query(
+            &schema,
+            r#"{ feed(id:"typed") { lastError { code detail } } }"#,
+        )
+        .await;
+        assert_eq!(
+            response["data"]["feed"]["lastError"],
+            json!({"code":wire,"detail":"fixture"})
+        );
+    }
+    db.with_conn(|connection| {
+        connection.execute(
+            "UPDATE feeds SET last_error=?1 WHERE id='typed'",
+            [r#"{"code":"INVALID","detail":"bad"}"#],
+        )
+    })
+    .unwrap();
+    let response = query(&schema, r#"{ feed(id:"typed") { lastError { code } } }"#).await;
+    assert!(
+        !response["errors"].as_array().unwrap().is_empty(),
+        "{response}"
     );
 }

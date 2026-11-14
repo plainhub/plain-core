@@ -22,23 +22,13 @@ type DbTableColumn {
 }
 
 extend type Mutation {
-	"""
-	`row` is a JSON object of column values. A malformed one is reported
-	as `false` rather than an error: this is a developer console, and the
-	operator is the one who typed it.
-	"""
-	createDbTableRow(table: String!, row: String!): Boolean!
+	createDbTableRow(table: String!, row: JSON!): Boolean!
 	deleteDbTableRows(table: String!, ids: [String!]!): Boolean!
 }
 
 extend type Query {
 	dbPath: String!
 	dbTableRowCount(table: String!): Long!
-	"""
-	Rows come back as pre-rendered JSON strings, one per row — the
-	column set differs per table, so there is no single row type to
-	model.
-	"""
-	dbTableRows(table: String!, offset: Int!, limit: Int!): [String!]!
+	dbTableRows(table: String!, offset: Int!, limit: Int!): [JSON!]!
 	dbTables: [DbTable!]!
 }

@@ -5,7 +5,8 @@ mod plan;
 mod syntax;
 
 use locale::Locale;
-use number::{Number, NumberType};
+use number::Number;
+pub use number::NumberType;
 use std::collections::VecDeque;
 use std::sync::Mutex;
 
@@ -13,7 +14,7 @@ use std::sync::Mutex;
 #[serde(rename_all = "camelCase")]
 pub struct Metadata {
     pub country: String,
-    pub number_type: String,
+    pub number_type: NumberType,
     pub carrier: String,
     pub description: String,
 }
@@ -85,7 +86,7 @@ impl Service {
         };
         Some(Metadata {
             country,
-            number_type: type_name(number_type).into(),
+            number_type,
             carrier,
             description,
         })
@@ -157,22 +158,6 @@ impl Service {
             }
         }
         region.to_owned()
-    }
-}
-
-fn type_name(kind: NumberType) -> &'static str {
-    match kind {
-        NumberType::FixedLine => "FIXED_LINE",
-        NumberType::Mobile => "MOBILE",
-        NumberType::FixedLineOrMobile => "FIXED_LINE_OR_MOBILE",
-        NumberType::TollFree => "TOLL_FREE",
-        NumberType::PremiumRate => "PREMIUM_RATE",
-        NumberType::SharedCost => "SHARED_COST",
-        NumberType::PersonalNumber => "PERSONAL_NUMBER",
-        NumberType::Voip => "VOIP",
-        NumberType::Pager => "PAGER",
-        NumberType::Uan => "UAN",
-        NumberType::Voicemail => "VOICEMAIL",
     }
 }
 

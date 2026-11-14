@@ -129,7 +129,7 @@ fn parser_matches_the_independent_google_syntax_and_region_replay() {
                 main_region: main_region(&number).to_owned(),
                 country_code: number.country_code,
                 national: number.national,
-                kind: crate::phone::type_name(number.kind).to_owned(),
+                kind: crate::serde_json::to_value(number.kind).unwrap().as_str().unwrap().to_owned(),
                 valid_regions,
             }
         });

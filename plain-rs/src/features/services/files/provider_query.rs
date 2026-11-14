@@ -53,7 +53,7 @@ impl Plan {
 }
 pub fn index_scope(plan: &mut Plan, db: &Db) -> plain_libs::anyhow::Result<()> {
     use crate::features::files::index_scope::{absolute_directory, under};
-    use crate::infrastructure::db::IndexMode;
+    use crate::infrastructure::db::FileIndexMode;
     fn within(root: &str, args: &mut Vec<String>) -> String {
         let prefix = format!("{}/", root.trim_end_matches('/'));
         args.extend([root.to_owned(), prefix.clone(), prefix]);
@@ -79,9 +79,9 @@ pub fn index_scope(plan: &mut Plan, db: &Db) -> plain_libs::anyhow::Result<()> {
             continue;
         }
         let (dirs, allowlist) = match volume.index_mode {
-            IndexMode::Allowlist => (&volume.included_dirs, true),
-            IndexMode::Blocklist => (&volume.excluded_dirs, false),
-            IndexMode::Unconfigured | IndexMode::Disabled => continue,
+            FileIndexMode::Allowlist => (&volume.included_dirs, true),
+            FileIndexMode::Blocklist => (&volume.excluded_dirs, false),
+            FileIndexMode::Unconfigured | FileIndexMode::Disabled => continue,
         };
         let mut clauses = vec![within(&volume.path, &mut args)];
         for child in volumes.iter().filter(|other| {

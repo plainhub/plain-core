@@ -5,20 +5,39 @@ type FileIndexDefaults {
 	excludedUserLibraries: Boolean!
 }
 
-type FileIndexVolume {
-	id: ID!
-	path: String!
-	isAvailable: Boolean!
-	indexMode: IndexMode!
-	includedDirs: [String!]!
-	excludedDirs: [String!]!
-}
-
-enum IndexMode {
+enum FileIndexMode {
 	UNCONFIGURED
 	DISABLED
 	ALLOWLIST
 	BLOCKLIST
+}
+
+type FileIndexScanProgress {
+	indexed: Int!
+	pending: Int
+	total: Int
+	state: FileIndexScanState!
+	error: String
+}
+
+"""
+File-index scan lifecycle shared by query and subscription progress.
+"""
+enum FileIndexScanState {
+	IDLE
+	RUNNING
+	PAUSED
+	STOPPED
+	FAILED
+}
+
+type FileIndexVolume {
+	id: ID!
+	path: String!
+	isAvailable: Boolean!
+	indexMode: FileIndexMode!
+	includedDirs: [String!]!
+	excludedDirs: [String!]!
 }
 
 type MediaBucket {
@@ -53,35 +72,14 @@ enum PlaybackType {
 	VIDEO
 }
 
-type ScanProgress {
-	indexed: Int!
-	pending: Int
-	total: Int
-	state: ScanState!
-	error: String
-}
-
-"""
-Media-index scan lifecycle, shared by `scanProgress.state` and the
-`media:scan:progress` WS payload (same values on both wires).
-"""
-enum ScanState {
-	IDLE
-	RUNNING
-	PAUSED
-	STOPPED
-	FAILED
-}
-
 extend type Mutation {
-	pauseMediaScan: Boolean!
-	rebuildFileIndexVolume(id: ID!): Boolean!
-	rebuildMediaIndex(root: String!): Boolean!
+	pauseFileIndexScan: Boolean!
+	rebuildFileIndex(volumeId: ID): Boolean!
 	recordMediaPlay(mediaId: ID!, type: PlaybackType!, positionMs: Long!): Boolean!
-	resumeMediaScan: Boolean!
+	resumeFileIndexScan: Boolean!
 	saveMediaPlayProgress(mediaId: ID!, type: PlaybackType!, positionMs: Long!): Boolean!
-	setFileIndexVolume(id: ID!, indexMode: IndexMode!, includedDirs: [String!]!, excludedDirs: [String!]!): Boolean!
-	stopMediaScan: Boolean!
+	setFileIndexVolume(id: ID!, indexMode: FileIndexMode!, includedDirs: [String!]!, excludedDirs: [String!]!): Boolean!
+	stopFileIndexScan: Boolean!
 }
 
 extend type Query {
@@ -89,5 +87,5 @@ extend type Query {
 	fileIndexVolumes: [FileIndexVolume!]!
 	mediaBuckets(type: MediaDataType!): [MediaBucket!]!
 	mediaPlayHistory(query: String!, offset: Int!, limit: Int!): [MediaPlayHistory!]!
-	scanProgress: ScanProgress!
+	fileIndexScanProgress: FileIndexScanProgress!
 }

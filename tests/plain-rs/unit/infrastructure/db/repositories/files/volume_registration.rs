@@ -38,7 +38,7 @@ fn uuid_loss_and_recovery_preserve_registered_volume_files_and_index_configurati
         let id = db.register_volume(&disk).unwrap().unwrap();
         db.set_volume_index(
             &id,
-            crate::infrastructure::db::IndexMode::Allowlist,
+            crate::infrastructure::db::FileIndexMode::Allowlist,
             &["Photos".into()],
             &["Photos/Excluded".into()],
         )
@@ -86,7 +86,7 @@ fn uuid_loss_and_recovery_preserve_registered_volume_files_and_index_configurati
         assert_eq!(original_volumes[0].id, id);
         assert_eq!(
             original_volumes[0].index_mode,
-            crate::infrastructure::db::IndexMode::Allowlist
+            crate::infrastructure::db::FileIndexMode::Allowlist
         );
         assert_eq!(original_volumes[0].included_dirs, ["Photos"]);
         assert_eq!(original_volumes[0].excluded_dirs, ["Photos/Excluded"]);

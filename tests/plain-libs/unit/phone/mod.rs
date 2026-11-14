@@ -14,7 +14,7 @@ pub(super) fn example(region: &str, kind: NumberType) -> String {
                 && case
                     .expected
                     .as_ref()
-                    .is_some_and(|value| value.number_type == type_name(kind))
+                    .is_some_and(|value| value.number_type == kind)
                 && case.number.starts_with('+')
                 && case.number[1..].bytes().all(|byte| byte.is_ascii_digit()))
             .then_some(case.number)
@@ -82,7 +82,7 @@ fn repeated_valid_and_invalid_numbers_reuse_results_but_locale_and_region_do_not
     let number = example("CN", NumberType::Mobile);
     let first = service.lookup(&number, "CN", "zh-CN").unwrap();
     assert_eq!(first.country, "CN");
-    assert_eq!(first.number_type, "MOBILE");
+    assert_eq!(first.number_type, NumberType::Mobile);
     assert!(!first.carrier.is_empty());
     assert_eq!(service.lookup(&number, "CN", "zh-CN"), Some(first));
     assert_eq!(service.resolutions.load(Ordering::Relaxed), 1);
@@ -118,7 +118,7 @@ fn carrier_is_not_attached_to_toll_free_or_fixed_line_numbers() {
     for kind in [NumberType::TollFree, NumberType::FixedLine] {
         let number = example("GB", kind);
         let facts = service.lookup(&number, "GB", "en").unwrap();
-        assert_eq!(facts.number_type, type_name(kind));
+        assert_eq!(facts.number_type, kind);
         assert!(facts.carrier.is_empty());
     }
 }
@@ -142,4 +142,33 @@ fn result_cache_evicts_old_entries_and_never_keeps_oversized_inputs() {
             .iter()
             .all(|(key, _)| key.len() <= 4096)
     );
+}
+
+#[test]
+fn number_types_preserve_all_wire_names_and_reject_unknown_values() {
+    for (kind, wire) in [
+        (NumberType::FixedLine, "FIXED_LINE"),
+        (NumberType::Mobile, "MOBILE"),
+        (NumberType::FixedLineOrMobile, "FIXED_LINE_OR_MOBILE"),
+        (NumberType::TollFree, "TOLL_FREE"),
+        (NumberType::PremiumRate, "PREMIUM_RATE"),
+        (NumberType::SharedCost, "SHARED_COST"),
+        (NumberType::PersonalNumber, "PERSONAL_NUMBER"),
+        (NumberType::Voip, "VOIP"),
+        (NumberType::Pager, "PAGER"),
+        (NumberType::Uan, "UAN"),
+        (NumberType::Voicemail, "VOICEMAIL"),
+    ] {
+        let value = crate::serde_json::json!(wire);
+        assert_eq!(crate::serde_json::to_value(kind).unwrap(), value);
+        assert_eq!(
+            crate::serde_json::from_value::<NumberType>(value).unwrap(),
+            kind
+        );
+    }
+    for wire in ["", "UNKNOWN", "mobile"] {
+        assert!(
+            crate::serde_json::from_value::<NumberType>(crate::serde_json::json!(wire)).is_err()
+        );
+    }
 }

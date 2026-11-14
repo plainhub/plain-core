@@ -134,7 +134,7 @@ pub(super) fn files(sdl: &str) -> BTreeMap<String, String> {
     group!(
         "Query",
         "media",
-        resolvers::media::scan::MediaScanQuery,
+        resolvers::media::scan::FileIndexScanQuery,
         resolvers::media::play_history::MediaPlayHistoryQuery,
         resolvers::media::public::MediaQuery
     );
@@ -258,7 +258,7 @@ pub(super) fn files(sdl: &str) -> BTreeMap<String, String> {
     group!(
         "Mutation",
         "media",
-        resolvers::media::scan::MediaScanMutation,
+        resolvers::media::scan::FileIndexScanMutation,
         resolvers::media::play_history::MediaPlayHistoryMutation
     );
     group!(

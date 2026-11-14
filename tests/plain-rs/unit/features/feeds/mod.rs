@@ -95,3 +95,51 @@ fn invalid_duplicate_empty_and_missing_updates_preserve_existing_rows() {
     );
     assert_eq!(list(&db).unwrap().len(), 2);
 }
+
+#[test]
+fn feed_errors_are_typed_through_storage_and_reject_invalid_codes() {
+    let db = Db::open(std::path::Path::new(":memory:")).unwrap();
+    let at = "2026-01-01T00:00:00Z";
+    let feed = db
+        .feed_save("typed", "Feed", "https://example.org/feed", false, at)
+        .unwrap();
+    assert_eq!(feed.last_error, FeedError::default());
+    for (code, wire) in [
+        (FeedErrorCode::None, "NONE"),
+        (FeedErrorCode::Timeout, "TIMEOUT"),
+        (FeedErrorCode::Server, "SERVER"),
+        (FeedErrorCode::Dns, "DNS"),
+        (FeedErrorCode::Parse, "PARSE"),
+        (FeedErrorCode::Unknown, "UNKNOWN"),
+    ] {
+        let error = FeedError {
+            code,
+            detail: "synthetic detail".into(),
+        };
+        db.feed_set_sync_status("typed", at, &error).unwrap();
+        assert_eq!(db.feed_get("typed").unwrap().unwrap().last_error, error);
+        let stored: String = db
+            .with_conn(|connection| {
+                connection.query_row("SELECT last_error FROM feeds WHERE id='typed'", [], |row| {
+                    row.get(0)
+                })
+            })
+            .unwrap();
+        assert_eq!(
+            plain_libs::serde_json::from_str::<plain_libs::serde_json::Value>(&stored).unwrap(),
+            plain_libs::serde_json::json!({"code": wire, "detail": "synthetic detail"})
+        );
+    }
+    for invalid in [
+        r#"{"code":"INVALID","detail":"bad"}"#,
+        r#"{"code":"","detail":""}"#,
+        "{}",
+        "not json",
+    ] {
+        db.with_conn(|connection| {
+            connection.execute("UPDATE feeds SET last_error=?1 WHERE id='typed'", [invalid])
+        })
+        .unwrap();
+        assert!(db.feed_get("typed").is_err(), "{invalid}");
+    }
+}

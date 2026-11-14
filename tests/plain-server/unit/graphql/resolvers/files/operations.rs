@@ -1,10 +1,10 @@
-use plain_libs::protocols::http_client;
 use super::*;
 use crate::test_support::schema::SchemaFixture as PublicSchema;
+use plain_libs::protocols::http_client;
+use plain_libs::serde_json::{Value, json};
 use plain_rs::features::prefs::Prefs;
 use plain_rs::infrastructure::db::Db;
 use plain_rs::infrastructure::host::bridge::Host;
-use plain_libs::serde_json::{Value, json};
 use std::sync::Arc;
 
 const GRANTED: &str = r#"["IMAGES","VIDEOS","AUDIO","DOCS","FILES"]"#;
@@ -192,7 +192,10 @@ async fn a_created_directory_reads_back_as_a_file_row() {
     assert_eq!(row["isDir"], true);
     assert_eq!(row["childCount"], 0);
     assert!(row["mediaId"].is_null());
-    assert!(plain_libs::chrono::DateTime::parse_from_rfc3339(row["updatedAt"].as_str().unwrap()).is_ok());
+    assert!(
+        plain_libs::chrono::DateTime::parse_from_rfc3339(row["updatedAt"].as_str().unwrap())
+            .is_ok()
+    );
     assert!(path.is_dir());
 }
 
@@ -226,7 +229,10 @@ async fn copy_and_move_use_the_shared_file_tasks() {
         let task = response.data.into_json().unwrap()["createFileTask"].clone();
         assert_eq!(task["status"], "DONE");
         assert_eq!(task["error"], "");
-        assert_eq!(task["completedOps"][0]["dst"], destination.to_string_lossy().as_ref());
+        assert_eq!(
+            task["completedOps"][0]["dst"],
+            destination.to_string_lossy().as_ref()
+        );
         assert_eq!(std::fs::read_to_string(&destination).unwrap(), "new");
         assert_eq!(source.exists(), kind == "COPY");
         let tasks = schema
@@ -235,11 +241,7 @@ async fn copy_and_move_use_the_shared_file_tasks() {
             .list("file-test".into())
             .await
             .unwrap();
-        assert!(
-            tasks
-                .iter()
-                .any(|task| task.title == kind)
-        );
+        assert!(tasks.iter().any(|task| task.title == kind));
     }
 }
 
@@ -348,7 +350,11 @@ async fn a_blank_media_query_is_refused_before_the_platform() {
     }
 }
 
-fn upload_fixture() -> (plain_libs::temporary::TempDir, PublicSchema, std::path::PathBuf) {
+fn upload_fixture() -> (
+    plain_libs::temporary::TempDir,
+    PublicSchema,
+    std::path::PathBuf,
+) {
     let (dir, schema) = fixture_with(GRANTED, |method, _| match method {
         "systemAccessFacts" => json!({"granted":{"FILES":true}}),
         other => panic!("Unexpected platform primitive: {other}"),
@@ -447,7 +453,9 @@ async fn file_uri_exports_replace_complete_bytes_and_preserve_existing_files_on_
         let neighbor = directory.path().join("unselected.opml");
         std::fs::write(&target, b"previous export").unwrap();
         std::fs::write(&neighbor, b"unselected bytes").unwrap();
-        let uri = http_client::Url::from_file_path(&target).unwrap().to_string();
+        let uri = http_client::Url::from_file_path(&target)
+            .unwrap()
+            .to_string();
         assert!(uri.contains("%20"));
         let chunks = base.join("export");
         std::fs::create_dir_all(&chunks).unwrap();

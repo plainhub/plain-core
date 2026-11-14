@@ -218,8 +218,49 @@ async fn the_queue_is_paged_and_its_count_matches() {
     assert_eq!(rows.len(), 2, "{page}");
     assert_eq!(rows[0]["durationMs"], 1000);
 
-    let count = query(&schema, r#"query { audioQueueItemCount }"#).await;
+    let count = query(&schema, r#"query { audioQueueItemCount(query: "") }"#).await;
     assert_eq!(count["data"]["audioQueueItemCount"], 3);
+
+    for (filter, expected) in [
+        ("", 3),
+        ("   ", 3),
+        ("text:alpha", 1),
+        ("text:TWO", 1),
+        ("text:/music/", 3),
+        ("ids:test:/music/b.mp3", 1),
+        ("NOT ids:test:/music/b.mp3", 2),
+        ("text:missing", 0),
+    ] {
+        let response = query(
+            &schema,
+            &format!(
+                r#"{{ audioQueueItemCount(query:{0}) audioQueueItems(query:{0},offset:0,limit:10) {{ mediaId }} page:audioQueueItems(query:{0},offset:1,limit:1) {{ mediaId }} }}"#,
+                json!(filter),
+            ),
+        )
+        .await;
+        assert!(response.get("errors").is_none(), "{response}");
+        assert_eq!(
+            response["data"]["audioQueueItemCount"], expected,
+            "{filter}: {response}"
+        );
+        assert_eq!(
+            response["data"]["audioQueueItems"].as_array().unwrap().len(),
+            expected as usize
+        );
+        assert_eq!(
+            response["data"]["page"].as_array().unwrap().len(),
+            usize::from(expected > 1)
+        );
+    }
+
+    for document in [
+        "{ audioQueueItemCount }",
+        "{ audioQueueItemCount(query:null) }",
+    ] {
+        let response = query(&schema, document).await;
+        assert!(response.get("errors").is_some(), "{response}");
+    }
 }
 
 #[cfg(not(target_os = "android"))]
@@ -426,7 +467,7 @@ async fn clearing_empties_the_queue_and_tells_the_player() {
     let cleared = query(&schema, r#"mutation { clearAudioQueue }"#).await;
     assert_eq!(cleared["data"]["clearAudioQueue"], true, "{cleared}");
 
-    let count = query(&schema, r#"query { audioQueueItemCount }"#).await;
+    let count = query(&schema, r#"query { audioQueueItemCount(query: "") }"#).await;
     assert_eq!(count["data"]["audioQueueItemCount"], 0, "{count}");
     assert_eq!(events.try_recv().unwrap().event_type, "CONTENT_CHANGED");
 }
@@ -591,11 +632,11 @@ async fn removing_a_playlist_item_lowers_its_count() {
 
     let removed = query(
         &schema,
-        &format!(r#"mutation {{ removeAudioPlaylistItem(id: "{id}", query: "ids:test:/music/a.mp3") {{ affectedCount }} }}"#),
+        &format!(r#"mutation {{ removeAudioPlaylistItems(id: "{id}", query: "ids:test:/music/a.mp3") {{ affectedCount }} }}"#),
     )
     .await;
     assert_eq!(
-        removed["data"]["removeAudioPlaylistItem"]["affectedCount"], 1,
+        removed["data"]["removeAudioPlaylistItems"]["affectedCount"], 1,
         "{removed}"
     );
 
@@ -806,7 +847,7 @@ async fn adding_tracks_reads_every_search_page_without_an_item_limit() {
     )
     .await;
     assert!(added["errors"].is_null(), "{added}");
-    let page=query(&schema,r#"{ audioQueueItemCount audioQueueItems(query:"",offset:1200,limit:200) { mediaId path } }"#).await;
+    let page=query(&schema,r#"{ audioQueueItemCount(query: "") audioQueueItems(query:"",offset:1200,limit:200) { mediaId path } }"#).await;
     assert_eq!(page["data"]["audioQueueItemCount"], 1205, "{page}");
     let tail = page["data"]["audioQueueItems"].as_array().unwrap();
     assert_eq!(tail.len(), 5, "{page}");
@@ -897,9 +938,9 @@ async fn playlist_query_removal_reports_actual_count_without_changing_other_list
         page["data"]["audioPlaylistItems"],
         json!([{"mediaId":"test:/two"}])
     );
-    let removed=query(&schema,&format!(r#"mutation {{ removeAudioPlaylistItem(id:"{}",query:"ids:test:/one,test:/absent") {{ affectedCount }} }}"#,first.id)).await;
+    let removed=query(&schema,&format!(r#"mutation {{ removeAudioPlaylistItems(id:"{}",query:"ids:test:/one,test:/absent") {{ affectedCount }} }}"#,first.id)).await;
     assert_eq!(
-        removed["data"]["removeAudioPlaylistItem"]["affectedCount"], 1,
+        removed["data"]["removeAudioPlaylistItems"]["affectedCount"], 1,
         "{removed}"
     );
     assert_eq!(domain::playlist_item_count(db, &second.id).unwrap(), 2);
@@ -988,15 +1029,15 @@ async fn main_audio_metadata_reads_unindexed_tags_without_changing_playback_or_s
     let before = preferences.entries();
     let current = domain::get_audio_current(db).unwrap();
     let count = domain::queue_total(db).unwrap();
-    let request = plain_graphql::Request::new("query Metadata($path: String!) { audioMetadata(path: $path) { title artist path durationMs } }")
+    let request = plain_graphql::Request::new("query Metadata($path: String!) { audioByPath(path: $path) { title artist path durationMs } }")
         .variables(plain_graphql::Variables::from_json(json!({"path":path})));
     let response = schema.execute(request).await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     let metadata = response.data.into_json().unwrap();
-    assert_eq!(metadata["audioMetadata"]["title"], "Hydrate Title");
-    assert_eq!(metadata["audioMetadata"]["artist"], "Hydrate Artist");
-    assert_eq!(metadata["audioMetadata"]["path"], path);
-    assert!(metadata["audioMetadata"]["durationMs"].as_i64().unwrap() > 0);
+    assert_eq!(metadata["audioByPath"]["title"], "Hydrate Title");
+    assert_eq!(metadata["audioByPath"]["artist"], "Hydrate Artist");
+    assert_eq!(metadata["audioByPath"]["path"], path);
+    assert!(metadata["audioByPath"]["durationMs"].as_i64().unwrap() > 0);
     assert_eq!(preferences.entries(), before);
     assert_eq!(domain::get_audio_current(db).unwrap(), current);
     assert_eq!(domain::queue_total(db).unwrap(), count);
@@ -1009,7 +1050,7 @@ async fn main_audio_metadata_reads_unindexed_tags_without_changing_playback_or_s
         let response = schema
             .execute(
                 plain_graphql::Request::new(
-                    "query($path: String!) { audioMetadata(path: $path) { title } }",
+                    "query($path: String!) { audioByPath(path: $path) { title } }",
                 )
                 .variables(plain_graphql::Variables::from_json(json!({"path":path}))),
             )
@@ -1023,52 +1064,9 @@ async fn main_audio_metadata_requires_storage_authorization_before_reading() {
     let (_directory, schema) =
         fixture_with("[]", |method, _| panic!("unexpected host call {method}"));
     let result = schema
-        .execute("{ audioMetadata(path: \"/not-accessed.mp3\") { title } }")
+        .execute("{ audioByPath(path: \"/not-accessed.mp3\") { title } }")
         .await;
     assert!(!result.errors.is_empty());
-}
-
-#[tokio::test]
-async fn main_audio_cover_extracts_original_bytes_and_preserves_nullable_absence_and_permission_errors()
- {
-    let (_directory, schema) =
-        fixture_with(GRANTED, |method, _| panic!("unexpected host call {method}"));
-    let request = |path: &str| {
-        plain_graphql::Request::new(
-            "mutation Cover($path: String!) { cacheAudioCover(path: $path) }",
-        )
-        .variables(plain_graphql::Variables::from_json(json!({"path":path})))
-    };
-    let response = schema
-        .execute(request(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/../plain-rs/testdata/audio-cover.mp3"
-        )))
-        .await;
-    assert!(response.errors.is_empty(), "{:?}", response.errors);
-    let data = response.data.into_json().unwrap();
-    let path = data["cacheAudioCover"].as_str().unwrap();
-    assert_eq!(
-        std::fs::read(path).unwrap(),
-        include_bytes!("../../../../../../plain-rs/testdata/v-prog-gray.jpg")
-    );
-    let response = schema
-        .execute(request(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/../plain-rs/testdata/audio-untagged.mp3"
-        )))
-        .await;
-    assert!(response.errors.is_empty(), "{:?}", response.errors);
-    assert!(response.data.into_json().unwrap()["cacheAudioCover"].is_null());
-    let (_directory, denied) =
-        fixture_with("[]", |method, _| panic!("unexpected host call {method}"));
-    assert!(
-        !denied
-            .execute(request("/not-read.mp3"))
-            .await
-            .errors
-            .is_empty()
-    );
 }
 
 #[tokio::test]

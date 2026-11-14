@@ -78,7 +78,7 @@ impl FromSql for FileKind {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[cfg_attr(feature = "graphql", derive(plain_graphql::Enum))]
-pub enum IndexMode {
+pub enum FileIndexMode {
     #[default]
     Unconfigured,
     Disabled,
@@ -86,7 +86,7 @@ pub enum IndexMode {
     Blocklist,
 }
 
-impl IndexMode {
+impl FileIndexMode {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Unconfigured => "UNCONFIGURED",
@@ -96,14 +96,14 @@ impl IndexMode {
         }
     }
 }
-impl plain_libs::rusqlite::ToSql for IndexMode {
+impl plain_libs::rusqlite::ToSql for FileIndexMode {
     fn to_sql(&self) -> plain_libs::rusqlite::Result<ToSqlOutput<'_>> {
         Ok(ToSqlOutput::Borrowed(ValueRef::Text(
             self.as_str().as_bytes(),
         )))
     }
 }
-impl FromSql for IndexMode {
+impl FromSql for FileIndexMode {
     fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
         match value.as_str()? {
             "UNCONFIGURED" => Ok(Self::Unconfigured),
@@ -123,7 +123,7 @@ pub struct VolumeRow {
     pub identity: String,
     pub path: String,
     pub is_available: bool,
-    pub index_mode: IndexMode,
+    pub index_mode: FileIndexMode,
     pub included_dirs: Vec<String>,
     pub excluded_dirs: Vec<String>,
 }

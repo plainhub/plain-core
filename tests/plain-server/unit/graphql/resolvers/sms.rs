@@ -405,7 +405,7 @@ async fn send_sms_preserves_the_client_uuid_with_default_sim() {
         .data::<Arc<plain_rs::features::services::sms::send_runtime::Runtime>>()
         .unwrap();
     let pending = plain_rs::features::sms_sends::pending(&sends.store().unwrap()).unwrap();
-    assert_eq!(pending[0].client_request_id.as_deref(), Some(id));
+    assert_eq!(pending[0].request_id, id);
 }
 
 #[tokio::test]
@@ -443,7 +443,7 @@ fn message_projection_preserves_raw_provider_type_for_app_clients() {
 }
 
 #[tokio::test]
-async fn send_sms_requires_a_client_request_id_before_platform_effects() {
+async fn send_sms_requires_a_request_id_before_platform_effects() {
     let (_dir, schema) = fixture(json!(["SMS"]));
     stub(schema_host(&schema), |method, _| {
         panic!("unexpected host call {method}")

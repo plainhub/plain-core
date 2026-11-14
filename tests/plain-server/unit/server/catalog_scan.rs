@@ -470,7 +470,7 @@ async fn source_directories_use_volume_configuration_and_reject_stopped_handles(
     let volume = state.db.volumes().unwrap().remove(0);
     assert_eq!(
         volume.index_mode,
-        plain_rs::infrastructure::db::IndexMode::Allowlist
+        plain_rs::infrastructure::db::FileIndexMode::Allowlist
     );
     core.stop_core().await;
     assert!(catalog.source_directories().is_err());
@@ -478,7 +478,7 @@ async fn source_directories_use_volume_configuration_and_reject_stopped_handles(
         plain_rs::features::services::files::indexing::set(
             &state,
             &volume.id,
-            plain_rs::infrastructure::db::IndexMode::Disabled,
+            plain_rs::infrastructure::db::FileIndexMode::Disabled,
             vec![],
             vec![]
         )

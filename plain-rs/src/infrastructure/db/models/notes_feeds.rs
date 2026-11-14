@@ -1,3 +1,23 @@
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[cfg_attr(feature = "graphql", derive(plain_graphql::Enum))]
+pub enum FeedErrorCode {
+    #[default]
+    None,
+    Timeout,
+    Server,
+    Dns,
+    Parse,
+    Unknown,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "graphql", derive(plain_graphql::SimpleObject))]
+pub struct FeedError {
+    pub code: FeedErrorCode,
+    pub detail: String,
+}
+
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct NoteRow {
     pub id: String,
@@ -16,7 +36,7 @@ pub struct FeedRow {
     pub logo: String,
     pub fetch_full_content: bool,
     pub last_sync_at: Option<String>,
-    pub last_error: String,
+    pub last_error: FeedError,
     pub created_at: String,
     pub updated_at: String,
 }

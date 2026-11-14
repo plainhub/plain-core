@@ -1,5 +1,3 @@
-use plain_rs::features::access::AccessFeature;
-use crate::graphql::resolvers::files::app_file::AppFile;
 use plain_graphql::{Context, Object};
 
 use plain_rs::features::files::app_files::FileStore;
@@ -9,46 +7,6 @@ use std::sync::Arc;
 pub struct AppFilesMutation;
 #[Object]
 impl AppFilesMutation {
-    async fn import_app_file(
-        &self,
-        ctx: &Context<'_>,
-        source: String,
-        file_name: String,
-        mime_type: String,
-        delete_source: bool,
-    ) -> plain_graphql::Result<AppFile> {
-        crate::http::auth::public_gate::require(
-            ctx,
-            ctx.data::<Arc<plain_rs::features::prefs::Prefs>>()?,
-            &[AccessFeature::Files],
-        )?;
-        let store = ctx.data::<Arc<FileStore>>()?;
-        let state = ctx.data::<crate::server::ServerState>()?;
-        let file = plain_rs::features::services::files::imports::import(
-            store,
-            &state.resources,
-            state.cache.root(),
-            plain_rs::features::services::files::imports::Import {
-                source,
-                name: file_name.clone(),
-                mime: mime_type,
-                delete_source,
-            },
-            state.stop.clone(),
-            state.cache_changes.clone(),
-        )
-        .await
-        .map_err(plain_graphql::Error::new)?;
-        let name = if file_name.is_empty() {
-            plain_rs::features::chat::attachments::app_file_store::display_name(
-                &file,
-                &Default::default(),
-            )
-        } else {
-            file_name
-        };
-        Ok(AppFile::from_dappfile(file, name))
-    }
     async fn release_app_file(
         &self,
         ctx: &Context<'_>,

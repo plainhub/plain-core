@@ -3,8 +3,9 @@ use super::{
     syntax,
 };
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum NumberType {
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum NumberType {
     FixedLine,
     Mobile,
     FixedLineOrMobile,

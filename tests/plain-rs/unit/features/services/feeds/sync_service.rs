@@ -124,7 +124,7 @@ async fn shutdown_cancels_owned_fetches_without_late_sync_completion_or_detached
     service.shutdown().await;
     assert_eq!(scheduler_exits.load(Ordering::SeqCst), 1);
     assert!(service.scheduler.lock().unwrap().is_none());
-    assert_eq!(finished(receiver).await.status, FeedWorkerStatus::Cancelled);
+    assert_eq!(finished(receiver).await.status, FeedWorkerStatus::Canceled);
     assert!(
         service
             .db
@@ -179,7 +179,7 @@ async fn independent_feeds_share_one_global_concurrency_limit() {
             .states()
             .iter()
             .filter(|state| state.feed_id.as_str() != "all")
-            .all(|state| state.status == FeedWorkerStatus::Cancelled)
+            .all(|state| state.status == FeedWorkerStatus::Canceled)
     );
     while let Ok(event) = events.try_recv() {
         assert_ne!(event.event_type, "FEED_SYNC_UPDATED");
@@ -330,7 +330,7 @@ fn feed_states_keep_enum_wire_names_and_active_boundaries() {
     for (status, wire, active) in [
         (FeedWorkerStatus::Queued, "QUEUED", true),
         (FeedWorkerStatus::Running, "RUNNING", true),
-        (FeedWorkerStatus::Cancelled, "CANCELLED", false),
+        (FeedWorkerStatus::Canceled, "CANCELED", false),
         (FeedWorkerStatus::Completed, "COMPLETED", false),
         (FeedWorkerStatus::Error, "ERROR", false),
     ] {

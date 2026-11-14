@@ -5,8 +5,9 @@ use plain_libs::serde_json::json;
 fn native_batches_emit_one_deduplicated_public_invalidation_and_empty_batches_emit_none() {
     let (events, mut receiver) = broadcast::channel(8);
     publish(&events, []);
+    publish(&events, [DataType::Note.kind(), DataType::File.kind()]);
     assert!(receiver.try_recv().is_err());
-    publish(&events, [3, 1, 3, 24]);
+    publish(&events, [3, 1, 3, 24, DataType::Note.kind()]);
     let event = receiver.try_recv().unwrap();
     assert_eq!(event.event_type, MEDIA_UPDATED);
     assert!(!event.is_host_event());
@@ -25,4 +26,5 @@ fn catalog_routing_selects_only_the_reported_media_kind() {
     assert!(!includes(r#"{"types":[]}"#, DataType::Image));
     assert!(!includes(r#"{"types":["IMAGE"],"extra":true}"#, DataType::Image));
     assert!(!includes("invalid", DataType::Image));
+    assert!(!includes(r#"{"types":["NOTE"]}"#, DataType::Note));
 }

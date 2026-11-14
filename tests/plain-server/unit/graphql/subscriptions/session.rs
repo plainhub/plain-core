@@ -89,7 +89,7 @@ async fn scan_events_wait_for_capacity_without_closing_the_connection_or_blockin
     };
     let spec = plain_rs::infrastructure::protocols::graphql::events::EVENTS
         .iter()
-        .find(|spec| spec.field == "mediaScanProgress")
+        .find(|spec| spec.field == "fileIndexScanProgressUpdated")
         .unwrap();
     let scope = NativeRequestScope::default();
     for _ in 0..64 {

@@ -155,7 +155,7 @@ async fn automatic_refreshes_deduplicate_and_manual_requests_survive_automatic_c
             if manual {
                 FeedWorkerStatus::Completed
             } else {
-                FeedWorkerStatus::Cancelled
+                FeedWorkerStatus::Canceled
             }
         );
         assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 1);
@@ -178,7 +178,7 @@ async fn disabling_automatic_dispatch_cancels_queued_work_but_manual_refresh_sti
     assert!(service.queue(Some("feed".into())).is_err());
     assert_eq!(
         super::super::tests::finished(pending).await.status,
-        FeedWorkerStatus::Cancelled
+        FeedWorkerStatus::Canceled
     );
     assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 0);
     drop(permits);
@@ -219,7 +219,7 @@ async fn a_network_policy_change_cancels_only_automatic_fetches() {
             if manual {
                 FeedWorkerStatus::Completed
             } else {
-                FeedWorkerStatus::Cancelled
+                FeedWorkerStatus::Canceled
             }
         );
         service.shutdown().await;

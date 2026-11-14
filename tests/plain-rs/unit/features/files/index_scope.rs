@@ -1,7 +1,7 @@
 use super::rules::resolve_defaults;
 use super::*;
 
-fn volume(id: &str, path: &str, mode: IndexMode) -> VolumeRow {
+fn volume(id: &str, path: &str, mode: FileIndexMode) -> VolumeRow {
     VolumeRow {
         id: id.into(),
         identity: id.into(),
@@ -15,9 +15,9 @@ fn volume(id: &str, path: &str, mode: IndexMode) -> VolumeRow {
 
 #[test]
 fn nested_volumes_apply_their_own_mode_and_retain_inactive_lists() {
-    let mut parent = volume("parent", "/", IndexMode::Blocklist);
+    let mut parent = volume("parent", "/", FileIndexMode::Blocklist);
     parent.excluded_dirs = vec!["data/private".into()];
-    let mut child = volume("child", "/data/disk", IndexMode::Allowlist);
+    let mut child = volume("child", "/data/disk", FileIndexMode::Allowlist);
     child.included_dirs = vec!["Photos".into()];
     child.excluded_dirs = vec!["Photos".into()];
     let mut scope = Scope {
@@ -33,22 +33,22 @@ fn nested_volumes_apply_their_own_mode_and_retain_inactive_lists() {
     assert!(!scope.contains_entry(Path::new("/data/private/file.txt"), false));
     assert!(scope.contains_entry(Path::new("/data/disk/Photos/image.jpg"), false));
     assert!(!scope.contains_entry(Path::new("/data/disk/Documents/file.txt"), false));
-    scope.volumes[1].index_mode = IndexMode::Disabled;
+    scope.volumes[1].index_mode = FileIndexMode::Disabled;
     assert!(!scope.contains_entry(Path::new("/data/disk/Photos/image.jpg"), false));
-    scope.volumes[1].index_mode = IndexMode::Allowlist;
+    scope.volumes[1].index_mode = FileIndexMode::Allowlist;
     assert!(scope.contains_entry(Path::new("/data/disk/Photos/image.jpg"), false));
     scope.volumes[1].included_dirs.clear();
     assert!(!scope.contains_entry(Path::new("/data/disk/Photos/image.jpg"), false));
-    scope.volumes[1].index_mode = IndexMode::Blocklist;
+    scope.volumes[1].index_mode = FileIndexMode::Blocklist;
     assert!(scope.contains_entry(Path::new("/data/disk/Documents/file.txt"), false));
     assert!(!scope.contains_entry(Path::new("/data/disk/Photos/image.jpg"), false));
 }
 
 #[test]
 fn offline_volume_rules_do_not_override_a_different_online_volume_at_the_same_path() {
-    let mut old = volume("old", "/data/disk", IndexMode::Disabled);
+    let mut old = volume("old", "/data/disk", FileIndexMode::Disabled);
     old.is_available = false;
-    let current = volume("new", "/data/disk", IndexMode::Blocklist);
+    let current = volume("new", "/data/disk", FileIndexMode::Blocklist);
     let scope = Scope {
         directories: source_directories(&[old.clone(), current.clone()]),
         exclusions: Vec::new(),
@@ -422,8 +422,8 @@ fn all_user_libraries_exclude_application_data_and_keep_cloud_documents() {
 
 #[test]
 fn selected_volume_keeps_its_rules_and_excludes_other_mounted_volumes() {
-    let root = volume("root", "/", IndexMode::Blocklist);
-    let mut disk = volume("disk", "/data/disk", IndexMode::Allowlist);
+    let root = volume("root", "/", FileIndexMode::Blocklist);
+    let mut disk = volume("disk", "/data/disk", FileIndexMode::Allowlist);
     disk.included_dirs = vec!["Photos".into()];
     let scope = Scope {
         directories: source_directories(&[root.clone(), disk.clone()]),
@@ -445,8 +445,8 @@ fn selected_volume_keeps_its_rules_and_excludes_other_mounted_volumes() {
     assert!(selected.contains_entry(Path::new("/data/disk/Photos/file.jpg"), false));
     assert!(!selected.contains_entry(Path::new("/data/disk/Documents/file.txt"), false));
     assert!(!selected.contains_entry(Path::new("/documents/file.txt"), false));
-    assert_eq!(scope.volumes[0].index_mode, IndexMode::Blocklist);
-    assert_eq!(scope.volumes[1].index_mode, IndexMode::Allowlist);
+    assert_eq!(scope.volumes[0].index_mode, FileIndexMode::Blocklist);
+    assert_eq!(scope.volumes[1].index_mode, FileIndexMode::Allowlist);
     assert!(scope.for_volume("missing").is_err());
 }
 
@@ -459,17 +459,17 @@ fn selected_unavailable_or_unconfigured_volumes_have_no_scan_roots() {
             excluded_directories: Vec::new(),
             excluded_names: Vec::new(),
         },
-        volumes: vec![volume("disk", "/data/disk", IndexMode::Blocklist)],
+        volumes: vec![volume("disk", "/data/disk", FileIndexMode::Blocklist)],
     };
     for mode in [
-        IndexMode::Unconfigured,
-        IndexMode::Disabled,
-        IndexMode::Allowlist,
+        FileIndexMode::Unconfigured,
+        FileIndexMode::Disabled,
+        FileIndexMode::Allowlist,
     ] {
         scope.volumes[0].index_mode = mode;
         assert!(scope.for_volume("disk").unwrap().directories.is_empty());
     }
-    scope.volumes[0].index_mode = IndexMode::Blocklist;
+    scope.volumes[0].index_mode = FileIndexMode::Blocklist;
     scope.volumes[0].is_available = false;
     assert!(scope.for_volume("disk").unwrap().directories.is_empty());
 }

@@ -14,11 +14,7 @@ use plain_rs::infrastructure::db::notes_feeds::FeedRow;
 
 type GqlResult<T> = plain_graphql::Result<T>;
 
-#[derive(SimpleObject, Clone)]
-pub struct FeedError {
-    pub code: String,
-    pub detail: String,
-}
+pub use plain_rs::features::feeds::FeedError;
 
 #[derive(SimpleObject, Clone)]
 pub struct Feed {
@@ -95,14 +91,7 @@ fn feed_model(_ctx: &Context<'_>, row: FeedRow) -> GqlResult<Feed> {
             .as_deref()
             .map(content_common::instant)
             .transpose()?,
-        last_error: {
-            let value: plain_libs::serde_json::Value =
-                plain_libs::serde_json::from_str(&row.last_error).unwrap_or_default();
-            FeedError {
-                code: value["code"].as_str().unwrap_or_default().into(),
-                detail: value["detail"].as_str().unwrap_or_default().into(),
-            }
-        },
+        last_error: row.last_error,
         created_at: content_common::instant(&row.created_at)?,
         updated_at: content_common::instant(&row.updated_at)?,
     })

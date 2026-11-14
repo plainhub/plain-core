@@ -35,7 +35,7 @@ pub use crate::infrastructure::db::browse::TableColumnMeta;
 #[cfg(feature = "library")]
 pub use models::{
     ArchivedConversationRow, AuditEventRow, ClipboardRow, FavoriteFolderRow, FileKind, FileRow,
-    HISTORY_KEEP, ImageEmbeddingRow, IndexMode, MediaPlayHistoryRow, Playlist, PlaylistItem,
+    HISTORY_KEEP, ImageEmbeddingRow, FileIndexMode, MediaPlayHistoryRow, Playlist, PlaylistItem,
     PomodoroItemRow, QueueItem, SessionRow, ShareRow, TagRelationRow, TagRow, TrashedMessageRow,
     VolumeRow,
 };

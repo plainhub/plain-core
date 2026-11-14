@@ -1,5 +1,5 @@
 use crate::features::files::index_scope;
-use crate::infrastructure::db::{IndexMode, VolumeRow};
+use crate::infrastructure::db::{FileIndexMode, VolumeRow};
 use std::path::Path;
 
 pub fn set_directories(
@@ -34,7 +34,7 @@ pub fn set_directories(
         if !db
             .set_volume_index(
                 &id,
-                IndexMode::Allowlist,
+                FileIndexMode::Allowlist,
                 &directories,
                 &volume.excluded_dirs,
             )

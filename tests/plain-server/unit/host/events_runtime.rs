@@ -4,7 +4,7 @@ use super::*;
 #[tokio::test]
 async fn unconfigured_volumes_do_not_scan_or_watch_until_a_volume_mode_is_saved() {
     use plain_rs::features::services::files::catalog_scan::{NativeMediaCatalog, host_connected};
-    use plain_rs::infrastructure::db::IndexMode;
+    use plain_rs::infrastructure::db::FileIndexMode;
     let (_directory, core, sources) = filesystem_media_host(false);
     let state = core.runtime().clone();
     let volume = state.db.volumes().unwrap().remove(0);
@@ -12,7 +12,7 @@ async fn unconfigured_volumes_do_not_scan_or_watch_until_a_volume_mode_is_saved(
         .db
         .set_volume_index(
             &volume.id,
-            IndexMode::Unconfigured,
+            FileIndexMode::Unconfigured,
             &volume.included_dirs,
             &[],
         )
@@ -35,7 +35,7 @@ async fn unconfigured_volumes_do_not_scan_or_watch_until_a_volume_mode_is_saved(
     plain_rs::features::services::files::indexing::set(
         &state,
         &volume.id,
-        IndexMode::Allowlist,
+        FileIndexMode::Allowlist,
         vec![sources.to_string_lossy().into_owned()],
         vec![],
     )

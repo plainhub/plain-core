@@ -159,7 +159,7 @@ impl AudioQuery {
             .collect())
     }
 
-    async fn audio_metadata(
+    async fn audio_by_path(
         &self,
         ctx: &Context<'_>,
         path: String,
@@ -244,10 +244,14 @@ impl AudioQuery {
             .collect())
     }
 
-    async fn audio_queue_item_count(&self, ctx: &Context<'_>) -> plain_graphql::Result<i32> {
+    async fn audio_queue_item_count(
+        &self,
+        ctx: &Context<'_>,
+        query: String,
+    ) -> plain_graphql::Result<i32> {
         public_gate::require(ctx, prefs(ctx), &[FEATURE])?;
         Ok(audio(ctx)?
-            .run(|db, _| domain::queue_total(db))
+            .run(move |db, _| domain::queue_filtered_count(db, &query))
             .await?
             .try_into()?)
     }
@@ -345,19 +349,6 @@ pub struct AudioMutation;
 
 #[Object]
 impl AudioMutation {
-    async fn cache_audio_cover(
-        &self,
-        ctx: &Context<'_>,
-        path: String,
-    ) -> plain_graphql::Result<Option<String>> {
-        public_gate::require(ctx, prefs(ctx), &[FEATURE])?;
-        Ok(audio(ctx)?
-            .cover(&path)
-            .await
-            .map_err(plain_graphql::Error::new)?
-            .map(|path| path.to_string_lossy().into_owned()))
-    }
-
     async fn select_audio(
         &self,
         ctx: &Context<'_>,
@@ -595,7 +586,7 @@ impl AudioMutation {
         Ok(true)
     }
 
-    async fn remove_audio_playlist_item(
+    async fn remove_audio_playlist_items(
         &self,
         ctx: &Context<'_>,
         id: plain_graphql::ID,

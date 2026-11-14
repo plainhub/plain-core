@@ -1,7 +1,7 @@
-use super::types::ScanProgress;
+use super::types::FileIndexScanProgress;
 use crate::server::ServerState;
 use plain_graphql::{Context, ID, Object, Result, SimpleObject};
-use plain_rs::infrastructure::db::IndexMode;
+use plain_rs::infrastructure::db::FileIndexMode;
 
 use plain_rs::features::services::files::scanning;
 use plain_rs::features::services::files::scanning::Command;
@@ -25,12 +25,12 @@ async fn index_state<'a>(ctx: &'a Context<'_>) -> Result<&'a ServerState> {
     Ok(state)
 }
 #[derive(Default)]
-pub struct MediaScanQuery;
+pub struct FileIndexScanQuery;
 #[Object]
-impl MediaScanQuery {
-    async fn scan_progress(&self, ctx: &Context<'_>) -> Result<ScanProgress> {
+impl FileIndexScanQuery {
+    async fn file_index_scan_progress(&self, ctx: &Context<'_>) -> Result<FileIndexScanProgress> {
         let progress = scanning::progress(state(ctx).await?).await?;
-        Ok(ScanProgress {
+        Ok(FileIndexScanProgress {
             indexed: progress.indexed,
             pending: progress
                 .total
@@ -93,40 +93,26 @@ async fn command(ctx: &Context<'_>, action: Command) -> Result<bool> {
     Ok(true)
 }
 #[derive(Default)]
-pub struct MediaScanMutation;
+pub struct FileIndexScanMutation;
 #[Object]
-impl MediaScanMutation {
-    async fn rebuild_media_index(
-        &self,
-        ctx: &Context<'_>,
-        #[graphql(name = "root")] _root: String,
-    ) -> Result<bool> {
-        command(
-            ctx,
-            Command::Rebuild(
-                #[cfg(feature = "media")]
-                _root,
-            ),
-        )
-        .await
+impl FileIndexScanMutation {
+    async fn rebuild_file_index(&self, ctx: &Context<'_>, volume_id: Option<ID>) -> Result<bool> {
+        command(ctx, Command::Rebuild(volume_id.map(String::from))).await
     }
-    async fn rebuild_file_index_volume(&self, ctx: &Context<'_>, id: ID) -> Result<bool> {
-        command(ctx, Command::RebuildVolume(id.into())).await
-    }
-    async fn pause_media_scan(&self, ctx: &Context<'_>) -> Result<bool> {
+    async fn pause_file_index_scan(&self, ctx: &Context<'_>) -> Result<bool> {
         command(ctx, Command::Pause).await
     }
-    async fn resume_media_scan(&self, ctx: &Context<'_>) -> Result<bool> {
+    async fn resume_file_index_scan(&self, ctx: &Context<'_>) -> Result<bool> {
         command(ctx, Command::Resume).await
     }
-    async fn stop_media_scan(&self, ctx: &Context<'_>) -> Result<bool> {
+    async fn stop_file_index_scan(&self, ctx: &Context<'_>) -> Result<bool> {
         command(ctx, Command::Stop).await
     }
     async fn set_file_index_volume(
         &self,
         ctx: &Context<'_>,
         id: ID,
-        index_mode: IndexMode,
+        index_mode: FileIndexMode,
         included_dirs: Vec<String>,
         excluded_dirs: Vec<String>,
     ) -> Result<bool> {
@@ -151,7 +137,7 @@ pub struct FileIndexVolume {
     pub id: ID,
     pub path: String,
     pub is_available: bool,
-    pub index_mode: IndexMode,
+    pub index_mode: FileIndexMode,
     pub included_dirs: Vec<String>,
     pub excluded_dirs: Vec<String>,
 }

@@ -8,9 +8,7 @@ async fn native_part_reports_publish_one_result_and_replay_the_durable_outbox() 
     ));
     let (events, mut received) = broadcast::channel(16);
     let runtime = Runtime::new(store.clone(), events.clone());
-    runtime
-        .register("send".into(), Some("request".into()), 2)
-        .unwrap();
+    runtime.register("send".into(), 2).unwrap();
     let report = |index| Report {
         request_id: "send".into(),
         part_index: index,
@@ -26,7 +24,7 @@ async fn native_part_reports_publish_one_result_and_replay_the_durable_outbox() 
     assert_eq!(event.event_type, "SMS_SEND_RESULT");
     assert_eq!(
         plain_libs::serde_json::from_str::<plain_libs::serde_json::Value>(&event.payload).unwrap(),
-        plain_libs::serde_json::json!({"requestId":"request","success":true,"resultCode":-1})
+        plain_libs::serde_json::json!({"requestId":"send","success":true,"resultCode":-1})
     );
     runtime.report(report(1)).unwrap();
     assert!(received.try_recv().is_err());

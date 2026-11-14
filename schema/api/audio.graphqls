@@ -42,12 +42,11 @@ enum MediaPlayMode {
 extend type Mutation {
 	addAudioPlaylistItems(id: ID!, query: String!): Boolean!
 	addAudioToQueue(query: String!): Boolean!
-	cacheAudioCover(path: String!): String
 	clearAudioQueue: Boolean!
 	createAudioPlaylist(name: String!): AudioPlaylist!
 	deleteAudioPlaylist(id: ID!): Boolean!
 	removeAudioFromQueue(mediaId: ID!): Boolean!
-	removeAudioPlaylistItem(id: ID!, query: String!): ActionResult!
+	removeAudioPlaylistItems(id: ID!, query: String!): ActionResult!
 	reorderAudioQueue(mediaIds: [ID!]!): Boolean!
 	replaceAudioQueue(query: String!, sortBy: FileSortBy!, shuffle: Boolean!): AudioItem
 	selectAudio(mediaId: ID!): AudioItem!
@@ -58,16 +57,16 @@ extend type Mutation {
 
 extend type Query {
 	audioArtists: [AudioArtist!]!
+	audioByPath(path: String!): AudioItem!
 	audioCount(query: String!): Int!
 	audioLyrics(mediaId: ID!): String
 	audioLyricsByPath(path: String!): String
-	audioMetadata(path: String!): AudioItem!
 	audioPlayback: AudioPlayback!
 	audioPlaylist(id: ID!): AudioPlaylist
 	audioPlaylistItemCount(id: ID!, query: String!): Int!
 	audioPlaylistItems(id: ID!, query: String!, offset: Int!, limit: Int!): [AudioItem!]!
 	audioPlaylists: [AudioPlaylist!]!
-	audioQueueItemCount: Int!
+	audioQueueItemCount(query: String!): Int!
 	audioQueueItems(query: String!, offset: Int!, limit: Int!): [AudioItem!]!
 	audios(query: String!, offset: Int!, limit: Int!, sortBy: FileSortBy!): [Audio!]!
 }
