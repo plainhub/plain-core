@@ -13,6 +13,11 @@ use sha2::{Digest, Sha256};
 
 const LIFETIME_MS: u64 = 300_000;
 
+pub(super) fn verification_code(hash: &[u8; 32]) -> String {
+    let digits = u64::from_be_bytes(hash[..8].try_into().unwrap()) % 100_000_000;
+    format!("{digits:08}")
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ClientHello {
@@ -186,7 +191,7 @@ impl Channel {
         Self {
             key,
             hash,
-            verification_code: context.clone(),
+            verification_code: verification_code(&hash),
             context,
             expires_at,
         }

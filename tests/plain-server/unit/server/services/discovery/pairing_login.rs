@@ -152,7 +152,9 @@ async fn trust_identity(
     peer_id: &str,
 ) {
     let waiting = notice(events, "PAIRING_REQUESTED").await;
-    assert_eq!(waiting.verification_code.unwrap().len(), 64);
+    let verification_code = waiting.verification_code.unwrap();
+    assert_eq!(verification_code.len(), 8);
+    assert!(verification_code.bytes().all(|byte| byte.is_ascii_digit()));
     plain_rs::features::services::discovery::pairing_confirmation::respond(state, peer_id, true)
         .await
         .unwrap();
@@ -217,7 +219,9 @@ async fn passwordless_native_management_displays_the_same_code_and_commits_only_
         waiting.verification_code.as_deref(),
         request["request"]["verificationCode"].as_str()
     );
-    assert_eq!(waiting.verification_code.unwrap().len(), 64);
+    let verification_code = waiting.verification_code.unwrap();
+    assert_eq!(verification_code.len(), 8);
+    assert!(verification_code.bytes().all(|byte| byte.is_ascii_digit()));
     assert!(remote_state.db.session_get(&local_id).unwrap().is_none());
     assert!(
         plain_rs::infrastructure::db::chat_store::peers::all(&state.db)
@@ -504,7 +508,9 @@ async fn known_key_mismatch_preserves_existing_grants() {
     );
     let waiting = notice(&mut notices, "PAIRING_REQUESTED").await;
     assert!(waiting.identity_changed);
-    assert_eq!(waiting.verification_code.as_ref().unwrap().len(), 64);
+    let verification_code = waiting.verification_code.as_ref().unwrap();
+    assert_eq!(verification_code.len(), 8);
+    assert!(verification_code.bytes().all(|byte| byte.is_ascii_digit()));
     pairing_attempts::cancel(&state, &peer_id).await.unwrap();
     let peer = plain_rs::infrastructure::db::chat_store::peers::get(&state.db, &remote_id)
         .unwrap()

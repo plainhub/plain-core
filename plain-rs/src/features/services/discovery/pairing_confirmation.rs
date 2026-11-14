@@ -63,9 +63,8 @@ pub(super) fn chat_key(
 }
 
 pub(super) fn verification_code(request: &PairingRequest) -> String {
-    let digest = Sha256::digest(request.payload.signature.as_bytes());
-    let digits = u64::from_be_bytes(digest[..8].try_into().unwrap()) % 100_000_000;
-    format!("{digits:08}")
+    let digest: [u8; 32] = Sha256::digest(request.payload.signature.as_bytes()).into();
+    super::super::confirmation_channel::verification_code(&digest)
 }
 
 pub(super) fn save_peer(

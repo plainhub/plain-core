@@ -10,7 +10,10 @@ fn signed_exchange_binds_identity_client_request_and_direction() {
         .unwrap();
     assert_eq!(client.api_key(), server.api_key());
     assert_eq!(client.context, server.context);
-    assert_eq!(client.verification_code.len(), 64);
+    assert_eq!(client.context.len(), 64);
+    assert_eq!(client.verification_code, server.verification_code);
+    assert_eq!(client.verification_code.len(), 8);
+    assert!(client.verification_code.bytes().all(|byte| byte.is_ascii_digit()));
     let metadata = client.encrypt_request(b"metadata", 102).unwrap();
     assert_eq!(server.decrypt_request(&metadata, 102).unwrap(), b"metadata");
     assert!(server.decrypt_response(&metadata, 102).is_err());
@@ -21,6 +24,14 @@ fn signed_exchange_binds_identity_client_request_and_direction() {
     let result = server.encrypt_response(b"result", 102).unwrap();
     assert_eq!(client.decrypt_response(&result, 102).unwrap(), b"result");
     assert!(client.decrypt_response(&result, 300100).is_err());
+}
+#[test]
+fn display_code_is_fixed_width_and_keeps_leading_zeroes() {
+    let mut digest = [0; 32];
+    digest[7] = 42;
+    assert_eq!(verification_code(&digest), "00000042");
+    digest[..8].copy_from_slice(&0xad3ce33898b6ad21_u64.to_be_bytes());
+    assert_eq!(verification_code(&digest), "83954721");
 }
 #[test]
 fn altered_client_key_cid_identity_signature_and_expiry_are_rejected() {
