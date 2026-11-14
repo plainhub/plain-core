@@ -212,6 +212,8 @@ Linux root services automatically mount eligible unmounted filesystems at stable
 
 Without path overrides, CLI data is stored in `~/.plainapp/data` for the user running the process. For the root service installed by `plainapp install`, this is normally `/root/.plainapp/data`.
 
+App files: `<data-dir>/files/` (default: `~/.plainapp/data/files/`; with `--data-dir /var/lib/plainapp`: `/var/lib/plainapp/files/`).
+
 ```text
 <data-dir>/                     Persistent data; default: ~/.plainapp/data
 ├── plain.db                    SQLite database: application records and indexes
@@ -221,11 +223,10 @@ Without path overrides, CLI data is stored in `~/.plainapp/data` for the user ru
 ├── tls.pem                     HTTPS certificate, unless overridden
 ├── tls.key                     HTTPS private key, unless overridden
 ├── tls-identity.json           TLS identity metadata
-├── files/                      App-managed file contents, including chat attachments
+├── files/                      App files, including note images and chat attachments
 │   └── <hash[0:2]>/
 │       └── <hash[2:4]>/
 │           └── <sha256>[.<ext>]
-├── note-images/                Images attached to notes
 ├── audio/
 │   └── pomodoro_sound.mp3      Custom Pomodoro sound
 ├── logs/
@@ -245,8 +246,7 @@ Default cache directories:
 <cache-dir>/                    Disposable application cache
 ├── image_cache/                Image processing cache
 ├── video_cache/                Video processing cache
-├── thumbs/
-│   └── rust/                   Generated thumbnails
+├── thumbs/                     Generated thumbnails
 ├── share_open/                 Temporary shared-file previews
 ├── updates/                    Downloaded application updates
 └── crash_report.txt            Temporary crash-report export

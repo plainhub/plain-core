@@ -251,7 +251,7 @@ fn authorize_path_for_read(
     }
     if candidate.starts_with(&directory) {
         let paths = crate::infrastructure::data_paths::DataPaths::new(&directory);
-        if candidate.starts_with(paths.note_images()) || candidate == paths.pomodoro_sound() {
+        if candidate == paths.pomodoro_sound() {
             return Ok(());
         }
         if candidate.starts_with(directory.join("files")) {

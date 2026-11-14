@@ -298,7 +298,7 @@ impl Thumbnails {
             let Some(key) = source_fingerprint(&request)? else {
                 return Ok(None);
             };
-            let cached = cache.join("thumbs").join("rust").join(format!(
+            let cached = cache.join("thumbs").join(format!(
                 "{key}.{}",
                 if plain_libs::utils::mime::mime_from_ext(&request.path) == "image/png" {
                     "png"

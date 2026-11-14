@@ -22,9 +22,6 @@ impl DataPaths {
     pub fn prefs(&self) -> PathBuf {
         self.root.join("prefs.json")
     }
-    pub fn note_images(&self) -> PathBuf {
-        self.root.join("note-images")
-    }
     pub fn audio(&self) -> PathBuf {
         self.root.join("audio")
     }
@@ -50,7 +47,7 @@ impl DataPaths {
         self.root.join("tls-identity.json")
     }
     pub fn initialize_directories(&self) -> std::io::Result<()> {
-        for directory in [self.note_images(), self.audio(), self.logs()] {
+        for directory in [self.audio(), self.logs()] {
             if std::fs::symlink_metadata(&directory).is_ok_and(|metadata| metadata.is_symlink()) {
                 return Err(std::io::Error::new(
                     std::io::ErrorKind::InvalidInput,

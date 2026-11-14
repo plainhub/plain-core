@@ -1,31 +1,35 @@
 use crate::server::ContentServer;
 
 #[tokio::test]
-async fn native_import_preserves_image_bytes_and_resolves_duplicate_names_in_rust() {
+async fn native_note_image_import_uses_shared_app_file_storage() {
     let directory = plain_libs::temporary::tempdir().unwrap();
     let core = ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state();
     let source = directory.path().join("source.png");
     std::fs::write(&source, b"image bytes").unwrap();
     let (_generation, mut requests) = state.host.connect();
-    for name in ["picture.png", "picture (1).png"] {
+    let mut imported = Vec::new();
+    for _ in 0..2 {
         let reference = core
             .native_management()
             .unwrap()
             .import_note_image(source.to_string_lossy().into_owned(), "picture.png".into())
             .await
             .unwrap();
-        assert_eq!(reference, format!("app://note-images/{name}"));
-        assert_eq!(
-            std::fs::read(
-                plain_rs::infrastructure::data_paths::DataPaths::new(directory.path())
-                    .note_images()
-                    .join(name)
-            )
-            .unwrap(),
-            b"image bytes"
-        );
+        assert!(reference.starts_with("fid:"));
+        let path = plain_rs::features::services::files::references::resolve(
+            state.db.clone(),
+            state.directory.clone(),
+            &reference,
+        )
+        .unwrap();
+        assert!(std::path::Path::new(&path).starts_with(directory.path().join("files")));
+        assert_eq!(std::fs::read(path).unwrap(), b"image bytes");
+        imported.push(reference);
     }
+    assert_eq!(imported[0], imported[1]);
+    assert_eq!(state.db.count_app_files(), 1);
+    assert!(!directory.path().join("note-images").exists());
     assert!(source.exists());
     assert!(requests.try_recv().is_err());
     let remote = crate::graphql::executor::execute_graphql(

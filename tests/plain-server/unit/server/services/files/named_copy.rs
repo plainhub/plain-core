@@ -339,14 +339,23 @@ async fn copies_logical_image_references_without_changing_the_source() {
     let dir = plain_libs::temporary::tempdir().unwrap();
     let data = dir.path().join("data");
     let core = ContentServer::open(&data).unwrap();
-    let source = data.join("note-images/source.png");
-    std::fs::create_dir_all(source.parent().unwrap()).unwrap();
+    let source = dir.path().join("source.png");
     std::fs::write(&source, b"original image").unwrap();
     let target = dir.path().join("exports");
-    for reference in [
-        "app://note-images/source.png".to_owned(),
-        source.to_string_lossy().into_owned(),
-    ] {
+    let reference = core
+        .native_management()
+        .unwrap()
+        .import_note_image(source.to_string_lossy().into_owned(), "source.png".into())
+        .await
+        .unwrap();
+    let state = core.runtime_state();
+    let stored = plain_rs::features::services::files::references::resolve(
+        state.db.clone(),
+        state.directory.clone(),
+        &reference,
+    )
+    .unwrap();
+    for reference in [reference, stored] {
         let response = execute(&core, &reference, &target, "saved.png").await;
         assert!(response.errors.is_empty(), "{:?}", response.errors);
         let saved = response.data.into_json().unwrap()["copyFileToDirectory"]

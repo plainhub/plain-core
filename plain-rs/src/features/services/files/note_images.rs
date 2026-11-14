@@ -22,42 +22,28 @@ pub async fn import(state: &CoreRuntime, source: &str, name: &str) -> Result<Str
     {
         return Err("Reserved image name".into());
     }
-    let directory =
-        crate::infrastructure::data_paths::DataPaths::new(&state.directory).note_images();
     let temporary = crate::features::services::files::source_files::stage(
         source,
         state.db.clone(),
         &state.directory,
         &state.resources,
-        &directory,
+        &state.cache.image_cache(),
         state.stop.clone(),
     )
     .await?;
-    let target = directory.join(name);
-    tokio::task::spawn_blocking(move || {
-        let mut temporary = temporary;
-        loop {
-            let destination = plain_libs::utils::unique_path::unique_sibling(&target)
-                .map_err(|error| error.to_string())?;
-            match temporary.persist_noclobber(&destination) {
-                Ok(_) => {
-                    return Ok(format!(
-                        "app://note-images/{}",
-                        destination
-                            .file_name()
-                            .and_then(|value| value.to_str())
-                            .ok_or("Invalid image name")?
-                    ));
-                }
-                Err(error) if error.error.kind() == std::io::ErrorKind::AlreadyExists => {
-                    temporary = error.file
-                }
-                Err(error) => return Err(error.to_string()),
-            }
-        }
-    })
-    .await
-    .map_err(|error| error.to_string())?
+    let record = state
+        .app_files
+        .import(
+            temporary.path().to_path_buf(),
+            name.to_owned(),
+            plain_libs::utils::mime::mime_from_ext(name).to_owned(),
+            false,
+        )
+        .await?;
+    Ok(format!(
+        "fid:{}",
+        record.real_path.rsplit('/').next().unwrap()
+    ))
 }
 
 #[cfg(test)]

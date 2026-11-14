@@ -11,7 +11,7 @@ async fn native_cache_accounting_and_clear_preserve_application_data_without_hos
     let persistent = [
         paths.database(),
         paths.prefs(),
-        paths.note_images().join("note.png"),
+        directory.path().join("files/note.png"),
         paths.audio().join("sound.mp3"),
         paths.tls_identity(),
         directory.path().join("ai_models/model.onnx"),

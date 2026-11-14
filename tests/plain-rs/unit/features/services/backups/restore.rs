@@ -114,7 +114,6 @@ fn staging_keeps_live_stores_untouched_and_startup_replaces_closed_stores() {
     assert_restored(directory.path());
     assert!(cache.path().is_dir());
     assert!(!cache.path().join("stale").exists());
-    assert!(paths.note_images().is_dir());
     assert!(paths.audio().is_dir());
 }
 #[test]

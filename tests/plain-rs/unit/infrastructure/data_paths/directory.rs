@@ -10,7 +10,6 @@ fn a_data_directory_is_initialized_once_and_remains_locked_for_the_process() {
     let paths = crate::infrastructure::data_paths::DataPaths::new(directory.path());
     for path in [
         first.cache_paths().root().to_owned(),
-        paths.note_images(),
         paths.audio(),
     ] {
         assert!(path.is_dir(), "{}", path.display());

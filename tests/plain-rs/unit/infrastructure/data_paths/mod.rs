@@ -7,7 +7,6 @@ fn all_platforms_derive_one_layout_from_the_data_root() {
     for (actual, relative) in [
         (paths.database(), "plain.db"),
         (paths.prefs(), "prefs.json"),
-        (paths.note_images(), "note-images"),
         (paths.audio(), "audio"),
         (paths.logs(), "logs"),
         (paths.log_file(), "logs/latest.log"),
@@ -28,7 +27,7 @@ fn all_platforms_derive_one_layout_from_the_data_root() {
 #[cfg(unix)]
 #[test]
 fn fixed_directories_cannot_redirect_application_io() {
-    for child in ["note-images", "audio", "logs"] {
+    for child in ["audio", "logs"] {
         let directory = plain_libs::temporary::tempdir().unwrap();
         let external = plain_libs::temporary::tempdir().unwrap();
         let paths = DataPaths::new(directory.path());

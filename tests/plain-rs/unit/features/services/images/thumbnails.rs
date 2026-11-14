@@ -671,7 +671,7 @@ async fn real_image_extensions_skip_legacy_white_thumbnails_and_use_current_cach
         .file_platform
         .thumbnail_cache(&request.path)
         .unwrap()
-        .join("thumbs/rust")
+        .join("thumbs")
         .join(format!("{old_key}.thumb"));
     std::fs::create_dir_all(old.parent().unwrap()).unwrap();
     std::fs::write(&old, b"legacy flattened thumbnail").unwrap();
