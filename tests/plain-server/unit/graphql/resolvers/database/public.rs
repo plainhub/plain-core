@@ -13,7 +13,12 @@ fn fixture() -> (plain_libs::temporary::TempDir, PublicSchema) {
     prefs.set("developer_mode", true).unwrap();
     let db = Arc::new(plain_rs::infrastructure::db::Db::open(&path).unwrap());
     db.with_conn(|conn| conn.execute_batch("CREATE TABLE test_rows (key TEXT PRIMARY KEY, title TEXT NOT NULL DEFAULT 'untitled', size INTEGER, ratio REAL, bytes BLOB); INSERT INTO test_rows VALUES('a','First',42,1.5,NULL),('b','Second',43,2.5,NULL);").unwrap());
-    let host = Arc::new(plain_rs::infrastructure::host::bridge::Host::default());
+    let host = Arc::new(plain_rs::infrastructure::host::bridge::Host::with_startup_config(
+        plain_rs::infrastructure::host::startup::StartupConfig {
+            debug: false,
+            ..plain_rs::infrastructure::platform::startup::config()
+        },
+    ).unwrap());
     let (events, _) = tokio::sync::broadcast::channel(16);
     let schema =
         crate::test_support::schema::build(host, events, prefs, db, dir.path().to_path_buf());

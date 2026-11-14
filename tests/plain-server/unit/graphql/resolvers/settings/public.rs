@@ -28,7 +28,12 @@ fn fixture(
     let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs = Arc::new(Prefs::load(&dir.path().join("prefs.json")).unwrap());
     let db = Arc::new(Db::open(&dir.path().join("data.db")).unwrap());
-    let host = Arc::new(Host::default());
+    let host = Arc::new(Host::with_startup_config(
+        plain_rs::infrastructure::host::startup::StartupConfig {
+            debug: false,
+            ..plain_rs::infrastructure::platform::startup::config()
+        },
+    ).unwrap());
     stub(host.clone(), handler);
     let directory = dir.path().to_path_buf();
     let (events, _) = tokio::sync::broadcast::channel(16);
@@ -43,7 +48,12 @@ async fn reads_come_from_the_rust_store() {
     let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs = Arc::new(Prefs::load(&dir.path().join("prefs.json")).unwrap());
     let db = Arc::new(Db::open(&dir.path().join("data.db")).unwrap());
-    let host = Arc::new(Host::default());
+    let host = Arc::new(Host::with_startup_config(
+        plain_rs::infrastructure::host::startup::StartupConfig {
+            debug: false,
+            ..plain_rs::infrastructure::platform::startup::config()
+        },
+    ).unwrap());
     stub(host.clone(), |method, _| {
         panic!("a read must not reach the platform: {method}")
     });
@@ -261,7 +271,12 @@ async fn file_index_configuration_is_not_stored_in_preferences() {
     let directory = plain_libs::temporary::tempdir().unwrap();
     let prefs = Arc::new(Prefs::in_memory());
     prefs.set("developer_mode", true).unwrap();
-    let host = Arc::new(Host::default());
+    let host = Arc::new(Host::with_startup_config(
+        plain_rs::infrastructure::host::startup::StartupConfig {
+            debug: false,
+            ..plain_rs::infrastructure::platform::startup::config()
+        },
+    ).unwrap());
     let db = Arc::new(Db::open(&directory.path().join("db")).unwrap());
     let (events, _) = tokio::sync::broadcast::channel(16);
     let schema =

@@ -3,9 +3,13 @@ pub mod content_common;
 
 use plain_graphql::{Context, Error, Result};
 use plain_rs::features::prefs::{Prefs, pref_keys::DEVELOPER_MODE};
+use plain_rs::infrastructure::host::bridge::Host;
 use std::sync::Arc;
 
 pub(crate) fn require_developer_mode(ctx: &Context<'_>) -> Result<()> {
+    if ctx.data::<Arc<Host>>()?.startup().debug {
+        return Ok(());
+    }
     if !ctx
         .data::<Arc<Prefs>>()?
         .get::<bool>(DEVELOPER_MODE)?

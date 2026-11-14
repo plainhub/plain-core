@@ -9,14 +9,18 @@ use plain_rs::features::prefs::Prefs;
 use plain_libs::serde_json::{Value, json};
 use std::sync::Arc;
 
-fn device() -> (plain_libs::temporary::TempDir, ContentServer, HeaderMap) {
+fn device(debug: bool) -> (plain_libs::temporary::TempDir, ContentServer, HeaderMap) {
     let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs = Arc::new(Prefs::load(&dir.path().join("prefs.json")).unwrap());
     plain_rs::features::prefs::security::bootstrap(&prefs).unwrap();
-    let server = ContentServer::start(
+    let server = ContentServer::start_with_config(
         dir.path(),
         &plain_libs::utils::base64::base64_encode(&[3; 32]),
         prefs,
+        plain_rs::infrastructure::host::startup::StartupConfig {
+            debug,
+            ..plain_rs::infrastructure::platform::startup::config()
+        },
     )
     .unwrap();
     let session = plain_libs::serde_json::to_value(
@@ -55,8 +59,8 @@ async fn call(state: ServerState, headers: &HeaderMap, document: &str) -> (Statu
 }
 #[tokio::test]
 async fn remote_settings_authentication_device_isolation_and_disable_reply() {
-    let (_a, first, headers) = device();
-    let (_b, second, other) = device();
+    let (_a, first, headers) = device(false);
+    let (_b, second, other) = device(false);
     let (status, result) = call(first.runtime_state(), &headers, r#"mutation{font:setPref(key:"editor_font_size",value:20) interval:setPref(key:"feed_auto_refresh_interval",value:3600)}"#).await;
     assert_eq!(status, StatusCode::OK);
     assert!(result.get("errors").is_none(), "{result}");
@@ -154,7 +158,7 @@ async fn remote_settings_authentication_device_isolation_and_disable_reply() {
 
 #[tokio::test]
 async fn authenticated_developer_apis_follow_mode_changes_without_relogin() {
-    let (_directory, server, headers) = device();
+    let (_directory, server, headers) = device(false);
     let state = server.runtime_state();
     for enabled in [false, true, false] {
         state.prefs.set("developer_mode", enabled).unwrap();
@@ -188,5 +192,28 @@ async fn authenticated_developer_apis_follow_mode_changes_without_relogin() {
             "IMAGES|VIDEOS|AUDIO|DOCS|FILES|NOTES|FEEDS"
         );
     }
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn debug_build_allows_database_and_prefs_without_developer_mode() {
+    let (_directory, server, headers) = device(true);
+    let state = server.runtime_state();
+    state.prefs.set("developer_mode", false).unwrap();
+    state.db.with_conn(|db| db.execute_batch("CREATE TABLE debug_fixture (id TEXT PRIMARY KEY)").unwrap());
+    let (status, result) = call(state.clone(), &headers, "{app{debug developerMode} prefs dbTables{name} dbPath}").await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(result.get("errors").is_none(), "{result}");
+    assert_eq!(result["data"]["app"]["debug"], true);
+    assert_eq!(result["data"]["app"]["developerMode"], false);
+    assert_eq!(result["data"]["prefs"]["developer_mode"], false);
+    assert!(result["data"]["dbTables"].as_array().unwrap().iter().any(|table| table["name"] == "debug_fixture"));
+    let (_, created) = call(state.clone(), &headers, r#"mutation{createDbTableRow(table:"debug_fixture",row:{id:"generated"})}"#).await;
+    assert!(created.get("errors").is_none(), "{created}");
+    assert_eq!(created["data"]["createDbTableRow"], true);
+    let (_, rows) = call(state.clone(), &headers, r#"{dbTableRows(table:"debug_fixture",offset:0,limit:10)}"#).await;
+    assert_eq!(rows["data"]["dbTableRows"], json!([{"id":"generated"}]));
+    assert_eq!(call(state.clone(), &HeaderMap::new(), "{prefs dbPath}").await.0, StatusCode::UNAUTHORIZED);
+    assert_eq!(state.prefs.get::<bool>("developer_mode").unwrap(), Some(false));
     server.shutdown().await;
 }
