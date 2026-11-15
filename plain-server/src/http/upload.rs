@@ -242,12 +242,11 @@ pub(crate) async fn upload(State(state): State<ServerState>, request: Request) -
                     .to_owned();
                 if file_name.is_empty()
                     || matches!(file_name.as_str(), "." | "..")
-                    || current.dir.is_empty()
+                    || (!current.is_app_file && current.dir.is_empty())
                 {
                     return plain(StatusCode::BAD_REQUEST, "dir or fileName is empty");
                 }
                 let content_type = field.content_type().unwrap_or_default().to_owned();
-                let destination_dir = PathBuf::from(&current.dir);
                 if current.is_app_file {
                     if managed {
                         return plain(StatusCode::FORBIDDEN, "forbidden");
@@ -266,6 +265,7 @@ pub(crate) async fn upload(State(state): State<ServerState>, request: Request) -
                     }
                     continue;
                 }
+                let destination_dir = PathBuf::from(&current.dir);
                 if !destination_dir.is_absolute() {
                     return plain(
                         StatusCode::BAD_REQUEST,

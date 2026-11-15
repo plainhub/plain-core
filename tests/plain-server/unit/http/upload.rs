@@ -172,6 +172,48 @@ async fn multipart_regular_upload_streams_without_host_preserves_replacements_an
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 #[tokio::test]
+async fn multipart_note_attachment_needs_no_filesystem_destination() {
+    let directory = plain_libs::temporary::tempdir().unwrap();
+    let prefs = std::sync::Arc::new(
+        plain_rs::features::prefs::Prefs::load(&directory.path().join("prefs.json")).unwrap(),
+    );
+    prefs.set("remote_access", true).unwrap();
+    let core = crate::server::ContentServer::start(
+        directory.path(),
+        &plain_libs::utils::base64::base64_encode(&[7; 32]),
+        prefs,
+    )
+    .unwrap();
+    let state = core.runtime_state();
+    let session =
+        plain_rs::features::services::sessions::create(&state, "note clipboard fixture".into())
+            .unwrap();
+    let key = plain_libs::utils::base64::base64_decode(&session.token);
+    let image = b"synthetic clipboard image";
+    let mut info = plain_libs::serde_json::json!({"dir":"","replace":false,"isAppFile":true,"size":image.len()});
+    let response = multipart_upload(
+        &core, "/upload", &session.client_id, None, &key, info.clone(), image, false,
+    )
+    .await;
+    let status = response.status();
+    let suffix = response.text().await.unwrap();
+    assert_eq!(status, 201, "{suffix}");
+    let store = plain_rs::features::files::app_files::FileStore::new(
+        state.db.clone(), directory.path().to_owned(),
+    );
+    assert_eq!(std::fs::read(store.resolve(&suffix).unwrap()).unwrap(), image);
+
+    info["isAppFile"] = false.into();
+    let response = multipart_upload(
+        &core, "/upload", &session.client_id, None, &key, info, image, false,
+    )
+    .await;
+    assert_eq!(response.status(), 400);
+    core.shutdown().await;
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[tokio::test]
 async fn native_upload_chunks_use_the_main_identity_key_and_the_owned_chunk_directory() {
     let directory = plain_libs::temporary::tempdir().unwrap();
     let token = plain_libs::utils::base64::base64_encode(&[8; 32]);
