@@ -225,8 +225,9 @@ fn send_goodbye(previous: &MdnsServiceInfo) {
         candidates.len()
     );
     for iface in &candidates {
-        let _ = socket2::SockRef::from(&*socket).set_multicast_if_v4(&iface.ip);
-        if let Err(e) = send_recorded(socket.as_ref(), &bytes, target) {
+        if let Err(e) = send_on_interface(socket.as_ref(), &bytes, target, || {
+            socket2::SockRef::from(&*socket).set_multicast_if_v4(&iface.ip)
+        }) {
             log::error!("mDNS goodbye {}: {e}", iface.name);
         }
     }
@@ -461,8 +462,9 @@ fn broadcast_service() {
         let Some(bytes) = bytes else {
             continue;
         };
-        let _ = socket2::SockRef::from(&*socket).set_multicast_if_v4(&iface.ip);
-        if let Err(e) = send_recorded(socket.as_ref(), &bytes, target) {
+        if let Err(e) = send_on_interface(socket.as_ref(), &bytes, target, || {
+            socket2::SockRef::from(&*socket).set_multicast_if_v4(&iface.ip)
+        }) {
             log::error!("mDNS announce {}: {e}", iface.name);
         }
     }
@@ -538,19 +540,14 @@ pub fn send_qu_query(bytes: &[u8]) {
 fn send_to_group(socket: &std::net::UdpSocket, bytes: &[u8]) {
     let target = SocketAddrV4::new(MDNS_GROUP, MDNS_PORT);
     let candidates = candidate_interfaces();
-    if candidates.is_empty() {
-        if let Err(e) = send_recorded(socket, bytes, target) {
-            log::error!("mDNS sendQuery: {e}");
-        }
-        return;
-    }
     // Send once per interface: the multicast egress interface is a socket-wide
     // setting, so a single send can only leave one NIC. Picking just the first
     // candidate silently drops the query when that interface is not where the
     // peers live (e.g. Ethernet/VM bridge enumerated before Wi-Fi).
     for iface in candidates {
-        let _ = socket2::SockRef::from(socket).set_multicast_if_v4(&iface.ip);
-        if let Err(e) = send_recorded(socket, bytes, target) {
+        if let Err(e) = send_on_interface(socket, bytes, target, || {
+            socket2::SockRef::from(socket).set_multicast_if_v4(&iface.ip)
+        }) {
             log::error!("mDNS sendQuery {}: {e}", iface.name);
         }
     }
@@ -564,9 +561,14 @@ fn ipv6_joined() -> &'static std::sync::Mutex<Option<HashSet<u32>>> {
 /// IPv6-capable multicast interfaces (name, interface index). Excludes loopback
 /// and addresses with no usable scope id.
 pub fn candidate_ipv6_interfaces() -> Vec<(String, u32)> {
+    ipv6_interfaces(plain_libs::utils::ifaddr::list_v6())
+}
+
+fn ipv6_interfaces(interfaces: Vec<plain_libs::utils::ifaddr::Ifv6>) -> Vec<(String, u32)> {
     let mut seen = HashSet::new();
-    plain_libs::utils::ifaddr::list_v6()
+    interfaces
         .into_iter()
+        .filter(|iface| iface.multicast)
         .filter_map(|iface| {
             let index = iface.index;
             if iface.ip.is_multicast() || index == 0 {
@@ -729,13 +731,10 @@ fn send_ipv6_query(bytes: &[u8]) {
     };
     let target = SocketAddrV6::new(MDNS_GROUP_V6, MDNS_PORT, 0, 0);
     let interfaces = candidate_ipv6_interfaces();
-    if interfaces.is_empty() {
-        let _ = send_recorded(socket.as_ref(), bytes, target);
-        return;
-    }
     for (name, index) in interfaces {
-        let _ = socket2::SockRef::from(&*socket).set_multicast_if_v6(index);
-        if let Err(e) = send_recorded(socket.as_ref(), bytes, target) {
+        if let Err(e) = send_on_interface(socket.as_ref(), bytes, target, || {
+            socket2::SockRef::from(&*socket).set_multicast_if_v6(index)
+        }) {
             log::error!("mDNS sendQuery v6 {}: {e}", name);
         }
     }
@@ -973,9 +972,14 @@ pub struct MdnsIface {
 }
 
 pub fn candidate_interfaces() -> Vec<MdnsIface> {
-    let mut seen = std::collections::HashSet::new();
-    plain_libs::utils::ifaddr::list()
+    ipv4_interfaces(plain_libs::utils::ifaddr::list())
+}
+
+fn ipv4_interfaces(interfaces: Vec<plain_libs::utils::ifaddr::Ifv4>) -> Vec<MdnsIface> {
+    let mut seen = HashSet::new();
+    interfaces
         .into_iter()
+        .filter(|iface| iface.multicast)
         .filter_map(|iface| {
             let ip = iface.ip;
             if ip.is_link_local() || ip.is_unspecified() {
@@ -1056,6 +1060,18 @@ fn joined_iface_list() -> Vec<String> {
     let mut names: Vec<String> = joined_iface_set().into_iter().collect();
     names.sort();
     names
+}
+
+fn send_on_interface(
+    socket: &std::net::UdpSocket,
+    bytes: &[u8],
+    dst: impl Into<std::net::SocketAddr>,
+    select_interface: impl FnOnce() -> io::Result<()>,
+) -> io::Result<usize> {
+    select_interface().map_err(|error| {
+        io::Error::new(error.kind(), format!("select multicast interface: {error}"))
+    })?;
+    send_recorded(socket, bytes, dst)
 }
 
 /// Packet-capture seam: production send/recv paths route through these so
@@ -1234,3 +1250,7 @@ mod tests {
         assert_eq!(next_retry_delay(std::u64::MAX), 32_000);
     }
 }
+
+#[cfg(test)]
+#[path = "../../../../../tests/plain-rs/unit/infrastructure/protocols/mdns/host_responder.rs"]
+mod multicast_tests;

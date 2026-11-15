@@ -87,3 +87,17 @@ fn windows_decoder_preserves_empty_adapters_and_rejects_truncated_addresses() {
     adapter.unicast = std::ptr::addr_of!(address);
     assert!(unsafe { collect(&adapter) }[0].ipv6.is_empty());
 }
+
+#[test]
+fn multicast_support_comes_from_adapter_flags_independently_of_type() {
+    for if_type in [71, 131] {
+        for (flags, multicast) in [(0, true), (0x0010, false), (0x0014, false), (4, true)] {
+            let mut adapter: Adapter = unsafe { std::mem::zeroed() };
+            adapter.name = c"test-interface".as_ptr();
+            adapter.if_type = if_type;
+            adapter.oper_status = 1;
+            adapter.flags = flags;
+            assert_eq!(unsafe { collect(&adapter) }[0].multicast, multicast);
+        }
+    }
+}

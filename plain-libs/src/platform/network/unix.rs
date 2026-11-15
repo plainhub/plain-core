@@ -62,6 +62,7 @@ unsafe fn collect(
                 index: index_of(name),
                 up: row.ifa_flags & libc::IFF_UP as u32 != 0,
                 loopback: row.ifa_flags & libc::IFF_LOOPBACK as u32 != 0,
+                multicast: row.ifa_flags & libc::IFF_MULTICAST as u32 != 0,
                 tunnel,
                 ..Default::default()
             });

@@ -9,6 +9,8 @@ use std::{ffi::c_void, io};
 mod abi;
 use abi::*;
 
+const IP_ADAPTER_NO_MULTICAST: u32 = 0x0010;
+
 #[cfg(windows)]
 #[link(name = "iphlpapi")]
 unsafe extern "system" {
@@ -66,6 +68,7 @@ unsafe fn collect(head: *const Adapter) -> Vec<Interface> {
             },
             up: adapter.oper_status == 1,
             loopback: adapter.if_type == 24,
+            multicast: adapter.flags & IP_ADAPTER_NO_MULTICAST == 0,
             tunnel: matches!(adapter.if_type, 23 | 131),
             ..Default::default()
         };

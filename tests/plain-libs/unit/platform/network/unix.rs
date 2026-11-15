@@ -87,3 +87,20 @@ fn null_names_and_non_ip_records_do_not_create_fabricated_addresses() {
             .is_empty()
     );
 }
+
+#[test]
+fn multicast_support_comes_from_flags_independently_of_interface_name_and_type() {
+    for name in [c"test-tunnel", c"test-lan"] {
+        for multicast in [false, true] {
+            let mut row: libc::ifaddrs = unsafe { std::mem::zeroed() };
+            row.ifa_name = name.as_ptr() as *mut c_char;
+            row.ifa_flags = (libc::IFF_UP | libc::IFF_POINTOPOINT) as u32;
+            if multicast {
+                row.ifa_flags |= libc::IFF_MULTICAST as u32;
+            }
+            let rows = unsafe { collect(&mut row, |_| super::super::InterfaceType::Tunnel, |_| 7) };
+            assert_eq!(rows[0].multicast, multicast);
+            assert!(rows[0].tunnel);
+        }
+    }
+}

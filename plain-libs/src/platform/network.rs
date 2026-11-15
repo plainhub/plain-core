@@ -46,6 +46,7 @@ pub struct Interface {
     pub ipv6: Vec<AddressV6>,
     pub up: bool,
     pub loopback: bool,
+    pub multicast: bool,
     pub tunnel: bool,
 }
 

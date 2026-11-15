@@ -5,6 +5,7 @@ use std::net::{Ipv4Addr, Ipv6Addr};
 #[derive(Debug, Clone)]
 pub struct Ifv4 {
     pub name: String,
+    pub multicast: bool,
     pub ip: Ipv4Addr,
     pub netmask: Option<Ipv4Addr>,
 }
@@ -14,6 +15,7 @@ pub struct Ifv4 {
 #[derive(Debug, Clone)]
 pub struct Ifv6 {
     pub name: String,
+    pub multicast: bool,
     pub ip: Ipv6Addr,
     pub index: u32,
 }
@@ -50,6 +52,10 @@ fn interfaces() -> (Vec<Ifv4>, Vec<Ifv6>) {
             return (Vec::new(), Vec::new());
         }
     };
+    addresses(interfaces)
+}
+
+fn addresses(interfaces: Vec<crate::platform::network::Interface>) -> (Vec<Ifv4>, Vec<Ifv6>) {
     let (mut v4, mut v6) = (Vec::new(), Vec::new());
     for interface in interfaces
         .into_iter()
@@ -58,6 +64,7 @@ fn interfaces() -> (Vec<Ifv4>, Vec<Ifv6>) {
         for address in interface.ipv4 {
             v4.push(Ifv4 {
                 name: interface.name.clone(),
+                multicast: interface.multicast,
                 ip: address.ip,
                 netmask: address.netmask,
             });
@@ -65,6 +72,7 @@ fn interfaces() -> (Vec<Ifv4>, Vec<Ifv6>) {
         for address in interface.ipv6 {
             v6.push(Ifv6 {
                 name: interface.name.clone(),
+                multicast: interface.multicast,
                 ip: address.ip,
                 index: address.index,
             });
