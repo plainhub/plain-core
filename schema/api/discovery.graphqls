@@ -67,6 +67,8 @@ type NearbyDevice {
 }
 
 extend type Mutation {
+	acquireMdnsDebugSession(token: String!): Boolean!
+	releaseMdnsDebugSession(token: String!): Boolean!
 	startDiscovery: Boolean!
 	stopDiscovery: Boolean!
 }

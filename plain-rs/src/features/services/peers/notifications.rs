@@ -1,4 +1,4 @@
-use plain_libs::protocols::http_client;
+use crate::features::capability::Capability;
 use crate::features::chat::enums::DeviceType;
 use crate::features::services::notifications::types::Notification;
 use crate::features::services::peers::management::Identity;
@@ -7,8 +7,9 @@ use crate::features::services::peers::metadata::AppSnapshot;
 use crate::infrastructure::db::DPeer;
 use crate::runtime::Runtime as CoreRuntime;
 use plain_libs::anyhow::{Result, ensure};
-use serde::Serialize;
+use plain_libs::protocols::http_client;
 use plain_libs::serde_json::json;
+use serde::Serialize;
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     sync::{Arc, Mutex},
@@ -34,7 +35,7 @@ struct Group {
     online: bool,
     loading: bool,
     loaded: bool,
-    capabilities: Option<Vec<String>>,
+    capabilities: Option<Vec<Capability>>,
     access: Vec<crate::features::access::AccessFeature>,
     items: Vec<Item>,
 }
@@ -60,10 +61,10 @@ struct State {
 pub struct Store(Arc<Mutex<State>>);
 
 fn allowed(app: &AppSnapshot) -> bool {
-    app.capabilities
-        .iter()
-        .any(|value| value == "NOTIFICATIONS")
-        && app.access.contains(&crate::features::access::AccessFeature::Notifications)
+    app.capabilities.contains(&Capability::Notifications)
+        && app
+            .access
+            .contains(&crate::features::access::AccessFeature::Notifications)
 }
 
 impl State {
@@ -344,7 +345,9 @@ pub async fn refresh_from_app(
         return Ok(());
     }
     let base = identity.http_url()?;
-    let client_id = state.native_client_id().map_err(plain_libs::anyhow::Error::msg)?;
+    let client_id = state
+        .native_client_id()
+        .map_err(plain_libs::anyhow::Error::msg)?;
     let key = plain_libs::utils::base64::base64_decode(&identity.token);
     let result = async {
         let app = app?;

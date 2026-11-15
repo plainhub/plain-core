@@ -80,6 +80,7 @@ pub(super) fn files(sdl: &str) -> BTreeMap<String, String> {
     group!(
         "Query",
         "app",
+        resolvers::app::http_server::HttpServerQuery,
         resolvers::app::cache::CacheQuery,
         resolvers::app::platform::PlatformQuery
     );
@@ -198,6 +199,7 @@ pub(super) fn files(sdl: &str) -> BTreeMap<String, String> {
     group!(
         "Mutation",
         "app",
+        resolvers::app::http_server::HttpServerMutation,
         resolvers::app::cache::CacheMutation,
         resolvers::app::platform::PlatformMutation
     );

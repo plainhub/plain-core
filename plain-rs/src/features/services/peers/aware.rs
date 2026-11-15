@@ -1,11 +1,12 @@
+use crate::features::capability::Capability;
 use crate::features::chat::enums::PeerStatus;
 use crate::features::services::peers::peer_transport::AwareConnectionConfig;
 use crate::features::services::peers::peer_transport::aware_config_for_peer;
 use crate::infrastructure::db::chat_store::peers;
 use crate::runtime::Runtime as CoreRuntime;
 use plain_libs::anyhow::{Result, ensure};
-use serde::Serialize;
 use plain_libs::serde_json::json;
+use serde::Serialize;
 use std::collections::HashMap;
 
 #[derive(Clone, PartialEq, Eq, Serialize)]
@@ -35,7 +36,8 @@ pub struct Runtime {
 
 impl Runtime {
     pub async fn ensure(&self, state: &CoreRuntime) -> Result<()> {
-        crate::features::services::capabilities::require(&state.host, "WIFI_AWARE").await?;
+        crate::features::services::capabilities::require(&state.host, Capability::WifiAware)
+            .await?;
         let mut work = self.work.lock().await;
         work.enabled = true;
         work.rejected.clear();
@@ -43,9 +45,11 @@ impl Runtime {
     }
 
     pub async fn subscribe(&self, state: &CoreRuntime, id: &str) -> Result<bool> {
-        crate::features::services::capabilities::require(&state.host, "WIFI_AWARE").await?;
+        crate::features::services::capabilities::require(&state.host, Capability::WifiAware)
+            .await?;
         let mut work = self.work.lock().await;
-        let peer = peers::get(&state.db, id)?.ok_or_else(|| plain_libs::anyhow::anyhow!("Unknown peer"))?;
+        let peer = peers::get(&state.db, id)?
+            .ok_or_else(|| plain_libs::anyhow::anyhow!("Unknown peer"))?;
         work.requested.insert(id.to_owned(), peer.status);
         work.rejected.remove(id);
         self.reconcile(state, &mut work).await?;
@@ -137,7 +141,10 @@ impl Runtime {
             }
             let started = state
                 .host
-                .call("peerStartAware", plain_libs::serde_json::to_value(&subscription)?)
+                .call(
+                    "peerStartAware",
+                    plain_libs::serde_json::to_value(&subscription)?,
+                )
                 .await
                 .map_err(plain_libs::anyhow::Error::msg)?;
             ensure!(state.host.is_current(generation), "Aware host replaced");

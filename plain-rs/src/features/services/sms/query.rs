@@ -1,10 +1,11 @@
+use crate::features::capability::Capability;
 use crate::features::services::files::provider_query as provider_plan;
 use crate::features::services::files::provider_query::Plan;
 use crate::features::services::sms::addresses::select as addresses;
 use crate::infrastructure::db::Db;
+use plain_libs::serde_json::{Value, json};
 use plain_libs::utils::search_dsl::FilterField;
 use serde::{Deserialize, Serialize};
-use plain_libs::serde_json::{Value, json};
 #[derive(Deserialize)]
 #[serde(tag = "action", rename_all = "camelCase", deny_unknown_fields)]
 pub enum Request {
@@ -171,7 +172,8 @@ fn plans(
         .into_iter()
         .find(|a| a.conversation_id == thread)
     {
-        let millis = plain_libs::chrono::DateTime::parse_from_rfc3339(&archive.archived_at)?.timestamp_millis();
+        let millis = plain_libs::chrono::DateTime::parse_from_rfc3339(&archive.archived_at)?
+            .timestamp_millis();
         let op = if fields
             .iter()
             .any(|f| f.name == "archived" && f.value == "1")
@@ -212,7 +214,9 @@ struct ConversationFacts {
     snippet_candidates:
         std::collections::HashMap<String, Vec<crate::features::services::sms::parts::Snippet>>,
 }
-fn instant(value: &str) -> plain_libs::anyhow::Result<plain_libs::chrono::DateTime<plain_libs::chrono::FixedOffset>> {
+fn instant(
+    value: &str,
+) -> plain_libs::anyhow::Result<plain_libs::chrono::DateTime<plain_libs::chrono::FixedOffset>> {
     Ok(plain_libs::chrono::DateTime::parse_from_rfc3339(value)?)
 }
 fn archived_matches(addresses: &[String], snippet: &str, query: &str) -> bool {
@@ -267,7 +271,8 @@ fn conversation_models(
     }).collect())
 }
 fn text_ids(facts: Value, filters: &[String]) -> plain_libs::anyhow::Result<Vec<String>> {
-    let parts: std::collections::BTreeMap<String, Vec<String>> = plain_libs::serde_json::from_value(facts)?;
+    let parts: std::collections::BTreeMap<String, Vec<String>> =
+        plain_libs::serde_json::from_value(facts)?;
     Ok(parts
         .into_iter()
         .filter(|(_, parts)| {
@@ -335,7 +340,10 @@ async fn count(
 ) -> plain_libs::anyhow::Result<i64> {
     let plans = prepare(db, host, query, include_trashed, false).await?;
     let receipt = host
-        .call("systemSmsCountFacts", plain_libs::serde_json::to_value(plans)?)
+        .call(
+            "systemSmsCountFacts",
+            plain_libs::serde_json::to_value(plans)?,
+        )
         .await
         .map_err(plain_libs::anyhow::Error::msg)?;
     let sms = receipt["sms"]
@@ -361,9 +369,9 @@ fn page(
                 .as_object_mut()
                 .and_then(|item| item.remove("parts"))
                 .ok_or_else(|| plain_libs::anyhow::anyhow!("missing MMS parts"))?;
-            let parts = plain_libs::serde_json::from_value::<Vec<crate::features::services::sms::parts::Part>>(
-                raw_parts,
-            )?;
+            let parts = plain_libs::serde_json::from_value::<
+                Vec<crate::features::services::sms::parts::Part>,
+            >(raw_parts)?;
             let message = crate::features::services::sms::parts::message(&parts);
             item["body"] = json!(message.body);
             item["attachments"] = plain_libs::serde_json::to_value(message.attachments)?;
@@ -382,8 +390,9 @@ fn page(
         }
     }
     items.sort_by(|a, b| {
-        let date =
-            |v: &Value| plain_libs::chrono::DateTime::parse_from_rfc3339(v["date"].as_str().unwrap()).unwrap();
+        let date = |v: &Value| {
+            plain_libs::chrono::DateTime::parse_from_rfc3339(v["date"].as_str().unwrap()).unwrap()
+        };
         date(b).cmp(&date(a))
     });
     Ok(items
@@ -457,7 +466,7 @@ pub async fn execute(
     host: &crate::infrastructure::host::bridge::Host,
     request: Request,
 ) -> plain_libs::anyhow::Result<Value> {
-    crate::features::services::capabilities::require(host, "TELEPHONY").await?;
+    crate::features::services::capabilities::require(host, Capability::Telephony).await?;
     Ok(match request {
         Request::Search {
             query,
@@ -476,8 +485,10 @@ pub async fn execute(
                 )
                 .await
                 .map_err(plain_libs::anyhow::Error::msg)?;
-            let candidates = plain_libs::serde_json::from_value(receipt["canonicalAddresses"].clone())?;
-            let own = plain_libs::serde_json::from_value::<Vec<String>>(receipt["ownNumbers"].clone())?;
+            let candidates =
+                plain_libs::serde_json::from_value(receipt["canonicalAddresses"].clone())?;
+            let own =
+                plain_libs::serde_json::from_value::<Vec<String>>(receipt["ownNumbers"].clone())?;
             let canonical = addresses(candidates, &own)
                 .into_iter()
                 .next()
@@ -491,9 +502,12 @@ pub async fn execute(
         } => {
             let plans = prepare(db, host, &query, include_trashed, true).await?;
             let ids: Vec<String> = plain_libs::serde_json::from_value(
-                host.call("systemSmsIdsFacts", plain_libs::serde_json::to_value(plans)?)
-                    .await
-                    .map_err(plain_libs::anyhow::Error::msg)?,
+                host.call(
+                    "systemSmsIdsFacts",
+                    plain_libs::serde_json::to_value(plans)?,
+                )
+                .await
+                .map_err(plain_libs::anyhow::Error::msg)?,
             )?;
             json!({"ids":ids.into_iter().collect::<std::collections::BTreeSet<_>>()})
         }

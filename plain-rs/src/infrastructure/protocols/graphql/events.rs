@@ -1,4 +1,5 @@
 use crate::features::access::AccessFeature;
+use crate::features::capability::Capability;
 pub struct EventSpec {
     pub field: &'static str,
     pub event: &'static str,
@@ -6,7 +7,7 @@ pub struct EventSpec {
     pub invalidation: bool,
     pub selection: &'static str,
     pub access: &'static [AccessFeature],
-    pub capability: Option<&'static str>,
+    pub capability: Option<Capability>,
 }
 pub const EVENTS: &[EventSpec] = &[
     EventSpec {
@@ -61,7 +62,7 @@ pub const EVENTS: &[EventSpec] = &[
         invalidation: false,
         selection: "{ running }",
         access: &[],
-        capability: Some("SCREEN_MIRROR"),
+        capability: Some(Capability::ScreenMirror),
     },
     EventSpec {
         field: "screenMirrorVideoCodec",
@@ -70,7 +71,7 @@ pub const EVENTS: &[EventSpec] = &[
         invalidation: false,
         selection: "{ annexB }",
         access: &[],
-        capability: Some("SCREEN_MIRROR"),
+        capability: Some(Capability::ScreenMirror),
     },
     EventSpec {
         field: "screenMirrorAudioGranted",
@@ -79,7 +80,7 @@ pub const EVENTS: &[EventSpec] = &[
         invalidation: false,
         selection: "",
         access: &[],
-        capability: Some("SCREEN_MIRROR"),
+        capability: Some(Capability::ScreenMirror),
     },
     EventSpec {
         field: "notificationCreated",
@@ -88,7 +89,7 @@ pub const EVENTS: &[EventSpec] = &[
         invalidation: false,
         selection: "{ id onlyOnce isClearable appId appName postedAt silent title body actions replyActions }",
         access: &[AccessFeature::Notifications],
-        capability: Some("NOTIFICATIONS"),
+        capability: Some(Capability::Notifications),
     },
     EventSpec {
         field: "notificationUpdated",
@@ -97,7 +98,7 @@ pub const EVENTS: &[EventSpec] = &[
         invalidation: false,
         selection: "{ id onlyOnce isClearable appId appName postedAt silent title body actions replyActions }",
         access: &[AccessFeature::Notifications],
-        capability: Some("NOTIFICATIONS"),
+        capability: Some(Capability::Notifications),
     },
     EventSpec {
         field: "notificationDeleted",
@@ -106,7 +107,7 @@ pub const EVENTS: &[EventSpec] = &[
         invalidation: false,
         selection: "{ id onlyOnce isClearable appId appName postedAt silent title body actions replyActions }",
         access: &[AccessFeature::Notifications],
-        capability: Some("NOTIFICATIONS"),
+        capability: Some(Capability::Notifications),
     },
     EventSpec {
         field: "notificationRefreshed",
@@ -115,7 +116,7 @@ pub const EVENTS: &[EventSpec] = &[
         invalidation: true,
         selection: "",
         access: &[AccessFeature::Notifications],
-        capability: Some("NOTIFICATIONS"),
+        capability: Some(Capability::Notifications),
     },
     EventSpec {
         field: "messagesCreated",
@@ -202,7 +203,7 @@ pub const EVENTS: &[EventSpec] = &[
         invalidation: false,
         selection: "{ uris }",
         access: &[AccessFeature::Sms],
-        capability: Some("TELEPHONY"),
+        capability: Some(Capability::Telephony),
     },
     EventSpec {
         field: "smsSendResult",
@@ -211,7 +212,7 @@ pub const EVENTS: &[EventSpec] = &[
         invalidation: false,
         selection: "{ requestId success resultCode }",
         access: &[AccessFeature::Sms],
-        capability: Some("TELEPHONY"),
+        capability: Some(Capability::Telephony),
     },
     EventSpec {
         field: "clipboardChanged",
@@ -220,7 +221,7 @@ pub const EVENTS: &[EventSpec] = &[
         invalidation: false,
         selection: "{ text sensitive time }",
         access: &[AccessFeature::Clipboard],
-        capability: Some("CLIPBOARD"),
+        capability: Some(Capability::Clipboard),
     },
     EventSpec {
         field: "peersChanged",

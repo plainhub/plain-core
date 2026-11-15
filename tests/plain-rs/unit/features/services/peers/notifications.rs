@@ -1,9 +1,9 @@
-use plain_libs::protocols::http_client;
 use crate::features::chat::enums::DeviceType;
 use crate::features::services::notifications::types::Notification;
 use crate::features::services::peers::management::Identity;
 use crate::infrastructure::db::DPeer;
 use plain_libs::anyhow::Result;
+use plain_libs::protocols::http_client;
 use plain_libs::serde_json::json;
 use std::collections::HashMap;
 
@@ -31,7 +31,9 @@ impl CallbackReceiver {
         }
     }
 
-    fn try_recv(&mut self) -> Result<plain_libs::serde_json::Value, tokio::sync::mpsc::error::TryRecvError> {
+    fn try_recv(
+        &mut self,
+    ) -> Result<plain_libs::serde_json::Value, tokio::sync::mpsc::error::TryRecvError> {
         if let Some(value) = self.buffered.pop_front() {
             return Ok(value);
         }
@@ -113,7 +115,7 @@ fn observation(items: Vec<Notification>) -> Result<(App, Vec<Notification>, http
     Ok((
         App {
             device_name: "Fixture".into(),
-            capabilities: vec!["NOTIFICATIONS".into()],
+            capabilities: vec![crate::features::capability::Capability::Notifications],
             access: vec![crate::features::access::AccessFeature::Notifications],
             url_token: plain_libs::utils::base64::base64_encode(&[9; 32]),
         },
@@ -170,7 +172,13 @@ async fn baseline_diffs_and_repeated_hints_only_alert_new_confirmed_items() {
     assert_eq!(update["group"]["items"][0]["icon"], icon);
     assert_eq!(update["group"]["items"][1]["body"], "Updated");
     store
-        .apply("706c6169-185c-8ca2-84a2-2e1dbaf20a51", &peer.id, &identity, observation(vec![]), &events)
+        .apply(
+            "706c6169-185c-8ca2-84a2-2e1dbaf20a51",
+            &peer.id,
+            &identity,
+            observation(vec![]),
+            &events,
+        )
         .unwrap();
     assert!(
         event(&mut receiver)["group"]["items"]
@@ -227,7 +235,13 @@ async fn silent_items_and_active_updates_do_not_alert_but_a_dismissed_id_can_not
             .is_empty()
     );
     store
-        .apply("706c6169-185c-8ca2-84a2-2e1dbaf20a51", &peer.id, &identity, observation(vec![]), &events)
+        .apply(
+            "706c6169-185c-8ca2-84a2-2e1dbaf20a51",
+            &peer.id,
+            &identity,
+            observation(vec![]),
+            &events,
+        )
         .unwrap();
     event(&mut receiver);
     store
@@ -451,7 +465,8 @@ async fn invalid_snapshots_do_not_mutate_projection_and_icons_decrypt_with_stand
         )
         .unwrap();
     let value = event(&mut receiver);
-    let url = http_client::Url::parse(value["group"]["items"][0]["icon"].as_str().unwrap()).unwrap();
+    let url =
+        http_client::Url::parse(value["group"]["items"][0]["icon"].as_str().unwrap()).unwrap();
     let file_id = url
         .query_pairs()
         .find(|(key, _)| key == "id")
@@ -461,7 +476,9 @@ async fn invalid_snapshots_do_not_mutate_projection_and_icons_decrypt_with_stand
     let (scope, payload) = crate::features::files::resource_link::parse(&file_id).unwrap();
     assert_eq!(
         scope,
-        crate::features::files::resource_link::Scope::Session("706c6169-185c-8ca2-84a2-2e1dbaf20a51".into())
+        crate::features::files::resource_link::Scope::Session(
+            "706c6169-185c-8ca2-84a2-2e1dbaf20a51".into()
+        )
     );
     let resource = crate::features::files::resource_link::open(&scope, &[9; 32], payload).unwrap();
     assert_eq!(
@@ -494,7 +511,13 @@ async fn confirmed_authorization_failures_clear_data_instead_of_looking_like_net
             AuthorizationError::Session
         };
         store
-            .apply("706c6169-185c-8ca2-84a2-2e1dbaf20a51", &peer.id, &identity, Err(error.into()), &events)
+            .apply(
+                "706c6169-185c-8ca2-84a2-2e1dbaf20a51",
+                &peer.id,
+                &identity,
+                Err(error.into()),
+                &events,
+            )
             .unwrap();
         let denied = event(&mut receiver);
         assert_eq!(denied["group"]["online"], permission);

@@ -1,4 +1,5 @@
 use crate::features::access::AccessFeature;
+use crate::features::capability::Capability;
 use crate::features::prefs::{Prefs, pref_keys::API_PERMISSIONS};
 use crate::infrastructure::host::bridge::Host;
 use plain_libs::serde_json::json;
@@ -18,7 +19,8 @@ pub async fn sample(host: &Host, features: &[AccessFeature]) -> Result<Vec<Acces
     struct Facts {
         granted: std::collections::BTreeMap<AccessFeature, bool>,
     }
-    let facts: Facts = plain_libs::serde_json::from_value(sample).map_err(|error| error.to_string())?;
+    let facts: Facts =
+        plain_libs::serde_json::from_value(sample).map_err(|error| error.to_string())?;
     let mut granted = Vec::new();
     for feature in features {
         match facts.granted.get(feature) {
@@ -47,20 +49,23 @@ pub async fn snapshot(host: &Host) -> Result<Vec<AccessFeature>, String> {
 
 pub async fn snapshot_with_capabilities(
     host: &Host,
-    capabilities: &[String],
+    capabilities: &[Capability],
 ) -> Result<Vec<AccessFeature>, String> {
     let features: Vec<_> = AccessFeature::ALL
         .into_iter()
         .filter(|feature| {
             feature
                 .capability()
-                .is_none_or(|capability| capabilities.iter().any(|value| value == capability))
+                .is_none_or(|capability| capabilities.contains(&capability))
         })
         .collect();
     sample(host, &features).await
 }
 
-pub fn enabled_features(prefs: &Prefs, grants: &[AccessFeature]) -> Result<Vec<AccessFeature>, String> {
+pub fn enabled_features(
+    prefs: &Prefs,
+    grants: &[AccessFeature],
+) -> Result<Vec<AccessFeature>, String> {
     let configured: Vec<AccessFeature> = prefs
         .get(API_PERMISSIONS)
         .map_err(|error| error.to_string())?

@@ -1,4 +1,4 @@
-use super::AccessFeature;
+use super::{AccessFeature, Capability};
 
 #[test]
 fn access_features_have_exact_wire_names() {
@@ -23,13 +23,24 @@ fn access_features_have_exact_wire_names() {
         assert_eq!(AccessFeature::parse(name), Some(feature));
         assert_eq!(plain_libs::serde_json::to_value(feature).unwrap(), name);
         assert_eq!(
-            plain_libs::serde_json::from_value::<AccessFeature>(plain_libs::serde_json::json!(name)).unwrap(),
+            plain_libs::serde_json::from_value::<AccessFeature>(plain_libs::serde_json::json!(
+                name
+            ))
+            .unwrap(),
             feature
         );
     }
-    assert_eq!(AccessFeature::Calls.capability(), Some("TELEPHONY"));
+    assert_eq!(
+        AccessFeature::Calls.capability(),
+        Some(Capability::Telephony)
+    );
     for name in ["CALL_LOGS", "calls", "UNKNOWN", ""] {
         assert_eq!(AccessFeature::parse(name), None);
-        assert!(plain_libs::serde_json::from_value::<AccessFeature>(plain_libs::serde_json::json!(name)).is_err());
+        assert!(
+            plain_libs::serde_json::from_value::<AccessFeature>(plain_libs::serde_json::json!(
+                name
+            ))
+            .is_err()
+        );
     }
 }

@@ -75,6 +75,7 @@ enum Capability {
 	NOTIFICATIONS
 	CLIPBOARD
 	DISK_MANAGER
+	HTTP_SERVER
 }
 
 type CreatedApiToken {

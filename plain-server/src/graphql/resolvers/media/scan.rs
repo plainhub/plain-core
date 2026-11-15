@@ -1,6 +1,7 @@
 use super::types::FileIndexScanProgress;
 use crate::server::ServerState;
 use plain_graphql::{Context, ID, InputObject, Object, Result, SimpleObject};
+use plain_rs::features::capability::Capability;
 use plain_rs::infrastructure::db::{FileIndexMode, FileIndexScanStatus};
 use plain_rs::infrastructure::types::{Instant, Long};
 
@@ -20,7 +21,7 @@ async fn state<'a>(ctx: &'a Context<'_>) -> Result<&'a ServerState> {
 }
 async fn index_state<'a>(ctx: &'a Context<'_>) -> Result<&'a ServerState> {
     let state = state(ctx).await?;
-    plain_rs::features::services::capabilities::require(&state.host, "MEDIA_SCAN")
+    plain_rs::features::services::capabilities::require(&state.host, Capability::MediaScan)
         .await
         .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
     Ok(state)

@@ -58,7 +58,8 @@ async fn provider_failure_never_publishes_partial_output_and_releases_staging() 
             .reply(generation, json!({"id":request["id"],"result":true}))
             .unwrap();
         let metadata: plain_libs::serde_json::Value =
-            plain_libs::serde_json::from_str(&stream.next_request().await.unwrap().unwrap()).unwrap();
+            plain_libs::serde_json::from_str(&stream.next_request().await.unwrap().unwrap())
+                .unwrap();
         assert_eq!(metadata["path"], "content://fixture/picked");
         stream.write(b"first".to_vec()).await.unwrap();
         if succeeds {
@@ -254,7 +255,8 @@ async fn remote_copy_follows_redirects_fetches_fresh_bytes_and_leaves_no_output_
 #[tokio::test]
 async fn public_url_copy_rejects_untrusted_tls_even_after_a_peer_cache_client_was_used() {
     use std::sync::atomic::{AtomicUsize, Ordering};
-    let (certificate_pem, certificate_key) = plain_libs::tls::generate_pem(&["localhost".into()]).unwrap();
+    let (certificate_pem, certificate_key) =
+        plain_libs::tls::generate_pem(&["localhost".into()]).unwrap();
     let config = plain_rs::infrastructure::tls_identity::config(
         certificate_pem.as_slice(),
         certificate_key.as_slice(),
@@ -276,7 +278,7 @@ async fn public_url_copy_rejects_untrusted_tls_even_after_a_peer_cache_client_wa
     );
     let server = tokio::spawn(async move {
         let (_stop, stopped) = tokio::sync::watch::channel(false);
-        plain_libs::protocols::https::serve(listener, router, config, stopped)
+        plain_libs::protocols::https::serve(listener, router, config, stopped, None, None)
             .await
             .unwrap();
     });
@@ -383,9 +385,15 @@ async fn schema_contract_named_copy_propagates_the_completed_task_error() {
     std::fs::write(source.join("preserved.txt"), b"preserved").unwrap();
     let response = execute(&core, source.to_str().unwrap(), &source, "nested").await;
     assert_eq!(response.errors.len(), 1, "{:?}", response.errors);
-    assert_eq!(response.errors[0].message, "cannot copy or move into source");
+    assert_eq!(
+        response.errors[0].message,
+        "cannot copy or move into source"
+    );
     assert!(!source.join("nested").exists());
-    assert_eq!(std::fs::read(source.join("preserved.txt")).unwrap(), b"preserved");
+    assert_eq!(
+        std::fs::read(source.join("preserved.txt")).unwrap(),
+        b"preserved"
+    );
     core.stop_core().await;
 }
 
@@ -395,13 +403,17 @@ async fn schema_contract_pagination_rejects_negative_offset_and_limit() {
     let core = ContentServer::open(&dir.path().join("data")).unwrap();
     let schema = core.native_graphql().unwrap();
     for field in [
-        format!("files(root:{:?},sortBy:NAME_ASC,", dir.path().to_str().unwrap()),
+        format!(
+            "files(root:{:?},sortBy:NAME_ASC,",
+            dir.path().to_str().unwrap()
+        ),
         "notifications(".to_owned(),
         "appFiles(".to_owned(),
         "fileTasks(".to_owned(),
     ] {
         for (offset, limit) in [(-1, 1), (0, -1), (-1, -1)] {
-            let document = format!("{{{field}query:\"\",offset:{offset},limit:{limit}){{__typename}}}}");
+            let document =
+                format!("{{{field}query:\"\",offset:{offset},limit:{limit}){{__typename}}}}");
             let response = schema.execute(Request::new(document)).await;
             assert_eq!(response.errors.len(), 1, "{field}: {:?}", response.errors);
             assert_eq!(response.errors[0].message, "invalid pagination", "{field}");

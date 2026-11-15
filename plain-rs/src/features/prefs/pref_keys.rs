@@ -1,7 +1,9 @@
+use crate::features::capability::Capability;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PrefAccess {
     Default,
     LocalOnly,
+    LocalOrHttpServer,
     RemoteReadOnly,
     RustOnly,
 }
@@ -67,11 +69,13 @@ pref_keys! {
         PASSWORD_TYPE = "password_type",
         LOGIN_REQUIRE_APPROVAL = "login_require_approval",
         API_PERMISSIONS = "api_permissions",
-        MDNS_HOSTNAME = "mdns_hostname",
         DEV_TOKEN = "dev_token",
         LOG_LEVEL = "log_level",
         AUTO_CHECK_UPDATE = "auto_check_update",
         SKIP_VERSION = "skip_version",
+    }
+    LocalOrHttpServer {
+        MDNS_HOSTNAME = "mdns_hostname",
     }
     RemoteReadOnly {
         APP_HOME_FEATURES = "app_home_features",
@@ -96,17 +100,23 @@ pub fn access(key: &str) -> Option<PrefAccess> {
         .iter()
         .find_map(|(name, access)| (*name == key).then_some(*access))
 }
-pub fn readable(key: &str, local: bool) -> bool {
+pub fn readable(key: &str, local: bool, capabilities: &[Capability]) -> bool {
     match access(key) {
         Some(PrefAccess::Default | PrefAccess::RemoteReadOnly) => true,
         Some(PrefAccess::LocalOnly) => local,
+        Some(PrefAccess::LocalOrHttpServer) => {
+            local || capabilities.contains(&Capability::HttpServer)
+        }
         _ => false,
     }
 }
-pub fn writable(key: &str, local: bool) -> bool {
+pub fn writable(key: &str, local: bool, capabilities: &[Capability]) -> bool {
     match access(key) {
         Some(PrefAccess::Default) => true,
         Some(PrefAccess::LocalOnly | PrefAccess::RemoteReadOnly) => local,
+        Some(PrefAccess::LocalOrHttpServer) => {
+            local || capabilities.contains(&Capability::HttpServer)
+        }
         _ => false,
     }
 }

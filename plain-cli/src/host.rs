@@ -1,20 +1,21 @@
+use plain_rs::features::capability::Capability;
 use std::sync::Arc;
 
-use plain_server::server::ContentServer;
 use plain_libs::serde_json::Value;
+use plain_server::server::ContentServer;
 
 #[cfg(target_os = "linux")]
 mod linux;
 
 pub struct Host {
     core: Arc<ContentServer>,
-    capabilities: Vec<String>,
+    capabilities: fn() -> Vec<Capability>,
     multicast: std::sync::Mutex<plain_rs::infrastructure::host::multicast::MulticastLeases>,
     failure: tokio::sync::watch::Sender<Option<String>>,
 }
 
 impl Host {
-    pub fn new(core: Arc<ContentServer>, capabilities: Vec<String>) -> Self {
+    pub fn new(core: Arc<ContentServer>, capabilities: fn() -> Vec<Capability>) -> Self {
         Self {
             core,
             capabilities,
@@ -56,9 +57,8 @@ impl Host {
             | "pairingSucceeded"
             | "networkInterfacesChanged"
             | "onlineClientsChanged" => Ok(Value::Null),
-            "systemCapabilities" => {
-                plain_libs::serde_json::to_value(&self.capabilities).map_err(|error| error.to_string())
-            }
+            "systemCapabilities" => plain_libs::serde_json::to_value((self.capabilities)())
+                .map_err(|error| error.to_string()),
             "peerTransportCapabilities" => Ok(plain_libs::serde_json::json!([])),
             "systemRequestAccess" => Ok(plain_libs::serde_json::json!(false)),
             "systemAccessFacts" => plain_rs::infrastructure::host::access_facts::facts(

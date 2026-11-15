@@ -1,8 +1,8 @@
 use crate::server::ContentServer;
 use plain_libs::axum::{Router, body::Bytes, http::HeaderMap, routing::post};
 use plain_libs::protocols::http_client;
-use plain_rs::features::services::peers::management_http::*;
 use plain_libs::serde_json::json;
+use plain_rs::features::services::peers::management_http::*;
 use std::sync::{Arc, Mutex};
 
 #[tokio::test]
@@ -55,7 +55,7 @@ async fn a_captured_response_cannot_answer_a_fresh_encrypted_request() {
     let proxy_port = socket.local_addr().unwrap().port();
     let proxy = tokio::spawn(async move {
         let (_stop, stopped) = tokio::sync::watch::channel(false);
-        plain_libs::protocols::https::serve(socket, router, config, stopped)
+        plain_libs::protocols::https::serve(socket, router, config, stopped, None, None)
             .await
             .unwrap();
     });
@@ -116,10 +116,17 @@ async fn a_captured_response_cannot_answer_a_fresh_encrypted_request() {
                 .unwrap()
             })
             .collect();
-        let nonces: Vec<_> = envelopes
-            .iter()
-            .map(|body| plain_libs::serde_json::from_str::<plain_libs::serde_json::Value>(body).unwrap()["requestId"].as_str().unwrap().to_owned())
-            .collect();
+        let nonces: Vec<_> =
+            envelopes
+                .iter()
+                .map(|body| {
+                    plain_libs::serde_json::from_str::<plain_libs::serde_json::Value>(body).unwrap()
+                        ["requestId"]
+                        .as_str()
+                        .unwrap()
+                        .to_owned()
+                })
+                .collect();
         assert_ne!(nonces[0], nonces[1]);
         for nonce in nonces {
             assert!(plain_libs::utils::uuid::Uuid::parse_str(&nonce).is_ok());

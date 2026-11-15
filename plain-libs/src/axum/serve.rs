@@ -2,6 +2,7 @@ use crate::axum_core::{body::Body, extract::Request, response::Response};
 use crate::hyper::body::Incoming;
 use crate::hyper_util::rt::{TokioExecutor, TokioIo};
 use crate::hyper_util::{server::conn::auto::Builder, service::TowerToHyperService};
+use crate::tower::Service;
 use crate::tower::ServiceExt as _;
 use futures_util::{FutureExt, pin_mut};
 use std::{
@@ -18,7 +19,6 @@ use tokio::{
     net::{TcpListener, TcpStream},
     sync::watch,
 };
-use crate::tower::Service;
 pub fn serve<M, S>(tcp_listener: TcpListener, make_service: M) -> Serve<M, S>
 where
     M: for<'a> Service<IncomingStream<'a>, Error = Infallible, Response = S>,
@@ -48,6 +48,7 @@ impl<M, S> Serve<M, S> {
             tcp_listener: self.tcp_listener,
             make_service: self.make_service,
             signal,
+            listener_closed: None,
             tcp_nodelay: self.tcp_nodelay,
             _marker: PhantomData,
         }
@@ -138,10 +139,16 @@ pub struct WithGracefulShutdown<M, S, F> {
     tcp_listener: TcpListener,
     make_service: M,
     signal: F,
+    listener_closed: Option<tokio::sync::oneshot::Sender<()>>,
     tcp_nodelay: Option<bool>,
     _marker: PhantomData<S>,
 }
 impl<M, S, F> WithGracefulShutdown<M, S, F> {
+    pub fn on_listener_closed(mut self, sender: tokio::sync::oneshot::Sender<()>) -> Self {
+        self.listener_closed = Some(sender);
+        self
+    }
+
     pub fn tcp_nodelay(self, nodelay: bool) -> Self {
         Self {
             tcp_nodelay: Some(nodelay),
@@ -163,6 +170,7 @@ where
             tcp_listener,
             make_service,
             signal,
+            listener_closed: _,
             tcp_nodelay,
             _marker: _,
         } = self;
@@ -189,6 +197,7 @@ where
             tcp_listener,
             mut make_service,
             signal,
+            listener_closed,
             tcp_nodelay,
             _marker: _,
         } = self;
@@ -239,6 +248,9 @@ where
             }
             drop(close_rx);
             drop(tcp_listener);
+            if let Some(sender) = listener_closed {
+                let _ = sender.send(());
+            }
             trace!(
                 "waiting for {} task(s) to finish",
                 close_tx.receiver_count()

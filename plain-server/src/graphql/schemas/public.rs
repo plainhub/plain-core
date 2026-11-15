@@ -47,6 +47,7 @@ use std::sync::Arc;
 
 #[derive(MergedObject, Default)]
 pub struct Query(
+    crate::graphql::resolvers::app::http_server::HttpServerQuery,
     crate::graphql::resolvers::app::cache::CacheQuery,
     crate::graphql::resolvers::peers::records::PeerRecordQuery,
     crate::graphql::resolvers::downloads::public::DownloadQuery,
@@ -92,6 +93,7 @@ pub struct Query(
 
 #[derive(MergedObject, Default)]
 pub struct Mutation(
+    crate::graphql::resolvers::app::http_server::HttpServerMutation,
     crate::graphql::resolvers::app::cache::CacheMutation,
     crate::graphql::resolvers::discovery::mdns::MdnsMutation,
     crate::graphql::resolvers::files::trash::TrashMutation,

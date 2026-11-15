@@ -1,4 +1,7 @@
-#[derive(serde::Serialize, serde::Deserialize, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Debug)]
+use crate::features::capability::Capability;
+#[derive(
+    serde::Serialize, serde::Deserialize, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Debug,
+)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[cfg_attr(feature = "graphql", derive(plain_graphql::Enum))]
 pub enum AccessFeature {
@@ -18,7 +21,13 @@ pub enum AccessFeature {
     Adb,
 }
 impl AccessFeature {
-    pub const FILE_FEATURES: [Self; 5] = [Self::Images, Self::Videos, Self::Audio, Self::Docs, Self::Files];
+    pub const FILE_FEATURES: [Self; 5] = [
+        Self::Images,
+        Self::Videos,
+        Self::Audio,
+        Self::Docs,
+        Self::Files,
+    ];
     pub const ALL: [Self; 14] = [
         Self::Images,
         Self::Videos,
@@ -53,20 +62,16 @@ impl AccessFeature {
             Self::Adb => "ADB",
         }
     }
-    pub fn capability(self) -> Option<&'static str> {
+    pub fn capability(self) -> Option<Capability> {
         Some(match self {
             Self::Contacts | Self::Sms | Self::Calls | Self::CallPhone | Self::PhoneNumber => {
-                "TELEPHONY"
+                Capability::Telephony
             }
-            Self::Apps => "PACKAGES",
-            Self::Notifications => "NOTIFICATIONS",
-            Self::Clipboard => "CLIPBOARD",
-            Self::Adb => "ADB",
-            Self::Images
-            | Self::Videos
-            | Self::Audio
-            | Self::Docs
-            | Self::Files => return None,
+            Self::Apps => Capability::Packages,
+            Self::Notifications => Capability::Notifications,
+            Self::Clipboard => Capability::Clipboard,
+            Self::Adb => Capability::Adb,
+            Self::Images | Self::Videos | Self::Audio | Self::Docs | Self::Files => return None,
         })
     }
     pub fn parse(value: &str) -> Option<Self> {

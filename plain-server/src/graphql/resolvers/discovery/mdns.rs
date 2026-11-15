@@ -54,8 +54,10 @@ struct MdnsActivity {
 }
 #[plain_graphql::ComplexObject]
 impl MdnsState {
-    #[graphql(guard = "crate::http::auth::public_gate::LocalOwner")]
-    fn activity(&self, ctx: &Context<'_>) -> plain_graphql::Result<Vec<MdnsActivity>> {
+    async fn activity(&self, ctx: &Context<'_>) -> plain_graphql::Result<Vec<MdnsActivity>> {
+        if !crate::http::auth::public_gate::is_local(ctx) {
+            crate::graphql::resolvers::app::http_server::authorized_capabilities(ctx).await?;
+        }
         let runtime = &ctx.data::<ServerState>()?.mdns;
         let activity = runtime
             .browser_activity()
@@ -98,21 +100,41 @@ impl MdnsQuery {
 pub struct MdnsMutation;
 #[Object]
 impl MdnsMutation {
-    async fn start_discovery(&self, ctx: &Context<'_>) -> plain_graphql::Result<bool> {
+    async fn acquire_mdns_debug_session(
+        &self,
+        ctx: &Context<'_>,
+        token: String,
+    ) -> plain_graphql::Result<bool> {
+        crate::graphql::resolvers::app::http_server::authorized_capabilities(ctx).await?;
         mdns_runtime::control(
             ctx.data::<ServerState>()?,
-            mdns_runtime::Request::Start {},
+            mdns_runtime::Request::DebugStart { token },
         )
         .await?;
         Ok(true)
     }
 
-    async fn stop_discovery(&self, ctx: &Context<'_>) -> plain_graphql::Result<bool> {
+    async fn release_mdns_debug_session(
+        &self,
+        ctx: &Context<'_>,
+        token: String,
+    ) -> plain_graphql::Result<bool> {
+        crate::graphql::resolvers::app::http_server::authorized_capabilities(ctx).await?;
         mdns_runtime::control(
             ctx.data::<ServerState>()?,
-            mdns_runtime::Request::Stop {},
+            mdns_runtime::Request::DebugStop { token },
         )
         .await?;
+        Ok(true)
+    }
+
+    async fn start_discovery(&self, ctx: &Context<'_>) -> plain_graphql::Result<bool> {
+        mdns_runtime::control(ctx.data::<ServerState>()?, mdns_runtime::Request::Start {}).await?;
+        Ok(true)
+    }
+
+    async fn stop_discovery(&self, ctx: &Context<'_>) -> plain_graphql::Result<bool> {
+        mdns_runtime::control(ctx.data::<ServerState>()?, mdns_runtime::Request::Stop {}).await?;
         Ok(true)
     }
 }

@@ -14,7 +14,8 @@ fn every_registered_key_has_the_expected_read_and_write_policy() {
             allow_any_host nearby_discoverable notification_filter launcher_shortcuts
             image_grid_cells_per_row video_grid_cells_per_row https web_address_bar_expanded
             password password_type login_require_approval
-            api_permissions mdns_hostname dev_token log_level auto_check_update skip_version"),
+            api_permissions dev_token log_level auto_check_update skip_version"),
+        (PrefAccess::LocalOrHttpServer, "mdns_hostname"),
         (PrefAccess::RemoteReadOnly, "app_home_features"),
         (PrefAccess::RustOnly, "opaque_server_setup opaque_password_record client_id adb_token master_secret signature_key_pair"),
     ];
@@ -26,13 +27,25 @@ fn every_registered_key_has_the_expected_read_and_write_policy() {
     for (key, policy) in expected {
         assert_eq!(access(key), Some(policy), "{key}");
         assert_eq!(
-            readable(key, false),
+            readable(key, false, &[]),
             matches!(policy, PrefAccess::Default | PrefAccess::RemoteReadOnly),
             "{key}"
         );
-        assert_eq!(readable(key, true), policy != PrefAccess::RustOnly, "{key}");
-        assert_eq!(writable(key, false), policy == PrefAccess::Default, "{key}");
-        assert_eq!(writable(key, true), policy != PrefAccess::RustOnly, "{key}");
+        assert_eq!(
+            readable(key, true, &[]),
+            policy != PrefAccess::RustOnly,
+            "{key}"
+        );
+        assert_eq!(
+            writable(key, false, &[]),
+            policy == PrefAccess::Default,
+            "{key}"
+        );
+        assert_eq!(
+            writable(key, true, &[]),
+            policy != PrefAccess::RustOnly,
+            "{key}"
+        );
     }
 }
 
@@ -89,11 +102,11 @@ fn exported_constants_match_the_registered_keys() {
         PASSWORD_TYPE,
         LOGIN_REQUIRE_APPROVAL,
         API_PERMISSIONS,
-        MDNS_HOSTNAME,
         DEV_TOKEN,
         LOG_LEVEL,
         AUTO_CHECK_UPDATE,
         SKIP_VERSION,
+        MDNS_HOSTNAME,
         APP_HOME_FEATURES,
         OPAQUE_SERVER_SETUP,
         OPAQUE_PASSWORD_RECORD,
@@ -123,10 +136,10 @@ fn unknown_or_modified_keys_never_gain_access() {
         "admin:password",
     ] {
         assert_eq!(access(key), None, "{key}");
-        assert!(!readable(key, false), "{key}");
-        assert!(!readable(key, true), "{key}");
-        assert!(!writable(key, false), "{key}");
-        assert!(!writable(key, true), "{key}");
+        assert!(!readable(key, false, &[]), "{key}");
+        assert!(!readable(key, true, &[]), "{key}");
+        assert!(!writable(key, false, &[]), "{key}");
+        assert!(!writable(key, true, &[]), "{key}");
     }
 }
 
@@ -139,10 +152,10 @@ fn native_read_keys_do_not_allow_generic_preference_writes() {
         SIGNATURE_PUBLIC_KEY,
     ] {
         assert_eq!(access(key), None, "{key}");
-        assert!(!readable(key, false), "{key}");
-        assert!(!readable(key, true), "{key}");
-        assert!(!writable(key, false), "{key}");
-        assert!(!writable(key, true), "{key}");
+        assert!(!readable(key, false, &[]), "{key}");
+        assert!(!readable(key, true, &[]), "{key}");
+        assert!(!writable(key, false, &[]), "{key}");
+        assert!(!writable(key, true, &[]), "{key}");
     }
 }
 
@@ -150,7 +163,25 @@ fn native_read_keys_do_not_allow_generic_preference_writes() {
 fn retired_volume_alias_has_no_preference_access() {
     assert_eq!(access("volume_alias"), None);
     for local in [false, true] {
-        assert!(!readable("volume_alias", local));
-        assert!(!writable("volume_alias", local));
+        assert!(!readable("volume_alias", local, &[]));
+        assert!(!writable("volume_alias", local, &[]));
+    }
+}
+
+#[test]
+fn http_server_support_opens_only_the_approved_hostname_setting() {
+    use crate::features::capability::Capability;
+    let capabilities = &[Capability::HttpServer];
+    assert!(readable(MDNS_HOSTNAME, false, capabilities));
+    assert!(writable(MDNS_HOSTNAME, false, capabilities));
+    for key in [
+        REMOTE_ACCESS,
+        HTTP_PORT,
+        HTTPS_PORT,
+        DEVELOPER_MODE,
+        API_PERMISSIONS,
+    ] {
+        assert!(!readable(key, false, capabilities), "{key}");
+        assert!(!writable(key, false, capabilities), "{key}");
     }
 }

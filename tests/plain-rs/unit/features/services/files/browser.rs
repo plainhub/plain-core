@@ -40,8 +40,8 @@ fn movie(codec: &[u8; 4], duration: u32, metadata: bool) -> Vec<u8> {
     }
     atom(b"moov", &tracks.concat())
 }
-async fn supported() -> Result<Vec<String>, String> {
-    Ok(vec!["VIDEO_REMUX".into(), "VIDEO_TRANSCODE".into()])
+async fn supported() -> Result<Vec<Capability>, String> {
+    Ok(vec![Capability::VideoRemux, Capability::VideoTranscode])
 }
 #[test]
 fn cache_identity_includes_operation_size_and_full_modification_time() {
@@ -198,10 +198,10 @@ async fn metadata_removal_uses_shared_rust_without_a_platform_encoder() {
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 #[test]
 fn remux_support_does_not_depend_on_an_installed_encoder() {
-    assert_eq!(declared_capabilities(false), vec!["VIDEO_REMUX"]);
+    assert_eq!(declared_capabilities(false), vec![Capability::VideoRemux]);
     assert_eq!(
         declared_capabilities(true),
-        vec!["VIDEO_REMUX", "VIDEO_TRANSCODE"]
+        vec![Capability::VideoRemux, Capability::VideoTranscode]
     );
 }
 
@@ -292,11 +292,33 @@ async fn native_hev1_conversion_caches_the_result_and_cleans_intermediates() {
     let bytes = include_bytes!("../../../../../../plain-rs/testdata/video-h265.mp4");
     std::fs::write(&source, bytes).unwrap();
     let runtime = Runtime::new(directory.path().join("cache"));
-    let output = runtime.convert(source.to_str().unwrap(), Operation::Transcode).await.unwrap().unwrap();
-    assert_eq!(plain_libs::media::isobmff::tracks(&output).unwrap().first_video_codec.as_deref(), Some("avc1"));
+    let output = runtime
+        .convert(source.to_str().unwrap(), Operation::Transcode)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        plain_libs::media::isobmff::tracks(&output)
+            .unwrap()
+            .first_video_codec
+            .as_deref(),
+        Some("avc1")
+    );
     let modified = std::fs::metadata(&output).unwrap().modified().unwrap();
-    assert_eq!(runtime.convert(source.to_str().unwrap(), Operation::Transcode).await.unwrap(), Some(output.clone()));
-    assert_eq!(std::fs::metadata(&output).unwrap().modified().unwrap(), modified);
+    assert_eq!(
+        runtime
+            .convert(source.to_str().unwrap(), Operation::Transcode)
+            .await
+            .unwrap(),
+        Some(output.clone())
+    );
+    assert_eq!(
+        std::fs::metadata(&output).unwrap().modified().unwrap(),
+        modified
+    );
     assert_eq!(std::fs::read(source).unwrap(), bytes);
-    assert_eq!(std::fs::read_dir(output.parent().unwrap()).unwrap().count(), 1);
+    assert_eq!(
+        std::fs::read_dir(output.parent().unwrap()).unwrap().count(),
+        1
+    );
 }

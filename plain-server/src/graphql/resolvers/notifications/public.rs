@@ -1,4 +1,3 @@
-use plain_rs::features::access::AccessFeature;
 use crate::graphql::types::ActionResult;
 use crate::graphql::types::facts::flag;
 use crate::graphql::types::facts::id;
@@ -7,11 +6,13 @@ use crate::graphql::types::facts::strings;
 use crate::graphql::types::facts::text;
 use crate::http::auth::public_gate;
 use plain_graphql::{Context, Object};
+use plain_rs::features::access::AccessFeature;
+use plain_rs::features::capability::Capability;
 
+use plain_libs::serde_json::Value;
 use plain_rs::features::prefs::Prefs;
 use plain_rs::features::services::notifications::types::Notification;
 use plain_rs::infrastructure::host::bridge::Host;
-use plain_libs::serde_json::Value;
 use std::sync::Arc;
 
 const FEATURE: AccessFeature = AccessFeature::Notifications;
@@ -32,7 +33,7 @@ impl NotificationsQuery {
         public_gate::require(ctx, ctx.data_unchecked::<Arc<Prefs>>(), &[FEATURE])?;
         plain_rs::features::services::capabilities::require(
             ctx.data_unchecked::<Arc<Host>>(),
-            "NOTIFICATIONS",
+            Capability::Notifications,
         )
         .await
         .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
@@ -53,7 +54,7 @@ impl NotificationsQuery {
         public_gate::require(ctx, ctx.data_unchecked::<Arc<Prefs>>(), &[FEATURE])?;
         plain_rs::features::services::capabilities::require(
             ctx.data_unchecked::<Arc<Host>>(),
-            "NOTIFICATIONS",
+            Capability::Notifications,
         )
         .await
         .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
@@ -74,7 +75,7 @@ impl NotificationsMutation {
         public_gate::require(ctx, ctx.data_unchecked::<Arc<Prefs>>(), &[FEATURE])?;
         plain_rs::features::services::capabilities::require(
             ctx.data_unchecked::<Arc<Host>>(),
-            "NOTIFICATIONS",
+            Capability::Notifications,
         )
         .await
         .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
@@ -124,7 +125,7 @@ impl NotificationsMutation {
         }
         plain_rs::features::services::capabilities::require(
             ctx.data_unchecked::<Arc<Host>>(),
-            "NOTIFICATIONS",
+            Capability::Notifications,
         )
         .await
         .map_err(|error| plain_graphql::Error::new(error.to_string()))?;

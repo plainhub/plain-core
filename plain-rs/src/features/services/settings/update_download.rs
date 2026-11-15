@@ -1,11 +1,12 @@
-use plain_libs::protocols::http_client;
+use crate::features::capability::Capability;
 use crate::features::prefs::pref_keys::SKIP_VERSION;
 use crate::features::prefs::security::UpdateInfo;
 use crate::features::services::settings::updates;
 use crate::infrastructure::types::Long;
 use crate::runtime::Runtime as CoreRuntime;
-use plain_libs::anyhow::{Result, anyhow, ensure};
 use futures_util::StreamExt;
+use plain_libs::anyhow::{Result, anyhow, ensure};
+use plain_libs::protocols::http_client;
 use serde::{Deserialize, Serialize};
 use std::{
     path::{Path, PathBuf},
@@ -100,8 +101,8 @@ impl Runtime {
         host: &crate::infrastructure::host::bridge::Host,
     ) -> Result<(), String> {
         let current = self.state.lock().unwrap();
-        let snapshot =
-            plain_libs::serde_json::to_value(&current.snapshot).map_err(|error| error.to_string())?;
+        let snapshot = plain_libs::serde_json::to_value(&current.snapshot)
+            .map_err(|error| error.to_string())?;
         host.notify("appUpdateDownloadChanged", snapshot)
     }
     fn publish(&self, state: &CoreRuntime, mut snapshot: AppUpdateDownload) -> AppUpdateDownload {
@@ -146,7 +147,10 @@ impl Runtime {
         task
     }
     pub fn reset_after_cache_clear(&self, state: &CoreRuntime) -> Result<()> {
-        updates::update(state, plain_libs::serde_json::json!({"downloadedApkPath":""}))?;
+        updates::update(
+            state,
+            plain_libs::serde_json::json!({"downloadedApkPath":""}),
+        )?;
         self.state.lock().unwrap().cancel = None;
         self.publish(state, AppUpdateDownload::default());
         Ok(())
@@ -176,17 +180,14 @@ pub enum Command {
 pub async fn reconcile(state: &CoreRuntime) -> Result<()> {
     ensure!(!*state.stop.borrow(), "Rust core stopped");
     let capabilities = crate::features::services::capabilities::snapshot(&state.host).await?;
-    if capabilities
-        .iter()
-        .any(|capability| capability == "APP_UPDATES")
-    {
+    if capabilities.contains(&Capability::AppUpdates) {
         execute_owned(state.clone(), Command::Reconcile).await?;
     }
     Ok(())
 }
 
 pub async fn execute(state: &CoreRuntime, command: Command) -> Result<AppUpdateDownload> {
-    crate::features::services::capabilities::require(&state.host, "APP_UPDATES").await?;
+    crate::features::services::capabilities::require(&state.host, Capability::AppUpdates).await?;
     let state = state.clone();
     tokio::spawn(async move { execute_owned(state, command).await }).await?
 }
@@ -217,7 +218,10 @@ async fn execute_owned(state: CoreRuntime, command: Command) -> Result<AppUpdate
             let identity = Identity::from(&info);
             validate_url(&identity.url)?;
             discard(&state, &info.downloaded_apk_path)?;
-            updates::update(&state, plain_libs::serde_json::json!({"downloadedApkPath":""}))?;
+            updates::update(
+                &state,
+                plain_libs::serde_json::json!({"downloadedApkPath":""}),
+            )?;
             let id = plain_libs::utils::uuid::Uuid::new_v4().into_string();
             let (cancel, receiver) = watch::channel(false);
             runtime.state.lock().unwrap().cancel = Some(cancel.clone());
@@ -236,7 +240,10 @@ async fn execute_owned(state: CoreRuntime, command: Command) -> Result<AppUpdate
         }
         Command::Cancel => {
             discard(&state, &info.downloaded_apk_path)?;
-            updates::update(&state, plain_libs::serde_json::json!({"downloadedApkPath":""}))?;
+            updates::update(
+                &state,
+                plain_libs::serde_json::json!({"downloadedApkPath":""}),
+            )?;
             runtime.state.lock().unwrap().cancel = None;
             Ok(runtime.publish(&state, AppUpdateDownload::default()))
         }
@@ -278,7 +285,10 @@ async fn execute_owned(state: CoreRuntime, command: Command) -> Result<AppUpdate
                 ));
             }
             if !info.downloaded_apk_path.is_empty() {
-                updates::update(&state, plain_libs::serde_json::json!({"downloadedApkPath":""}))?;
+                updates::update(
+                    &state,
+                    plain_libs::serde_json::json!({"downloadedApkPath":""}),
+                )?;
             }
             if snapshot.status == AppUpdateDownloadStatus::Completed {
                 return Ok(runtime.publish(&state, AppUpdateDownload::default()));
@@ -456,7 +466,7 @@ async fn save_stream<B: AsRef<[u8]>>(
     tokio::select! {
         biased;
         _=canceled(cancel, &mut stop)=>return Err(anyhow!("Update download canceled")),
-        result=crate::features::services::capabilities::require(&state.host, "APP_UPDATES")=>result?,
+        result=crate::features::services::capabilities::require(&state.host, Capability::AppUpdates)=>result?,
     }
     ensure!(
         !*cancel.borrow() && !*stop.borrow(),
@@ -480,7 +490,10 @@ async fn save_stream<B: AsRef<[u8]>>(
     let target = root.join(id);
     std::fs::rename(staging.path(), &target)?;
     let path = target.join("package").to_string_lossy().into_owned();
-    if let Err(error) = updates::update(state, plain_libs::serde_json::json!({"downloadedApkPath":path})) {
+    if let Err(error) = updates::update(
+        state,
+        plain_libs::serde_json::json!({"downloadedApkPath":path}),
+    ) {
         std::fs::remove_dir_all(&target)?;
         return Err(error);
     }
@@ -516,7 +529,8 @@ fn restored(state: &CoreRuntime, info: &UpdateInfo) -> Result<Option<String>> {
     {
         return Ok(None);
     }
-    let Ok(saved) = plain_libs::serde_json::from_slice::<Identity>(&std::fs::read(metadata)?) else {
+    let Ok(saved) = plain_libs::serde_json::from_slice::<Identity>(&std::fs::read(metadata)?)
+    else {
         return Ok(None);
     };
     let length = std::fs::metadata(path)?.len();
@@ -560,7 +574,8 @@ pub mod test_fixture {
         let identity = Identity::from(&updates::info(state)?);
         let total = chunks.iter().map(|chunk| chunk.len() as u64).sum();
         let (_cancel, mut receiver) = watch::channel(false);
-        let stream = futures_util::stream::iter(chunks.into_iter().map(Ok::<_, plain_libs::anyhow::Error>));
+        let stream =
+            futures_util::stream::iter(chunks.into_iter().map(Ok::<_, plain_libs::anyhow::Error>));
         save_stream(state, id, &identity, stream, Some(total), &mut receiver).await
     }
 }

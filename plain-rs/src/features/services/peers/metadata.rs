@@ -1,18 +1,20 @@
+use crate::features::capability::Capability;
 use crate::features::services::peers::management::Identity;
 use crate::features::services::peers::management::current;
 use crate::features::services::peers::management::current_peer;
 use crate::infrastructure::events::WsEvent;
 use crate::runtime::Runtime as CoreRuntime;
 use plain_libs::anyhow::Result;
-use serde::Deserialize;
 use plain_libs::serde_json::json;
+use serde::Deserialize;
 use tokio::sync::watch;
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AppSnapshot {
     pub device_name: String,
-    pub capabilities: Vec<String>,
+    #[serde(deserialize_with = "crate::features::capability::deserialize_list")]
+    pub capabilities: Vec<Capability>,
     pub access: Vec<crate::features::access::AccessFeature>,
     pub url_token: String,
 }
@@ -54,7 +56,9 @@ pub async fn refresh(
     let data = crate::features::services::peers::management_http::query(
         state,
         &identity.http_url()?,
-        &state.native_client_id().map_err(plain_libs::anyhow::Error::msg)?,
+        &state
+            .native_client_id()
+            .map_err(plain_libs::anyhow::Error::msg)?,
         &plain_libs::utils::base64::base64_decode(&identity.token),
         json!({"query":"{ app { deviceName capabilities access urlToken } }"}),
         256 * 1024,

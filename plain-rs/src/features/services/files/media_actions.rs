@@ -1,3 +1,4 @@
+use crate::features::capability::Capability;
 use crate::features::enums::DataType;
 use crate::features::media::actions as media_actions;
 use crate::features::media::actions::Action;
@@ -71,8 +72,7 @@ impl MediaActions {
         )
         .map_err(|error| plain_libs::anyhow::Error::msg(error.to_string()))?;
         let from_trash = action == Action::Restore
-            || (action == Action::Delete
-                && capabilities.iter().any(|value| value == "MEDIA_TRASH"));
+            || (action == Action::Delete && capabilities.contains(&Capability::MediaTrash));
         if !matches!(
             kind,
             DataType::Audio | DataType::Video | DataType::Image | DataType::Doc

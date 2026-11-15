@@ -2,9 +2,9 @@
 
 use plain_graphql::{Context, Json, Object};
 
-use plain_rs::features::prefs::Prefs;
-use plain_rs::features::prefs::pref_keys::APP_HOME_FEATURES;
 use plain_libs::serde_json::Value;
+use plain_rs::features::prefs::Prefs;
+use plain_rs::features::prefs::pref_keys::{APP_HOME_FEATURES, PrefAccess, access};
 use std::sync::Arc;
 
 #[derive(Default)]
@@ -12,7 +12,7 @@ pub struct PrefsQuery;
 
 #[Object]
 impl PrefsQuery {
-    fn prefs(
+    async fn prefs(
         &self,
         ctx: &Context<'_>,
         keys: Option<Vec<String>>,
@@ -24,7 +24,7 @@ impl PrefsQuery {
         };
         let mut values = plain_libs::serde_json::Map::new();
         for key in keys {
-            if !plain_rs::features::prefs::pref_keys::readable(&key, is_local(ctx)) {
+            if !readable(ctx, &key).await? {
                 return Err(plain_graphql::Error::new("Preference is not accessible"));
             }
             if let Some(value) = prefs.get::<Value>(&key)? {
@@ -78,12 +78,30 @@ fn is_local(ctx: &Context<'_>) -> bool {
     ctx.data_opt::<crate::graphql::executor::RequestOrigin>()
         == Some(&crate::graphql::executor::RequestOrigin::Local)
 }
-pub(crate) fn allowed(ctx: &Context<'_>, key: &str) -> bool {
-    plain_rs::features::prefs::pref_keys::writable(key, is_local(ctx))
-}
-pub(crate) fn authorize(ctx: &Context<'_>, key: &str) -> plain_graphql::Result<()> {
-    if !allowed(ctx, key) {
+pub(crate) async fn authorize(ctx: &Context<'_>, key: &str) -> plain_graphql::Result<()> {
+    let capabilities = preference_capabilities(ctx, key).await?;
+    let allowed = plain_rs::features::prefs::pref_keys::writable(key, is_local(ctx), &capabilities);
+    if !allowed {
         return Err(plain_graphql::Error::new("Preference is not accessible"));
     }
     Ok(())
+}
+
+async fn readable(ctx: &Context<'_>, key: &str) -> plain_graphql::Result<bool> {
+    let capabilities = preference_capabilities(ctx, key).await?;
+    Ok(plain_rs::features::prefs::pref_keys::readable(
+        key,
+        is_local(ctx),
+        &capabilities,
+    ))
+}
+
+async fn preference_capabilities(
+    ctx: &Context<'_>,
+    key: &str,
+) -> plain_graphql::Result<Vec<plain_rs::features::capability::Capability>> {
+    if is_local(ctx) || access(key) != Some(PrefAccess::LocalOrHttpServer) {
+        return Ok(Vec::new());
+    }
+    crate::graphql::resolvers::app::http_server::authorized_capabilities(ctx).await
 }

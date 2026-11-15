@@ -1,6 +1,7 @@
 use crate::graphql::resolvers::app::capability_types::Disk;
 use crate::server::ServerState;
 use plain_graphql::{Context, ID, Object, Result};
+use plain_rs::features::capability::Capability;
 
 use plain_rs::features::services::settings::types::AppUpdate;
 use plain_rs::infrastructure::host::bridge::Host;
@@ -55,7 +56,7 @@ impl PlatformQuery {
     }
 
     async fn disks(&self, ctx: &Context<'_>) -> Result<Vec<Disk>> {
-        require_capability(ctx, "DISK_MANAGER").await?;
+        require_capability(ctx, Capability::DiskManager).await?;
         let disks = tokio::task::spawn_blocking(plain_rs::infrastructure::platform::disks::list)
             .await
             .map_err(|error| plain_graphql::Error::new(error.to_string()))?
@@ -81,7 +82,7 @@ impl PlatformQuery {
     }
 }
 
-async fn require_capability(ctx: &Context<'_>, name: &str) -> Result<()> {
+async fn require_capability(ctx: &Context<'_>, name: Capability) -> Result<()> {
     plain_rs::features::services::capabilities::require(ctx.data::<Arc<Host>>()?, name)
         .await
         .map_err(|error| plain_graphql::Error::new(error.to_string()))
@@ -93,7 +94,7 @@ pub struct PlatformMutation;
 #[Object]
 impl PlatformMutation {
     async fn format_disk(&self, ctx: &Context<'_>, path: String) -> Result<bool> {
-        require_capability(ctx, "DISK_MANAGER").await?;
+        require_capability(ctx, Capability::DiskManager).await?;
         Ok(plain_rs::features::services::disks::format(
             ctx.data::<ServerState>()?,
             ctx.data::<String>()?,

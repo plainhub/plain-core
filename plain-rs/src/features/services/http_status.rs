@@ -3,6 +3,7 @@ use crate::runtime::Runtime as CoreRuntime;
 use std::sync::Mutex;
 
 #[derive(Clone, Default, serde::Serialize)]
+#[cfg_attr(feature = "graphql", derive(plain_graphql::SimpleObject))]
 #[serde(rename_all = "camelCase")]
 pub struct HttpServerState {
     pub revision: Long,

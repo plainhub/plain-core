@@ -1,8 +1,8 @@
 use crate::test_support::schema::SchemaFixture as PublicSchema;
+use plain_libs::serde_json::{Value, json};
 use plain_rs::features::prefs::Prefs;
 use plain_rs::infrastructure::db::Db;
 use plain_rs::infrastructure::host::bridge::Host;
-use plain_libs::serde_json::{Value, json};
 use std::sync::Arc;
 
 fn stub(host: Arc<Host>, handler: impl Fn(&str, Value) -> Value + Send + 'static) {
@@ -28,12 +28,13 @@ fn fixture(
     let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs = Arc::new(Prefs::load(&dir.path().join("prefs.json")).unwrap());
     let db = Arc::new(Db::open(&dir.path().join("data.db")).unwrap());
-    let host = Arc::new(Host::with_startup_config(
-        plain_rs::infrastructure::host::startup::StartupConfig {
+    let host = Arc::new(
+        Host::with_startup_config(plain_rs::infrastructure::host::startup::StartupConfig {
             debug: false,
             ..plain_rs::infrastructure::platform::startup::config()
-        },
-    ).unwrap());
+        })
+        .unwrap(),
+    );
     stub(host.clone(), handler);
     let directory = dir.path().to_path_buf();
     let (events, _) = tokio::sync::broadcast::channel(16);
@@ -48,12 +49,13 @@ async fn reads_come_from_the_rust_store() {
     let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs = Arc::new(Prefs::load(&dir.path().join("prefs.json")).unwrap());
     let db = Arc::new(Db::open(&dir.path().join("data.db")).unwrap());
-    let host = Arc::new(Host::with_startup_config(
-        plain_rs::infrastructure::host::startup::StartupConfig {
+    let host = Arc::new(
+        Host::with_startup_config(plain_rs::infrastructure::host::startup::StartupConfig {
             debug: false,
             ..plain_rs::infrastructure::platform::startup::config()
-        },
-    ).unwrap());
+        })
+        .unwrap(),
+    );
     stub(host.clone(), |method, _| {
         panic!("a read must not reach the platform: {method}")
     });
@@ -184,7 +186,10 @@ async fn pref_keys_outside_the_safe_set_are_refused() {
         ))
         .await;
     assert_eq!(response.errors.len(), 1);
-    assert_eq!(response.errors[0].message, "No permission: developer mode is disabled");
+    assert_eq!(
+        response.errors[0].message,
+        "No permission: developer mode is disabled"
+    );
 }
 
 /// The cap is on bytes, not characters - a multi-byte value would slip past
@@ -213,10 +218,10 @@ async fn a_value_just_under_the_cap_is_accepted() {
 #[test]
 fn only_registered_keys_are_writable_for_each_origin() {
     use plain_rs::features::prefs::pref_keys::writable;
-    assert!(writable("locale", false));
-    assert!(writable("locale", true));
-    assert!(!writable("http_port", false));
-    assert!(writable("http_port", true));
+    assert!(writable("locale", false, &[]));
+    assert!(writable("locale", true, &[]));
+    assert!(!writable("http_port", false, &[]));
+    assert!(writable("http_port", true, &[]));
     for key in [
         "master_secret",
         "client_id",
@@ -224,8 +229,8 @@ fn only_registered_keys_are_writable_for_each_origin() {
         "",
         "admin:password",
     ] {
-        assert!(!writable(key, false));
-        assert!(!writable(key, true));
+        assert!(!writable(key, false, &[]));
+        assert!(!writable(key, true, &[]));
     }
 }
 
@@ -283,12 +288,13 @@ async fn file_index_configuration_is_not_stored_in_preferences() {
     let directory = plain_libs::temporary::tempdir().unwrap();
     let prefs = Arc::new(Prefs::in_memory());
     prefs.set("developer_mode", true).unwrap();
-    let host = Arc::new(Host::with_startup_config(
-        plain_rs::infrastructure::host::startup::StartupConfig {
+    let host = Arc::new(
+        Host::with_startup_config(plain_rs::infrastructure::host::startup::StartupConfig {
             debug: false,
             ..plain_rs::infrastructure::platform::startup::config()
-        },
-    ).unwrap());
+        })
+        .unwrap(),
+    );
     let db = Arc::new(Db::open(&directory.path().join("db")).unwrap());
     let (events, _) = tokio::sync::broadcast::channel(16);
     let schema =

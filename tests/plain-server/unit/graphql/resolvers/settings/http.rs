@@ -5,8 +5,8 @@ use plain_libs::axum::{
     extract::State,
     http::{HeaderMap, StatusCode},
 };
-use plain_rs::features::prefs::Prefs;
 use plain_libs::serde_json::{Value, json};
+use plain_rs::features::prefs::Prefs;
 use std::sync::Arc;
 
 fn device(debug: bool) -> (plain_libs::temporary::TempDir, ContentServer, HeaderMap) {
@@ -44,6 +44,56 @@ fn device(debug: bool) -> (plain_libs::temporary::TempDir, ContentServer, Header
     );
     (dir, server, headers)
 }
+#[tokio::test]
+async fn http_server_capability_cannot_disable_remote_access_through_the_api() {
+    use plain_rs::features::capability::Capability;
+    use plain_rs::features::prefs::pref_keys::{DEVELOPER_MODE, REMOTE_ACCESS};
+
+    let (_directory, server, headers) = device(false);
+    let state = server.runtime_state();
+    state.prefs.set(REMOTE_ACCESS, true).unwrap();
+    let host = state.host.clone();
+    let (generation, mut requests) = host.connect();
+    let replies = tokio::spawn(async move {
+        while let Some(request) = requests.recv().await {
+            assert_eq!(request["method"], "systemCapabilities");
+            host.reply(
+                generation,
+                json!({"id":request["id"],"result":[Capability::HttpServer]}),
+            )
+            .unwrap();
+        }
+    });
+    assert!(
+        plain_rs::features::services::capabilities::snapshot(&state.host)
+            .await
+            .unwrap()
+            .contains(&Capability::HttpServer)
+    );
+
+    for developer_mode in [false, true] {
+        state.prefs.set(DEVELOPER_MODE, developer_mode).unwrap();
+        let (status, response) = call(
+            state.clone(),
+            &headers,
+            r#"mutation { setPref(key:"remote_access", value:false) }"#,
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(
+            response["errors"][0]["message"],
+            "Preference is not accessible"
+        );
+        assert_eq!(state.prefs.get::<bool>(REMOTE_ACCESS).unwrap(), Some(true));
+        let (status, response) = call(state.clone(), &headers, r#"{prefs(keys:["locale"])}"#).await;
+        assert_eq!(status, StatusCode::OK);
+        assert!(response["errors"].is_null(), "{response}");
+    }
+    state.host.disconnect(generation);
+    replies.await.unwrap();
+    server.shutdown().await;
+}
+
 async fn call(state: ServerState, headers: &HeaderMap, document: &str) -> (StatusCode, Value) {
     let response = graphql::call(
         State(state),
@@ -55,7 +105,10 @@ async fn call(state: ServerState, headers: &HeaderMap, document: &str) -> (Statu
     let body = plain_libs::axum::body::to_bytes(response.into_body(), 1024 * 1024)
         .await
         .unwrap();
-    (status, plain_libs::serde_json::from_slice(&body).unwrap_or(Value::Null))
+    (
+        status,
+        plain_libs::serde_json::from_slice(&body).unwrap_or(Value::Null),
+    )
 }
 #[tokio::test]
 async fn remote_settings_authentication_device_isolation_and_disable_reply() {
@@ -200,20 +253,52 @@ async fn debug_build_allows_database_and_prefs_without_developer_mode() {
     let (_directory, server, headers) = device(true);
     let state = server.runtime_state();
     state.prefs.set("developer_mode", false).unwrap();
-    state.db.with_conn(|db| db.execute_batch("CREATE TABLE debug_fixture (id TEXT PRIMARY KEY)").unwrap());
-    let (status, result) = call(state.clone(), &headers, "{app{debug developerMode} prefs dbTables{name} dbPath}").await;
+    state.db.with_conn(|db| {
+        db.execute_batch("CREATE TABLE debug_fixture (id TEXT PRIMARY KEY)")
+            .unwrap()
+    });
+    let (status, result) = call(
+        state.clone(),
+        &headers,
+        "{app{debug developerMode} prefs dbTables{name} dbPath}",
+    )
+    .await;
     assert_eq!(status, StatusCode::OK);
     assert!(result.get("errors").is_none(), "{result}");
     assert_eq!(result["data"]["app"]["debug"], true);
     assert_eq!(result["data"]["app"]["developerMode"], false);
     assert_eq!(result["data"]["prefs"]["developer_mode"], false);
-    assert!(result["data"]["dbTables"].as_array().unwrap().iter().any(|table| table["name"] == "debug_fixture"));
-    let (_, created) = call(state.clone(), &headers, r#"mutation{createDbTableRow(table:"debug_fixture",row:{id:"generated"})}"#).await;
+    assert!(
+        result["data"]["dbTables"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|table| table["name"] == "debug_fixture")
+    );
+    let (_, created) = call(
+        state.clone(),
+        &headers,
+        r#"mutation{createDbTableRow(table:"debug_fixture",row:{id:"generated"})}"#,
+    )
+    .await;
     assert!(created.get("errors").is_none(), "{created}");
     assert_eq!(created["data"]["createDbTableRow"], true);
-    let (_, rows) = call(state.clone(), &headers, r#"{dbTableRows(table:"debug_fixture",offset:0,limit:10)}"#).await;
+    let (_, rows) = call(
+        state.clone(),
+        &headers,
+        r#"{dbTableRows(table:"debug_fixture",offset:0,limit:10)}"#,
+    )
+    .await;
     assert_eq!(rows["data"]["dbTableRows"], json!([{"id":"generated"}]));
-    assert_eq!(call(state.clone(), &HeaderMap::new(), "{prefs dbPath}").await.0, StatusCode::UNAUTHORIZED);
-    assert_eq!(state.prefs.get::<bool>("developer_mode").unwrap(), Some(false));
+    assert_eq!(
+        call(state.clone(), &HeaderMap::new(), "{prefs dbPath}")
+            .await
+            .0,
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(
+        state.prefs.get::<bool>("developer_mode").unwrap(),
+        Some(false)
+    );
     server.shutdown().await;
 }

@@ -1,4 +1,3 @@
-use plain_rs::features::access::AccessFeature;
 use crate::graphql::resolvers::packages::types::Certificate;
 use crate::graphql::resolvers::packages::types::Package;
 use crate::graphql::resolvers::packages::types::PackageInstallPending;
@@ -12,13 +11,15 @@ use crate::graphql::types::facts::optional_instant;
 use crate::graphql::types::facts::text;
 use crate::http::auth::public_gate;
 use plain_graphql::{Context, Object};
+use plain_rs::features::access::AccessFeature;
+use plain_rs::features::capability::Capability;
 
+use plain_libs::serde_json::Value;
 use plain_rs::features::prefs::Prefs;
 use plain_rs::features::prefs::settings::FileSortBy;
 use plain_rs::infrastructure::db::Db;
 use plain_rs::infrastructure::host::bridge::Host;
 use plain_rs::infrastructure::types::Long;
-use plain_libs::serde_json::Value;
 use std::sync::Arc;
 
 const FEATURE: AccessFeature = AccessFeature::Apps;
@@ -36,7 +37,7 @@ impl PackagesQuery {
         public_gate::require(ctx, ctx.data_unchecked::<Arc<Prefs>>(), &[FEATURE])?;
         plain_rs::features::services::capabilities::require(
             ctx.data_unchecked::<Arc<Host>>(),
-            "PACKAGES",
+            Capability::Packages,
         )
         .await
         .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
@@ -73,7 +74,7 @@ impl PackagesQuery {
         public_gate::require(ctx, ctx.data_unchecked::<Arc<Prefs>>(), &[FEATURE])?;
         plain_rs::features::services::capabilities::require(
             ctx.data_unchecked::<Arc<Host>>(),
-            "PACKAGES",
+            Capability::Packages,
         )
         .await
         .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
@@ -92,7 +93,7 @@ impl PackagesQuery {
         }
         plain_rs::features::services::capabilities::require(
             ctx.data_unchecked::<Arc<Host>>(),
-            "PACKAGES",
+            Capability::Packages,
         )
         .await
         .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
@@ -107,14 +108,17 @@ impl PackagesQuery {
         public_gate::require(ctx, ctx.data_unchecked::<Arc<Prefs>>(), &[FEATURE])?;
         plain_rs::features::services::capabilities::require(
             ctx.data_unchecked::<Arc<Host>>(),
-            "PACKAGES",
+            Capability::Packages,
         )
         .await
         .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
         let ids: Vec<String> = ids.iter().map(|id| id.0.clone()).collect();
         let facts = ctx
             .data_unchecked::<Arc<Host>>()
-            .call("systemPackageStatuses", plain_libs::serde_json::json!({ "ids": ids }))
+            .call(
+                "systemPackageStatuses",
+                plain_libs::serde_json::json!({ "ids": ids }),
+            )
             .await
             .map_err(|error| plain_graphql::Error::new(error))?;
         Ok(package_statuses(&ids, &facts))
@@ -135,13 +139,16 @@ impl PackagesMutation {
         public_gate::require(ctx, ctx.data_unchecked::<Arc<Prefs>>(), &[FEATURE])?;
         plain_rs::features::services::capabilities::require(
             ctx.data_unchecked::<Arc<Host>>(),
-            "PACKAGES",
+            Capability::Packages,
         )
         .await
         .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
         let ids: Vec<String> = ids.iter().map(|id| id.0.clone()).collect();
         ctx.data_unchecked::<Arc<Host>>()
-            .call("systemUninstallPackages", plain_libs::serde_json::json!({ "ids": ids }))
+            .call(
+                "systemUninstallPackages",
+                plain_libs::serde_json::json!({ "ids": ids }),
+            )
             .await
             .map_err(|error| plain_graphql::Error::new(error))?;
         Ok(true)
@@ -155,7 +162,7 @@ impl PackagesMutation {
         public_gate::require(ctx, ctx.data_unchecked::<Arc<Prefs>>(), &[FEATURE])?;
         plain_rs::features::services::capabilities::require(
             ctx.data_unchecked::<Arc<Host>>(),
-            "PACKAGES",
+            Capability::Packages,
         )
         .await
         .map_err(|error| plain_graphql::Error::new(error.to_string()))?;

@@ -1,10 +1,11 @@
-use plain_libs::protocols::http_client;
+use crate::features::capability::Capability;
 use crate::features::prefs::pref_keys::{AUTO_CHECK_UPDATE, SKIP_VERSION};
 use crate::features::prefs::security::UpdateInfo;
 use crate::features::updates::Release;
 use crate::infrastructure::events::WsEvent;
 use crate::runtime::Runtime as CoreRuntime;
 use plain_libs::anyhow::{Result, anyhow, ensure};
+use plain_libs::protocols::http_client;
 use std::{sync::OnceLock, time::Duration};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
@@ -39,7 +40,8 @@ pub fn info(state: &CoreRuntime) -> Result<UpdateInfo> {
 }
 
 pub fn update(state: &CoreRuntime, patch: plain_libs::serde_json::Value) -> Result<()> {
-    let patch: crate::features::prefs::security::UpdatePatch = plain_libs::serde_json::from_value(patch)?;
+    let patch: crate::features::prefs::security::UpdatePatch =
+        plain_libs::serde_json::from_value(patch)?;
     state
         .store
         .get()?
@@ -67,7 +69,7 @@ pub struct Runtime {
 
 pub async fn check(state: &CoreRuntime, automatic: bool) -> Result<AppUpdateStatus> {
     ensure!(!*state.stop.borrow(), "Rust core stopped");
-    crate::features::services::capabilities::require(&state.host, "APP_UPDATES").await?;
+    crate::features::services::capabilities::require(&state.host, Capability::AppUpdates).await?;
     let mut cache = state.update_checks.cache.lock().await;
     let now_ms = u64::try_from(plain_libs::chrono::Utc::now().timestamp_millis())?;
     let info = info(state)?;
@@ -87,7 +89,7 @@ pub async fn snapshot(
     state: &CoreRuntime,
 ) -> Result<crate::features::services::settings::types::AppUpdate> {
     ensure!(!*state.stop.borrow(), "Rust core stopped");
-    crate::features::services::capabilities::require(&state.host, "APP_UPDATES").await?;
+    crate::features::services::capabilities::require(&state.host, Capability::AppUpdates).await?;
     let mut cache = state.update_checks.cache.lock().await;
     let status = if cache
         .checked_at
@@ -129,8 +131,12 @@ fn project(state: &CoreRuntime) -> Result<crate::features::services::settings::t
             .map(|release| release.name.clone())
             .unwrap_or_default(),
         published_at: latest
-            .and_then(|release| plain_libs::chrono::DateTime::parse_from_rfc3339(&release.published_at).ok())
-            .map(|time| crate::infrastructure::types::Instant(time.with_timezone(&plain_libs::chrono::Utc))),
+            .and_then(|release| {
+                plain_libs::chrono::DateTime::parse_from_rfc3339(&release.published_at).ok()
+            })
+            .map(|time| {
+                crate::infrastructure::types::Instant(time.with_timezone(&plain_libs::chrono::Utc))
+            }),
     })
 }
 
@@ -162,7 +168,10 @@ async fn fetch(state: &CoreRuntime) -> Result<AppUpdateStatus> {
         "Invalid update source"
     );
     let response = client()?.get(url).send().await?;
-    update(state, plain_libs::serde_json::json!({"checkUpdateTime":now_ms}))?;
+    update(
+        state,
+        plain_libs::serde_json::json!({"checkUpdateTime":now_ms}),
+    )?;
     if response.status() == http_client::StatusCode::FORBIDDEN
         || response.status() == http_client::StatusCode::TOO_MANY_REQUESTS
     {
@@ -216,12 +225,19 @@ async fn fetch(state: &CoreRuntime) -> Result<AppUpdateStatus> {
     Ok(AppUpdateStatus::Available)
 }
 
-pub async fn set_setting(state: &CoreRuntime, key: &str, value: plain_libs::serde_json::Value) -> Result<bool> {
+pub async fn set_setting(
+    state: &CoreRuntime,
+    key: &str,
+    value: plain_libs::serde_json::Value,
+) -> Result<bool> {
     let _cache = state.update_checks.cache.lock().await;
     let changed = crate::features::prefs::security::set_entry(&state.prefs, key, value)?;
     if changed && key == SKIP_VERSION {
         state.update_checks.download.invalidate();
-        update(state, plain_libs::serde_json::json!({"downloadedApkPath":""}))?;
+        update(
+            state,
+            plain_libs::serde_json::json!({"downloadedApkPath":""}),
+        )?;
         crate::features::services::settings::update_download::Runtime::schedule_reconcile(state);
     }
     Ok(changed)

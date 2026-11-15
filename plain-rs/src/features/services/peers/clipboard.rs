@@ -1,4 +1,5 @@
 use crate::features::access::AccessFeature;
+use crate::features::capability::Capability;
 use crate::features::services::peers::management::Identity;
 use crate::features::services::peers::management::current_peer;
 use crate::runtime::Runtime as CoreRuntime;
@@ -22,17 +23,16 @@ pub async fn receive(
         return Ok(());
     };
     let capabilities = crate::features::services::capabilities::snapshot(&state.host).await?;
-    if !capabilities
-        .iter()
-        .any(|capability| capability == "CLIPBOARD")
-    {
+    if !capabilities.contains(&Capability::Clipboard) {
         return Ok(());
     }
     let base = identity.http_url()?;
     let data = crate::features::services::peers::management_http::query(
         state,
         &base,
-        &state.native_client_id().map_err(plain_libs::anyhow::Error::msg)?,
+        &state
+            .native_client_id()
+            .map_err(plain_libs::anyhow::Error::msg)?,
         &plain_libs::utils::base64::base64_decode(&identity.token),
         json!({"query":r#"{ clipboardItems(query:"",offset:0,limit:1) { id text sensitive } }"#}),
         4 * 1024 * 1024,
@@ -89,7 +89,10 @@ pub async fn send(
     if !current_peer(state, peer_id, identity, canceled).await?
         || *access.borrow() != Some(true)
         || !crate::features::clipboard::sync::sends(&state.prefs, peer_id)?
-        || !crate::features::services::device::access::is_enabled(&state.prefs, &[AccessFeature::Clipboard])
+        || !crate::features::services::device::access::is_enabled(
+            &state.prefs,
+            &[AccessFeature::Clipboard],
+        )
         || !state.clipboard_changes.can_send(text)
     {
         return Ok(false);
@@ -129,7 +132,10 @@ pub async fn follow(
     let mut delay = Duration::from_secs(1);
     while !*cancellation.borrow() && !*stop.borrow() {
         if !crate::features::clipboard::sync::sends(&state.prefs, peer_id).unwrap_or(false)
-            || !crate::features::services::device::access::is_enabled(&state.prefs, &[AccessFeature::Clipboard])
+            || !crate::features::services::device::access::is_enabled(
+                &state.prefs,
+                &[AccessFeature::Clipboard],
+            )
             || *access.borrow() == Some(false)
         {
             pending = None;

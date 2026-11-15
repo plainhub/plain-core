@@ -53,7 +53,10 @@ fn dlna_cast_only_accepts_castable_media_types() {
         .split('}')
         .next()
         .unwrap();
-    assert_eq!(values.split_whitespace().collect::<Vec<_>>(), ["AUDIO", "VIDEO", "IMAGE"]);
+    assert_eq!(
+        values.split_whitespace().collect::<Vec<_>>(),
+        ["AUDIO", "VIDEO", "IMAGE"]
+    );
     assert!(sdl.contains("dlnaCast(rendererUdn: String!, url: String!, title: String!, mime: String!, type: DlnaCastType!): Boolean!"));
 }
 
@@ -73,7 +76,14 @@ fn public_schema_exposes_the_contract_it_has_to_serve() {
     assert!(!sdl.contains("dbTableColumns("));
     assert!(!sdl.contains("includeTrashed"));
     assert!(!sdl.contains("embeddedAudioLyrics"));
-    assert!(sdl.lines().any(|line| line.trim() == "keyValue(key: String!): JSON"));
+    assert!(sdl.contains("httpServer: HttpServer!"));
+    assert!(sdl.contains("restartHttpServer(httpPort: Int, httpsPort: Int): HttpServerState!"));
+    assert!(sdl.contains("acquireMdnsDebugSession(token: String!): Boolean!"));
+    assert!(sdl.contains("releaseMdnsDebugSession(token: String!): Boolean!"));
+    assert!(
+        sdl.lines()
+            .any(|line| line.trim() == "keyValue(key: String!): JSON")
+    );
     assert!(sdl.contains("setKeyValue(key: String!, value: JSON!): Boolean!"));
     for removed in [
         "savedValue(",
@@ -95,8 +105,6 @@ fn public_schema_exposes_the_contract_it_has_to_serve() {
         "scanHistory:",
         "addScanHistory(",
         "removeScanHistory(",
-        "acquireMdnsDebugSession(",
-        "releaseMdnsDebugSession(",
         "input DlnaReceiverInput",
         "enum DlnaReceiverAction",
         "enum PeerStatusAction",
@@ -237,14 +245,19 @@ fn public_schema_exposes_the_contract_it_has_to_serve() {
         .split('}')
         .next()
         .unwrap();
-    for field in [
-        "peerId: ID!",
-        "mode: PairingMode!",
-        "password: String",
-    ] {
+    for field in ["peerId: ID!", "mode: PairingMode!", "password: String"] {
         assert!(pairing_input.contains(field));
     }
-    for obsolete in ["id:", "host:", "generation:", "confirm:", "name:", "ips:", "lastSeen:", "deviceType:"] {
+    for obsolete in [
+        "id:",
+        "host:",
+        "generation:",
+        "confirm:",
+        "name:",
+        "ips:",
+        "lastSeen:",
+        "deviceType:",
+    ] {
         assert!(!pairing_input.contains(obsolete));
     }
     assert!(!sdl.contains("enum MediaAction {"));
@@ -705,13 +718,12 @@ async fn no_root_field_fails_for_unregistered_schema_data() {
         } else {
             format!("{{ {name} {{ {} }} }}", selection.join(" "))
         };
-        let response = schema
-            .execute(
-                plain_graphql::Request::new(query.as_str())
-                    .data(server.runtime_state())
-                    .data(server.runtime_state().native_client_id().unwrap()),
-            )
-            .await;
+        let response = crate::graphql::executor::execute_graphql(
+            &schema,
+            plain_graphql::Request::new(query.as_str()),
+            crate::graphql::executor::RequestContext::local(server.runtime_state()),
+        )
+        .await;
         for error in response.errors {
             if error.message.contains("does not exist") {
                 unregistered.push(format!("{name}: {}", error.message));
@@ -834,13 +846,7 @@ async fn deployed_schema_exposes_platform_fields_and_subscriptions_on_every_host
                 "uninstallPackages",
             ][..],
         ),
-        (
-            "subscriptionType",
-            &[
-                "smsChanged",
-                "smsSendResult",
-            ][..],
-        ),
+        ("subscriptionType", &["smsChanged", "smsSendResult"][..]),
     ] {
         let fields: Vec<_> = root[kind]["fields"]
             .as_array()
@@ -861,10 +867,7 @@ async fn deployed_schema_exposes_platform_fields_and_subscriptions_on_every_host
     for name in ["Contact", "Call", "Sms", "SmsSendResult", "SmsSendReceipt"] {
         assert!(names.contains(&name), "type {name} missing");
     }
-    for field in [
-        "smsChanged",
-        "smsSendResult",
-    ] {
+    for field in ["smsChanged", "smsSendResult"] {
         assert_eq!(
             crate::graphql::subscriptions::operation::spec(&plain_graphql::Request::new(format!(
                 "subscription {{ {field} }}"
@@ -922,7 +925,6 @@ fn closed_fields_keep_named_enums_and_required_wrappers() {
         ("PeerStatus", "PAIRED UNPAIRED CHANNEL"),
         ("DiscoveryMethod", "LAN BLE QR"),
         ("SessionType", "LOGIN API_TOKEN"),
-
         (
             "ImageSearchStatusType",
             "UNAVAILABLE DOWNLOADING LOADING READY ERROR",
@@ -985,14 +987,27 @@ mod event_contract;
 #[test]
 fn pairing_commands_have_no_public_ui_state_or_client_record_snapshots() {
     let sdl = sdl();
-    for name in ["PairingState", "PairingPhase", "PairingRequestInput", "PeerRecordInput", "pairingStates", "pairingChanged"] {
+    for name in [
+        "PairingState",
+        "PairingPhase",
+        "PairingRequestInput",
+        "PeerRecordInput",
+        "pairingStates",
+        "pairingChanged",
+    ] {
         assert!(!sdl.contains(name), "obsolete pairing contract: {name}");
     }
-    let input = sdl.split("input PairPeerInput {").nth(1).unwrap().split('}').next().unwrap();
+    let input = sdl
+        .split("input PairPeerInput {")
+        .nth(1)
+        .unwrap()
+        .split('}')
+        .next()
+        .unwrap();
     assert!(input.contains("peerId: ID!"));
     assert!(input.contains("mode: PairingMode!"));
     assert!(input.contains("password: String"));
-    assert_eq!(input.lines().filter(|line| line.contains(':')).count(),3);
+    assert_eq!(input.lines().filter(|line| line.contains(':')).count(), 3);
     assert!(sdl.contains("peerFileUrl(peerId: ID!, fileId: String!): String!"));
 }
 
@@ -1000,12 +1015,43 @@ fn pairing_commands_have_no_public_ui_state_or_client_record_snapshots() {
 fn sms_sending_has_one_mutation_and_one_result_subscription() {
     let schema = sdl();
     assert!(schema.contains("sendSms(number: String!, body: String!, attachmentPaths: [String!]! = [], subscriptionId: Int, requestId: String!): SmsSendReceipt!"));
-    let receipt = schema.split("type SmsSendReceipt {").nth(1).unwrap().split('}').next().unwrap();
-    assert_eq!(receipt.lines().map(str::trim).filter(|line| !line.is_empty()).collect::<Vec<_>>(), ["requestId: String!", "requiresConfirmation: Boolean!"]);
-    let result = schema.split("type SmsSendResult {").nth(1).unwrap().split('}').next().unwrap();
-    assert!(result.lines().any(|line| line.trim() == "requestId: String!"));
-    for retired in ["sendMms(", "mmsSendResult:", "mmsSent:", "type MmsSendResult {"] {
-        assert!(!schema.contains(retired), "retired contract remains: {retired}");
+    let receipt = schema
+        .split("type SmsSendReceipt {")
+        .nth(1)
+        .unwrap()
+        .split('}')
+        .next()
+        .unwrap();
+    assert_eq!(
+        receipt
+            .lines()
+            .map(str::trim)
+            .filter(|line| !line.is_empty())
+            .collect::<Vec<_>>(),
+        ["requestId: String!", "requiresConfirmation: Boolean!"]
+    );
+    let result = schema
+        .split("type SmsSendResult {")
+        .nth(1)
+        .unwrap()
+        .split('}')
+        .next()
+        .unwrap();
+    assert!(
+        result
+            .lines()
+            .any(|line| line.trim() == "requestId: String!")
+    );
+    for retired in [
+        "sendMms(",
+        "mmsSendResult:",
+        "mmsSent:",
+        "type MmsSendResult {",
+    ] {
+        assert!(
+            !schema.contains(retired),
+            "retired contract remains: {retired}"
+        );
     }
 }
 
@@ -1023,25 +1069,45 @@ fn each_catalog_exposes_only_its_named_sort_contract() {
         ("ImageSortBy", ["NAME_ASC", "NAME_DESC"], true),
         ("VideoSortBy", ["NAME_ASC", "NAME_DESC"], true),
     ] {
-        let body = schema.split(&format!("enum {name} {{")).nth(1).unwrap().split('}').next().unwrap();
+        let body = schema
+            .split(&format!("enum {name} {{"))
+            .nth(1)
+            .unwrap()
+            .split('}')
+            .next()
+            .unwrap();
         let actual = body.split_whitespace().collect::<Vec<_>>();
         let mut expected = common.to_vec();
         expected.extend(labels);
-        if capture { expected.push("TAKEN_AT_DESC"); }
+        if capture {
+            expected.push("TAKEN_AT_DESC");
+        }
         assert_eq!(actual, expected, "{name}");
     }
-    for (field, name) in [("images", "Image"), ("videos", "Video"), ("audios", "Audio"), ("docs", "Doc")] {
-        assert!(schema.contains(&format!("{field}(query: String!, offset: Int!, limit: Int!, sortBy: {name}SortBy!)")));
+    for (field, name) in [
+        ("images", "Image"),
+        ("videos", "Video"),
+        ("audios", "Audio"),
+        ("docs", "Doc"),
+    ] {
+        assert!(schema.contains(&format!(
+            "{field}(query: String!, offset: Int!, limit: Int!, sortBy: {name}SortBy!)"
+        )));
     }
-    assert!(schema.contains("replaceAudioQueue(query: String!, sortBy: AudioSortBy!, shuffle: Boolean!)"));
+    assert!(
+        schema
+            .contains("replaceAudioQueue(query: String!, sortBy: AudioSortBy!, shuffle: Boolean!)")
+    );
 }
 
 #[tokio::test]
 async fn irrelevant_sort_values_fail_before_resolver_context_is_accessed() {
     let schema = super::PublicSchema::build(
-        super::Query::default(), super::Mutation::default(),
+        super::Query::default(),
+        super::Mutation::default(),
         crate::graphql::subscriptions::Subscription::default(),
-    ).finish();
+    )
+    .finish();
     for (field, value, name) in [
         ("audios", "TAKEN_AT_DESC", "AudioSortBy"),
         ("audios", "NAME_ASC", "AudioSortBy"),
@@ -1049,12 +1115,27 @@ async fn irrelevant_sort_values_fail_before_resolver_context_is_accessed() {
         ("images", "TITLE_ASC", "ImageSortBy"),
         ("videos", "UPDATED_AT", "VideoSortBy"),
     ] {
-        let response = schema.execute(format!(r#"{{ {field}(query:"",offset:0,limit:1,sortBy:{value}) {{ __typename }} }}"#)).await;
+        let response = schema
+            .execute(format!(
+                r#"{{ {field}(query:"",offset:0,limit:1,sortBy:{value}) {{ __typename }} }}"#
+            ))
+            .await;
         assert!(!response.errors.is_empty());
-        let errors = response.errors.iter().map(|error| error.message.as_str()).collect::<Vec<_>>().join(" ");
+        let errors = response
+            .errors
+            .iter()
+            .map(|error| error.message.as_str())
+            .collect::<Vec<_>>()
+            .join(" ");
         assert!(errors.contains(name) && errors.contains(value), "{errors}");
         assert!(!errors.contains("Data "), "resolver executed: {errors}");
     }
-    let response = schema.execute(r#"{ files(root:"/example",query:"",offset:0,limit:1,sortBy:TAKEN_AT_DESC) { name } }"#).await;
-    assert!(response.errors.iter().any(|error| error.message.contains("FileSortBy") && error.message.contains("TAKEN_AT_DESC")));
+    let response = schema
+        .execute(
+            r#"{ files(root:"/example",query:"",offset:0,limit:1,sortBy:TAKEN_AT_DESC) { name } }"#,
+        )
+        .await;
+    assert!(response.errors.iter().any(
+        |error| error.message.contains("FileSortBy") && error.message.contains("TAKEN_AT_DESC")
+    ));
 }

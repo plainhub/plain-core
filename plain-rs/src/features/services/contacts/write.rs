@@ -1,8 +1,9 @@
+use crate::features::capability::Capability;
 use crate::features::prefs::Prefs;
 use crate::features::services::capabilities;
 use crate::infrastructure::host::bridge::Host;
-use serde::Deserialize;
 use plain_libs::serde_json::{Value, json};
+use serde::Deserialize;
 
 const MAX_NAME_LEN: usize = 200;
 const MAX_NOTES_LEN: usize = 10_000;
@@ -180,13 +181,17 @@ fn validate_contact_input(input: &Value, require_source: bool) -> plain_libs::an
     Ok(())
 }
 
-pub async fn execute(prefs: &Prefs, host: &Host, request: Request) -> plain_libs::anyhow::Result<Value> {
+pub async fn execute(
+    prefs: &Prefs,
+    host: &Host,
+    request: Request,
+) -> plain_libs::anyhow::Result<Value> {
     let configured: Vec<String> = prefs.get_or(
         crate::features::prefs::pref_keys::API_PERMISSIONS,
         Vec::new(),
     );
     plain_libs::anyhow::ensure!(permission_allowed(&configured), "no_permission");
-    capabilities::require(host, "TELEPHONY").await?;
+    capabilities::require(host, Capability::Telephony).await?;
     match request.action {
         Action::CreateContact | Action::UpdateContact => {
             let input = request

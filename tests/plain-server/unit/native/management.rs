@@ -55,14 +55,6 @@ async fn retired_management_roots_are_unavailable_to_local_and_authenticated_rem
             "removeScanHistory",
             r#"mutation{removeScanHistory(text:"fixture")}"#,
         ),
-        (
-            "acquireMdnsDebugSession",
-            r#"mutation{acquireMdnsDebugSession(token:"fixture"){revision}}"#,
-        ),
-        (
-            "releaseMdnsDebugSession",
-            r#"mutation{releaseMdnsDebugSession(token:"fixture"){revision}}"#,
-        ),
         ("tlsCertificateSignature", "{tlsCertificateSignature}"),
         ("systemSettings", "{systemSettings{password}}"),
         ("userSettings", "{userSettings{service}}"),
@@ -89,12 +81,7 @@ async fn retired_management_roots_are_unavailable_to_local_and_authenticated_rem
             "mutation{toggleNotificationApp(packageName:\"fixture\"){affectedCount}}",
         ),
         ("cycleAudioPlayMode", "mutation{cycleAudioPlayMode}"),
-        ("httpServer", "{httpServer{revision}}"),
         ("verifyAdbToken", "{verifyAdbToken(token:\"fixture\")}"),
-        (
-            "restartHttpServer",
-            "mutation{restartHttpServer(httpPort:0){revision}}",
-        ),
         (
             "regenerateTlsCertificate",
             "mutation{regenerateTlsCertificate}",
@@ -295,7 +282,10 @@ async fn native_preference_reads_and_notification_changes_preserve_shared_state_
         assert!(system.get(private).is_none());
     }
     let mut events = state.events.subscribe();
-    for expected in [plain_libs::serde_json::json!(["fixture.app"]), plain_libs::serde_json::json!([])] {
+    for expected in [
+        plain_libs::serde_json::json!(["fixture.app"]),
+        plain_libs::serde_json::json!([]),
+    ] {
         assert!(
             management
                 .toggle_notification_app("fixture.app".into())

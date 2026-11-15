@@ -1,4 +1,3 @@
-use plain_rs::features::access::AccessFeature;
 use crate::graphql::resolvers::mobile::contacts::types::*;
 use crate::graphql::types::ActionResult;
 use crate::graphql::types::facts::instant;
@@ -8,13 +7,15 @@ use crate::graphql::types::facts::text;
 use crate::graphql::types::facts::{host_json, provider_params};
 use crate::http::auth::public_gate;
 use plain_graphql::{Context, ID, Object};
+use plain_rs::features::access::AccessFeature;
+use plain_rs::features::capability::Capability;
 
+use plain_libs::serde_json::{Value, json};
 use plain_rs::features::prefs::Prefs;
 use plain_rs::features::services::capabilities;
 use plain_rs::features::services::contacts::write as contact_write;
 use plain_rs::features::services::contacts::write::Action;
 use plain_rs::infrastructure::host::bridge::Host;
-use plain_libs::serde_json::{Value, json};
 use std::sync::Arc;
 
 const FEATURE: AccessFeature = AccessFeature::Contacts;
@@ -32,7 +33,7 @@ impl ContactsQuery {
         limit: i32,
     ) -> plain_graphql::Result<Vec<Contact>> {
         public_gate::require(ctx, ctx.data_unchecked::<Arc<Prefs>>(), &[FEATURE])?;
-        capabilities::require(ctx.data_unchecked::<Arc<Host>>(), "TELEPHONY")
+        capabilities::require(ctx.data_unchecked::<Arc<Host>>(), Capability::Telephony)
             .await
             .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
         if public_gate::is_local(ctx) && !public_gate::require_granted(ctx, &[FEATURE]).await? {
@@ -54,7 +55,7 @@ impl ContactsQuery {
     }
 
     async fn contact_count(&self, ctx: &Context<'_>, query: String) -> plain_graphql::Result<i32> {
-        capabilities::require(ctx.data_unchecked::<Arc<Host>>(), "TELEPHONY")
+        capabilities::require(ctx.data_unchecked::<Arc<Host>>(), Capability::Telephony)
             .await
             .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
         if !public_gate::require_granted(
@@ -91,7 +92,7 @@ impl ContactsQuery {
         ctx: &Context<'_>,
     ) -> plain_graphql::Result<Vec<ContactSource>> {
         public_gate::require(ctx, ctx.data_unchecked::<Arc<Prefs>>(), &[FEATURE])?;
-        capabilities::require(ctx.data_unchecked::<Arc<Host>>(), "TELEPHONY")
+        capabilities::require(ctx.data_unchecked::<Arc<Host>>(), Capability::Telephony)
             .await
             .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
         Ok(plain_rs::features::services::contacts::projection::sources(
@@ -107,7 +108,7 @@ impl ContactsQuery {
 
     async fn contact_groups(&self, ctx: &Context<'_>) -> plain_graphql::Result<Vec<ContactGroup>> {
         public_gate::require(ctx, ctx.data_unchecked::<Arc<Prefs>>(), &[FEATURE])?;
-        capabilities::require(ctx.data_unchecked::<Arc<Host>>(), "TELEPHONY")
+        capabilities::require(ctx.data_unchecked::<Arc<Host>>(), Capability::Telephony)
             .await
             .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
         Ok(plain_rs::features::services::contacts::projection::groups(
@@ -176,7 +177,7 @@ impl ContactsMutation {
             ));
         }
         public_gate::require(ctx, ctx.data_unchecked::<Arc<Prefs>>(), &[FEATURE])?;
-        capabilities::require(ctx.data_unchecked::<Arc<Host>>(), "TELEPHONY")
+        capabilities::require(ctx.data_unchecked::<Arc<Host>>(), Capability::Telephony)
             .await
             .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
         plain_rs::features::services::phone_query::require_narrowing(

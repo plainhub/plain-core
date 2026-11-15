@@ -50,7 +50,9 @@ async fn encrypted_public_and_ble_rpc_share_auth_executor_and_receipts() {
         Arc::new(plain_rs::features::prefs::Prefs::load(&dir.path().join("system.json")).unwrap());
     prefs.set("background_service_enabled", true).unwrap();
     prefs.set("device_name", "fixture tablet").unwrap();
-    prefs.set("client_id", "706c6169-0000-8000-8000-000000000001").unwrap();
+    prefs
+        .set("client_id", "706c6169-0000-8000-8000-000000000001")
+        .unwrap();
     let (local_keypair, local_public_key) = plain_libs::crypto::ed25519_generate();
     prefs
         .set(
@@ -62,7 +64,13 @@ async fn encrypted_public_and_ble_rpc_share_auth_executor_and_receipts() {
     let db = Db::open(&dir.path().join("plain.db")).unwrap();
     let key = [7; 32];
     let (kp, public_key) = plain_libs::crypto::ed25519_generate();
-    let mut peer = DPeer::new("706c6169-89f1-81c6-8bc7-6b67c2ffa178", "phone", "", Some(443), DeviceType::Phone);
+    let mut peer = DPeer::new(
+        "706c6169-89f1-81c6-8bc7-6b67c2ffa178",
+        "phone",
+        "",
+        Some(443),
+        DeviceType::Phone,
+    );
     peer.status = PeerStatus::Paired;
     peer.key = plain_libs::utils::base64::base64_encode(&key);
     peer.public_key = plain_libs::utils::base64::base64_encode(&public_key);
@@ -97,7 +105,7 @@ async fn encrypted_public_and_ble_rpc_share_auth_executor_and_receipts() {
                         request["params"],
                         json!({
                             "peer":{"id":"706c6169-89f1-81c6-8bc7-6b67c2ffa178","port":port},
-                            "config":{"pmk":plain_libs::utils::base64::base64_encode(&[7;32]),"isClient":true,"localPort":https}
+                            "config":{"pmk":plain_libs::utils::base64::base64_encode(&[7;32]),"isClient":advertised_client_id.as_str() < "706c6169-89f1-81c6-8bc7-6b67c2ffa178","localPort":https}
                         })
                     );
 
@@ -137,7 +145,8 @@ async fn encrypted_public_and_ble_rpc_share_auth_executor_and_receipts() {
                         .find(|p| p["id"] == advertised_client_id)
                         .unwrap();
                     assert!(
-                        plain_rs::features::client_identity::parse(local["id"].as_str().unwrap()).is_some()
+                        plain_rs::features::client_identity::parse(local["id"].as_str().unwrap())
+                            .is_some()
                     );
                     assert_eq!(local["name"], "fixture tablet");
                     assert_eq!(local["deviceType"], "COMPUTER");
@@ -210,7 +219,10 @@ async fn encrypted_public_and_ble_rpc_share_auth_executor_and_receipts() {
     let content: Value = plain_libs::serde_json::from_slice(&content).unwrap();
     assert!(content.get("errors").is_none(), "{content}");
     let id = content["data"]["renamed"][0]["id"].as_str().unwrap();
-    assert_eq!(messages::get(&db, id).unwrap().unwrap().from_id, "706c6169-89f1-81c6-8bc7-6b67c2ffa178");
+    assert_eq!(
+        messages::get(&db, id).unwrap().unwrap().from_id,
+        "706c6169-89f1-81c6-8bc7-6b67c2ffa178"
+    );
     assert!(content["data"]["renamed"][0]["channelId"].is_null());
     let event = std::iter::from_fn(|| received_events.try_recv().ok())
         .take(32)
@@ -223,7 +235,9 @@ async fn encrypted_public_and_ble_rpc_share_auth_executor_and_receipts() {
     );
     for expected in [false, true] {
         if expected {
-            let mut current = peers::get(&db, "706c6169-89f1-81c6-8bc7-6b67c2ffa178").unwrap().unwrap();
+            let mut current = peers::get(&db, "706c6169-89f1-81c6-8bc7-6b67c2ffa178")
+                .unwrap()
+                .unwrap();
             current.port = Some(5443);
             peers::save(&db, &[current], SaveMode::Update).unwrap();
         }

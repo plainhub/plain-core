@@ -125,6 +125,26 @@ async fn public_discovery_lifetime(
 }
 
 pub(crate) async fn stop_locked(state: &ServerState, guard: &mut Option<PublicServer>) {
+    if let Some(listeners) = stop_services_locked(state, guard).await {
+        listeners.shutdown().await;
+    }
+}
+
+pub(crate) async fn stop_for_restart_locked(
+    state: &ServerState,
+    guard: &mut Option<PublicServer>,
+) -> Result<Option<super::HttpListeners>, String> {
+    let mut listeners = stop_services_locked(state, guard).await;
+    if let Some(listeners) = &mut listeners {
+        listeners.stop_accepting().await?;
+    }
+    Ok(listeners)
+}
+
+async fn stop_services_locked(
+    state: &ServerState,
+    guard: &mut Option<PublicServer>,
+) -> Option<super::HttpListeners> {
     state.cast.media.interrupt();
     let _control = state.peer_status.control.lock().await;
     state
@@ -158,8 +178,9 @@ pub(crate) async fn stop_locked(state: &ServerState, guard: &mut Option<PublicSe
             ..
         } = public;
         discovery.finish().await;
-        listeners.shutdown().await;
+        return Some(listeners);
     }
+    None
 }
 
 #[cfg(test)]

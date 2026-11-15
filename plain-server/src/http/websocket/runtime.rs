@@ -7,6 +7,7 @@ use plain_libs::axum::{
 };
 use plain_libs::protocols::websocket::{CloseFrame, Message, WebSocket, WebSocketUpgrade};
 use plain_libs::serde_json::{Value, json};
+use plain_rs::features::capability::Capability;
 use plain_rs::features::prefs::security::PasswordType;
 use plain_rs::features::services::confirmation_channel;
 use plain_rs::infrastructure::events::WsEvent;
@@ -207,9 +208,17 @@ pub(super) fn upgrade(
         .into_response()
 }
 
-fn login_failure(state: &ServerState, client_id: &str, ip: &str, code: u16, reason: &'static str) -> Message {
+fn login_failure(
+    state: &ServerState,
+    client_id: &str,
+    ip: &str,
+    code: u16,
+    reason: &'static str,
+) -> Message {
     let client = plain_rs::infrastructure::db::AuditEventClient {
-        client_id: client_id.to_owned(), client_ip: ip.to_owned(), ..Default::default()
+        client_id: client_id.to_owned(),
+        client_ip: ip.to_owned(),
+        ..Default::default()
     };
     match crate::http::auth::ws_login::record_failure(state, &client, reason) {
         Ok(()) => close(code, reason),
@@ -448,7 +457,7 @@ async fn run(
                 if !registered {
                     if !plain.is_empty() { let _ = socket.send(close(1008, "invalid_request")).await; break; }
                     if channel == Channel::Screen {
-                        if let Err(error) = plain_rs::features::services::capabilities::require(&state.host, "SCREEN_MIRROR").await {
+                        if let Err(error) = plain_rs::features::services::capabilities::require(&state.host, Capability::ScreenMirror).await {
                             log::warn!("Screen mirror connection: {error}");
                             let _ = socket.send(close(1008, "unsupported_capability")).await;
                             break;
@@ -519,7 +528,9 @@ async fn run(
         )
     {
         let client = plain_rs::infrastructure::db::AuditEventClient {
-            client_id: params.cid.clone(), client_ip: ip.clone(), ..Default::default()
+            client_id: params.cid.clone(),
+            client_ip: ip.clone(),
+            ..Default::default()
         };
         if let Err(error) =
             crate::http::auth::ws_login::record_failure(&state, &client, cancel_reason)
@@ -615,7 +626,7 @@ pub(crate) async fn remove_connection(state: &ServerState, id: &str) {
     };
     if reset_touch {
         match plain_rs::features::services::capabilities::snapshot(&state.host).await {
-            Ok(capabilities) if capabilities.iter().any(|value| value == "SCREEN_MIRROR") => {
+            Ok(capabilities) if capabilities.contains(&Capability::ScreenMirror) => {
                 if let Err(error) = state
                     .host
                     .call("systemScreenMirrorResetTouch", json!({}))
@@ -635,7 +646,7 @@ pub(crate) async fn dispatch_controls(state: &ServerState, payload: &[u8]) -> Re
     if controls.is_empty() {
         return Ok(());
     }
-    plain_rs::features::services::capabilities::require(&state.host, "SCREEN_MIRROR")
+    plain_rs::features::services::capabilities::require(&state.host, Capability::ScreenMirror)
         .await
         .map_err(|error| error.to_string())?;
     if let Err(error) = state

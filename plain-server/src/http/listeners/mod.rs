@@ -6,8 +6,8 @@ pub(crate) mod lifecycle;
 #[cfg(feature = "core")]
 mod public_server;
 
-use plain_libs::protocols::http_client;
 use plain_libs::axum::{Extension, Router};
+use plain_libs::protocols::http_client;
 
 use crate::http::ConnectionScheme;
 use plain_libs::protocols::https::{self, ServerConfig};
@@ -22,6 +22,8 @@ pub struct HttpListeners {
     stop: watch::Sender<bool>,
     tasks: Vec<JoinHandle<()>>,
     failure: watch::Receiver<Option<String>>,
+    listener_closed: Vec<tokio::sync::oneshot::Receiver<()>>,
+    drain: Option<tokio::sync::oneshot::Sender<()>>,
 }
 
 impl HttpListeners {
@@ -58,12 +60,16 @@ impl HttpListeners {
             .into_make_service_with_connect_info::<SocketAddr>();
         let (failure_sender, failure) = watch::channel(None);
         let http_failure = failure_sender.clone();
+        let (drain, drained) = tokio::sync::oneshot::channel();
+        let (http_closed, http_receiver) = tokio::sync::oneshot::channel();
+        let (https_closed, https_receiver) = tokio::sync::oneshot::channel();
         let http_task = tokio::spawn(async move {
             let mut task_guard = ListenerTaskGuard::new("HTTP", http_failure.clone());
             if let Err(error) = plain_libs::axum::serve(http, app)
                 .with_graceful_shutdown(async move {
                     let _ = receiver.changed().await;
                 })
+                .on_listener_closed(http_closed)
                 .await
             {
                 let _ = http_failure.send(Some(format!("HTTP serve failed: {error}")));
@@ -77,6 +83,8 @@ impl HttpListeners {
                 router.layer(Extension(ConnectionScheme("https"))),
                 tls,
                 tls_stop,
+                Some(https_closed),
+                Some(drained),
             )
             .await
             {
@@ -90,6 +98,8 @@ impl HttpListeners {
             stop,
             tasks: vec![http_task, tls_task],
             failure,
+            listener_closed: vec![http_receiver, https_receiver],
+            drain: Some(drain),
         };
         if let Err(error) = listeners.check_health().await {
             listeners.shutdown().await;
@@ -138,8 +148,19 @@ impl HttpListeners {
         .map_err(|_| "HTTP/HTTPS server readiness timed out".to_string())?
     }
 
+    pub(crate) async fn stop_accepting(&mut self) -> Result<(), String> {
+        let _ = self.stop.send(true);
+        for closed in self.listener_closed.drain(..) {
+            closed
+                .await
+                .map_err(|_| "HTTP listener ended before shutdown acknowledgment")?;
+        }
+        Ok(())
+    }
+
     pub async fn shutdown(mut self) {
         let _ = self.stop.send(true);
+        self.drain.take();
         let deadline = tokio::time::Instant::now() + Duration::from_secs(2);
         for task in &mut self.tasks {
             if tokio::time::timeout_at(deadline, &mut *task).await.is_err() {

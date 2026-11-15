@@ -33,6 +33,8 @@ pub async fn serve(
     router: Router,
     config: ServerConfig,
     mut stop: watch::Receiver<bool>,
+    listener_closed: Option<tokio::sync::oneshot::Sender<()>>,
+    drain: Option<tokio::sync::oneshot::Receiver<()>>,
 ) -> io::Result<()> {
     listener.set_nonblocking(true)?;
     let listener = TcpListener::from_std(listener)?;
@@ -70,6 +72,12 @@ pub async fn serve(
     }
 
     drop(listener);
+    if let Some(sender) = listener_closed {
+        let _ = sender.send(());
+    }
+    if let Some(drain) = drain {
+        let _ = drain.await;
+    }
     if time::timeout(Duration::from_secs(1), async {
         while connections.join_next().await.is_some() {}
     })

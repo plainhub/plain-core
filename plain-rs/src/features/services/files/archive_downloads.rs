@@ -1,3 +1,4 @@
+use crate::features::capability::Capability;
 use crate::features::enums::DataType;
 use crate::features::services::files::archives::ArchiveReader;
 use crate::runtime::Runtime as CoreRuntime;
@@ -340,7 +341,7 @@ async fn package_entries(
     state: &CoreRuntime,
     query: &str,
 ) -> plain_libs::anyhow::Result<Vec<(PathBuf, String)>> {
-    crate::features::services::capabilities::require(&state.host, "PACKAGES").await?;
+    crate::features::services::capabilities::require(&state.host, Capability::Packages).await?;
     let facts = state
         .host
         .call("systemPackageFacts", json!({}))

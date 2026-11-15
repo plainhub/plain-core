@@ -102,6 +102,22 @@ type EventVolume {
 	fileSystem: String
 }
 
+type HttpServer {
+	state: HttpServerState!
+	addresses: [String!]!
+	onlineClients: [ID!]!
+	remoteAccess: Boolean!
+	mdnsHostname: String!
+}
+
+type HttpServerState {
+	revision: Long!
+	restarting: Boolean!
+	httpPort: Int!
+	httpsPort: Int!
+	error: String!
+}
+
 type LoginEventData {
 	sessionType: SessionType!
 }
@@ -126,6 +142,7 @@ type VolumeFailedEventData {
 type Mutation {
 	clearAppCache: Boolean!
 	formatDisk(path: String!): Boolean!
+	restartHttpServer(httpPort: Int, httpsPort: Int): HttpServerState!
 	setMountAlias(id: ID!, alias: String!): Boolean!
 }
 
@@ -134,4 +151,5 @@ type Query {
 	appUpdate: AppUpdate!
 	disks: [Disk!]!
 	events(query: String!, offset: Int!, limit: Int!): [Event!]!
+	httpServer: HttpServer!
 }

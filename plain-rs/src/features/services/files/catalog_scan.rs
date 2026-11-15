@@ -1,3 +1,4 @@
+use crate::features::capability::Capability;
 #[cfg(feature = "runtime-media")]
 mod directory_walk;
 #[cfg(feature = "runtime-media")]
@@ -32,8 +33,7 @@ async fn configure_sources(
     }
     if !capabilities
         .map_err(|error| error.to_string())?
-        .iter()
-        .any(|capability| capability == "MEDIA_SCAN")
+        .contains(&Capability::MediaScan)
     {
         return Ok(());
     }

@@ -3,6 +3,7 @@ use crate::management_socket;
 use crate::storage;
 use plain_libs::anyhow::{Result, anyhow};
 use plain_rs::features::access::AccessFeature;
+use plain_rs::features::capability::Capability;
 use plain_rs::features::prefs::pref_keys::API_PERMISSIONS;
 use plain_rs::infrastructure::platform::system::consts::AppPaths;
 use plain_server::server::{ContentServer, PairingApproval};
@@ -65,7 +66,7 @@ impl Service {
         plain_rs::infrastructure::platform::system::log::set_file(&log_file)?;
         core.set_log_file(&log_file)
             .map_err(plain_libs::anyhow::Error::msg)?;
-        let runtime = Arc::new(Host::new(core.clone(), capabilities()));
+        let runtime = Arc::new(Host::new(core.clone(), capabilities));
         let host = tokio::spawn(runtime.run());
         let mut service = Self {
             core,
@@ -179,31 +180,32 @@ impl Service {
     }
 }
 
-fn capabilities() -> Vec<String> {
-    let mut capabilities = vec!["MEDIA_SCAN".into(), "APP_UPDATES".into()];
-    capabilities.extend(
-        plain_rs::features::services::files::media_action_io::capabilities()
-            .iter()
-            .map(|value| (*value).to_owned()),
-    );
+const CLI: &[Capability] = &[
+    Capability::MediaScan,
+    Capability::AppUpdates,
+    Capability::HttpServer,
+];
+
+#[cfg(target_os = "linux")]
+const CLI_LINUX: &[Capability] = &[Capability::AppRelaunch];
+
+fn capabilities() -> Vec<Capability> {
+    let mut capabilities = CLI.to_vec();
+    capabilities.extend(plain_rs::features::services::files::media_action_io::capabilities());
     #[cfg(target_os = "linux")]
     {
-        capabilities.push("APP_RELAUNCH".into());
-        if has_command("lsblk") {
-            capabilities.push("DISK_MANAGER".into());
-        }
-    }
-    if management_socket::available() {
-        capabilities.push("LOCAL_LOGIN_APPROVAL".into());
+        capabilities.extend_from_slice(CLI_LINUX);
+        capabilities.extend(has_command("lsblk").then_some(Capability::DiskManager));
     }
     capabilities
 }
 
+#[cfg(target_os = "linux")]
 fn has_command(command: &str) -> bool {
     std::env::var_os("PATH").is_some_and(|paths| {
         std::env::split_paths(&paths).any(|path| {
             let executable = path.join(command);
-            executable.is_file() || cfg!(windows) && executable.with_extension("exe").is_file()
+            executable.is_file()
         })
     })
 }

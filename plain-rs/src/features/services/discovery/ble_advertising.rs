@@ -1,7 +1,8 @@
+use crate::features::capability::Capability;
 use crate::runtime::Runtime as CoreRuntime;
 use plain_libs::anyhow::{Result, ensure};
-use serde::Deserialize;
 use plain_libs::serde_json::json;
+use serde::Deserialize;
 use std::sync::Mutex;
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
@@ -100,8 +101,7 @@ impl Runtime {
         let supported = if facts.available {
             crate::features::services::capabilities::snapshot(&state.host)
                 .await?
-                .iter()
-                .any(|value| value == "BLE")
+                .contains(&Capability::Ble)
         } else {
             false
         };

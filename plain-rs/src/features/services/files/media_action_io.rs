@@ -1,3 +1,4 @@
+use crate::features::capability::Capability;
 use crate::features::enums::DataType;
 use crate::features::media::actions::Action;
 use crate::features::media::actions::Item;
@@ -11,32 +12,30 @@ use std::path::{Path, PathBuf};
 #[cfg(feature = "runtime-media")]
 use std::sync::Arc;
 
-pub fn capabilities() -> &'static [&'static str] {
-    if cfg!(any(target_os = "android", target_os = "ios")) {
-        &[]
-    } else {
-        &["MEDIA_DELETE", "MEDIA_MOVE"]
-    }
+#[cfg(any(target_os = "android", target_os = "ios"))]
+const FILESYSTEM: &[Capability] = &[];
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+const FILESYSTEM: &[Capability] = &[Capability::MediaDelete, Capability::MediaMove];
+
+pub fn capabilities() -> &'static [Capability] {
+    FILESYSTEM
 }
 
-pub async fn capability_list(host: &Host) -> Result<Vec<String>, String> {
+pub async fn capability_list(host: &Host) -> Result<Vec<Capability>, String> {
     if cfg!(any(target_os = "android", target_os = "ios")) {
         crate::features::services::capabilities::snapshot(host)
             .await
             .map_err(|error| error.to_string())
     } else {
-        Ok(capabilities()
-            .iter()
-            .map(|value| (*value).to_owned())
-            .collect())
+        Ok(capabilities().to_vec())
     }
 }
 
-pub fn action_capability(action: Action) -> &'static str {
+pub fn action_capability(action: Action) -> Capability {
     match action {
-        Action::Delete => "MEDIA_DELETE",
-        Action::Move => "MEDIA_MOVE",
-        Action::Trash | Action::Restore => "MEDIA_TRASH",
+        Action::Delete => Capability::MediaDelete,
+        Action::Move => Capability::MediaMove,
+        Action::Trash | Action::Restore => Capability::MediaTrash,
     }
 }
 

@@ -35,31 +35,65 @@ async fn management_pairing_with_cli_requires_password_without_second_approval()
     let remote_state = remote.core.runtime();
     let local_id = state.native_client_id().unwrap();
     let remote_id = remote_state.native_client_id().unwrap();
-    state.nearby_devices.observe(plain_rs::features::discovery::nearby_devices::Device {
-        id:remote_id.clone(),name:"Fixture".into(),ips:vec!["127.0.0.1".into()],
-        port:remote.core.http_ports().await.unwrap().1,remote_access:Some(true),
-        signature_public_key:plain_libs::utils::base64::base64_encode(&plain_rs::features::services::peers::peer_wire::signing_keypair(&remote_state.prefs).unwrap()[32..]),
-        device_type:plain_rs::features::chat::enums::DeviceType::Computer,version:"1".into(),platform:"fixture".into(),
-        last_seen_at:plain_rs::infrastructure::db::now_iso(),discovery_methods:vec![plain_rs::features::discovery::nearby_devices::DiscoveryMethod::Lan],
-    }).unwrap();
+    state
+        .nearby_devices
+        .observe(plain_rs::features::discovery::nearby_devices::Device {
+            id: remote_id.clone(),
+            name: "Fixture".into(),
+            ips: vec!["127.0.0.1".into()],
+            port: remote.core.http_ports().await.unwrap().1,
+            remote_access: Some(true),
+            signature_public_key: plain_libs::utils::base64::base64_encode(
+                &plain_rs::features::services::peers::peer_wire::signing_keypair(
+                    &remote_state.prefs,
+                )
+                .unwrap()[32..],
+            ),
+            device_type: plain_rs::features::chat::enums::DeviceType::Computer,
+            version: "1".into(),
+            platform: "fixture".into(),
+            last_seen_at: plain_rs::infrastructure::db::now_iso(),
+            discovery_methods: vec![
+                plain_rs::features::discovery::nearby_devices::DiscoveryMethod::Lan,
+            ],
+        })
+        .unwrap();
     for (password, expected) in [
         ("wrong password", "PAIRING_FAILED"),
         ("fixture password", "PAIRING_COMPLETED"),
     ] {
         let mut events = state.events.subscribe();
-        assert!(pairing_attempts::start(state,remote_id.clone(),Mode::Manage,Some(password.into()),None).await.unwrap());
-        let outcome = tokio::time::timeout(std::time::Duration::from_secs(10),async {
+        assert!(
+            pairing_attempts::start(
+                state,
+                remote_id.clone(),
+                Mode::Manage,
+                Some(password.into()),
+                None
+            )
+            .await
+            .unwrap()
+        );
+        let outcome = tokio::time::timeout(std::time::Duration::from_secs(10), async {
             while let Ok(event) = events.recv().await {
-                if matches!(event.event_type,"PAIRING_COMPLETED"|"PAIRING_FAILED") { return event; }
+                if matches!(event.event_type, "PAIRING_COMPLETED" | "PAIRING_FAILED") {
+                    return event;
+                }
             }
             panic!("pairing notifications closed")
-        }).await.unwrap();
-        assert_eq!(outcome.event_type,expected,"{}",outcome.payload);
+        })
+        .await
+        .unwrap();
+        assert_eq!(outcome.event_type, expected, "{}", outcome.payload);
         let session = remote_state.db.session_get(&local_id).unwrap();
         let peer = peers::get(&state.db, &remote_id).unwrap();
         let remote_peer = peers::get(&remote_state.db, &local_id).unwrap();
         if expected == "PAIRING_FAILED" {
-            assert_eq!(plain_libs::serde_json::from_str::<plain_libs::serde_json::Value>(&outcome.payload).unwrap()["error"], "invalid_password");
+            assert_eq!(
+                plain_libs::serde_json::from_str::<plain_libs::serde_json::Value>(&outcome.payload)
+                    .unwrap()["error"],
+                "invalid_password"
+            );
             assert!(session.is_none());
             assert!(peer.is_none() && remote_peer.is_none());
             continue;
@@ -151,10 +185,14 @@ async fn service_grants_remote_file_features_and_preserves_other_settings_across
             .unwrap();
             assert!(response.starts_with("HTTP/1.1 200"));
             let (_, body) = response.split_once("\r\n\r\n").unwrap();
-            let result: plain_libs::serde_json::Value = plain_libs::serde_json::from_str(body).unwrap();
+            let result: plain_libs::serde_json::Value =
+                plain_libs::serde_json::from_str(body).unwrap();
             assert!(result["errors"].is_null(), "{result}");
             let data = &result["data"];
-            assert_eq!(data["app"]["access"], plain_libs::serde_json::json!(defaults));
+            assert_eq!(
+                data["app"]["access"],
+                plain_libs::serde_json::json!(defaults)
+            );
             assert!(
                 data["app"]["capabilities"]
                     .as_array()
@@ -244,7 +282,14 @@ async fn service_starts_real_listeners_and_releases_them_and_the_data_lock_on_sh
         vec![source.to_string_lossy().into_owned()]
     );
     tokio::time::timeout(std::time::Duration::from_secs(5), async {
-        while service.core.runtime().media_watch.lock().unwrap().is_empty() {
+        while service
+            .core
+            .runtime()
+            .media_watch
+            .lock()
+            .unwrap()
+            .is_empty()
+        {
             tokio::time::sleep(std::time::Duration::from_millis(10)).await;
         }
     })
@@ -311,11 +356,19 @@ async fn service_starts_real_listeners_and_releases_them_and_the_data_lock_on_sh
             .await
             .is_err()
     );
-    assert!(management_socket::requests(&paths.data_dir, None).await.is_err());
+    assert!(
+        management_socket::requests(&paths.data_dir, None)
+            .await
+            .is_err()
+    );
     let mut invalid = options();
     invalid.web_root = Some(directory.path().join("missing-web"));
     assert!(Service::start(&paths, invalid).await.is_err());
-    assert!(management_socket::requests(&paths.data_dir, None).await.is_err());
+    assert!(
+        management_socket::requests(&paths.data_dir, None)
+            .await
+            .is_err()
+    );
     let reopened = ContentServer::open_with_cache(&paths.data_dir, &paths.cache_dir).unwrap();
     reopened.stop_core().await;
 }
@@ -348,5 +401,201 @@ async fn unconfigured_service_fails_before_listeners_or_passwordless_access() {
             .unwrap()
             .is_none()
     );
-    assert!(management_socket::requests(&paths.data_dir, None).await.is_err());
+    assert!(
+        management_socket::requests(&paths.data_dir, None)
+            .await
+            .is_err()
+    );
+}
+
+#[tokio::test]
+async fn web_http_server_card_reads_state_and_changes_the_serving_port() {
+    use plain_libs::protocols::http_client;
+    let directory = plain_libs::temporary::tempdir().unwrap();
+    let paths = AppPaths {
+        data_dir: directory.path().join("data"),
+        cache_dir: directory.path().join("cache"),
+        tls_cert: directory.path().join("tls.pem"),
+        tls_key: directory.path().join("tls.key"),
+    };
+    std::fs::create_dir(&paths.data_dir).unwrap();
+    let prefs = plain_rs::features::prefs::Prefs::load(&plain_rs::features::prefs::default_path(
+        &paths.data_dir,
+    ))
+    .unwrap();
+    prefs.set("http_port", 0).unwrap();
+    prefs.set("https_port", 0).unwrap();
+    plain_rs::features::prefs::security::set_password_login(&prefs, "owned web fixture").unwrap();
+    let service = Service::start(&paths, Options::default()).await.unwrap();
+    let prefs = service.core.shared_preferences().unwrap();
+    let original_ports = service.core.http_ports().await.unwrap();
+    let session = service
+        .core
+        .native_management()
+        .unwrap()
+        .create_session("HTTP card fixture".into())
+        .unwrap();
+    let client = http_client::builder()
+        .danger_accept_invalid_certs(true)
+        .timeout(std::time::Duration::from_secs(5))
+        .build()
+        .unwrap();
+    let port = i32::from(service.core.http_ports().await.unwrap().0);
+    let request = |port, query: &'static str| {
+        client
+            .post(format!("http://127.0.0.1:{port}/graphql"))
+            .header("C-ID", &session.client_id)
+            .bearer_auth(&session.token)
+            .header("Content-Type", "application/json")
+            .body(plain_libs::serde_json::json!({"query":query}).to_string())
+    };
+    let response: plain_libs::serde_json::Value = plain_libs::serde_json::from_str(&request(port, "{ app { capabilities } httpServer { state { revision restarting httpPort httpsPort error } addresses onlineClients } }")
+        .send().await.unwrap().text().await.unwrap()).unwrap();
+    assert!(response["errors"].is_null(), "{response}");
+    assert!(
+        response["data"]["app"]["capabilities"]
+            .as_array()
+            .unwrap()
+            .contains(&plain_libs::serde_json::json!(Capability::HttpServer))
+    );
+    assert_eq!(response["data"]["httpServer"]["state"]["httpPort"], port);
+    assert!(response["data"]["httpServer"]["addresses"].is_array());
+    assert!(response["data"]["httpServer"]["onlineClients"].is_array());
+    let denied: plain_libs::serde_json::Value = plain_libs::serde_json::from_str(
+        &request(
+            port,
+            "mutation { setPref(key:\"remote_access\",value:false) }",
+        )
+        .send()
+        .await
+        .unwrap()
+        .text()
+        .await
+        .unwrap(),
+    )
+    .unwrap();
+    assert!(denied["errors"].is_array(), "{denied}");
+    assert!(prefs.get_or("remote_access", true));
+    let renamed: plain_libs::serde_json::Value = plain_libs::serde_json::from_str(
+        &request(
+            port,
+            "mutation { setPref(key:\"mdns_hostname\",value:\"fixture-http-card.local\") }",
+        )
+        .send()
+        .await
+        .unwrap()
+        .text()
+        .await
+        .unwrap(),
+    )
+    .unwrap();
+    assert!(renamed["errors"].is_null(), "{renamed}");
+    assert_eq!(
+        prefs.get_or("mdns_hostname", String::new()),
+        "fixture-http-card.local"
+    );
+    for invalid in [
+        "mutation { restartHttpServer(httpPort:-1) { revision } }",
+        "mutation { restartHttpServer(httpsPort:65536) { revision } }",
+    ] {
+        let response: plain_libs::serde_json::Value = plain_libs::serde_json::from_str(
+            &request(port, invalid)
+                .send()
+                .await
+                .unwrap()
+                .text()
+                .await
+                .unwrap(),
+        )
+        .unwrap();
+        assert!(response["errors"].is_array(), "{response}");
+        assert_eq!(service.core.runtime().http_server.snapshot().revision.0, 0);
+    }
+    let response: plain_libs::serde_json::Value = plain_libs::serde_json::from_str(
+        &request(
+            port,
+            "mutation { restartHttpServer(httpPort:0) { revision restarting } }",
+        )
+        .send()
+        .await
+        .unwrap()
+        .text()
+        .await
+        .unwrap(),
+    )
+    .unwrap();
+    assert!(response["errors"].is_null(), "{response}");
+    assert_eq!(response["data"]["restartHttpServer"]["restarting"], false);
+    let state = service.core.runtime().http_server.snapshot();
+    let completed = tokio::time::timeout(
+        std::time::Duration::from_secs(10),
+        service
+            .core
+            .runtime()
+            .http_server
+            .wait_finished(state.revision),
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    assert!(completed.error.is_empty(), "{}", completed.error);
+    assert_eq!(completed.https_port, i32::from(original_ports.1));
+    let response: plain_libs::serde_json::Value = plain_libs::serde_json::from_str(
+        &request(
+            completed.http_port,
+            "{httpServer{state{revision restarting httpPort httpsPort error}}}",
+        )
+        .send()
+        .await
+        .unwrap()
+        .text()
+        .await
+        .unwrap(),
+    )
+    .unwrap();
+    assert!(response["errors"].is_null(), "{response}");
+    assert_eq!(
+        response["data"]["httpServer"]["state"]["httpPort"],
+        completed.http_port
+    );
+    let unauthenticated = client
+        .post(format!("http://127.0.0.1:{}/graphql", completed.http_port))
+        .header("Content-Type", "application/json")
+        .body("{\"query\":\"{httpServer{remoteAccess}}\"}")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(unauthenticated.status().as_u16(), 401);
+    let tls_response = client.post(format!("https://127.0.0.1:{}/graphql", completed.https_port))
+        .header("C-ID", &session.client_id).bearer_auth(&session.token)
+        .header("Content-Type", "application/json")
+        .body(plain_libs::serde_json::json!({"query":"mutation { restartHttpServer(httpsPort:0) { restarting httpPort httpsPort error } }"}).to_string())
+        .send().await.unwrap().text().await.unwrap();
+    let tls_response: plain_libs::serde_json::Value =
+        plain_libs::serde_json::from_str(&tls_response).unwrap();
+    assert!(tls_response["errors"].is_null(), "{tls_response}");
+    assert_eq!(
+        tls_response["data"]["restartHttpServer"]["restarting"],
+        false
+    );
+    assert_eq!(
+        tls_response["data"]["restartHttpServer"]["httpPort"],
+        completed.http_port
+    );
+    assert_eq!(tls_response["data"]["restartHttpServer"]["error"], "");
+    let https_port = tls_response["data"]["restartHttpServer"]["httpsPort"]
+        .as_i64()
+        .unwrap();
+    assert_eq!(
+        client
+            .get(format!("https://127.0.0.1:{https_port}/health"))
+            .send()
+            .await
+            .unwrap()
+            .text()
+            .await
+            .unwrap(),
+        "OK"
+    );
+    service.shutdown().await;
 }

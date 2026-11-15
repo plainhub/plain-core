@@ -35,7 +35,7 @@ impl<'a> Preferences<'a> {
 
     pub async fn set(&self, key: &str, value: Value) -> plain_libs::anyhow::Result<bool> {
         plain_libs::anyhow::ensure!(
-            crate::features::prefs::pref_keys::writable(key, true),
+            crate::features::prefs::pref_keys::writable(key, true, &[]),
             "Preference is not accessible"
         );
         plain_libs::anyhow::ensure!(value.to_string().len() <= 65536, "invalid_pref_value");

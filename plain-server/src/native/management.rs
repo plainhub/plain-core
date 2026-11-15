@@ -94,13 +94,7 @@ impl NativeManagement {
         https_port: Option<u16>,
     ) -> Result<HttpServerState, String> {
         self.state.native_client_id()?;
-        let receipt = crate::http::listeners::control::restart(&self.state, http_port, https_port)?;
-        let mut stop = self.state.stop.clone();
-        tokio::select! {
-            biased;
-            _ = stop.wait_for(|stopped| *stopped) => Err("Rust core stopped".into()),
-            result = self.state.http_server.wait_finished(receipt.revision) => result,
-        }
+        crate::http::listeners::control::restart_and_wait(&self.state, http_port, https_port).await
     }
 
     pub async fn ble_incoming(

@@ -657,7 +657,7 @@ async fn stale_bootstrap_unauthorized_cannot_revoke_a_replacement_management_ses
         .unwrap();
     let (stop, receiver) = watch::channel(false);
     let upstream = tokio::spawn(plain_libs::protocols::https::serve(
-        listener, router, tls, receiver,
+        listener, router, tls, receiver, None, None,
     ));
     for changed in [false, true] {
         let executor = local.native_graphql().unwrap();

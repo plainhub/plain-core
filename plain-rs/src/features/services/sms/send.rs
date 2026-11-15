@@ -1,3 +1,4 @@
+use crate::features::capability::Capability;
 use crate::features::prefs::Prefs;
 use crate::infrastructure::host::bridge::Host;
 use plain_libs::serde_json::{Value, json};
@@ -83,7 +84,7 @@ pub async fn execute(
         Vec::new(),
     );
     plain_libs::anyhow::ensure!(permission_allowed(&configured), "no_permission");
-    crate::features::services::capabilities::require(host, "TELEPHONY").await?;
+    crate::features::services::capabilities::require(host, Capability::Telephony).await?;
     let requires_confirmation = !request.attachment_paths.is_empty();
     plain_libs::anyhow::ensure!(
         !requires_confirmation || request.subscription_id.is_none(),

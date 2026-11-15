@@ -1,12 +1,12 @@
-use crate::graphql::resolvers::app::types::Capability;
 use crate::graphql::types::KeyValuePair;
 use plain_graphql::{ComplexObject, Context, ID, Object, SimpleObject};
+use plain_rs::features::capability::Capability;
 
+use plain_libs::serde_json::{Value, json};
 use plain_rs::features::access::AccessFeature;
 use plain_rs::features::services::device::types::*;
 use plain_rs::infrastructure::host::bridge::Host;
 use plain_rs::infrastructure::types::Long;
-use plain_libs::serde_json::{Value, json};
 use std::sync::Arc;
 
 #[derive(SimpleObject, Clone)]
@@ -18,13 +18,16 @@ pub struct App {
     pub device_name: String,
     pub developer_mode: bool,
     #[graphql(skip)]
-    capabilities_sample: Arc<tokio::sync::OnceCell<Result<Vec<String>, String>>>,
+    capabilities_sample: Arc<tokio::sync::OnceCell<Result<Vec<Capability>, String>>>,
     #[graphql(skip)]
     access_sample: Arc<tokio::sync::OnceCell<Result<Vec<AccessFeature>, String>>>,
 }
 
 impl App {
-    async fn capability_names(&self, ctx: &Context<'_>) -> plain_graphql::Result<&Vec<String>> {
+    async fn capability_sample(
+        &self,
+        ctx: &Context<'_>,
+    ) -> plain_graphql::Result<&Vec<Capability>> {
         self.capabilities_sample
             .get_or_init(|| async {
                 plain_rs::features::services::capabilities::snapshot(
@@ -37,13 +40,16 @@ impl App {
             .as_ref()
             .map_err(|error| plain_graphql::Error::new(error.clone()))
     }
-    async fn granted_access(&self, ctx: &Context<'_>) -> plain_graphql::Result<&Vec<AccessFeature>> {
+    async fn granted_access(
+        &self,
+        ctx: &Context<'_>,
+    ) -> plain_graphql::Result<&Vec<AccessFeature>> {
         self.access_sample
             .get_or_init(|| async {
                 let host = ctx.data::<Arc<Host>>().map_err(|error| error.message)?;
                 plain_rs::features::services::device::access::snapshot_with_capabilities(
                     host,
-                    self.capability_names(ctx)
+                    self.capability_sample(ctx)
                         .await
                         .map_err(|error| error.message)?,
                 )
@@ -95,18 +101,13 @@ impl App {
         ))
     }
     async fn capabilities(&self, ctx: &Context<'_>) -> plain_graphql::Result<Vec<Capability>> {
-        let mut names = self.capability_names(ctx).await?.clone();
-        names.extend(
-            plain_rs::features::services::files::browser::capabilities()
-                .into_iter()
-                .map(str::to_owned),
-        );
-        let mut seen = std::collections::HashSet::new();
-        Ok(names
-            .into_iter()
-            .filter(|name| seen.insert(name.clone()))
-            .filter_map(|name| Capability::parse(&name))
-            .collect())
+        let mut capabilities = self.capability_sample(ctx).await?.clone();
+        for capability in plain_rs::features::services::files::browser::capabilities() {
+            if !capabilities.contains(&capability) {
+                capabilities.push(capability);
+            }
+        }
+        Ok(capabilities)
     }
     fn build_channel(&self, ctx: &Context<'_>) -> plain_graphql::Result<AppChannelType> {
         Ok(app_channel(
@@ -335,7 +336,7 @@ impl DeviceMutation {
     async fn relaunch_app(&self, ctx: &Context<'_>) -> plain_graphql::Result<bool> {
         plain_rs::features::services::capabilities::require(
             ctx.data::<Arc<Host>>()?,
-            "APP_RELAUNCH",
+            Capability::AppRelaunch,
         )
         .await
         .map_err(|error| plain_graphql::Error::new(error.to_string()))?;

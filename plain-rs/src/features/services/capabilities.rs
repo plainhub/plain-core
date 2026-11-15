@@ -1,8 +1,9 @@
+use crate::features::capability::Capability;
 use crate::infrastructure::host::bridge::Host;
 use plain_libs::anyhow::{Result, anyhow, bail};
 
-pub async fn snapshot(host: &Host) -> Result<Vec<String>> {
-    plain_libs::serde_json::from_value(
+pub async fn snapshot(host: &Host) -> Result<Vec<Capability>> {
+    crate::features::capability::deserialize_list(
         host.call("systemCapabilities", plain_libs::serde_json::json!({}))
             .await
             .map_err(plain_libs::anyhow::Error::msg)?,
@@ -10,14 +11,14 @@ pub async fn snapshot(host: &Host) -> Result<Vec<String>> {
     .map_err(|error| anyhow!("invalid platform capabilities: {error}"))
 }
 
-pub fn require_list(capabilities: &[String], capability: &str) -> Result<()> {
-    if capabilities.iter().any(|value| value == capability) {
+pub fn require_list(capabilities: &[Capability], capability: Capability) -> Result<()> {
+    if capabilities.contains(&capability) {
         return Ok(());
     }
     bail!("unsupported capability {capability}")
 }
 
-pub async fn require(host: &Host, capability: &str) -> Result<()> {
+pub async fn require(host: &Host, capability: Capability) -> Result<()> {
     require_list(&snapshot(host).await?, capability)
 }
 

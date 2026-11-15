@@ -2,6 +2,7 @@ use crate::{http::websocket::runtime, server::ServerState};
 use futures_util::{SinkExt, StreamExt};
 use plain_libs::anyhow::{Result, anyhow, ensure};
 use plain_libs::tokio_tungstenite::tungstenite::{Message, protocol::WebSocketConfig};
+use plain_rs::features::capability::Capability;
 use plain_rs::features::services::peers::managed_resources::PeerRoute;
 use plain_rs::infrastructure::{
     host::request_scope::NativeRequestScope,
@@ -260,7 +261,8 @@ async fn local(
         .native_client_id()
         .map_err(plain_libs::anyhow::Error::msg)?;
     if session.kind == SocketKind::Screen {
-        plain_rs::features::services::capabilities::require(&state.host, "SCREEN_MIRROR").await?;
+        plain_rs::features::services::capabilities::require(&state.host, Capability::ScreenMirror)
+            .await?;
     }
     let channel = session.kind.channel();
     let mut events = channel.subscribe(state);

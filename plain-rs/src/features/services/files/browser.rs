@@ -1,3 +1,4 @@
+use crate::features::capability::Capability;
 use sha2::{Digest, Sha256};
 use std::{
     path::{Path, PathBuf},
@@ -11,10 +12,10 @@ pub enum Operation {
     Transcode,
 }
 impl Operation {
-    fn capability(self) -> &'static str {
+    fn capability(self) -> Capability {
         match self {
-            Self::Remux => "VIDEO_REMUX",
-            Self::Transcode => "VIDEO_TRANSCODE",
+            Self::Remux => Capability::VideoRemux,
+            Self::Transcode => Capability::VideoTranscode,
         }
     }
     fn key(self) -> &'static str {
@@ -69,7 +70,7 @@ impl Runtime {
         self.convert_with(
             path,
             operation,
-            || async { Ok(capabilities().into_iter().map(str::to_owned).collect()) },
+            || async { Ok(capabilities()) },
             |input, output| async move {
                 if operation == Operation::Remux {
                     return media_task(move |canceled| {
@@ -146,7 +147,7 @@ impl Runtime {
     ) -> Result<Option<PathBuf>, String>
     where
         C: FnOnce() -> CF,
-        CF: std::future::Future<Output = Result<Vec<String>, String>>,
+        CF: std::future::Future<Output = Result<Vec<Capability>, String>>,
         E: FnOnce(PathBuf, Arc<Output>) -> EF,
         EF: std::future::Future<Output = Result<bool, String>>,
     {
@@ -178,7 +179,7 @@ impl Runtime {
         let capabilities = capabilities().await?;
         if !capabilities
             .iter()
-            .any(|name| name == operation.capability())
+            .any(|name| *name == operation.capability())
         {
             return Ok(None);
         }
@@ -193,7 +194,9 @@ impl Runtime {
         tokio::fs::create_dir_all(parent)
             .await
             .map_err(|error| error.to_string())?;
-        let temporary = Arc::new(Output(parent.join(format!("{}.mp4", plain_libs::utils::uuid::Uuid::new_v4()))));
+        let temporary = Arc::new(Output(
+            parent.join(format!("{}.mp4", plain_libs::utils::uuid::Uuid::new_v4())),
+        ));
         let reservation = temporary.clone();
         tokio::task::spawn_blocking(move || {
             std::fs::OpenOptions::new()
@@ -238,44 +241,29 @@ fn cache_path(root: &Path, path: &str, source: &Source, operation: Operation) ->
         .join(&key[..2])
         .join(format!("{key}.mp4"))
 }
-#[cfg(any(
-    test,
-    not(any(
-        target_os = "android",
-        target_os = "ios",
-        target_os = "macos",
-        target_os = "windows"
-    ))
-))]
-fn declared_capabilities(available: bool) -> Vec<&'static str> {
-    if available {
-        vec!["VIDEO_REMUX", "VIDEO_TRANSCODE"]
-    } else {
-        vec!["VIDEO_REMUX"]
-    }
+const VIDEO_BASE: &[Capability] = &[Capability::VideoRemux];
+
+fn declared_capabilities(transcode: bool) -> Vec<Capability> {
+    VIDEO_BASE
+        .iter()
+        .copied()
+        .chain(transcode.then_some(Capability::VideoTranscode))
+        .collect()
 }
-pub fn capabilities() -> Vec<&'static str> {
+
+pub fn capabilities() -> Vec<Capability> {
     #[cfg(target_os = "android")]
-    {
-        if crate::infrastructure::platform::android::media::can_transcode() {
-            vec!["VIDEO_REMUX", "VIDEO_TRANSCODE"]
-        } else {
-            vec!["VIDEO_REMUX"]
-        }
-    }
+    let transcode = crate::infrastructure::platform::android::media::can_transcode();
     #[cfg(any(target_os = "macos", target_os = "ios", target_os = "windows"))]
-    {
-        vec!["VIDEO_REMUX", "VIDEO_TRANSCODE"]
-    }
+    let transcode = true;
     #[cfg(not(any(
         target_os = "android",
         target_os = "ios",
         target_os = "macos",
         target_os = "windows"
     )))]
-    {
-        declared_capabilities(ffmpeg_available())
-    }
+    let transcode = ffmpeg_available();
+    declared_capabilities(transcode)
 }
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]

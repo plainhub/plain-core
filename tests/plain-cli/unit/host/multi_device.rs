@@ -1,8 +1,8 @@
 use crate::host::Host;
+use plain_libs::serde_json::{Value, json};
 use plain_rs::infrastructure::host::request_scope::NativeRequestScope;
 use plain_server::native::graphql::NativeGraphqlExecutor;
 use plain_server::server::ContentServer;
-use plain_libs::serde_json::{Value, json};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -32,23 +32,20 @@ impl Node {
         let core = Arc::new(
             ContentServer::open_with_cache(&data, &directory.path().join("cache")).unwrap(),
         );
-        let (certificate_pem, certificate_key) = plain_libs::tls::generate_pem(&["localhost".into()]).unwrap();
+        let (certificate_pem, certificate_key) =
+            plain_libs::tls::generate_pem(&["localhost".into()]).unwrap();
         let (_, port) = core
-            .start_public(
-                0,
-                0,
-                certificate_pem,
-                certificate_key,
-            )
+            .start_public(0, 0, certificate_pem, certificate_key)
             .await
             .unwrap();
-        let host = tokio::spawn(Arc::new(Host::new(core.clone(), vec![])).run());
+        let host = tokio::spawn(Arc::new(Host::new(core.clone(), Vec::new)).run());
         let native = core.native_graphql().unwrap();
         let scope = NativeRequestScope::default();
         let subscription_id = native.open_subscriptions(scope.clone()).unwrap();
         let pairing_completions = native.subscription_session(subscription_id).unwrap();
         pairing_completions.send(r#"{"type":"subscribe","id":"pairing","payload":{"query":"subscription { pairingCompleted { deviceId } }"}}"#).unwrap();
-        let ready: Value = plain_libs::serde_json::from_str(&pairing_completions.read().await.unwrap()).unwrap();
+        let ready: Value =
+            plain_libs::serde_json::from_str(&pairing_completions.read().await.unwrap()).unwrap();
         assert_eq!(ready["payload"]["extensions"]["subscriptionReady"], true);
         Self {
             core,
@@ -70,13 +67,19 @@ impl Node {
     async fn paired(&mut self, peer_id: &str) {
         tokio::time::timeout(Duration::from_secs(15), async {
             for _ in 0..128 {
-                let frame: Value = plain_libs::serde_json::from_str(&self.pairing_completions.read().await.unwrap()).unwrap();
-                if frame["payload"]["data"]["pairingCompleted"]["deviceId"] == peer_id { return; }
+                let frame: Value = plain_libs::serde_json::from_str(
+                    &self.pairing_completions.read().await.unwrap(),
+                )
+                .unwrap();
+                if frame["payload"]["data"]["pairingCompleted"]["deviceId"] == peer_id {
+                    return;
+                }
             }
             panic!("pairing did not complete");
-        }).await.unwrap();
+        })
+        .await
+        .unwrap();
     }
-
 }
 
 impl Drop for Node {
@@ -114,13 +117,31 @@ async fn native_password_and_approval_pairing_enables_actual_chat_and_preserves_
     .await;
     let second_id = second.native.client_id();
     let remote_state = second.core.runtime();
-    first.core.runtime().nearby_devices.observe(plain_rs::features::discovery::nearby_devices::Device {
-        id:second_id.into(), name:"Fixture".into(), ips:vec!["127.0.0.1".into()], port:second.port,
-        remote_access:Some(true),signature_public_key:plain_libs::utils::base64::base64_encode(
-            &plain_rs::features::services::peers::peer_wire::signing_keypair(&remote_state.prefs).unwrap()[32..]),
-        device_type:plain_rs::features::chat::enums::DeviceType::Computer, version:"1".into(),platform:"fixture".into(),
-        last_seen_at:plain_rs::infrastructure::db::now_iso(),discovery_methods:vec![plain_rs::features::discovery::nearby_devices::DiscoveryMethod::Lan],
-    }).unwrap();
+    first
+        .core
+        .runtime()
+        .nearby_devices
+        .observe(plain_rs::features::discovery::nearby_devices::Device {
+            id: second_id.into(),
+            name: "Fixture".into(),
+            ips: vec!["127.0.0.1".into()],
+            port: second.port,
+            remote_access: Some(true),
+            signature_public_key: plain_libs::utils::base64::base64_encode(
+                &plain_rs::features::services::peers::peer_wire::signing_keypair(
+                    &remote_state.prefs,
+                )
+                .unwrap()[32..],
+            ),
+            device_type: plain_rs::features::chat::enums::DeviceType::Computer,
+            version: "1".into(),
+            platform: "fixture".into(),
+            last_seen_at: plain_rs::infrastructure::db::now_iso(),
+            discovery_methods: vec![
+                plain_rs::features::discovery::nearby_devices::DiscoveryMethod::Lan,
+            ],
+        })
+        .unwrap();
     let started = query(
         &first.native,
         r#"mutation($peerId:ID!){pairPeer(input:{peerId:$peerId,mode:MANAGE,password:"fixture-password"})}"#,
@@ -196,7 +217,8 @@ async fn native_password_and_approval_pairing_enables_actual_chat_and_preserves_
     ) -> Value {
         tokio::time::timeout(Duration::from_secs(10), async {
             loop {
-                let value: Value = plain_libs::serde_json::from_str(&session.read().await.unwrap()).unwrap();
+                let value: Value =
+                    plain_libs::serde_json::from_str(&session.read().await.unwrap()).unwrap();
                 assert_eq!(value["type"], "next", "{value}");
                 if value["payload"]["extensions"]["subscriptionReady"] == true {
                     continue;
@@ -230,8 +252,7 @@ async fn native_password_and_approval_pairing_enables_actual_chat_and_preserves_
             .is_err()
     );
     first.native.close_subscriptions(remote_handle);
-    let content =
-        json!({"text":{"text":"accepted native pairing message"}});
+    let content = json!({"text":{"text":"accepted native pairing message"}});
     let sent = query(&first.native, "mutation($targets:[String!]!,$content:ChatContentInput!){sendChatItems(targets:$targets,content:$content){id status}}",
         json!({"targets":[format!("peer:{second_id}")],"content":content})).await;
     assert_eq!(sent["sendChatItems"][0]["status"], "SENT");

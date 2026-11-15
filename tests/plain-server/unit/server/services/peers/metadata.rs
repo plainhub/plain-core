@@ -1,4 +1,5 @@
 use crate::server::ContentServer;
+use plain_libs::serde_json::json;
 use plain_rs::features::chat::enums::DeviceType;
 use plain_rs::features::services::peers::management::Identity;
 use plain_rs::features::services::peers::metadata::*;
@@ -6,7 +7,6 @@ use plain_rs::infrastructure::db::DPeer;
 use plain_rs::infrastructure::db::chat_store::SaveMode;
 use plain_rs::infrastructure::db::chat_store::peers;
 use plain_rs::runtime::Runtime as ServerState;
-use plain_libs::serde_json::json;
 use std::{
     sync::{
         Arc,
@@ -97,13 +97,15 @@ async fn encrypted_app_observations_work_without_notification_support_and_cannot
                         sdk_requested.notify_one();
                         sdk_release.notified().await;
                     }
-                    let granted: plain_libs::serde_json::Map<String, plain_libs::serde_json::Value> =
-                        request["params"]["features"]
-                            .as_array()
-                            .unwrap()
-                            .iter()
-                            .map(|name| (name.as_str().unwrap().to_owned(), json!(false)))
-                            .collect();
+                    let granted: plain_libs::serde_json::Map<
+                        String,
+                        plain_libs::serde_json::Value,
+                    > = request["params"]["features"]
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .map(|name| (name.as_str().unwrap().to_owned(), json!(false)))
+                        .collect();
                     json!({"granted":granted})
                 }
                 "mdnsMulticast" => json!(false),
@@ -165,7 +167,7 @@ async fn encrypted_app_observations_work_without_notification_support_and_cannot
         !snapshot
             .capabilities
             .iter()
-            .any(|value| value == "NOTIFICATIONS")
+            .any(|value| *value == plain_rs::features::capability::Capability::Notifications)
     );
     assert_eq!(
         peers::get(&state.db, &peer.id).unwrap().unwrap().name,

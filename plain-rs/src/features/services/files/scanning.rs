@@ -1,3 +1,4 @@
+use crate::features::capability::Capability;
 use crate::runtime::Runtime as CoreRuntime;
 use plain_libs::anyhow::Result;
 
@@ -27,7 +28,7 @@ pub enum Command {
 }
 
 async fn available(state: &CoreRuntime) -> Result<()> {
-    crate::features::services::capabilities::require(&state.host, "MEDIA_SCAN").await
+    crate::features::services::capabilities::require(&state.host, Capability::MediaScan).await
 }
 pub async fn progress(state: &CoreRuntime, volume_id: Option<&str>) -> Result<Progress> {
     available(state).await?;

@@ -23,10 +23,13 @@ impl Drop for Directory {
 async fn access_primitives_report_capabilities_and_grants_without_an_app_business_row() {
     let directory = Directory::new();
     let core = Arc::new(ContentServer::open(&directory.0).unwrap());
-    let runtime = Host::new(core.clone(), vec!["MEDIA_SCAN".into()]);
+    let runtime = Host::new(core.clone(), || vec![Capability::MediaScan]);
     assert_eq!(
         runtime
-            .dispatch("peerTransportCapabilities", plain_libs::serde_json::json!({}))
+            .dispatch(
+                "peerTransportCapabilities",
+                plain_libs::serde_json::json!({})
+            )
             .await
             .unwrap(),
         plain_libs::serde_json::json!([])
@@ -74,7 +77,7 @@ async fn access_primitives_report_capabilities_and_grants_without_an_app_busines
 async fn native_app_query_uses_startup_data_and_live_capabilities_without_public_listener() {
     let directory = Directory::new();
     let core = Arc::new(ContentServer::open(&directory.0).unwrap());
-    let runtime = Arc::new(Host::new(core.clone(), vec!["MEDIA_SCAN".into()]));
+    let runtime = Arc::new(Host::new(core.clone(), || vec![Capability::MediaScan]));
     let runner = tokio::spawn(runtime.run());
     let response = core
         .native_graphql()
@@ -88,9 +91,12 @@ async fn native_app_query_uses_startup_data_and_live_capabilities_without_public
         directory.0.to_string_lossy().as_ref()
     );
     assert_eq!(data["app"]["deviceType"], "COMPUTER");
-    let mut capabilities = vec!["MEDIA_SCAN"];
+    let mut capabilities = vec![Capability::MediaScan];
     capabilities.extend(plain_rs::features::services::files::browser::capabilities());
-    assert_eq!(data["app"]["capabilities"], plain_libs::serde_json::json!(capabilities));
+    assert_eq!(
+        data["app"]["capabilities"],
+        plain_libs::serde_json::json!(capabilities)
+    );
     assert_eq!(data["app"]["httpPort"], 0);
     assert_eq!(data["app"]["httpsPort"], 0);
     core.stop_core().await;
@@ -103,10 +109,13 @@ async fn native_file_resolution_uses_actual_os_read_authorization() {
     let path = directory.0.join("readable.txt");
     std::fs::write(&path, "actual bytes").unwrap();
     let core = Arc::new(ContentServer::open(&directory.0).unwrap());
-    let runtime = Arc::new(Host::new(core.clone(), vec![]));
+    let runtime = Arc::new(Host::new(core.clone(), Vec::new));
     assert!(
         runtime
-            .dispatch("fileTaskAuthorize", plain_libs::serde_json::json!({"paths":[path]}))
+            .dispatch(
+                "fileTaskAuthorize",
+                plain_libs::serde_json::json!({"paths":[path]})
+            )
             .await
             .is_err()
     );
@@ -169,7 +178,7 @@ async fn media_buckets_are_served_by_the_core_catalog() {
             updated_at: "2026-10-13T00:00:00.000Z".into(),
         }])
         .unwrap();
-    let runtime = Host::new(core.clone(), vec![]);
+    let runtime = Host::new(core.clone(), Vec::new);
     let runtime = Arc::new(runtime);
     let runner = tokio::spawn(runtime.clone().run());
     let response = core
@@ -212,7 +221,7 @@ async fn completion_scan_runs_directly_without_another_host_request() {
         .unwrap();
     let path = directory.0.as_path().join("completed.txt");
     std::fs::write(&path, b"completed file").unwrap();
-    let runtime = Arc::new(Host::new(core.clone(), vec![]));
+    let runtime = Arc::new(Host::new(core.clone(), Vec::new));
     let mut calls = tokio::task::JoinSet::new();
     for _ in 0..32 {
         let runtime = runtime.clone();
@@ -255,13 +264,16 @@ async fn device_and_log_queries_use_the_headless_server_provider_without_a_legac
     std::fs::write(logs.join("latest.log"), "first\nsecond\n").unwrap();
     let core = Arc::new(ContentServer::open(&directory.0).unwrap());
     core.set_log_file(&logs.join("latest.log")).unwrap();
-    let runtime = Arc::new(Host::new(core.clone(), Vec::new()));
+    let runtime = Arc::new(Host::new(core.clone(), Vec::new));
     let runner = tokio::spawn(runtime.run());
     let response = core.native_graphql().unwrap().execute("{ deviceInfo { platform cpuArch appVersion } deviceStatus { uptimeSec cpuUsage } appLogs(query:\"\",offset:0,limit:2) }".into()).await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     let data = response.data.into_json().unwrap();
     assert_eq!(data["deviceInfo"]["cpuArch"], std::env::consts::ARCH);
-    assert_eq!(data["appLogs"], plain_libs::serde_json::json!(["second", "first"]));
+    assert_eq!(
+        data["appLogs"],
+        plain_libs::serde_json::json!(["second", "first"])
+    );
     let response = core
         .native_graphql()
         .unwrap()
@@ -280,13 +292,15 @@ async fn device_and_log_queries_use_the_headless_server_provider_without_a_legac
 async fn thumbnails_and_regular_file_probes_use_the_shared_media_engine() {
     let directory = Directory::new();
     let image_path = directory.0.join("photo.png");
-    plain_libs::image::RgbImage::new(8, 4).save(&image_path).unwrap();
+    plain_libs::image::RgbImage::new(8, 4)
+        .save(&image_path)
+        .unwrap();
     let core = Arc::new(ContentServer::open(&directory.0).unwrap());
     core.native_media_catalog()
         .unwrap()
         .configure_scan_directories(None)
         .unwrap();
-    let runtime = Arc::new(Host::new(core.clone(), Vec::new()));
+    let runtime = Arc::new(Host::new(core.clone(), Vec::new));
     let runner = tokio::spawn(runtime.clone().run());
     let state = core.runtime();
     let bytes = state
@@ -318,7 +332,7 @@ async fn thumbnails_and_regular_file_probes_use_the_shared_media_engine() {
 async fn headless_dispatch_rejects_the_retired_image_metadata_operation() {
     let directory = Directory::new();
     let core = Arc::new(ContentServer::open(&directory.0).unwrap());
-    let runtime = Host::new(core.clone(), Vec::new());
+    let runtime = Host::new(core.clone(), Vec::new);
     assert!(
         runtime
             .dispatch(
@@ -366,7 +380,7 @@ async fn audio_queue_uses_the_registered_host_and_keeps_unindexed_playback_tempo
         }])
         .unwrap();
     let id = rows[0].id.clone();
-    let runtime = Arc::new(Host::new(core.clone(), Vec::new()));
+    let runtime = Arc::new(Host::new(core.clone(), Vec::new));
     let runner = tokio::spawn(runtime.run());
     let executor = core.native_graphql().unwrap();
     let response=executor.execute(format!(r#"mutation {{ addAudioToQueue(query:"ids:{id}") selectAudio(mediaId:"{id}") {{ mediaId path }} }}"#).into()).await;
@@ -397,7 +411,10 @@ async fn audio_queue_uses_the_registered_host_and_keeps_unindexed_playback_tempo
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     let selected = response.data.into_json().unwrap();
     assert!(selected["selectAudioByPath"]["mediaId"].is_null());
-    assert_eq!(selected["selectAudioByPath"]["path"], raw.to_string_lossy().as_ref());
+    assert_eq!(
+        selected["selectAudioByPath"]["path"],
+        raw.to_string_lossy().as_ref()
+    );
     let response = executor
         .execute("{ audioPlayback {mediaId path} }".into())
         .await;

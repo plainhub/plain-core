@@ -55,7 +55,7 @@ pub(crate) async fn update(
                 })
                 .collect(),
         };
-        super::public::authorize(ctx, &key)?;
+        super::public::authorize(ctx, &key).await?;
     }
     Ok(preferences(ctx)?.patch(patch).await?)
 }
@@ -70,7 +70,7 @@ fn security_preferences<'a>(ctx: &'a Context<'_>) -> Result<SecurityPreferences<
 }
 
 pub(crate) async fn set_pref(ctx: &Context<'_>, key: &str, value: Value) -> Result<bool> {
-    super::public::authorize(ctx, key)?;
+    super::public::authorize(ctx, key).await?;
     Ok(preferences(ctx)?.set(key, value).await?)
 }
 

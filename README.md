@@ -139,6 +139,8 @@ Use release builds for performance measurements. Consumer workspaces must config
 
 `plain-rs/src/features/app_feature.rs` owns app feature names. Generate the sibling Desktop and App enums with `node scripts/gen-app-features.mjs --write`; omit `--write` to check them.
 
+`plain-rs/src/features/capability.rs` owns capability names and wire values. Generate the Desktop and App capability enums with `yarn node scripts/gen-capabilities.mjs --write`; omit `--write` to check them.
+
 Regenerate the contracts with Node.js and Rust:
 
 ```sh

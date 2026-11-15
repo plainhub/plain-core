@@ -3,7 +3,6 @@
 //! Reads reuse the same provider search the contact roots use, so a call and
 //! a contact from the same query DSL behave alike.
 
-use plain_rs::features::access::AccessFeature;
 use crate::graphql::resolvers::tags::domain_types::Tag;
 use crate::graphql::types::ActionResult;
 use crate::graphql::types::facts::instant;
@@ -12,13 +11,15 @@ use crate::graphql::types::facts::text;
 use crate::graphql::types::facts::{host_json, provider_params};
 use crate::http::auth::public_gate;
 use plain_graphql::{Context, Enum, ID, Object, SimpleObject};
+use plain_rs::features::access::AccessFeature;
+use plain_rs::features::capability::Capability;
 
+use plain_libs::serde_json::Value;
 use plain_rs::features::prefs::Prefs;
 use plain_rs::features::services::capabilities;
 use plain_rs::features::services::files::provider_query::Provider;
 use plain_rs::infrastructure::db::Db;
 use plain_rs::infrastructure::host::bridge::Host;
-use plain_libs::serde_json::Value;
 use std::sync::Arc;
 
 const FEATURE: AccessFeature = AccessFeature::Calls;
@@ -150,7 +151,7 @@ impl CallsQuery {
         if public_gate::is_local(ctx) && !public_gate::require_granted(ctx, &[FEATURE]).await? {
             return Ok(Vec::new());
         }
-        capabilities::require(ctx.data_unchecked::<Arc<Host>>(), "TELEPHONY")
+        capabilities::require(ctx.data_unchecked::<Arc<Host>>(), Capability::Telephony)
             .await
             .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
 
@@ -172,7 +173,10 @@ impl CallsQuery {
                 .await
                 .ok()
                 .and_then(|facts| {
-                    plain_libs::serde_json::from_value::<plain_libs::phone::batch::LocaleFacts>(facts).ok()
+                    plain_libs::serde_json::from_value::<plain_libs::phone::batch::LocaleFacts>(
+                        facts,
+                    )
+                    .ok()
                 })
         } else {
             None
@@ -194,7 +198,7 @@ impl CallsQuery {
         if !public_gate::require_granted(ctx, &[FEATURE]).await? {
             return Ok(0);
         }
-        capabilities::require(ctx.data_unchecked::<Arc<Host>>(), "TELEPHONY")
+        capabilities::require(ctx.data_unchecked::<Arc<Host>>(), Capability::Telephony)
             .await
             .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
         let count = ctx
@@ -239,7 +243,7 @@ impl CallsMutation {
             &query,
         )
         .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
-        capabilities::require(ctx.data_unchecked::<Arc<Host>>(), "TELEPHONY")
+        capabilities::require(ctx.data_unchecked::<Arc<Host>>(), Capability::Telephony)
             .await
             .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
         let ids: Vec<Value> = host_json(
@@ -281,8 +285,12 @@ impl CallsMutation {
         number: String,
         show_dialer: bool,
     ) -> plain_graphql::Result<bool> {
-        public_gate::require(ctx, ctx.data_unchecked::<Arc<Prefs>>(), &[AccessFeature::CallPhone])?;
-        capabilities::require(ctx.data_unchecked::<Arc<Host>>(), "TELEPHONY")
+        public_gate::require(
+            ctx,
+            ctx.data_unchecked::<Arc<Prefs>>(),
+            &[AccessFeature::CallPhone],
+        )?;
+        capabilities::require(ctx.data_unchecked::<Arc<Host>>(), Capability::Telephony)
             .await
             .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
         ctx.data_unchecked::<Arc<Host>>()

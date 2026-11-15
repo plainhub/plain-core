@@ -1,3 +1,4 @@
+use crate::features::capability::Capability;
 use crate::infrastructure::db::DPeer;
 use crate::infrastructure::db::chat_store::peers;
 use crate::runtime::Runtime as CoreRuntime;
@@ -343,7 +344,7 @@ pub async fn refresh_data(
             Err(error) => Err(error),
         };
     let clipboard = app.as_ref().ok().map(|app| {
-        app.capabilities.iter().any(|value| value == "CLIPBOARD")
+        app.capabilities.contains(&Capability::Clipboard)
             && app
                 .access
                 .contains(&crate::features::access::AccessFeature::Clipboard)

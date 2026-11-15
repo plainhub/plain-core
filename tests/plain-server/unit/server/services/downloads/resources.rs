@@ -77,7 +77,7 @@ async fn tls() -> (
     );
     let task = tokio::spawn(async move {
         let (_stop, stopped) = tokio::sync::watch::channel(false);
-        plain_libs::protocols::https::serve(socket, router, config, stopped)
+        plain_libs::protocols::https::serve(socket, router, config, stopped, None, None)
             .await
             .unwrap();
     });
@@ -92,7 +92,9 @@ fn fixture() -> (
     let prefs = Arc::new(
         plain_rs::features::prefs::Prefs::load(&directory.path().join("prefs.json")).unwrap(),
     );
-    prefs.set("client_id", "706c6169-1dfd-8b72-82bb-3ad00a9928ca").unwrap();
+    prefs
+        .set("client_id", "706c6169-1dfd-8b72-82bb-3ad00a9928ca")
+        .unwrap();
     let server = crate::server::ContentServer::start(
         directory.path(),
         &plain_libs::utils::base64::base64_encode(&[3; 32]),

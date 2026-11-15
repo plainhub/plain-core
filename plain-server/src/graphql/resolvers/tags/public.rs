@@ -1,13 +1,14 @@
 use crate::graphql::resolvers::tags::domain_types::Tag;
 use crate::graphql::resolvers::tags::domain_types::TagRelation;
 use plain_graphql::{Context, Object};
+use plain_rs::features::capability::Capability;
 
+use plain_libs::serde_json::json;
 pub use plain_rs::features::enums::DataType;
 use plain_rs::features::services::capabilities;
 use plain_rs::features::tags;
 use plain_rs::infrastructure::db::Db;
 use plain_rs::infrastructure::host::bridge::Host;
-use plain_libs::serde_json::json;
 use std::sync::Arc;
 
 #[derive(Default)]
@@ -73,7 +74,8 @@ impl TagsMutation {
         name: String,
     ) -> plain_graphql::Result<Tag> {
         let row = tags::update_tag(db(ctx), id.as_str(), &name).map_err(failed)?;
-        let row = row.ok_or_else(|| plain_graphql::Error::new(format!("Tag {} not found", id.as_str())))?;
+        let row =
+            row.ok_or_else(|| plain_graphql::Error::new(format!("Tag {} not found", id.as_str())))?;
         Tag::from_row(&row)
     }
 
@@ -159,7 +161,7 @@ async fn provider_query_keys(
     query: &str,
 ) -> plain_graphql::Result<Vec<String>> {
     if kind == DataType::Contact {
-        capabilities::require(ctx.data_unchecked::<Arc<Host>>(), "TELEPHONY")
+        capabilities::require(ctx.data_unchecked::<Arc<Host>>(), Capability::Telephony)
             .await
             .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
     }
@@ -178,7 +180,7 @@ async fn provider_query_keys(
             .map_err(|error| plain_graphql::Error::new(error.to_string()));
     }
     let method = if kind == DataType::Call {
-        capabilities::require(ctx.data_unchecked::<Arc<Host>>(), "TELEPHONY")
+        capabilities::require(ctx.data_unchecked::<Arc<Host>>(), Capability::Telephony)
             .await
             .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
         "systemCallIds"

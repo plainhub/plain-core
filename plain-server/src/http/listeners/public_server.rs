@@ -96,16 +96,26 @@ impl ServerState {
     pub(crate) async fn restart_public_locked(&self) -> Result<(u16, u16), String> {
         self.native_client_id()?;
         let (http, https, cert, key) = self.http_configuration().await?;
-        {
+        let previous = {
             let mut server = self.public_server.lock().await.take();
-            crate::http::listeners::lifecycle::stop_locked(self, &mut server).await;
+            let previous =
+                crate::http::listeners::lifecycle::stop_for_restart_locked(self, &mut server)
+                    .await?;
             self.http_server.stopped();
+            previous
+        };
+        let result = async {
+            let ports = self.start_public_locked(http, https, cert, key).await?;
+            self.mdns
+                .update_hostname(self)
+                .await
+                .map_err(|error| error.to_string())?;
+            Ok(ports)
         }
-        let ports = self.start_public_locked(http, https, cert, key).await?;
-        self.mdns
-            .update_hostname(self)
-            .await
-            .map_err(|error| error.to_string())?;
-        Ok(ports)
+        .await;
+        if let Some(previous) = previous {
+            tokio::spawn(previous.shutdown());
+        }
+        result
     }
 }

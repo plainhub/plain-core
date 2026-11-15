@@ -45,3 +45,17 @@ pub(crate) fn restart(
 #[cfg(test)]
 #[path = "../../../../tests/plain-server/unit/http/listeners/control.rs"]
 mod tests;
+
+pub(crate) async fn restart_and_wait(
+    state: &ServerState,
+    http: Option<u16>,
+    https: Option<u16>,
+) -> Result<HttpServerState, String> {
+    let receipt = restart(state, http, https)?;
+    let mut stop = state.stop.clone();
+    tokio::select! {
+        biased;
+        _ = stop.wait_for(|stopped| *stopped) => Err("Rust core stopped".into()),
+        result = state.http_server.wait_finished(receipt.revision) => result,
+    }
+}

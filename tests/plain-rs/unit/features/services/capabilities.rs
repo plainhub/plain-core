@@ -19,8 +19,8 @@ async fn support_uses_one_capability_sample_without_permission_or_method_probes(
         })
     };
     let capabilities = snapshot(&host).await.unwrap();
-    assert!(require_list(&capabilities, "MEDIA_DELETE").is_ok());
-    assert!(require_list(&capabilities, "MEDIA_MOVE").is_err());
+    assert!(require_list(&capabilities, Capability::MediaDelete).is_ok());
+    assert!(require_list(&capabilities, Capability::MediaMove).is_err());
     worker.await.unwrap();
 }
 
