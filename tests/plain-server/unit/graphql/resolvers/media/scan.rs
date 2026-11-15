@@ -42,7 +42,7 @@ async fn native_media_controls_share_the_main_contract_and_remote_permissions() 
         .unwrap();
     let source_path = source.path().canonicalize().unwrap();
     let id = state.db.register_volume(&source_path).unwrap().unwrap();
-    let query = native.execute(Request::new("{ fileIndexVolumes { id path indexMode includedDirs excludedDirs isAvailable lastScanAt lastScanStatus lastScanCount lastScanTotal } fileIndexDefaults { excludedDirs excludedNames } }")).await;
+    let query = native.execute(Request::new("{ fileIndexVolumes { id path indexMode includedDirs excludedDirs isAvailable lastScanAt lastScanStatus lastScanCount lastScanTotal } fileIndexDefaults { excludedDirs excludedNames excludedProfileDirs { profilesDir excludedDir exceptDirs } mediaExcludedDirSuffixes } }")).await;
     assert!(query.errors.is_empty(), "{:?}", query.errors);
     let data = query.data.into_json().unwrap();
     assert!(
@@ -59,6 +59,32 @@ async fn native_media_controls_share_the_main_contract_and_remote_permissions() 
             .unwrap()
             .contains(&plain_libs::serde_json::json!("node_modules"))
     );
+    let rules = &data["fileIndexDefaults"];
+    #[cfg(target_os = "macos")]
+    {
+        assert_eq!(
+            rules["excludedProfileDirs"],
+            plain_libs::serde_json::json!([{
+                "profilesDir": "/Users/", "excludedDir": "Library",
+                "exceptDirs": ["Library/Mobile Documents/com~apple~CloudDocs"]
+            }])
+        );
+        assert_eq!(
+            rules["mediaExcludedDirSuffixes"],
+            plain_libs::serde_json::json!([".photoslibrary", ".app", ".bundle", ".framework"])
+        );
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        assert_eq!(
+            rules["excludedProfileDirs"],
+            plain_libs::serde_json::json!([])
+        );
+        assert_eq!(
+            rules["mediaExcludedDirSuffixes"],
+            plain_libs::serde_json::json!([])
+        );
+    }
     let volume = data["fileIndexVolumes"]
         .as_array()
         .unwrap()
@@ -402,4 +428,38 @@ fn core_volume_progress_events_preserve_the_volume_id_for_subscription_consumers
         plain_rs::features::services::files::scanning::FileIndexScanState::Running
     );
     assert_eq!(progress.total, None);
+}
+
+#[test]
+fn file_index_default_types_match_the_committed_main_schema() {
+    use crate::graphql::schemas::public::{Mutation, PublicSchema, Query};
+    let sdl = PublicSchema::build(
+        Query::default(),
+        Mutation::default(),
+        crate::graphql::subscriptions::Subscription::default(),
+    )
+    .finish()
+    .sdl();
+    let committed = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../schema/api/media.graphqls"
+    ));
+    for name in ["FileIndexDefaults", "FileIndexProfileDir"] {
+        let declaration = format!("type {name} {{");
+        let actual = sdl
+            .split_once(&declaration)
+            .unwrap()
+            .1
+            .split_once("\n}")
+            .unwrap()
+            .0;
+        let expected = committed
+            .split_once(&declaration)
+            .unwrap()
+            .1
+            .split_once("\n}")
+            .unwrap()
+            .0;
+        assert_eq!(actual, expected, "{name}");
+    }
 }

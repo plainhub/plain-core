@@ -516,3 +516,6 @@ fn mounted_volume_exclusions_stop_before_hidden_and_git_ancestors() {
         Some(repository.as_path())
     );
 }
+
+#[path = "catalog_paths/allocations.rs"]
+mod allocations;

@@ -1,4 +1,5 @@
 mod paths;
+pub mod platform;
 mod rules;
 
 pub use paths::{
@@ -6,9 +7,7 @@ pub use paths::{
 };
 pub use rules::{Defaults, defaults};
 #[cfg(target_os = "macos")]
-pub(crate) use rules::{
-    macos_application_directory, macos_cloud_documents_ancestor, macos_cloud_documents_root,
-};
+pub(crate) use platform::{macos_cloud_documents_ancestor, macos_cloud_documents_root};
 
 use crate::infrastructure::db::{Db, FileIndexMode, VolumeRow};
 use std::path::Path;

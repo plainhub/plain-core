@@ -1,31 +1,11 @@
+#[cfg(test)]
+use crate::features::files::index_scope::platform::under_root_case_insensitive;
+use crate::features::files::index_scope::platform::{
+    media_package_component as is_excluded_package_component,
+    media_private_directory as is_platform_private_root, media_system_directory as is_system_root,
+    under_root,
+};
 use std::path::Path;
-#[cfg(any(target_os = "linux", target_os = "windows"))]
-use std::sync::OnceLock;
-
-#[cfg(target_os = "macos")]
-const EXCLUDED_SYSTEM_ROOTS: &[&str] = &[
-    "/System",
-    "/Library",
-    "/Applications",
-    "/private",
-    "/usr",
-    "/bin",
-    "/sbin",
-    "/var",
-    "/tmp",
-    "/dev",
-    "/cores",
-    "/proc",
-];
-
-#[cfg(target_os = "linux")]
-const EXCLUDED_SYSTEM_ROOTS: &[&str] = &[
-    "/proc", "/sys", "/dev", "/run", "/tmp", "/snap", "/usr", "/etc", "/var", "/boot", "/opt",
-    "/lib", "/lib32", "/lib64", "/bin", "/sbin",
-];
-
-#[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
-const EXCLUDED_SYSTEM_ROOTS: &[&str] = &[];
 
 const EXCLUDED_DIR_NAMES: &[&str] = &["node_modules"];
 
@@ -220,42 +200,6 @@ pub fn is_media_excluded_name_or_root(
     false
 }
 
-#[cfg(target_os = "macos")]
-fn is_platform_private_root(path: &str) -> bool {
-    crate::features::files::index_scope::macos_application_directory(path)
-}
-
-#[cfg(target_os = "windows")]
-fn is_platform_private_root(path: &str) -> bool {
-    static APP_DATA: OnceLock<Option<String>> = OnceLock::new();
-    let app_data = APP_DATA.get_or_init(|| {
-        std::env::var_os("USERPROFILE").map(|home| {
-            Path::new(&home)
-                .join("AppData")
-                .to_string_lossy()
-                .replace('\\', "/")
-        })
-    });
-    app_data
-        .as_ref()
-        .is_some_and(|app_data| under_root_case_insensitive(path, app_data))
-}
-
-#[cfg(target_os = "linux")]
-fn is_platform_private_root(path: &str) -> bool {
-    static SNAP: OnceLock<Option<String>> = OnceLock::new();
-    let snap = SNAP.get_or_init(|| {
-        std::env::var_os("HOME")
-            .map(|home| Path::new(&home).join("snap").to_string_lossy().to_string())
-    });
-    snap.as_ref().is_some_and(|snap| under_root(path, snap))
-}
-
-#[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
-fn is_platform_private_root(_path: &str) -> bool {
-    false
-}
-
 #[cfg(target_os = "windows")]
 pub fn is_native_hidden(path: &Path) -> bool {
     use std::os::windows::fs::MetadataExt;
@@ -271,75 +215,6 @@ pub fn is_native_hidden(path: &Path) -> bool {
 #[cfg(not(any(target_os = "windows", target_os = "macos")))]
 pub fn is_native_hidden(_path: &Path) -> bool {
     false
-}
-
-#[cfg(target_os = "macos")]
-pub const MEDIA_PACKAGE_SUFFIXES: &[&str] = &[".photoslibrary", ".app", ".bundle", ".framework"];
-#[cfg(not(target_os = "macos"))]
-pub const MEDIA_PACKAGE_SUFFIXES: &[&str] = &[];
-
-fn is_excluded_package_component(component: &str) -> bool {
-    MEDIA_PACKAGE_SUFFIXES
-        .iter()
-        .any(|suffix| component.to_ascii_lowercase().ends_with(suffix))
-}
-
-#[cfg(target_os = "windows")]
-fn windows_system_roots() -> Vec<String> {
-    let mut roots = Vec::new();
-    for key in [
-        "SystemRoot",
-        "ProgramFiles",
-        "ProgramFiles(x86)",
-        "ProgramData",
-    ] {
-        if let Some(path) = std::env::var_os(key) {
-            roots.push(path.to_string_lossy().replace('\\', "/"));
-        }
-    }
-    if let Some(system_root) = std::env::var_os("SystemRoot") {
-        if let Some(drive) = Path::new(&system_root).components().next() {
-            let drive = drive.as_os_str().to_string_lossy();
-            roots.extend(
-                [
-                    "$Recycle.Bin",
-                    "System Volume Information",
-                    "Recovery",
-                    "PerfLogs",
-                ]
-                .into_iter()
-                .map(|name| format!("{drive}/{name}")),
-            );
-        }
-    }
-    roots
-}
-
-#[cfg(target_os = "windows")]
-fn is_system_root(path: &str) -> bool {
-    static ROOTS: OnceLock<Vec<String>> = OnceLock::new();
-    ROOTS
-        .get_or_init(windows_system_roots)
-        .iter()
-        .any(|root| under_root_case_insensitive(path, root))
-}
-
-#[cfg(not(target_os = "windows"))]
-fn is_system_root(path: &str) -> bool {
-    EXCLUDED_SYSTEM_ROOTS
-        .iter()
-        .any(|root| under_root(path, root))
-}
-
-fn under_root(p: &str, root: &str) -> bool {
-    p == root || p.starts_with(&format!("{root}/"))
-}
-
-pub fn under_root_case_insensitive(p: &str, root: &str) -> bool {
-    p.eq_ignore_ascii_case(root)
-        || p.get(..root.len())
-            .is_some_and(|prefix| prefix.eq_ignore_ascii_case(root))
-            && p.as_bytes().get(root.len()) == Some(&b'/')
 }
 
 pub fn infer_type(name: &str) -> &'static str {

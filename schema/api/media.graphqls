@@ -1,8 +1,14 @@
 type FileIndexDefaults {
 	excludedDirs: [String!]!
 	excludedNames: [String!]!
-	excludedPackages: [String!]!
-	excludedUserLibraries: Boolean!
+	"""
+	Directory rules relative to every direct child of profilesDir.
+	"""
+	excludedProfileDirs: [FileIndexProfileDir!]!
+	"""
+	Case-insensitive directory suffixes excluded from media recognition only.
+	"""
+	mediaExcludedDirSuffixes: [String!]!
 }
 
 enum FileIndexMode {
@@ -10,6 +16,21 @@ enum FileIndexMode {
 	DISABLED
 	ALLOWLIST
 	BLOCKLIST
+}
+
+type FileIndexProfileDir {
+	"""
+	Absolute parent directory ending in a slash; rules apply to every direct child profile.
+	"""
+	profilesDir: String!
+	"""
+	Excluded directory relative to each profile.
+	"""
+	excludedDir: String!
+	"""
+	Profile-relative exceptions; their ancestors remain traversable and other rules still apply.
+	"""
+	exceptDirs: [String!]!
 }
 
 type FileIndexScanProgress {

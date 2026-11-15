@@ -96,14 +96,11 @@ pub fn normalized(path: &Path) -> String {
 }
 
 pub fn under(path: &str, root: &str) -> bool {
-    if root == "/" {
-        return path.starts_with('/');
-    }
-    component_eq(path, root)
-        || path
-            .get(..root.len())
-            .is_some_and(|head| component_eq(head, root))
-            && (root.ends_with('/') || path.as_bytes().get(root.len()) == Some(&b'/'))
+    path.get(..root.len())
+        .is_some_and(|prefix| component_eq(prefix, root))
+        && (path.len() == root.len()
+            || root.ends_with('/')
+            || path.as_bytes().get(root.len()) == Some(&b'/'))
 }
 
 pub(super) fn component_eq(a: &str, b: &str) -> bool {

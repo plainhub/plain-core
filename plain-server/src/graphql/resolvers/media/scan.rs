@@ -53,11 +53,23 @@ impl FileIndexScanQuery {
         Ok(FileIndexDefaults {
             excluded_dirs: defaults.excluded_directories,
             excluded_names: defaults.excluded_names,
-            excluded_packages: plain_rs::features::media::catalog_paths::MEDIA_PACKAGE_SUFFIXES
+            excluded_profile_dirs: plain_rs::features::files::index_scope::platform::PROFILE_DIRS
                 .iter()
-                .map(|suffix| suffix.to_string())
+                .map(|rule| FileIndexProfileDir {
+                    profiles_dir: rule.profiles_dir.to_owned(),
+                    excluded_dir: rule.excluded_dir.to_owned(),
+                    except_dirs: rule
+                        .except_dirs
+                        .iter()
+                        .map(|dir| (*dir).to_owned())
+                        .collect(),
+                })
                 .collect(),
-            excluded_user_libraries: cfg!(target_os = "macos"),
+            media_excluded_dir_suffixes:
+                plain_rs::features::files::index_scope::platform::MEDIA_DIR_SUFFIXES
+                    .iter()
+                    .map(|suffix| (*suffix).to_owned())
+                    .collect(),
         })
     }
     async fn file_index_volumes(&self, ctx: &Context<'_>) -> Result<Vec<FileIndexVolume>> {
@@ -164,8 +176,20 @@ pub struct FileIndexVolume {
 pub struct FileIndexDefaults {
     pub excluded_dirs: Vec<String>,
     pub excluded_names: Vec<String>,
-    pub excluded_packages: Vec<String>,
-    pub excluded_user_libraries: bool,
+    /// Directory rules relative to every direct child of profilesDir.
+    pub excluded_profile_dirs: Vec<FileIndexProfileDir>,
+    /// Case-insensitive directory suffixes excluded from media recognition only.
+    pub media_excluded_dir_suffixes: Vec<String>,
+}
+
+#[derive(SimpleObject)]
+pub struct FileIndexProfileDir {
+    /// Absolute parent directory ending in a slash; rules apply to every direct child profile.
+    pub profiles_dir: String,
+    /// Excluded directory relative to each profile.
+    pub excluded_dir: String,
+    /// Profile-relative exceptions; their ancestors remain traversable and other rules still apply.
+    pub except_dirs: Vec<String>,
 }
 
 #[derive(InputObject)]
