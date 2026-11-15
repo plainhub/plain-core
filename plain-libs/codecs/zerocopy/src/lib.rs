@@ -4068,7 +4068,7 @@ macro_rules! transmute_mut {
 /// ```rust
 /// use zerocopy::include_value;
 /// # macro_rules! include_value {
-/// # ($file:expr) => { zerocopy::include_value!(concat!("../testdata/include_value/", $file)) };
+/// # ($file:expr) => { zerocopy::include_value!(concat!("../../../../plain-rs/testdata/zerocopy/include_value/", $file)) };
 /// # }
 ///
 /// fn main() {

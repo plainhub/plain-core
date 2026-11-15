@@ -15,7 +15,6 @@ archive-sha256 = "1b9b4fd18abc82b8136838da5d50bae7bdea537c574d8dc1a34ed098d6c166
 
 [lib]
 path = "src/lib.rs"
-doctest = false
 
 [features]
 "__internal_use_only_features_that_work_on_stable" = ["alloc", "derive", "simd"]
