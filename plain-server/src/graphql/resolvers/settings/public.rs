@@ -3,7 +3,7 @@
 use plain_graphql::{Context, Json, Object};
 
 use plain_rs::features::prefs::Prefs;
-use plain_rs::features::prefs::pref_keys::{APP_HOME_FEATURES, AUTO_CHECK_UPDATE, SKIP_VERSION};
+use plain_rs::features::prefs::pref_keys::APP_HOME_FEATURES;
 use plain_libs::serde_json::Value;
 use std::sync::Arc;
 
@@ -60,17 +60,8 @@ impl PrefsMutation {
     }
 
     async fn remove_pref(&self, ctx: &Context<'_>, key: String) -> plain_graphql::Result<bool> {
-        authorize(ctx, &key)?;
-        if matches!(key.as_str(), SKIP_VERSION | AUTO_CHECK_UPDATE) {
-            let default = if key == SKIP_VERSION {
-                Value::String(String::new())
-            } else {
-                Value::Bool(true)
-            };
-            super::state::set_pref(ctx, &key, default).await?;
-        } else {
-            super::state::remove_pref(ctx, &key).await?;
-        }
+        super::super::common::require_developer_mode(ctx)?;
+        super::state::remove_pref(ctx, &key).await?;
         Ok(true)
     }
 }

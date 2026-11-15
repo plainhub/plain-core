@@ -34,13 +34,15 @@ async fn native_media_controls_share_the_main_contract_and_remote_permissions() 
     let native = core.native_graphql().unwrap();
     let source = plain_libs::temporary::Builder::new()
         .prefix("plain-index-scan-")
-        .tempdir_in(std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" })
-            .map(std::path::PathBuf::from)
-            .unwrap_or_else(|| std::env::current_dir().unwrap()))
+        .tempdir_in(
+            std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" })
+                .map(std::path::PathBuf::from)
+                .unwrap_or_else(|| std::env::current_dir().unwrap()),
+        )
         .unwrap();
     let source_path = source.path().canonicalize().unwrap();
     let id = state.db.register_volume(&source_path).unwrap().unwrap();
-    let query = native.execute(Request::new("{ fileIndexVolumes { id path indexMode includedDirs excludedDirs isAvailable } fileIndexDefaults { excludedDirs excludedNames } }")).await;
+    let query = native.execute(Request::new("{ fileIndexVolumes { id path indexMode includedDirs excludedDirs isAvailable lastScanAt lastScanStatus lastScanCount lastScanTotal } fileIndexDefaults { excludedDirs excludedNames } }")).await;
     assert!(query.errors.is_empty(), "{:?}", query.errors);
     let data = query.data.into_json().unwrap();
     assert!(
@@ -64,12 +66,67 @@ async fn native_media_controls_share_the_main_contract_and_remote_permissions() 
         .find(|volume| volume["id"] == id)
         .unwrap();
     assert_eq!(volume["indexMode"], "UNCONFIGURED");
+    for field in [
+        "lastScanAt",
+        "lastScanStatus",
+        "lastScanCount",
+        "lastScanTotal",
+    ] {
+        assert!(volume[field].is_null(), "{field}");
+    }
+    for (status, wire, count, total) in [
+        (
+            plain_rs::infrastructure::db::FileIndexScanStatus::Completed,
+            "COMPLETED",
+            0,
+            Some(0),
+        ),
+        (
+            plain_rs::infrastructure::db::FileIndexScanStatus::Canceled,
+            "CANCELED",
+            2,
+            None,
+        ),
+        (
+            plain_rs::infrastructure::db::FileIndexScanStatus::Failed,
+            "FAILED",
+            3,
+            Some(5),
+        ),
+    ] {
+        state
+            .db
+            .record_volume_scan(&id, status, count, total)
+            .unwrap();
+        let response = native
+            .execute(Request::new(
+                "{ fileIndexVolumes { id lastScanAt lastScanStatus lastScanCount lastScanTotal } }",
+            ))
+            .await;
+        assert!(response.errors.is_empty(), "{:?}", response.errors);
+        let data = response.data.into_json().unwrap();
+        let volume = data["fileIndexVolumes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|volume| volume["id"] == id)
+            .unwrap();
+        assert_eq!(volume["lastScanStatus"], wire);
+        assert_eq!(volume["lastScanCount"], count);
+        assert_eq!(
+            volume["lastScanTotal"],
+            plain_libs::serde_json::json!(total)
+        );
+        plain_libs::chrono::DateTime::parse_from_rfc3339(volume["lastScanAt"].as_str().unwrap())
+            .unwrap();
+    }
+
     state
         .db
         .with_conn(|conn| conn.execute("UPDATE volumes SET index_mode='DISABLED'", []))
         .unwrap();
     let set = native.execute(Request::new(
-        "mutation($id:ID!,$dirs:[String!]!){setFileIndexVolume(id:$id,indexMode:DISABLED,includedDirs:$dirs,excludedDirs:[])}"
+        "mutation($id:ID!,$dirs:[String!]!){setFileIndexVolume(input:{volumeId:$id,indexMode:DISABLED,includedDirs:$dirs,excludedDirs:[]})}"
     ).variables(plain_graphql::Variables::from_json(plain_libs::serde_json::json!({"id":id,"dirs":[source_path.to_str().unwrap()]})))).await;
     assert!(set.errors.is_empty(), "{:?}", set.errors);
     state.media_scans.wait_background().await.unwrap();
@@ -114,6 +171,53 @@ async fn native_media_controls_share_the_main_contract_and_remote_permissions() 
         .execute(Request::new("{ fileIndexScanProgress { state } }"))
         .await;
     assert!(main.errors.is_empty(), "{:?}", main.errors);
+    let first = state.media_scans.enqueue_volume(&id).unwrap().unwrap();
+    let second = state
+        .media_scans
+        .enqueue_volume("generated-queued-volume")
+        .unwrap()
+        .unwrap();
+    let queued = native.execute(Request::new("{ fileIndexScanProgress(volumeId: \"generated-queued-volume\") { volumeId state indexed total } }")).await;
+    assert!(queued.errors.is_empty(), "{:?}", queued.errors);
+    assert_eq!(
+        queued.data.into_json().unwrap()["fileIndexScanProgress"]["state"],
+        "QUEUED"
+    );
+    for (operation, volume_id, expected_first, expected_second) in [
+        ("pauseFileIndex", id.as_str(), "PAUSED", "RUNNING"),
+        ("resumeFileIndex", id.as_str(), "QUEUED", "RUNNING"),
+        (
+            "stopFileIndex",
+            "generated-queued-volume",
+            "QUEUED",
+            "STOPPED",
+        ),
+    ] {
+        let response = native
+            .execute(
+                Request::new(format!(
+                    "mutation($volumeId:ID){{{operation}(volumeId:$volumeId)}}"
+                ))
+                .variables(plain_graphql::Variables::from_json(
+                    plain_libs::serde_json::json!({"volumeId":volume_id}),
+                )),
+            )
+            .await;
+        assert!(response.errors.is_empty(), "{:?}", response.errors);
+        let progress = native.execute(Request::new("query($id:ID){first:fileIndexScanProgress(volumeId:$id){volumeId state} second:fileIndexScanProgress(volumeId:\"generated-queued-volume\"){volumeId state}}")
+            .variables(plain_graphql::Variables::from_json(plain_libs::serde_json::json!({"id":id})))).await;
+        assert!(progress.errors.is_empty(), "{:?}", progress.errors);
+        let progress = progress.data.into_json().unwrap();
+        assert_eq!(progress["first"]["volumeId"], id);
+        assert_eq!(progress["first"]["state"], expected_first);
+        assert_eq!(progress["second"]["state"], expected_second);
+    }
+    second.finish(Ok(())).unwrap();
+    let stopped = native
+        .execute(Request::new("mutation { stopFileIndex }"))
+        .await;
+    assert!(stopped.errors.is_empty(), "{:?}", stopped.errors);
+    first.finish(Ok(())).unwrap();
     for volume_id in [id.as_str(), "missing-volume"] {
         let denied = native
             .execute(
@@ -129,7 +233,11 @@ async fn native_media_controls_share_the_main_contract_and_remote_permissions() 
         );
     }
     std::fs::create_dir(source_path.join("included")).unwrap();
-    std::fs::write(source_path.join("included/included.txt"), "generated index fixture").unwrap();
+    std::fs::write(
+        source_path.join("included/included.txt"),
+        "generated index fixture",
+    )
+    .unwrap();
     std::fs::create_dir(source_path.join("excluded")).unwrap();
     std::fs::write(
         source_path.join("excluded/ignored.txt"),
@@ -137,7 +245,7 @@ async fn native_media_controls_share_the_main_contract_and_remote_permissions() 
     )
     .unwrap();
     let configured = native.execute(Request::new(
-        "mutation($id:ID!,$dirs:[String!]!,$excluded:[String!]!){setFileIndexVolume(id:$id,indexMode:ALLOWLIST,includedDirs:$dirs,excludedDirs:$excluded)}"
+        "mutation($id:ID!,$dirs:[String!]!,$excluded:[String!]!){setFileIndexVolume(input:{volumeId:$id,indexMode:ALLOWLIST,includedDirs:$dirs,excludedDirs:$excluded})}"
     ).variables(plain_graphql::Variables::from_json(plain_libs::serde_json::json!({
         "id":id,"dirs":[source_path.join("included").to_str().unwrap()],
         "excluded":[source_path.join("excluded").to_str().unwrap()]
@@ -270,4 +378,28 @@ async fn public_scans_require_opt_in_and_grants_then_read_the_same_core() {
     done.send(()).unwrap();
     provider.await.unwrap();
     core.stop_core().await;
+}
+
+#[test]
+fn core_volume_progress_events_preserve_the_volume_id_for_subscription_consumers() {
+    let (events, mut received) = tokio::sync::broadcast::channel(32);
+    let scans = std::sync::Arc::new(
+        plain_rs::features::services::files::media_scans::MediaScans::new(
+            events,
+            std::env::temp_dir(),
+        ),
+    );
+    let _session = scans.enqueue_volume("generated-volume").unwrap().unwrap();
+    let event = received.try_recv().unwrap();
+    let progress: super::FileIndexScanProgress =
+        plain_libs::serde_json::from_str(&event.payload).unwrap();
+    assert_eq!(
+        progress.volume_id.as_ref().map(|id| id.as_str()),
+        Some("generated-volume")
+    );
+    assert_eq!(
+        progress.state,
+        plain_rs::features::services::files::scanning::FileIndexScanState::Running
+    );
+    assert_eq!(progress.total, None);
 }

@@ -34,6 +34,7 @@ pub fn download_url(id: &str) -> String {
 
 pub(crate) fn key(state: &CoreRuntime, scope: &Scope) -> plain_libs::anyhow::Result<Vec<u8>> {
     let token = match scope {
+        Scope::Session(id) if state.native_client_id().is_ok_and(|native| native == *id) => state.token.to_string(),
         Scope::Session(id) => {
             state
                 .db
@@ -102,7 +103,7 @@ pub async fn resolve(
         let resource = resource_link::open(&scope, &key(&owner, &scope)?, payload)?;
         if resource.r#type == ResourceType::ForegroundMediaThumbnail {
             plain_libs::anyhow::ensure!(
-                matches!(&scope, Scope::Session(id) if &crate::features::services::sessions::native(&owner)?.client_id == id),
+                matches!(&scope, Scope::Session(id) if owner.native_client_id().is_ok_and(|native| native == *id)),
                 "Foreground thumbnails require native session"
             );
         }

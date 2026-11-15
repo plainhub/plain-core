@@ -97,7 +97,7 @@ pub fn start(state: CoreRuntime) -> tokio::task::JoinHandle<()> {
 }
 
 async fn roots(state: &CoreRuntime) -> Result<Vec<PathBuf>> {
-    let facts = state.file_platform.mounts(state.prefs.clone()).await?;
+    let facts = state.file_platform.mounts().await?;
     let rows = facts
         .as_array()
         .ok_or_else(|| plain_libs::anyhow::anyhow!("invalid storage volume facts"))?;

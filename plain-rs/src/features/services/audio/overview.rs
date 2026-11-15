@@ -10,9 +10,10 @@ use std::sync::Arc;
 const PAGE_SIZE: u32 = 512;
 
 pub async fn read(db: Arc<Db>, catalog: MediaCatalog) -> Result<Vec<Artist>, String> {
-    if let MediaCatalog::Native(source) = &catalog {
+    if let MediaCatalog::Native(source, prefs) = &catalog {
         let source = source.clone();
-        return tokio::task::spawn_blocking(move || overview::native(&source))
+        let prefs = prefs.clone();
+        return tokio::task::spawn_blocking(move || overview::native(&source, &prefs))
             .await
             .map_err(|error| error.to_string())?
             .map_err(|error| error.to_string());

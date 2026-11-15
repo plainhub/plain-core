@@ -551,7 +551,8 @@ async fn source_directory_scan_keeps_one_session_across_roots_and_partial_failur
         crate::test_support::HostRequests::connect(&core.runtime_state().host);
     let worker = tokio::spawn({
         let catalog = catalog.clone();
-        async move { catalog.scan_source_directories("/").await }
+        let sources = sources.clone();
+        async move { catalog.scan_directories(sources, Purpose::Rebuild).await }
     });
     let mut session_id = None;
     for _ in 0..2 {
@@ -643,8 +644,8 @@ async fn background_source_scan_is_busy_before_the_first_read_and_core_stop_join
     catalog.read_gate = Some(gate.clone());
     let (_generation, mut requests) =
         crate::test_support::HostRequests::connect(&core.runtime_state().host);
-    let started = catalog.start_source_scan("/").unwrap();
-    assert!(catalog.start_source_scan("/").is_err());
+    let started = catalog.start_volume_scan(None).unwrap().unwrap();
+    assert_eq!(catalog.start_volume_scan(None).unwrap().unwrap().id, started.id);
     tokio::time::timeout(std::time::Duration::from_secs(5), gate.0.notified())
         .await
         .unwrap();
@@ -663,6 +664,7 @@ async fn background_source_scan_is_busy_before_the_first_read_and_core_stop_join
     assert_eq!(
         crate::features::services::files::media_catalog::count(
             &core.runtime_state().db,
+            &core.runtime_state().prefs,
             crate::features::enums::DataType::Doc,
             ""
         )
@@ -901,7 +903,7 @@ async fn an_unmounted_source_is_a_coverage_gap_and_does_not_retire_catalog_rows(
     }).unwrap();
     let catalog = NativeMediaCatalog::new(state.clone());
     catalog.configure_scan_directories(None).unwrap();
-    let result = catalog.scan_source_directories("/").await.unwrap();
+    let result = catalog.scan_directories(vec![source.to_str().unwrap().to_owned()], Purpose::Rebuild).await.unwrap();
     assert_eq!(
         result.status,
         crate::features::services::files::media_scans::Status::Failed
@@ -1160,7 +1162,9 @@ async fn sdk_host_restores_the_configured_index_without_scanning_on_startup() {
     );
     assert!(state.media_scans.snapshot().unwrap().is_none());
     let catalog = NativeMediaCatalog::new(state.clone());
-    let snapshot = catalog.scan_source_directories("/").await.unwrap();
+    catalog.start_volume_scan(None).unwrap().unwrap();
+    state.media_scans.wait_background().await.unwrap();
+    let snapshot = state.media_scans.snapshot().unwrap().unwrap();
     assert_eq!(
         snapshot.status,
         crate::features::services::files::media_scans::Status::Completed,
@@ -1232,7 +1236,7 @@ async fn changed_index_directories_refresh_all_shared_media_lists_without_copyin
 
 #[cfg(feature = "runtime-media")]
 #[tokio::test]
-async fn directory_scan_counts_filtered_files_before_the_first_index_write() {
+async fn directory_scan_streams_filtered_files_before_the_final_total() {
     let directory = directory_scan_fixture();
     let root = directory.path().join("source");
     for folder in [
@@ -1308,26 +1312,25 @@ async fn directory_scan_counts_filtered_files_before_the_first_index_write() {
         .unwrap();
     assert_eq!(result.total_files, Some(4));
     assert_eq!(result.processed_files, 4);
+    let mut streamed = false;
     let mut counted = false;
-    let mut indexed = false;
+    let mut indexed = 0;
     while let Ok(event) = events.try_recv() {
-        if event.event_type != crate::infrastructure::events::MEDIA_SCAN_PROGRESS {
-            continue;
-        }
+        if event.event_type != crate::infrastructure::events::MEDIA_SCAN_PROGRESS { continue; }
         let progress: plain_libs::serde_json::Value = plain_libs::serde_json::from_str(&event.payload).unwrap();
-        if progress["total"] == 4 && progress["indexed"] == 0 {
+        let current = progress["indexed"].as_u64().unwrap();
+        assert!(current >= indexed && current <= 4, "invalid committed file progress: {progress}");
+        indexed = current;
+        if progress["total"].is_null() {
+            assert!(!counted, "the known total must not become unknown again");
+            streamed |= current > 0;
+        } else {
+            assert_eq!(progress["total"], 4);
             counted = true;
         }
-        if progress["indexed"].as_u64().unwrap() > 0 {
-            assert!(
-                counted,
-                "Indexing started before counting completed: {progress}"
-            );
-            assert_eq!(progress["total"], 4);
-            indexed = true;
-        }
     }
-    assert!(counted && indexed);
+    assert!(streamed && counted);
+    assert_eq!(indexed, 4);
     assert_eq!(
         state
             .db
@@ -1483,3 +1486,78 @@ async fn directory_scan_batches_records_and_reconciles_unseen_rows() {
     }).unwrap();
     core.stop_core().await;
 }
+
+
+#[tokio::test]
+async fn full_volume_scan_persists_history_and_background_preserves_it() {
+    let directory = directory_scan_fixture();
+    let source = directory.path().join("generated-scan-source");
+    std::fs::create_dir_all(source.join("nested")).unwrap();
+    std::fs::write(source.join("one.rs"), b"generated source one").unwrap();
+    std::fs::write(source.join("nested/two.rs"), b"generated source two").unwrap();
+    let source = source.canonicalize().unwrap();
+    let core = crate::test_runtime::Core::open(&directory.path().join("core")).unwrap();
+    let state = core.runtime_state();
+    let catalog = NativeMediaCatalog::new(state.clone());
+    state.media_scans.set_defaults(crate::features::files::index_scope::Defaults::default()).unwrap();
+    crate::features::services::files::indexing::set_directories(&state.db, &[source.to_str().unwrap().into()]).unwrap();
+    catalog.configure_scan_directories(None).unwrap();
+    let volume_id = state.db.register_volume(&source).unwrap().unwrap();
+    let result = catalog.scan_directory(source.to_str().unwrap()).await.unwrap();
+    assert_eq!(result.status, crate::features::services::files::media_scans::Status::Completed);
+    assert_eq!(result.processed_files, 2);
+    let stored = state.db.volumes().unwrap().into_iter().find(|volume| volume.id == volume_id).unwrap();
+    assert_eq!(stored.last_scan_status, Some(crate::infrastructure::db::FileIndexScanStatus::Completed));
+    assert_eq!(stored.last_scan_count, Some(2));
+    assert_eq!(stored.last_scan_total, Some(2));
+    plain_libs::chrono::DateTime::parse_from_rfc3339(stored.last_scan_at.as_deref().unwrap()).unwrap();
+    std::fs::write(source.join("three.rs"), b"generated source three").unwrap();
+    catalog.scan_directories(vec![source.to_str().unwrap().into()], Purpose::Reconcile).await.unwrap();
+    let after = state.db.volumes().unwrap().into_iter().find(|volume| volume.id == volume_id).unwrap();
+    assert_eq!(after, stored);
+    let updated = catalog.scan_directory(source.to_str().unwrap()).await.unwrap();
+    assert_eq!(updated.processed_files, 3);
+    let after = state.db.volumes().unwrap().into_iter().find(|volume| volume.id == volume_id).unwrap();
+    assert_eq!(after.last_scan_count, Some(3));
+    assert_eq!(after.last_scan_total, Some(3));
+    core.stop_core().await;
+}
+
+
+#[tokio::test]
+async fn configured_scan_walks_each_root_once_and_commits_bounded_batches() {
+    use std::sync::{Arc, atomic::{AtomicUsize, Ordering}};
+    let directory = directory_scan_fixture();
+    let source = directory.path().join("generated-buffered-source");
+    std::fs::create_dir(&source).unwrap();
+    let ordinary = SCAN_BATCH_SIZE * 2 + 17;
+    let documents = SCAN_BATCH_SIZE + 17;
+    for index in 0..ordinary { std::fs::write(source.join(format!("source-{index}.rs")), b"generated source").unwrap(); }
+    for index in 0..documents { std::fs::write(source.join(format!("document-{index}.txt")), b"generated document").unwrap(); }
+    let source = source.canonicalize().unwrap();
+    let core = crate::test_runtime::Core::open(&directory.path().join("core")).unwrap();
+    let state = core.runtime_state();
+    let catalog = NativeMediaCatalog::new(state.clone());
+    state.media_scans.set_defaults(crate::features::files::index_scope::Defaults::default()).unwrap();
+    crate::features::services::files::indexing::set_directories(&state.db, &[source.to_str().unwrap().into()]).unwrap();
+    catalog.configure_scan_directories(None).unwrap();
+    let commits = Arc::new(AtomicUsize::new(0));
+    let observed = commits.clone();
+    state.db.with_conn(|conn| conn.commit_hook(Some(move || { observed.fetch_add(1, Ordering::Relaxed); false })));
+    let result = catalog.scan_directory(source.to_str().unwrap()).await.unwrap();
+    state.db.with_conn(|conn| conn.commit_hook(None::<fn() -> bool>));
+    assert_eq!(catalog.directory_walks.load(Ordering::Relaxed), 1, "one configured scan must not enumerate its root twice");
+    assert_eq!(result.status, crate::features::services::files::media_scans::Status::Completed);
+    assert_eq!(result.total_files, Some(ordinary + documents));
+    assert_eq!(result.processed_files, ordinary + documents);
+    let bound = ((ordinary + documents + 1).div_ceil(SCAN_BATCH_SIZE) + documents.div_ceil(SCAN_BATCH_SIZE)) * 2 + 2;
+    let actual = commits.load(Ordering::Relaxed);
+    assert!(actual <= bound, "{actual} commits exceed bounded scan batches ({bound})");
+    let rows = state.db.with_conn(|conn| conn.query_row("SELECT count(*) FROM files WHERE kind<>'DIRECTORY' AND last_seen_scan_id IS NOT NULL", [], |row| row.get::<_, i64>(0))).unwrap();
+    assert_eq!(rows, (ordinary + documents) as i64, "the final partial batch must persist");
+    core.stop_core().await;
+}
+
+#[cfg(unix)]
+#[path = "catalog_scan/volume_boundary.rs"]
+mod volume_boundary;

@@ -210,12 +210,12 @@ Linux root services automatically mount eligible unmounted filesystems at stable
 
 ### Data and cache directories
 
-Without path overrides, CLI data is stored in `~/.plainapp/data` for the user running the process. For the root service installed by `plainapp install`, this is normally `/root/.plainapp/data`.
+Without path overrides, Linux CLI commands and the installed service use `/var/lib/plainapp`. Other operating systems use `~/.plainapp/data` for the user running the process. `run`, `prefs` and `passwd` share the same directory selection.
 
-App files: `<data-dir>/files/` (default: `~/.plainapp/data/files/`; with `--data-dir /var/lib/plainapp`: `/var/lib/plainapp/files/`).
+App files: `<data-dir>/files/` (Linux default: `/var/lib/plainapp/files/`; other operating systems: `~/.plainapp/data/files/`).
 
 ```text
-<data-dir>/                     Persistent data; default: ~/.plainapp/data
+<data-dir>/                     Persistent data; Linux default: /var/lib/plainapp
 ├── plain.db                    SQLite database: application records and indexes
 ├── plain.db-wal                SQLite write-ahead log, when present
 ├── plain.db-shm                SQLite shared-memory file, when present

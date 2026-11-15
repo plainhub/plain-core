@@ -19,12 +19,12 @@ fn photo_snapshot_populates_shared_image_queries_and_preserves_identity() {
         favorite: false,
     };
     replace(&db, std::slice::from_ref(&asset)).unwrap();
-    let rows = media_catalog::rows(&db, DataType::Image, "", MediaSortBy::NameAsc, 10, 0).unwrap();
+    let rows = media_catalog::rows(&db, &crate::features::prefs::Prefs::in_memory(), DataType::Image, "", MediaSortBy::NameAsc, 10, 0).unwrap();
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].path, "ph://asset/L0/001");
     assert_eq!(rows[0].size_bytes, 0);
     assert_eq!(rows[0].bucket_id, "ph://photos");
-    let buckets = media_catalog::buckets(&db, DataType::Image).unwrap();
+    let buckets = media_catalog::buckets(&db, &crate::features::prefs::Prefs::in_memory(), DataType::Image).unwrap();
     assert_eq!(buckets[0].name, "photos");
     let id = rows[0].id.clone();
     assert_eq!(db.media_resource_path(&id).unwrap(), rows[0].path);
@@ -50,7 +50,7 @@ fn photo_snapshot_populates_shared_image_queries_and_preserves_identity() {
     for paths in [None, Some(vec!["/".to_owned()])] {
         db.update_index_visibility(&scope, paths.as_deref())
             .unwrap();
-        assert_eq!(media_catalog::count(&db, DataType::Image, "").unwrap(), 1);
+        assert_eq!(media_catalog::count(&db, &crate::features::prefs::Prefs::in_memory(), DataType::Image, "").unwrap(), 1);
     }
     db.with_conn(|conn| conn.execute("UPDATE files SET indexed=0 WHERE volume_id='photos'", []))
         .unwrap();
@@ -58,7 +58,7 @@ fn photo_snapshot_populates_shared_image_queries_and_preserves_identity() {
     asset.favorite = true;
     asset.created_at = "2026-01-02T00:00:00Z".into();
     replace(&db, &[asset]).unwrap();
-    let rows = media_catalog::rows(&db, DataType::Image, "", MediaSortBy::NameAsc, 10, 0).unwrap();
+    let rows = media_catalog::rows(&db, &crate::features::prefs::Prefs::in_memory(), DataType::Image, "", MediaSortBy::NameAsc, 10, 0).unwrap();
     assert_eq!(rows[0].id, id);
     assert_eq!(rows[0].title, "edited.jpg");
     assert!(rows[0].favorited);
@@ -70,9 +70,9 @@ fn photo_snapshot_populates_shared_image_queries_and_preserves_identity() {
             .starts_with("2026-01-02")
     );
     db.refresh_volume_availability().unwrap();
-    assert_eq!(media_catalog::count(&db, DataType::Image, "").unwrap(), 1);
+    assert_eq!(media_catalog::count(&db, &crate::features::prefs::Prefs::in_memory(), DataType::Image, "").unwrap(), 1);
     replace(&db, &[]).unwrap();
-    assert_eq!(media_catalog::count(&db, DataType::Image, "").unwrap(), 0);
+    assert_eq!(media_catalog::count(&db, &crate::features::prefs::Prefs::in_memory(), DataType::Image, "").unwrap(), 0);
 }
 
 #[tokio::test]
@@ -104,11 +104,11 @@ async fn photo_queries_use_raw_pages_once_per_revision_and_remove_hidden_assets(
     });
     let catalog = PhotoCatalog::default();
     catalog.sync(&db, &host).await.unwrap();
-    assert_eq!(media_catalog::count(&db, DataType::Image, "").unwrap(), 1);
+    assert_eq!(media_catalog::count(&db, &crate::features::prefs::Prefs::in_memory(), DataType::Image, "").unwrap(), 1);
     catalog.sync(&db, &host).await.unwrap();
-    assert_eq!(media_catalog::count(&db, DataType::Image, "").unwrap(), 1);
+    assert_eq!(media_catalog::count(&db, &crate::features::prefs::Prefs::in_memory(), DataType::Image, "").unwrap(), 1);
     catalog.sync(&db, &host).await.unwrap();
-    assert_eq!(media_catalog::count(&db, DataType::Image, "").unwrap(), 0);
+    assert_eq!(media_catalog::count(&db, &crate::features::prefs::Prefs::in_memory(), DataType::Image, "").unwrap(), 0);
     worker.await.unwrap();
 }
 
@@ -122,17 +122,17 @@ fn photo_snapshot_stores_videos_in_the_shared_catalog_without_copying() {
     ])).unwrap();
     replace(&db, &assets).unwrap();
     let videos =
-        media_catalog::rows(&db, DataType::Video, "", MediaSortBy::NameAsc, 10, 0).unwrap();
+        media_catalog::rows(&db, &crate::features::prefs::Prefs::in_memory(), DataType::Video, "", MediaSortBy::NameAsc, 10, 0).unwrap();
     assert_eq!(videos.len(), 1);
     assert_eq!(videos[0].path, "ph://video/L0/001");
     assert_eq!(videos[0].size_bytes, 0);
     assert_eq!(videos[0].duration_ms, 1250);
     assert_eq!(videos[0].width, 1920);
-    assert_eq!(media_catalog::count(&db, DataType::Image, "").unwrap(), 1);
+    assert_eq!(media_catalog::count(&db, &crate::features::prefs::Prefs::in_memory(), DataType::Image, "").unwrap(), 1);
     assert_eq!(
         db.media_resource_path(&videos[0].id).unwrap(),
         videos[0].path
     );
     replace(&db, &assets[..1]).unwrap();
-    assert_eq!(media_catalog::count(&db, DataType::Video, "").unwrap(), 0);
+    assert_eq!(media_catalog::count(&db, &crate::features::prefs::Prefs::in_memory(), DataType::Video, "").unwrap(), 0);
 }

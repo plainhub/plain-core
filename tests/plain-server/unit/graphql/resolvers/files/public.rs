@@ -422,7 +422,7 @@ async fn mounts_and_favorites_need_no_storage_grant() {
     assert_eq!(mounts[0]["driveType"], "INTERNAL_STORAGE");
     assert_eq!(mounts[0]["totalBytes"], 100);
     assert_eq!(mounts[1]["driveType"], "USB_STORAGE");
-    assert_eq!(mounts[1]["alias"], "USB");
+    assert_eq!(mounts[1]["alias"], "", "host metadata cannot override the volume alias store");
 }
 
 /// The bookmarks come straight out of Rust SQLite — the host is never

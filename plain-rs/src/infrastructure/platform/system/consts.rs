@@ -33,12 +33,9 @@ impl AppPaths {
         directory: Option<PathBuf>,
         cache: Option<PathBuf>,
     ) -> Result<Self, String> {
-        let base = home_directory()
-            .unwrap_or_else(std::env::temp_dir)
-            .join(".plainapp");
         let data_dir = directory
             .or_else(|| configured_path("PLAINAPP_DATA_DIR"))
-            .unwrap_or_else(|| base.join("data"));
+            .unwrap_or_else(|| default_data_directory(std::env::consts::OS));
         let data_dir = std::path::absolute(data_dir).map_err(|error| error.to_string())?;
         let cache_dir = match cache.or_else(|| configured_path("PLAINAPP_CACHE_DIR")) {
             Some(cache) => std::path::absolute(cache).map_err(|error| error.to_string())?,
@@ -62,3 +59,16 @@ fn configured_path(name: &str) -> Option<PathBuf> {
 pub fn home_directory() -> Option<PathBuf> {
     std::env::home_dir()
 }
+
+fn default_data_directory(os: &str) -> PathBuf {
+    if os == "linux" {
+        return PathBuf::from("/var/lib/plainapp");
+    }
+    home_directory()
+        .unwrap_or_else(std::env::temp_dir)
+        .join(".plainapp/data")
+}
+
+#[cfg(test)]
+#[path = "../../../../../tests/plain-rs/unit/infrastructure/platform/system/consts.rs"]
+mod tests;

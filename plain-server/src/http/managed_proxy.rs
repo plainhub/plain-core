@@ -351,11 +351,8 @@ async fn resource(state: ServerState, target: &str, path: &str, request: Request
     let native = path == "fs"
         && native_loopback(&state, &request)
         && state.native_client_id().is_ok_and(|native| native == id);
-    let session = if native {
-        match plain_rs::features::services::sessions::native(&state) {
-            Ok(session) => session,
-            Err(_) => return StatusCode::UNAUTHORIZED.into_response(),
-        }
+    let browser_session = if native {
+        None
     } else {
         if !same_origin(&request) {
             return StatusCode::FORBIDDEN.into_response();
@@ -363,13 +360,14 @@ async fn resource(state: ServerState, target: &str, path: &str, request: Request
         let Ok(session) = caller(&state, &id) else {
             return StatusCode::UNAUTHORIZED.into_response();
         };
-        session
+        Some(session)
     };
-    let Ok(url_key) = decode_key(&session.url_token) else {
+    let url_token = browser_session.as_ref().map_or(state.token.as_ref(), |session| session.url_token.as_str());
+    let Ok(url_key) = decode_key(url_token) else {
         return StatusCode::UNAUTHORIZED.into_response();
     };
     let scope = Scope::Session(id);
-    let browser_session = (!native).then_some(&session);
+    let browser_session = browser_session.as_ref();
     let Ok(plain) = resource_link::decrypt(&scope, ResourcePurpose::Fs, &url_key, payload) else {
         return StatusCode::UNAUTHORIZED.into_response();
     };

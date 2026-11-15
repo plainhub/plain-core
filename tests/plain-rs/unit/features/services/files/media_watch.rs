@@ -636,7 +636,7 @@ async fn directory_scanning_waits_for_watch_registration_and_remains_cancellable
                 .is_none()
         );
         if cancel {
-            state.media_scans.cancel().unwrap();
+            state.media_scans.cancel(None).unwrap();
         } else {
             started.send_replace(true);
         }

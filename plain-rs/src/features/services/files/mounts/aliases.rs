@@ -1,0 +1,70 @@
+use crate::infrastructure::db::Db;
+use plain_libs::serde_json::Value;
+use std::path::Path;
+
+pub fn mount_id(mount: &Value) -> String {
+    mount
+        .get("id")
+        .and_then(Value::as_str)
+        .filter(|id| !id.is_empty())
+        .map(str::to_owned)
+        .unwrap_or_else(|| format!("path:{}", mount["path"].as_str().unwrap_or_default()))
+}
+
+fn mounted_path(mount: &Value) -> Option<&Path> {
+    mount
+        .get("mountPoint")
+        .unwrap_or(&mount["path"])
+        .as_str()
+        .map(Path::new)
+        .filter(|path| path.is_absolute())
+}
+
+pub fn apply_aliases(db: &Db, mut facts: Value) -> Result<Value, String> {
+    let mounts = facts.as_array_mut().ok_or("Invalid storage volume facts")?;
+    let ids = mounts
+        .iter()
+        .map(|mount| {
+            mounted_path(mount)
+                .map(|path| db.register_volume(path))
+                .transpose()
+                .map(Option::flatten)
+                .map_err(|error| error.to_string())
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let aliases = db
+        .volumes()
+        .map_err(|error| error.to_string())?
+        .into_iter()
+        .map(|volume| (volume.id, volume.alias))
+        .collect::<std::collections::HashMap<_, _>>();
+    for (mount, id) in mounts.iter_mut().zip(ids) {
+        mount["alias"] = Value::String(id.map_or_else(String::new, |id| aliases[&id].clone()));
+    }
+    Ok(facts)
+}
+
+pub fn set_alias(db: &Db, facts: &Value, id: &str, alias: &str) -> Result<(), String> {
+    let mount = facts
+        .as_array()
+        .ok_or("Invalid storage volume facts")?
+        .iter()
+        .find(|mount| mount_id(mount) == id)
+        .ok_or("Mount not found")?;
+    let path = mounted_path(mount).ok_or("Mounted filesystem volume required")?;
+    let volume_id = db
+        .register_volume(path)
+        .map_err(|error| error.to_string())?
+        .ok_or("Filesystem volume is unavailable")?;
+    if !db
+        .set_volume_alias(&volume_id, alias)
+        .map_err(|error| error.to_string())?
+    {
+        return Err("Volume not found".into());
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+#[path = "../../../../../../tests/plain-rs/unit/features/services/files/mounts/aliases.rs"]
+mod tests;

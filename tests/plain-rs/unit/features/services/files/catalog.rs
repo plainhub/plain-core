@@ -27,8 +27,8 @@ async fn native_catalog_reads_rows_counts_ids_and_buckets_without_a_host() {
     let dir = plain_libs::temporary::tempdir().unwrap();
     let db = Arc::new(Db::open(&dir.path().join("data.db")).unwrap());
     let stored = db.record_media_files(&[metadata()]).unwrap();
-    let catalog = MediaCatalog::new(db, Arc::new(Host::default()));
-    assert!(matches!(catalog, MediaCatalog::Native(_)));
+    let catalog = MediaCatalog::new(db, Arc::new(Host::default()), Arc::new(crate::features::prefs::Prefs::in_memory()));
+    assert!(matches!(catalog, MediaCatalog::Native(..)));
     let rows = catalog
         .rows(DataType::Image, "", MediaSortBy::NameAsc, 10, 0)
         .await
@@ -106,7 +106,7 @@ async fn platform_catalog_reads_os_facts_without_a_local_catalogue() {
     });
     let dir = plain_libs::temporary::tempdir().unwrap();
     let db = Arc::new(Db::open(&dir.path().join("data.db")).unwrap());
-    let catalog = MediaCatalog::new(db, host);
+    let catalog = MediaCatalog::new(db, host, Arc::new(crate::features::prefs::Prefs::in_memory()));
     let rows = catalog
         .rows(DataType::Image, "text:picture", MediaSortBy::NameAsc, 8, 4)
         .await
@@ -181,7 +181,7 @@ async fn semantic_image_candidates_intersect_platform_ids_and_keep_non_text_filt
                 .unwrap();
         }
     });
-    let catalog = MediaCatalog::Platform { db, host };
+    let catalog = MediaCatalog::Platform { db, host, prefs: Arc::new(crate::features::prefs::Prefs::in_memory()) };
     let candidates = ["2", "3", "2"].map(str::to_owned);
     for selection in ["ids:1,2".to_owned(), format!("tag_id:{}", tag.id)] {
         let query = format!(
@@ -251,7 +251,7 @@ async fn document_extensions_read_only_bounded_path_pages() {
                 .unwrap();
         }
     });
-    let catalog = MediaCatalog::Platform { db, host };
+    let catalog = MediaCatalog::Platform { db, host, prefs: Arc::new(crate::features::prefs::Prefs::in_memory()) };
     assert_eq!(
         catalog
             .document_extensions("bucket_id:/documents")
@@ -260,4 +260,210 @@ async fn document_extensions_read_only_bounded_path_pages() {
         vec![("PDF".into(), 512), ("TXT".into(), 1)]
     );
     worker.await.unwrap();
+}
+
+#[tokio::test]
+async fn media_exclusions_hide_lists_search_counts_groups_and_restore_without_index_changes() {
+    let dir = plain_libs::temporary::tempdir().unwrap();
+    let db = Arc::new(Db::open(&dir.path().join("data.db")).unwrap());
+    let prefs = Arc::new(crate::features::prefs::Prefs::in_memory());
+    let catalog = MediaCatalog::new(db.clone(), Arc::new(Host::default()), prefs.clone());
+    let mut image_ids = Vec::new();
+    for (kind, extension) in [
+        (DataType::Image, "jpg"),
+        (DataType::Video, "mp4"),
+        (DataType::Audio, "mp3"),
+        (DataType::Doc, "txt"),
+    ] {
+        let files = [
+            "/hidden/item",
+            "/hidden/child/item",
+            "/hidden-copy/item",
+            "/visible/item",
+        ]
+        .map(|path| crate::infrastructure::db::MediaFileMetadata {
+            data_type: kind,
+            path: format!("{path}.{extension}"),
+            title: "item".into(),
+            artist: "Synthetic Artist".into(),
+            size_bytes: 100,
+            duration_ms: 10,
+            ..metadata()
+        });
+        let stored = db.record_media_files(&files).unwrap();
+        if kind == DataType::Image {
+            image_ids = stored.into_iter().map(|row| row.id).collect();
+        }
+    }
+    let indexed_before = db
+        .with_conn(|conn| {
+            conn.query_row("SELECT COUNT(*) FROM files WHERE indexed=1", [], |row| {
+                row.get::<_, i64>(0)
+            })
+        })
+        .unwrap();
+    prefs.set("media_excluded_dirs", vec!["/hidden/"]).unwrap();
+    for kind in [
+        DataType::Image,
+        DataType::Video,
+        DataType::Audio,
+        DataType::Doc,
+    ] {
+        assert_eq!(catalog.count(kind, "").await.unwrap(), 2);
+        assert_eq!(catalog.count(kind, "text:item").await.unwrap(), 2);
+        let rows = catalog
+            .rows(kind, "", MediaSortBy::NameAsc, 20, 0)
+            .await
+            .unwrap();
+        assert_eq!(rows.len(), 2);
+        assert!(
+            rows.iter()
+                .any(|row| row["path"].as_str().unwrap().starts_with("/hidden-copy/"))
+        );
+        assert_eq!(
+            catalog.ids(kind, "text:item", false).await.unwrap().len(),
+            2
+        );
+        assert_eq!(
+            catalog
+                .buckets(kind)
+                .await
+                .unwrap()
+                .iter()
+                .map(|bucket| bucket.item_count)
+                .sum::<u64>(),
+            2
+        );
+    }
+    assert_eq!(
+        catalog
+            .image_matches("", &image_ids, false)
+            .await
+            .unwrap()
+            .len(),
+        2
+    );
+    assert_eq!(
+        catalog.document_extensions("").await.unwrap(),
+        vec![("TXT".into(), 2)]
+    );
+    let artists = crate::features::services::audio::overview::read(
+        db.clone(),
+        MediaCatalog::new(db.clone(), Arc::new(Host::default()), prefs.clone()),
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        artists.iter().map(|artist| artist.item_count).sum::<i32>(),
+        2
+    );
+    assert_eq!(
+        db.with_conn(|conn| conn.query_row(
+            "SELECT COUNT(*) FROM files WHERE indexed=1",
+            [],
+            |row| row.get::<_, i64>(0)
+        ))
+        .unwrap(),
+        indexed_before
+    );
+    let files = super::super::indexed::native(
+        &db,
+        "text:item",
+        0,
+        100,
+        crate::features::prefs::settings::FileSortBy::NameAsc,
+        true,
+    )
+    .unwrap();
+    assert_eq!(files, plain_libs::serde_json::json!(16));
+    prefs
+        .set("media_excluded_dirs", Vec::<String>::new())
+        .unwrap();
+    for kind in [
+        DataType::Image,
+        DataType::Video,
+        DataType::Audio,
+        DataType::Doc,
+    ] {
+        assert_eq!(catalog.count(kind, "").await.unwrap(), 4);
+    }
+}
+
+#[tokio::test]
+async fn media_exclusion_paths_treat_wildcards_as_literals_and_support_the_volume_root() {
+    let dir = plain_libs::temporary::tempdir().unwrap();
+    let db = Arc::new(Db::open(&dir.path().join("data.db")).unwrap());
+    let prefs = Arc::new(crate::features::prefs::Prefs::in_memory());
+    for path in ["/100%_/one.jpg", "/100ab/one.jpg", "/100%_-copy/one.jpg"] {
+        db.record_media_files(&[crate::infrastructure::db::MediaFileMetadata {
+            path: path.into(),
+            ..metadata()
+        }])
+        .unwrap();
+    }
+    let catalog = MediaCatalog::new(db, Arc::new(Host::default()), prefs.clone());
+    prefs.set("media_excluded_dirs", vec!["/100%_"]).unwrap();
+    assert_eq!(catalog.count(DataType::Image, "").await.unwrap(), 2);
+    prefs.set("media_excluded_dirs", vec!["/"]).unwrap();
+    assert_eq!(catalog.count(DataType::Image, "").await.unwrap(), 0);
+}
+
+#[tokio::test]
+async fn platform_media_entries_send_the_same_exclusion_rule_to_the_host() {
+    let host = Arc::new(
+        Host::with_startup_config(crate::infrastructure::host::startup::StartupConfig {
+            system_media_catalog: true,
+            ..crate::infrastructure::platform::startup::config()
+        })
+        .unwrap(),
+    );
+    let (generation, mut requests) = host.connect();
+    let replies = host.clone();
+    let worker = tokio::spawn(async move {
+        for _ in 0..5 {
+            let request = requests.recv().await.unwrap();
+            let plan = &request["params"]["plan"];
+            assert!(
+                plan["clauses"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|clause| clause == "NOT (_data = ? OR substr(_data,1,length(?)) = ?)")
+            );
+            let args = plan["args"].as_array().unwrap();
+            assert!(
+                args.windows(3)
+                    .any(|args| args == [json!("/hidden"), json!("/hidden/"), json!("/hidden/")])
+            );
+            let result = if request["method"] == "systemMediaCount" {
+                json!(0)
+            } else {
+                json!([])
+            };
+            replies
+                .reply(generation, json!({"id":request["id"],"result":result}))
+                .unwrap();
+        }
+    });
+    let dir = plain_libs::temporary::tempdir().unwrap();
+    let prefs = Arc::new(crate::features::prefs::Prefs::in_memory());
+    prefs.set("media_excluded_dirs", vec!["/hidden/"]).unwrap();
+    let catalog = MediaCatalog::new(
+        Arc::new(Db::open(&dir.path().join("data.db")).unwrap()),
+        host.clone(),
+        prefs,
+    );
+    catalog
+        .rows(DataType::Image, "", MediaSortBy::NameAsc, 10, 0)
+        .await
+        .unwrap();
+    catalog.count(DataType::Image, "").await.unwrap();
+    catalog.ids(DataType::Image, "", false).await.unwrap();
+    catalog.buckets(DataType::Image).await.unwrap();
+    catalog
+        .image_matches("", &["1".into()], false)
+        .await
+        .unwrap();
+    worker.await.unwrap();
+    host.disconnect(generation);
 }

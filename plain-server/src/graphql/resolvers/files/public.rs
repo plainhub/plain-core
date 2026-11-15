@@ -70,7 +70,7 @@ impl FilesQuery {
     async fn mounts(&self, ctx: &Context<'_>) -> plain_graphql::Result<Vec<Mount>> {
         let facts = ctx
             .data::<Arc<plain_rs::features::services::files::platform::FilePlatform>>()?
-            .mounts(prefs(ctx).clone())
+            .mounts()
             .await
             .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
         Ok(rows(&facts, mount))
@@ -368,13 +368,7 @@ fn file(item: &Value) -> File {
 
 fn mount(item: &Value) -> Mount {
     Mount {
-        id: plain_graphql::ID(
-            item.get("id")
-                .and_then(Value::as_str)
-                .filter(|id| !id.is_empty())
-                .map(str::to_owned)
-                .unwrap_or_else(|| format!("path:{}", text(item, "path"))),
-        ),
+        id: plain_graphql::ID(plain_rs::features::services::files::mounts::mount_id(item)),
         name: text(item, "name"),
         path: text(item, "path"),
         mount_point: item

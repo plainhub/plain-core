@@ -1,8 +1,7 @@
 use crate::features::files::resource_link::{self, Resource, Scope};
-use crate::infrastructure::db::Db;
 use plain_libs::serde_json::Value;
 
-pub fn peer_content(content: &str, client_id: &str, db: &Db) -> plain_libs::anyhow::Result<String> {
+pub fn peer_content(content: &str, client_id: &str, resource_token: &str) -> plain_libs::anyhow::Result<String> {
     let mut value: Value = plain_libs::serde_json::from_str(content)?;
     if !matches!(
         value.get("type").and_then(Value::as_str),
@@ -10,11 +9,8 @@ pub fn peer_content(content: &str, client_id: &str, db: &Db) -> plain_libs::anyh
     ) {
         return Ok(content.into());
     }
-    let session = db
-        .session_get(client_id)?
-        .ok_or_else(|| plain_libs::anyhow::anyhow!("Session unavailable"))?;
-    let key = crate::features::sessions::token_key(&session.url_token)?;
-    let scope = Scope::Session(session.client_id);
+    let key = crate::features::sessions::token_key(resource_token)?;
+    let scope = Scope::Session(client_id.to_owned());
     let items = value
         .get_mut("value")
         .and_then(|v| v.get_mut("items"))

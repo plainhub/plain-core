@@ -384,7 +384,7 @@ INSERT INTO image_embeddings(file_id,path,embedding,created_at,updated_at) VALUE
 CREATE TRIGGER reject_scan_delete BEFORE DELETE ON files BEGIN SELECT RAISE(ABORT,'rejected'); END;" )).unwrap();
     let root = std::path::Path::new("/scan/root_%");
     let gaps = [root.join("denied")];
-    assert!(reconcile_scan_batch(&db, root, "current", &gaps, 1, "").is_err());
+    assert!(reconcile_scan_batch(&db, "scan", root, "current", &gaps, 1, "").is_err());
     assert!(db.file("audio").unwrap().is_some());
     db.with_conn(|conn| {
         assert_eq!(
@@ -395,16 +395,16 @@ CREATE TRIGGER reject_scan_delete BEFORE DELETE ON files BEGIN SELECT RAISE(ABOR
         conn.execute_batch("DROP TRIGGER reject_scan_delete")
     })
     .unwrap();
-    let first = reconcile_scan_batch(&db, root, "current", &gaps, 1, "").unwrap();
+    let first = reconcile_scan_batch(&db, "scan", root, "current", &gaps, 1, "").unwrap();
     assert_eq!(first.len(), 1);
     assert_eq!(
-        reconcile_scan_batch(&db, root, "current", &gaps, 1, &first[0].id)
+        reconcile_scan_batch(&db, "scan", root, "current", &gaps, 1, &first[0].id)
             .unwrap()
             .len(),
         1
     );
     assert!(
-        reconcile_scan_batch(&db, root, "current", &gaps, 1, "")
+        reconcile_scan_batch(&db, "scan", root, "current", &gaps, 1, "")
             .unwrap()
             .is_empty()
     );
@@ -447,4 +447,13 @@ CREATE TRIGGER reject_scan_delete BEFORE DELETE ON files BEGIN SELECT RAISE(ABOR
         Ok::<_, plain_libs::rusqlite::Error>(())
     })
     .unwrap();
+}
+
+#[test]
+fn root_volume_reconciliation_preserves_other_mounted_volumes() {
+    let db = Db::open(std::path::Path::new(":memory:")).unwrap();
+    db.with_conn(|conn| conn.execute_batch("INSERT INTO volumes(id,identity,path,is_available) VALUES('internal','internal','/fixture',1),('usb','usb','/fixture/mnt/usb1',1); INSERT INTO files(id,volume_id,path,file_name,kind,updated_at,last_seen_scan_id) VALUES('internal-old','internal','old.rs','old.rs','FILE','now','previous'),('usb-keep','usb','keep.txt','keep.txt','DOC','now','previous');")).unwrap();
+    let removed = reconcile_scan_batch(&db, "internal", std::path::Path::new("/fixture"), "current", &[], 256, "").unwrap();
+    assert_eq!(removed.iter().map(|row| row.id.as_str()).collect::<Vec<_>>(), vec!["internal-old"], "rebuilding a parent volume must not reconcile a mounted child volume");
+    assert!(db.file("usb-keep").unwrap().is_some());
 }

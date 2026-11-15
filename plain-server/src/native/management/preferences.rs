@@ -92,6 +92,15 @@ impl NativeManagement {
 
     pub async fn set_pref(&self, key: &str, value: plain_libs::serde_json::Value) -> Result<bool, String> {
         self.state.native_client_id()?;
+        if key == keys::ADB_TOKEN {
+            if value.as_str() != Some("") {
+                return Err("ADB token can only be cleared; use reset to generate it".into());
+            }
+            return self.security_preferences()?
+                .remove(key)
+                .await
+                .map_err(|error| error.to_string());
+        }
         plain_rs::features::services::settings::preferences::Preferences::from_server(&self.state)
             .set(key, value)
             .await

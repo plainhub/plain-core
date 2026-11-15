@@ -54,14 +54,14 @@ pub mod file;
 #[cfg(feature = "library")]
 pub mod media_file;
 #[cfg(feature = "library")]
-pub use file::{FileKind, FileRow, FileIndexMode, VolumeRow};
+pub use file::{FileKind, FileRow, FileIndexMode, FileIndexScanStatus, VolumeRow};
 #[cfg(feature = "library")]
 pub use media_file::{
     MediaFileMetadata, MediaFileMetadataAvailability, MediaFileMetadataRead, MediaFileRow,
 };
 
 #[cfg(feature = "library")]
-pub use audit_event::AuditEventRow;
+pub use audit_event::{AuditEventClient, AuditEventRow};
 
 #[cfg(feature = "library")]
 mod media_play_history;

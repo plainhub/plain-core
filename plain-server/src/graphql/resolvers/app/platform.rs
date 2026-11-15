@@ -41,6 +41,12 @@ impl PlatformQuery {
                             r#type: kind,
                             message: row.message,
                             client_id: row.client_id.map(ID),
+                            client_name: row.client_name,
+                            client_ip: row.client_ip,
+                            os_name: row.os_name,
+                            os_version: row.os_version,
+                            app_name: row.app_name,
+                            app_version: row.app_version,
                             created_at: plain_rs::infrastructure::types::Instant(
                                 at.with_timezone(&plain_libs::chrono::Utc),
                             ),
@@ -110,14 +116,17 @@ impl PlatformMutation {
         Ok(true)
     }
 
-    fn set_mount_alias(
+    async fn set_mount_alias(
         &self,
         ctx: &Context<'_>,
         id: plain_graphql::ID,
         alias: String,
     ) -> Result<bool> {
         let state = ctx.data::<ServerState>()?;
-        plain_rs::features::prefs::storage::set_alias(&state.prefs, id.as_str(), &alias)?;
+        state
+            .file_platform
+            .set_mount_alias(id.to_string(), alias)
+            .await?;
         Ok(true)
     }
 }

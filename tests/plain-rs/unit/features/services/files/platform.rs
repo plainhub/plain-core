@@ -59,6 +59,7 @@ async fn sdk_file_access_without_a_system_media_catalog_records_portable_file_me
         .unwrap();
     let count = crate::features::services::files::media_catalog::count(
         &state.db,
+        &state.prefs,
         crate::features::enums::DataType::Doc,
         "",
     )

@@ -23,12 +23,14 @@ pub struct Receipt {
 
 pub struct Delivery {
     db: Db,
+    resource_token: Arc<str>,
     locks: Mutex<HashMap<String, Weak<tokio::sync::Mutex<()>>>>,
 }
 impl Delivery {
-    pub fn new(db: Db) -> Self {
+    pub fn new(db: Db, resource_token: Arc<str>) -> Self {
         Self {
             db,
+            resource_token,
             locks: Mutex::new(HashMap::new()),
         }
     }
@@ -86,7 +88,7 @@ impl Delivery {
         let content = crate::features::chat::messages::content::peer_content(
             &chat.content,
             client_id,
-            &self.db,
+            &self.resource_token,
         )?;
         let targets = if chat.channel_id.is_none() {
             if retry {

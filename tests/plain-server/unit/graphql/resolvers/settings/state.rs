@@ -160,7 +160,7 @@ async fn result_only_user_patch_does_not_read_unselected_system_settings() {
     plain_rs::features::prefs::security::bootstrap(&prefs).unwrap();
     prefs
         .set(
-            "volume_alias",
+            "pomodoro_settings",
             plain_libs::serde_json::json!("malformed unrelated system data"),
         )
         .unwrap();

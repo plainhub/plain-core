@@ -117,15 +117,53 @@ impl FromSql for FileIndexMode {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[cfg_attr(feature = "graphql", derive(plain_graphql::Enum))]
+pub enum FileIndexScanStatus {
+    Completed,
+    Canceled,
+    Failed,
+}
+
+impl plain_libs::rusqlite::ToSql for FileIndexScanStatus {
+    fn to_sql(&self) -> plain_libs::rusqlite::Result<ToSqlOutput<'_>> {
+        let value = match self {
+            Self::Completed => "COMPLETED",
+            Self::Canceled => "CANCELED",
+            Self::Failed => "FAILED",
+        };
+        Ok(ToSqlOutput::Borrowed(ValueRef::Text(value.as_bytes())))
+    }
+}
+
+impl FromSql for FileIndexScanStatus {
+    fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+        match value.as_str()? {
+            "COMPLETED" => Ok(Self::Completed),
+            "CANCELED" => Ok(Self::Canceled),
+            "FAILED" => Ok(Self::Failed),
+            _ => Err(plain_libs::rusqlite::types::FromSqlError::Other(
+                "Invalid file index scan status".into(),
+            )),
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct VolumeRow {
     pub id: String,
     pub identity: String,
     pub path: String,
+    pub alias: String,
     pub is_available: bool,
     pub index_mode: FileIndexMode,
     pub included_dirs: Vec<String>,
     pub excluded_dirs: Vec<String>,
+    pub last_scan_at: Option<String>,
+    pub last_scan_status: Option<FileIndexScanStatus>,
+    pub last_scan_count: Option<i64>,
+    pub last_scan_total: Option<i64>,
 }
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize)]

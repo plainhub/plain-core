@@ -130,12 +130,12 @@ fn native_history_and_catalog_share_one_snapshot_during_external_writes() {
             writer.execute_batch("COMMIT").unwrap();
         }))
     });
-    let before = native(&db).unwrap();
+    let before = native(&db, &crate::features::prefs::Prefs::in_memory()).unwrap();
     assert_eq!(before.len(), 1);
     assert_eq!(before[0].name, "Old Artist");
     assert_eq!(before[0].item_count, 2);
     assert_eq!(before[0].play_count, 5);
-    let after = native(&db).unwrap();
+    let after = native(&db, &crate::features::prefs::Prefs::in_memory()).unwrap();
     assert_eq!(after.len(), 1);
     assert_eq!(after[0].name, "New Artist");
     assert_eq!(after[0].item_count, 2);
@@ -166,7 +166,7 @@ fn native_scan_covers_more_than_a_page_and_excludes_trash_and_other_media() {
         transaction.commit()
     })
     .unwrap();
-    let summary = native(&db).unwrap();
+    let summary = native(&db, &crate::features::prefs::Prefs::in_memory()).unwrap();
     assert_eq!(
         summary
             .iter()

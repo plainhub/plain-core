@@ -1,4 +1,5 @@
 use crate::features::enums::DataType;
+use crate::features::prefs::Prefs;
 use crate::features::prefs::settings::MediaSortBy;
 use crate::features::services::files::provider_query::{self as query, Provider};
 use crate::infrastructure::db::Db;
@@ -6,12 +7,13 @@ use crate::infrastructure::db::MediaFileRow;
 use plain_libs::anyhow::Result;
 use plain_libs::rusqlite::{params_from_iter, types::Value};
 
-fn selection(db: &Db, data_type: DataType, text: &str) -> Result<(String, Vec<Value>)> {
-    selection_with_trash(db, data_type, text, false)
+fn selection(db: &Db, prefs: &Prefs, data_type: DataType, text: &str) -> Result<(String, Vec<Value>)> {
+    selection_with_trash(db, prefs, data_type, text, false)
 }
 
 fn selection_with_trash(
     db: &Db,
+    prefs: &Prefs,
     data_type: DataType,
     text: &str,
     from_trash: bool,
@@ -43,6 +45,7 @@ fn selection_with_trash(
             plan.args.extend(args);
         }
     }
+    plan.exclude_media_directories(prefs)?;
     Ok(selection_from_plan(data_type, plan, from_trash))
 }
 
@@ -94,6 +97,7 @@ fn selection_from_plan(
 
 pub fn rows(
     db: &Db,
+    prefs: &Prefs,
     data_type: DataType,
     query: &str,
     sort: MediaSortBy,
@@ -103,7 +107,7 @@ pub fn rows(
     selected_rows(
         db,
         data_type,
-        selection(db, data_type, query)?,
+        selection(db, prefs, data_type, query)?,
         sort,
         limit,
         offset,
@@ -112,12 +116,14 @@ pub fn rows(
 
 pub fn rows_with_plan(
     db: &Db,
+    prefs: &Prefs,
     data_type: DataType,
-    plan: query::Plan,
+    mut plan: query::Plan,
     sort: MediaSortBy,
     limit: u32,
     offset: u32,
 ) -> Result<Vec<MediaFileRow>> {
+    plan.exclude_media_directories(prefs)?;
     selected_rows(
         db,
         data_type,
@@ -166,8 +172,8 @@ fn selected_rows(
     })?)
 }
 
-pub fn count(db: &Db, data_type: DataType, query: &str) -> Result<i64> {
-    let (sql, args) = selection(db, data_type, query)?;
+pub fn count(db: &Db, prefs: &Prefs, data_type: DataType, query: &str) -> Result<i64> {
+    let (sql, args) = selection(db, prefs, data_type, query)?;
     Ok(db.with_conn(|conn| {
         conn.query_row(
             &sql.replace("{columns}", "COUNT(*)"),
@@ -177,8 +183,8 @@ pub fn count(db: &Db, data_type: DataType, query: &str) -> Result<i64> {
     })?)
 }
 
-pub fn ids(db: &Db, data_type: DataType, query: &str, from_trash: bool) -> Result<Vec<String>> {
-    let (sql, args) = selection_with_trash(db, data_type, query, from_trash)?;
+pub fn ids(db: &Db, prefs: &Prefs, data_type: DataType, query: &str, from_trash: bool) -> Result<Vec<String>> {
+    let (sql, args) = selection_with_trash(db, prefs, data_type, query, from_trash)?;
     let sql = format!(
         "{} ORDER BY updated_at DESC,file_id",
         sql.replace("{columns}", "id")
@@ -191,8 +197,8 @@ pub fn ids(db: &Db, data_type: DataType, query: &str, from_trash: bool) -> Resul
     })?)
 }
 
-pub fn document_extensions(db: &Db, query: &str) -> Result<Vec<(String, i32)>> {
-    let (sql, args) = selection(db, DataType::Doc, query)?;
+pub fn document_extensions(db: &Db, prefs: &Prefs, query: &str) -> Result<Vec<(String, i32)>> {
+    let (sql, args) = selection(db, prefs, DataType::Doc, query)?;
     Ok(db.with_conn(|conn| -> plain_libs::rusqlite::Result<_> {
         let mut statement = conn.prepare(&sql.replace("{columns}", "file_name"))?;
         let mut counts = std::collections::BTreeMap::new();
@@ -216,8 +222,8 @@ pub fn add_document_extension(counts: &mut std::collections::BTreeMap<String, i3
     }
 }
 
-fn bucket_selection(db: &Db, data_type: DataType) -> Result<(String, Vec<Value>)> {
-    let (sql, args) = selection(db, data_type, "")?;
+fn bucket_selection(db: &Db, prefs: &Prefs, data_type: DataType) -> Result<(String, Vec<Value>)> {
+    let (sql, args) = selection(db, prefs, data_type, "")?;
     Ok((
         format!(
             "WITH ranked AS ({})
@@ -233,8 +239,8 @@ FROM ranked GROUP BY bucket_id",
     ))
 }
 
-pub fn buckets(db: &Db, data_type: DataType) -> Result<Vec<super::media_buckets::Bucket>> {
-    let (sql, args) = bucket_selection(db, data_type)?;
+pub fn buckets(db: &Db, prefs: &Prefs, data_type: DataType) -> Result<Vec<super::media_buckets::Bucket>> {
+    let (sql, args) = bucket_selection(db, prefs, data_type)?;
     let mut buckets = db.with_conn(|conn| {
         let mut statement = conn.prepare(&sql)?;
         statement

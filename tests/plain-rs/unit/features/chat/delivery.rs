@@ -70,6 +70,45 @@ fn setup() -> (Db, Vec<u8>) {
     (db, plain_libs::crypto::ed25519_generate().0.to_vec())
 }
 const TEXT: &str = r#"{"type":"TEXT","value":{"text":"fixture"}}"#;
+
+#[tokio::test]
+async fn attachment_delivery_uses_runtime_credentials_without_a_session_row() {
+    struct Attachments {
+        key: Vec<u8>,
+        reference: String,
+        calls: AtomicUsize,
+    }
+    impl PeerTransport for Attachments {
+        async fn post<'a>(&'a self, _: &'a str, _: &'a str, _: Option<&'a str>, _: &'a [u8]) -> std::result::Result<Vec<u8>, String> {
+            unreachable!()
+        }
+        async fn message(&self, _: &DPeer, _: &str, _: &str, _: &[u8], body: &str) -> std::result::Result<(), String> {
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            let wire: Value = plain_libs::serde_json::from_str(body).unwrap();
+            let content: Value = plain_libs::serde_json::from_str(wire["request"]["variables"]["content"].as_str().unwrap()).unwrap();
+            let id = content["value"]["items"][0]["uri"].as_str().unwrap().strip_prefix("fsid:").unwrap();
+            let (scope, payload) = crate::features::files::resource_link::parse(id).unwrap();
+            assert_eq!(scope, crate::features::files::resource_link::Scope::Session("self".into()));
+            assert_eq!(crate::features::files::resource_link::open(&scope, &self.key, payload).unwrap(), crate::features::files::resource_link::Resource::reference(&self.reference));
+            Ok(())
+        }
+    }
+    let (db, signing_key) = setup();
+    let directory = plain_libs::temporary::tempdir().unwrap();
+    let file = crate::features::chat::attachments::app_file_store::import_bytes(&db, directory.path(), b"fixture", "text/plain").unwrap();
+    let reference = format!("fid:{}", file.fid_suffix);
+    let token = plain_libs::crypto::gen_token();
+    let transport = Attachments { key: plain_libs::utils::base64::base64_decode(&token), reference: reference.clone(), calls: AtomicUsize::new(0) };
+    let delivery = Delivery::new(db.clone(), Arc::from(token));
+    let content = json!({"type":"FILES","value":{"items":[{"uri":reference,"fileName":"fixture.txt","size":7}]}}).to_string();
+    let chat = message_lifecycle::create(&db, "peer", "", &content).unwrap();
+    let receipt = delivery.send(&transport, "self", &signing_key, &chat.id, None).await.unwrap();
+    assert_eq!(receipt.chat.unwrap().status, ChatStatus::Sent);
+    assert_eq!(transport.calls.load(Ordering::SeqCst), 1);
+    assert!(db.session_list().unwrap().is_empty());
+    assert_eq!(messages::get(&db, &chat.id).unwrap().unwrap().content, content);
+}
+
 #[tokio::test]
 async fn routing_uses_current_db_and_retries_only_current_joined_members() {
     let (db, key) = setup();
@@ -78,7 +117,7 @@ async fn routing_uses_current_db_and_retries_only_current_joined_members() {
         db: db.clone(),
         change_content: false,
     };
-    let delivery = Delivery::new(db.clone());
+    let delivery = Delivery::new(db.clone(), Arc::from(plain_libs::crypto::gen_token()));
     let local = message_lifecycle::create(&db, "local", "", TEXT).unwrap();
     assert_eq!(
         delivery
@@ -177,7 +216,7 @@ async fn routing_uses_current_db_and_retries_only_current_joined_members() {
 #[tokio::test]
 async fn changed_content_cannot_be_marked_sent_by_an_older_attempt() {
     let (db, key) = setup();
-    let delivery = Delivery::new(db.clone());
+    let delivery = Delivery::new(db.clone(), Arc::from(plain_libs::crypto::gen_token()));
     let transport = Transport {
         calls: AtomicUsize::new(0),
         db: db.clone(),
@@ -196,14 +235,7 @@ async fn changed_content_cannot_be_marked_sent_by_an_older_attempt() {
 }
 #[test]
 fn attachment_uris_and_response_receipts_match_mobile_contract() {
-    let db = Db::open(std::path::Path::new(":memory:")).unwrap();
-    crate::features::sessions::SessionStore::new(&db)
-        .upsert(crate::features::sessions::SessionInfo {
-            client_id: "sender".into(),
-            ..Default::default()
-        })
-        .unwrap();
-    let token = db.session_get("sender").unwrap().unwrap().url_token;
+    let token = plain_libs::crypto::gen_token();
     for uri in [
         "fid:abc",
         "content://provider/123",
@@ -212,7 +244,7 @@ fn attachment_uris_and_response_receipts_match_mobile_contract() {
     ] {
         let content =
             json!({"type":"FILES","value":{"items":[{"uri":uri,"name":"x"}]}}).to_string();
-        let wire = crate::features::chat::messages::content::peer_content(&content, "sender", &db)
+        let wire = crate::features::chat::messages::content::peer_content(&content, "sender", &token)
             .unwrap();
         let wire: Value = plain_libs::serde_json::from_str(&wire).unwrap();
         let uri_wire = wire["value"]["items"][0]["uri"].as_str().unwrap();
@@ -236,8 +268,8 @@ fn attachment_uris_and_response_receipts_match_mobile_contract() {
         assert!(
             crate::features::chat::messages::content::peer_content(
                 &content,
-                "missing-session",
-                &db
+                "sender",
+                "invalid-token"
             )
             .is_err()
         );
@@ -297,7 +329,7 @@ async fn concurrent_sends_serialize_and_reload_content_after_old_attempt_finishe
         }
     }
     let (db, key) = setup();
-    let delivery = Arc::new(Delivery::new(db.clone()));
+    let delivery = Arc::new(Delivery::new(db.clone(), Arc::from(plain_libs::crypto::gen_token())));
     let transport = Arc::new(Blocking {
         entered: tokio::sync::Notify::new(),
         release: tokio::sync::Notify::new(),

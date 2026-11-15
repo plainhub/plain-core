@@ -234,10 +234,7 @@ pub(super) async fn native(state: ServerState, ticket: &str, request: Request) -
     if !state.native_client_id().is_ok_and(|id| id == owner) {
         return StatusCode::UNAUTHORIZED.into_response();
     }
-    let Ok(session) = plain_rs::features::services::sessions::native(&state) else {
-        return StatusCode::UNAUTHORIZED.into_response();
-    };
-    let Ok(key) = decode_key(&session.url_token) else {
+    let Ok(key) = decode_key(&state.token) else {
         return StatusCode::UNAUTHORIZED.into_response();
     };
     let Ok(plain) =

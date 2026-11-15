@@ -538,7 +538,7 @@ async fn semantic_search_pages_all_matches_and_filters_before_pagination() {
         }],
     )
     .unwrap();
-    let catalog = MediaCatalog::Native(db.clone());
+    let catalog = MediaCatalog::Native(db.clone(), Arc::new(crate::features::prefs::Prefs::in_memory()));
     let mut expected = filename;
     expected.extend(ranked);
     assert_eq!(
@@ -663,6 +663,7 @@ async fn semantic_search_pages_all_matches_and_filters_before_pagination() {
             };
             let rows = crate::features::services::files::media_catalog::rows_with_plan(
                 &provider_db,
+                &crate::features::prefs::Prefs::in_memory(),
                 DataType::Image,
                 plan,
                 sort,
@@ -696,6 +697,7 @@ async fn semantic_search_pages_all_matches_and_filters_before_pagination() {
     let platform = MediaCatalog::Platform {
         db: db.clone(),
         host,
+        prefs: Arc::new(crate::features::prefs::Prefs::in_memory()),
     };
     assert_eq!(
         search::count(&platform, &runtime, "cat", "text:cat")

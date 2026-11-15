@@ -12,7 +12,6 @@ fn mount_facts_preserve_existing_wire_fields() {
         used_bytes: 40,
         free_bytes: 60,
         remote: false,
-        alias: String::new(),
         drive_type: "USB_STORAGE".into(),
         disk_id: "/volume".into(),
     };

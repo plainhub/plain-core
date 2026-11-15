@@ -1,6 +1,53 @@
 use crate::server::ContentServer;
 
 #[tokio::test]
+async fn adb_automation_is_opt_in_and_disabling_revokes_the_token() {
+    use plain_libs::serde_json::json;
+    use plain_rs::features::prefs::pref_keys::ADB_TOKEN;
+
+    let directory = plain_libs::temporary::tempdir().unwrap();
+    let core = ContentServer::open(directory.path()).unwrap();
+    let state = core.runtime_state();
+    let management = core.native_management().unwrap();
+    let mut events = state.events.subscribe();
+    assert_eq!(management.get_pref(ADB_TOKEN).unwrap(), json!(""));
+    assert!(state.prefs.get::<String>(ADB_TOKEN).unwrap().is_none());
+    assert!(!management.verify_adb_token("".into()).unwrap());
+    assert!(!management.set_pref(ADB_TOKEN, json!("")).await.unwrap());
+    assert!(events.try_recv().is_err());
+
+    assert!(management.reset_adb_token().unwrap());
+    let token = state.prefs.get::<String>(ADB_TOKEN).unwrap().unwrap();
+    assert_eq!(token.len(), 32);
+    assert!(management.verify_adb_token(token.clone()).unwrap());
+    assert_eq!(events.try_recv().unwrap().event_type, "PREFS_UPDATED");
+    for value in [json!("client-chosen-token"), json!(true), json!(null)] {
+        assert!(management.set_pref(ADB_TOKEN, value).await.is_err());
+        assert!(management.verify_adb_token(token.clone()).unwrap());
+    }
+    assert!(events.try_recv().is_err());
+
+    assert!(management.set_pref(ADB_TOKEN, json!("")).await.unwrap());
+    assert!(state.prefs.get::<String>(ADB_TOKEN).unwrap().is_none());
+    assert!(!management.verify_adb_token(token.clone()).unwrap());
+    assert_eq!(management.get_pref(ADB_TOKEN).unwrap(), json!(""));
+    assert_eq!(events.try_recv().unwrap().event_type, "PREFS_UPDATED");
+    plain_rs::features::prefs::security::bootstrap(&state.prefs).unwrap();
+    assert!(state.prefs.get::<String>(ADB_TOKEN).unwrap().is_none());
+    assert!(events.try_recv().is_err());
+
+    assert!(management.reset_adb_token().unwrap());
+    let replacement = state.prefs.get::<String>(ADB_TOKEN).unwrap().unwrap();
+    assert_ne!(replacement, token);
+    assert!(!management.verify_adb_token(token).unwrap());
+    assert!(management.verify_adb_token(replacement).unwrap());
+    assert_eq!(events.try_recv().unwrap().event_type, "PREFS_UPDATED");
+    assert!(events.try_recv().is_err());
+    core.stop_core().await;
+    assert!(management.set_pref(ADB_TOKEN, json!("")).await.is_err());
+}
+
+#[tokio::test]
 async fn startup_loads_published_integer_enums_and_returns_names_to_the_app() {
     use plain_rs::features::prefs::{Prefs, pref_keys as keys};
 

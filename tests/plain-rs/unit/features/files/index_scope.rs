@@ -3,6 +3,11 @@ use super::*;
 
 fn volume(id: &str, path: &str, mode: FileIndexMode) -> VolumeRow {
     VolumeRow {
+        alias: String::new(),
+        last_scan_at: None,
+        last_scan_status: None,
+        last_scan_count: None,
+        last_scan_total: None,
         id: id.into(),
         identity: id.into(),
         path: path.into(),

@@ -113,20 +113,19 @@ async fn init_requires_a_client_id_and_returns_forbidden_when_access_is_disabled
 }
 
 #[tokio::test]
-async fn native_init_uses_its_stored_session_without_replacing_the_password() {
+async fn native_init_uses_memory_credentials_without_creating_a_session_or_replacing_the_password() {
     let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::server::ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state();
     let id = state.native_client_id().unwrap();
-    let stored = state.db.session_get(&id).unwrap().unwrap();
-    assert_eq!(stored.token, state.token.as_ref());
+    assert!(state.db.session_get(&id).unwrap().is_none());
     plain_rs::features::prefs::security::set_entry(
         &state.prefs,
         "password",
         plain_libs::serde_json::json!("existing-password"),
     )
     .unwrap();
-    let key = plain_libs::utils::base64::base64_decode(&stored.token);
+    let key = plain_libs::utils::base64::base64_decode(&state.token);
     let mut headers = HeaderMap::new();
     headers.insert("c-id", id.parse().unwrap());
     let response = init(
@@ -157,10 +156,7 @@ async fn native_init_uses_its_stored_session_without_replacing_the_password() {
             .is_some()
     );
     assert!(payload.get("opaquePublicKey").is_none());
-    assert_eq!(
-        state.db.session_get(&id).unwrap().unwrap().url_token,
-        stored.url_token
-    );
+    assert!(state.db.session_get(&id).unwrap().is_none());
     core.stop_core().await;
 }
 

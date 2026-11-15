@@ -1,8 +1,8 @@
 use super::*;
 use crate::test_support::schema::SchemaFixture as PublicSchema;
+use plain_libs::serde_json::{Value, json};
 use plain_rs::features::prefs::Prefs;
 use plain_rs::infrastructure::db::Db;
-use plain_libs::serde_json::{Value, json};
 use std::sync::Arc;
 
 const GRANTED: &str = r#"["IMAGES","VIDEOS","AUDIO","DOCS","FILES"]"#;
@@ -854,10 +854,7 @@ async fn loaded_image_search_preserves_filters_counts_and_semantic_order() {
         captured.lock().unwrap().push((method.to_owned(), params));
         json!([{"id":"page-one"},{"id":"page-two"}])
     });
-    let catalog = plain_rs::features::services::files::catalog::MediaCatalog::Platform {
-        db,
-        host,
-    };
+    let catalog = plain_rs::features::services::files::catalog::MediaCatalog::Platform { db, host, prefs: Arc::new(plain_rs::features::prefs::Prefs::in_memory()) };
     let page = plain_rs::features::services::images::search::rows(
         &catalog, models, "cat", "text:cat", 100, 2, "NAME_ASC",
     )
@@ -926,5 +923,39 @@ async fn file_access_does_not_grant_media_libraries() {
         for field in ["videoCount", "audioCount", "docCount"] {
             assert_eq!(data[field], 0);
         }
+    }
+}
+
+#[tokio::test]
+async fn approved_media_preference_filters_public_results_without_changing_indexed_files() {
+    let (_dir, schema, db) = fixture_seeded(
+        GRANTED,
+        true,
+        |db| {
+            db.record_media_files(&[
+                media(DataType::Image, "/hidden/one.jpg", "One", 100, "hidden"),
+                media(DataType::Image, "/visible/two.jpg", "Two", 100, "visible"),
+            ])
+            .unwrap();
+        },
+        |method, _| panic!("native media selection must not call the host: {method}"),
+    );
+    let response = schema.execute("{ imageCount(query: \"\") }").await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    assert_eq!(response.data.into_json().unwrap()["imageCount"], 2);
+    for (paths, expected) in [(json!(["/hidden"]), 1), (json!([]), 2)] {
+        let response = schema
+            .execute(
+                plain_graphql::Request::new(
+                    "mutation($paths: JSON!) { setPref(key: \"media_excluded_dirs\", value: $paths) }",
+                )
+                .variables(plain_graphql::Variables::from_json(json!({"paths": paths}))),
+            )
+            .await;
+        assert!(response.errors.is_empty(), "{:?}", response.errors);
+        let response = schema.execute("{ imageCount(query: \"\") }").await;
+        assert!(response.errors.is_empty(), "{:?}", response.errors);
+        assert_eq!(response.data.into_json().unwrap()["imageCount"], expected);
+        assert_eq!(db.with_conn(|conn| conn.query_row("SELECT COUNT(*) FROM files WHERE indexed=1", [], |row| row.get::<_, i64>(0))).unwrap(), 2);
     }
 }

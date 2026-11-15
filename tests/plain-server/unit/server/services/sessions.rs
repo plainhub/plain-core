@@ -261,16 +261,7 @@ async fn native_management_public_auth_and_revoke_share_one_database_without_hos
             .status(),
         StatusCode::UNAUTHORIZED
     );
-    assert_eq!(
-        state
-            .db
-            .session_list()
-            .unwrap()
-            .iter()
-            .map(|session| session.client_id.as_str())
-            .collect::<Vec<_>>(),
-        vec![PHONE_ID]
-    );
+    assert!(state.db.session_list().unwrap().is_empty());
     let unauthorized = state.public.execute("{ sessions { clientId } }").await;
     assert!(!unauthorized.errors.is_empty());
 }
@@ -385,7 +376,7 @@ async fn main_schema_keeps_secrets_local_and_remote_metadata_and_resource_token_
     channel.key = "channel-secret".into();
     channels::save(&state.db, &[channel], SaveMode::Insert).unwrap();
     let native = server.native_graphql().unwrap();
-    let query = r#"{ sessions { clientId token } peers { key token } chatChannels { key } }"#;
+    let query = r#"{ sessions { clientId } peers { key token } chatChannels { key } }"#;
     let local = native.execute(query.into()).await;
     assert!(local.errors.is_empty(), "{:?}", local.errors);
     let local = local.data.into_json().unwrap();
@@ -394,15 +385,6 @@ async fn main_schema_keeps_secrets_local_and_remote_metadata_and_resource_token_
     assert!(settings.get("url_token").is_none());
     assert_eq!(local["peers"][0]["key"], "peer-secret");
     assert_eq!(local["chatChannels"][0]["key"], "channel-secret");
-    assert_eq!(
-        local["sessions"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .find(|row| row["clientId"] == session.client_id)
-            .unwrap()["token"],
-        session.token
-    );
     let mut headers = HeaderMap::new();
     headers.insert("c-id", session.client_id.parse().unwrap());
     headers.insert(
@@ -439,7 +421,6 @@ async fn main_schema_keeps_secrets_local_and_remote_metadata_and_resource_token_
     );
     assert_eq!(metadata["data"]["peers"][0]["id"], "peer");
     for query in [
-        "{sessions{token}}",
         "{peers{key}}",
         "{peers{token}}",
         "{peers{key}}",

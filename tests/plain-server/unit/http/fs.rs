@@ -1370,49 +1370,33 @@ async fn fs_native_resource_ranges_use_the_provider_file_window() {
 }
 
 #[tokio::test]
-async fn native_resources_use_the_stored_session_url_token_and_follow_rotation_and_revocation() {
-    let (_root, core, state, _) = test_state();
+async fn native_resources_use_memory_credentials_and_old_links_expire_after_restart() {
+    let (root, core, state, _) = test_state();
     let files = plain_libs::temporary::tempdir().unwrap();
-    let path = files.path().join("session.txt");
-    std::fs::write(&path, b"session-bound bytes").unwrap();
+    let path = files.path().join("native.txt");
+    std::fs::write(&path, b"native bytes").unwrap();
     let client_id = state.native_client_id().unwrap();
-    let mut session = state.db.session_get(&client_id).unwrap().unwrap();
-    assert_eq!(core.native_url_token().unwrap(), session.url_token);
-    assert_ne!(session.token, session.url_token);
+    assert!(state.db.session_list().unwrap().is_empty());
+    assert_eq!(core.native_url_token().unwrap(), state.token.as_ref());
     let first = file_id(&state, path.to_str().unwrap());
     let response = call_fs(&state, &format!("id={first}&action=download"), &[]).await;
     assert_eq!(response.status(), StatusCode::OK);
-    assert_eq!(body_bytes(response).await, b"session-bound bytes");
-    session.url_token = plain_libs::crypto::gen_token();
-    state.db.session_save(&session).unwrap();
-    assert_eq!(core.native_url_token().unwrap(), session.url_token);
-    assert_eq!(
-        call_fs(&state, &format!("id={first}&action=download"), &[])
-            .await
-            .status(),
-        StatusCode::FORBIDDEN
-    );
-    let current = file_id(&state, path.to_str().unwrap());
-    assert_eq!(
-        call_fs(&state, &format!("id={current}&action=download"), &[])
-            .await
-            .status(),
-        StatusCode::OK
-    );
-    state.db.session_delete(&client_id).unwrap();
+    assert_eq!(body_bytes(response).await, b"native bytes");
+    let graphql = core.native_graphql().unwrap().execute("{ app { urlToken } sessions { clientId } }".into()).await;
+    assert!(graphql.errors.is_empty(), "{:?}", graphql.errors);
+    assert_eq!(graphql.data.into_json().unwrap()["sessions"], plain_libs::serde_json::json!([]));
+    core.stop_core().await;
     assert!(core.native_url_token().is_err());
-    assert_eq!(
-        call_fs(&state, &format!("id={current}&action=download"), &[])
-            .await
-            .status(),
-        StatusCode::FORBIDDEN
-    );
-    let response = core
-        .native_graphql()
-        .unwrap()
-        .execute("{ app { urlToken } }".into())
-        .await;
-    assert!(!response.errors.is_empty());
-    assert!(state.db.session_get(&client_id).unwrap().is_none());
+    drop(state);
+    drop(core);
+    let core = ContentServer::open(root.path()).unwrap();
+    let state = core.runtime_state();
+    assert_eq!(state.native_client_id().unwrap(), client_id);
+    assert!(state.db.session_list().unwrap().is_empty());
+    assert_eq!(call_fs(&state, &format!("id={first}&action=download"), &[]).await.status(), StatusCode::FORBIDDEN);
+    let current = file_id(&state, path.to_str().unwrap());
+    let response = call_fs(&state, &format!("id={current}&action=download"), &[]).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(body_bytes(response).await, b"native bytes");
     core.stop_core().await;
 }

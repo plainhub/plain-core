@@ -21,6 +21,12 @@ type Event {
 	type: EventType!
 	message: String!
 	clientId: ID
+	clientName: String!
+	clientIp: String!
+	osName: String!
+	osVersion: String!
+	appName: String!
+	appVersion: String!
 	createdAt: Instant!
 }
 

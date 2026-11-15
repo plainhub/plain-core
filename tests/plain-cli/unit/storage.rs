@@ -61,7 +61,7 @@ async fn startup_scan_indexes_configured_directories_through_the_headless_host()
     catalog.configure_scan_directories(None).unwrap();
     let runtime = Arc::new(crate::host::Host::new(core.clone(), vec![]));
     let runner = tokio::spawn(runtime.run());
-    let started = catalog.start_source_scan("/").unwrap();
+    let started = catalog.start_volume_scan(None).unwrap().unwrap();
     let result = tokio::time::timeout(std::time::Duration::from_secs(10), async {
         loop {
             let snapshot = catalog.file_scan_status().unwrap().unwrap();

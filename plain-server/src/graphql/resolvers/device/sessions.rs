@@ -1,20 +1,22 @@
 use crate::server::ServerState;
 use plain_graphql::{Context, ID, Object, Result, SimpleObject};
 
-use plain_rs::features::sessions::SessionInfo;
+use plain_rs::features::sessions::SessionType;
 use plain_rs::infrastructure::db::Db;
 use plain_rs::infrastructure::types::Instant;
 use std::sync::Arc;
 
 #[derive(SimpleObject)]
+struct CreatedApiToken {
+    client_id: ID,
+    token: String,
+}
+
+#[derive(SimpleObject)]
 struct Session {
     client_id: ID,
     client_name: String,
-    r#type: plain_rs::features::sessions::SessionType,
-    #[graphql(guard = "crate::http::auth::public_gate::LocalOwner")]
-    token: String,
-    #[graphql(guard = "crate::http::auth::public_gate::LocalOwner")]
-    url_token: String,
+    r#type: SessionType,
     client_ip: String,
     os_name: String,
     os_version: String,
@@ -29,28 +31,22 @@ struct Session {
 impl TryFrom<plain_rs::infrastructure::db::SessionRow> for Session {
     type Error = plain_graphql::Error;
     fn try_from(row: plain_rs::infrastructure::db::SessionRow) -> Result<Self> {
-        let value = SessionInfo::try_from(row.clone())?;
+        let created_at = crate::graphql::types::parse_instant(&row.created_at)?;
+        let updated_at = crate::graphql::types::parse_instant(&row.updated_at)?;
+        let last_seen_at = row.last_seen_at.as_deref().map(crate::graphql::types::parse_instant).transpose()?;
         Ok(Self {
-            client_id: ID(value.client_id),
-            client_name: value.client_name,
+            client_id: row.client_id.into(),
+            client_name: row.name,
             r#type: row.r#type,
-            token: value.token,
-            url_token: row.url_token,
             client_ip: row.client_ip,
-            os_name: value.os_name,
-            os_version: value.os_version,
-            app_name: value.app_name,
-            app_version: value.app_version,
-            last_seen_at: row
-                .last_seen_at
-                .map(|at| {
-                    plain_libs::chrono::DateTime::parse_from_rfc3339(&at)
-                        .map(|at| Instant(at.with_timezone(&plain_libs::chrono::Utc)))
-                })
-                .transpose()?,
-            last_active: Instant(value.last_active),
-            created_at: Instant(value.created_at),
-            updated_at: Instant(value.updated_at),
+            os_name: row.os_name,
+            os_version: row.os_version,
+            app_name: row.app_name,
+            app_version: row.app_version,
+            last_seen_at,
+            last_active: last_seen_at.unwrap_or(updated_at),
+            created_at,
+            updated_at,
         })
     }
 }
@@ -85,6 +81,12 @@ pub struct SessionsMutation;
 
 #[Object]
 impl SessionsMutation {
+    fn create_api_token(&self, ctx: &Context<'_>, name: String) -> Result<CreatedApiToken> {
+        caller(ctx)?;
+        let session = plain_rs::features::services::sessions::create(ctx.data::<ServerState>()?, name)?;
+        Ok(CreatedApiToken { client_id: session.client_id.into(), token: session.token })
+    }
+
     fn rename_session(&self, ctx: &Context<'_>, client_id: ID, name: String) -> Result<bool> {
         caller(ctx)?;
         Ok(plain_rs::features::services::sessions::rename(
@@ -108,13 +110,9 @@ impl SessionsMutation {
 
 fn revoke(ctx: &Context<'_>, client_id: &str, action: &str) -> Result<bool> {
     let state = ctx.data::<ServerState>()?;
-    let name = state
-        .db
-        .session_get(client_id)?
-        .map(|row| row.name)
-        .unwrap_or_default();
+    let client = state.db.audit_event_client(client_id)?;
     plain_rs::features::services::sessions::delete(state, client_id)?;
-    state.db.audit_event_add(action, &name, Some(client_id))?;
+    state.db.audit_event_add(action, "", Some(&client))?;
     Ok(true)
 }
 

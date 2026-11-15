@@ -33,14 +33,17 @@ pub(super) async fn dispatch(
                 let store = core.runtime().store.get().map_err(|e| e.to_string())?;
                 let events = crate::storage::event_sink(&core)?;
                 let db = core.runtime().db.clone();
-                let client_id =
-                    (!request.client_id.is_empty()).then_some(request.client_id.as_str());
+                let client = if request.client_id.is_empty() {
+                    None
+                } else {
+                    Some(db.audit_event_client(&request.client_id).map_err(|error| error.to_string())?)
+                };
                 let result =
                     plain_rs::infrastructure::platform::linux::disks::format::format_disk_single_partition(
                         &store,
                         &request.path,
                         |mount| {
-                            let _ = db.audit_event_add("unmount", mount, client_id);
+                            let _ = db.audit_event_add("unmount", mount, client.as_ref());
                         },
                         &events,
                     );
@@ -51,7 +54,7 @@ pub(super) async fn dispatch(
                         "format_disk_failed"
                     },
                     &request.path,
-                    client_id,
+                    client.as_ref(),
                 );
                 result
                     .map(|_| Value::Bool(true))

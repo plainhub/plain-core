@@ -34,7 +34,7 @@ fn roundtrip_string_and_json_shapes() {
     prefs.set("adb_token", "abc123").unwrap();
     prefs.set("dlna_allowed_senders", vec!["/a", "/b"]).unwrap();
     prefs
-        .set("volume_alias", plain_libs::serde_json::json!({"enabled": true}))
+        .set("pomodoro_settings", plain_libs::serde_json::json!({"enabled": true}))
         .unwrap();
 
     assert_eq!(
@@ -46,7 +46,7 @@ fn roundtrip_string_and_json_shapes() {
         Some(vec!["/a".into(), "/b".into()])
     );
     assert_eq!(
-        prefs.get::<plain_libs::serde_json::Value>("volume_alias").unwrap(),
+        prefs.get::<plain_libs::serde_json::Value>("pomodoro_settings").unwrap(),
         Some(plain_libs::serde_json::json!({"enabled": true}))
     );
 }
@@ -68,27 +68,27 @@ fn user_store_has_matching_default_and_clear_operations() {
 #[test]
 fn set_same_value_skips_disk_write() {
     let (dir, prefs) = tmp_prefs("noop");
-    assert!(prefs.set("volume_alias", 1u32).unwrap());
+    assert!(prefs.set("pomodoro_settings", 1u32).unwrap());
     let file = dir.join("prefs.json");
     let first = std::fs::read(&file).unwrap();
     // Same value again: no rewrite reported.
-    assert!(!prefs.set("volume_alias", 1u32).unwrap());
+    assert!(!prefs.set("pomodoro_settings", 1u32).unwrap());
     assert_eq!(std::fs::read(&file).unwrap(), first);
     // Different value: rewritten.
-    assert!(prefs.set("volume_alias", 2u32).unwrap());
+    assert!(prefs.set("pomodoro_settings", 2u32).unwrap());
     assert_ne!(std::fs::read(&file).unwrap(), first);
 }
 
 #[test]
 fn remove_persists_and_reports_presence() {
     let (_dir, prefs) = tmp_prefs("remove");
-    prefs.set("volume_alias", "v").unwrap();
-    assert!(prefs.remove("volume_alias").unwrap());
+    prefs.set("pomodoro_settings", "v").unwrap();
+    assert!(prefs.remove("pomodoro_settings").unwrap());
     assert!(
-        !prefs.remove("volume_alias").unwrap(),
+        !prefs.remove("pomodoro_settings").unwrap(),
         "second remove: absent"
     );
-    assert_eq!(prefs.get::<String>("volume_alias").unwrap(), None);
+    assert_eq!(prefs.get::<String>("pomodoro_settings").unwrap(), None);
 }
 
 #[test]
@@ -137,7 +137,7 @@ fn reload_sees_previous_writes_and_pretty_prints() {
     let (dir, prefs) = tmp_prefs("reload");
     prefs.set("device_name", "box").unwrap();
     prefs
-        .set("volume_alias", plain_libs::serde_json::json!({"a": 1}))
+        .set("pomodoro_settings", plain_libs::serde_json::json!({"a": 1}))
         .unwrap();
     drop(prefs);
 
@@ -151,7 +151,7 @@ fn reload_sees_previous_writes_and_pretty_prints() {
         Some("box")
     );
     assert_eq!(
-        reloaded.get::<plain_libs::serde_json::Value>("volume_alias").unwrap(),
+        reloaded.get::<plain_libs::serde_json::Value>("pomodoro_settings").unwrap(),
         Some(plain_libs::serde_json::json!({"a": 1}))
     );
 }

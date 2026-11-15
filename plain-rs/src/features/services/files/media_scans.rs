@@ -6,6 +6,7 @@ use tokio::sync::watch;
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Status {
+    Queued,
     Running,
     Paused,
     Canceling,
@@ -36,6 +37,7 @@ pub enum CoverageState {
 #[serde(rename_all = "camelCase")]
 pub struct Snapshot {
     pub id: String,
+    pub volume_id: Option<String>,
     pub status: Status,
     pub total_files: Option<usize>,
     pub processed_files: usize,
@@ -54,25 +56,49 @@ struct Job {
     snapshot: Snapshot,
     cancel: watch::Sender<bool>,
     activity: watch::Sender<()>,
+    task: Option<tokio::task::JoinHandle<()>>,
 }
 
 #[derive(Default)]
 struct State {
     defaults: crate::features::files::index_scope::Defaults,
-    job: Option<Job>,
-    rebuild_result: Option<Snapshot>,
+    jobs: Vec<Job>,
     closed: bool,
     policy: Option<Arc<crate::features::services::files::media_scan_policy::Policy>>,
-    task: Option<tokio::task::JoinHandle<()>>,
 }
 
 impl State {
     fn rebuild_snapshot(&self) -> Option<&Snapshot> {
-        self.job
-            .as_ref()
+        self.jobs
+            .iter()
+            .rev()
             .filter(|job| job.purpose == Purpose::Rebuild)
+            .min_by_key(|job| match job.snapshot.status {
+                Status::Running | Status::Canceling => 0,
+                Status::Queued => 1,
+                Status::Paused => 2,
+                _ => 3,
+            })
             .map(|job| &job.snapshot)
-            .or(self.rebuild_result.as_ref())
+    }
+
+    fn schedule(&mut self) {
+        if self.closed
+            || self
+                .jobs
+                .iter()
+                .any(|job| matches!(job.snapshot.status, Status::Running | Status::Canceling))
+        {
+            return;
+        }
+        if let Some(job) = self
+            .jobs
+            .iter_mut()
+            .find(|job| job.snapshot.status == Status::Queued)
+        {
+            job.snapshot.status = Status::Running;
+            job.activity.send_replace(());
+        }
     }
 }
 
@@ -102,15 +128,28 @@ impl MediaScans {
         }
     }
 
-    fn publish(&self, job: &Job) {
-        if job.purpose != Purpose::Rebuild {
-            return;
+    fn publish(&self, state: &State, id: &str) {
+        if let Some(job) = state
+            .jobs
+            .iter()
+            .find(|job| job.snapshot.id == id && job.purpose == Purpose::Rebuild)
+        {
+            self.publish_snapshot(&job.snapshot);
         }
-        let snapshot = &job.snapshot;
+        if let Some(snapshot) = state.rebuild_snapshot()
+            && snapshot.id != id
+            && snapshot.status == Status::Running
+        {
+            self.publish_snapshot(snapshot);
+        }
+    }
+
+    fn publish_snapshot(&self, snapshot: &Snapshot) {
         let Some(events) = &self.events else {
             return;
         };
         let state = match snapshot.status {
+            Status::Queued => "QUEUED",
             Status::Running => "RUNNING",
             Status::Paused => "PAUSED",
             Status::Canceling | Status::Canceled => "STOPPED",
@@ -119,6 +158,7 @@ impl MediaScans {
         };
         let payload = plain_libs::serde_json::json!({
             "id": snapshot.id,
+            "volumeId": snapshot.volume_id,
             "indexed": snapshot.processed_files,
             "pending": snapshot.total_files.map(|total| total.saturating_sub(snapshot.processed_files)),
             "total": snapshot.total_files,
@@ -151,33 +191,64 @@ impl MediaScans {
         if guard.closed {
             return Err("Rust core stopped".into());
         }
-        if guard.job.as_ref().is_some_and(|job| {
+        if guard.jobs.iter().any(|job| {
             matches!(
                 job.snapshot.status,
-                Status::Running | Status::Paused | Status::Canceling
+                Status::Queued | Status::Running | Status::Paused | Status::Canceling
             )
         }) {
             return Err("Media scan already running".into());
         }
-        if purpose == Purpose::Reconcile {
-            if let Some(previous) = guard
-                .job
-                .take()
-                .filter(|job| job.purpose == Purpose::Rebuild)
-            {
-                guard.rebuild_result = Some(previous.snapshot);
-            }
-        } else {
-            guard.rebuild_result = None;
+        guard
+            .jobs
+            .retain(|job| purpose == Purpose::Reconcile && job.purpose == Purpose::Rebuild);
+        Ok(self.insert_job(&mut guard, None, total_files, purpose))
+    }
+
+    pub fn enqueue_volume(self: &Arc<Self>, volume_id: &str) -> Result<Option<Session>, String> {
+        let mut guard = self
+            .state
+            .lock()
+            .map_err(|_| "Media scan state unavailable")?;
+        if guard.closed {
+            return Err("Rust core stopped".into());
         }
+        if guard.jobs.iter().any(|job| {
+            job.snapshot.volume_id.as_deref() == Some(volume_id)
+                && matches!(
+                    job.snapshot.status,
+                    Status::Queued | Status::Running | Status::Paused | Status::Canceling
+                )
+        }) {
+            return Ok(None);
+        }
+        guard
+            .jobs
+            .retain(|job| job.snapshot.volume_id.as_deref() != Some(volume_id));
+        Ok(Some(self.insert_job(
+            &mut guard,
+            Some(volume_id.to_owned()),
+            None,
+            Purpose::Rebuild,
+        )))
+    }
+
+    fn insert_job(
+        self: &Arc<Self>,
+        guard: &mut State,
+        volume_id: Option<String>,
+        total_files: Option<usize>,
+        purpose: Purpose,
+    ) -> Session {
         let (cancel, receiver) = watch::channel(false);
         let (activity, _) = watch::channel(());
         let id = plain_libs::utils::uuid::Uuid::new_v4().into_string();
-        guard.job = Some(Job {
+        guard.jobs.push(Job {
             purpose,
             snapshot: Snapshot {
                 id: id.clone(),
-                status: Status::Running,
+                volume_id,
+                status: Status::Queued,
                 total_files,
                 processed_files: 0,
                 error: None,
@@ -185,15 +256,15 @@ impl MediaScans {
             },
             cancel,
             activity,
+            task: None,
         });
-        if let Some(job) = &guard.job {
-            self.publish(job);
-        }
-        Ok(Session {
+        guard.schedule();
+        self.publish(guard, &id);
+        Session {
             scans: self.clone(),
             id,
             cancel: receiver,
-        })
+        }
     }
 
     pub fn spawn<F>(
@@ -213,23 +284,46 @@ impl MediaScans {
             return Err("Rust core stopped".into());
         }
         let snapshot = guard
-            .job
-            .as_ref()
-            .filter(|job| job.snapshot.id == session.id)
+            .jobs
+            .iter()
+            .find(|job| job.snapshot.id == session.id)
             .ok_or("Media scan replaced")?
             .snapshot
             .clone();
-        guard.task = Some(runtime.spawn(run(session)));
+        let task = runtime.spawn(run(session));
+        guard
+            .jobs
+            .iter_mut()
+            .find(|job| job.snapshot.id == snapshot.id)
+            .ok_or("Media scan replaced")?
+            .task = Some(task);
         Ok(snapshot)
     }
 
     pub async fn wait_background(&self) -> Result<(), String> {
+        let tasks = self
+            .state
+            .lock()
+            .map_err(|_| "Media scan state unavailable")?
+            .jobs
+            .iter_mut()
+            .filter_map(|job| job.task.take())
+            .collect::<Vec<_>>();
+        for task in tasks {
+            task.await.map_err(|error| error.to_string())?;
+        }
+        Ok(())
+    }
+
+    pub async fn wait_volume(&self, volume_id: &str) -> Result<(), String> {
         let task = self
             .state
             .lock()
             .map_err(|_| "Media scan state unavailable")?
-            .task
-            .take();
+            .jobs
+            .iter_mut()
+            .find(|job| job.snapshot.volume_id.as_deref() == Some(volume_id))
+            .and_then(|job| job.task.take());
         if let Some(task) = task {
             task.await.map_err(|error| error.to_string())?;
         }
@@ -257,49 +351,30 @@ impl MediaScans {
     }
 
     pub async fn wait_idle(&self) -> Result<bool, String> {
-        let Some((id, mut activity, canceled)) = self
-            .state
-            .lock()
-            .map_err(|_| "Media scan state unavailable")?
-            .job
-            .as_ref()
-            .filter(|job| {
-                matches!(
-                    job.snapshot.status,
-                    Status::Running | Status::Paused | Status::Canceling
-                )
-            })
-            .map(|job| {
-                (
-                    job.snapshot.id.clone(),
-                    job.activity.subscribe(),
-                    job.cancel.subscribe(),
-                )
-            })
-        else {
-            return Ok(true);
-        };
-        while self
-            .state
-            .lock()
-            .map_err(|_| "Media scan state unavailable")?
-            .job
-            .as_ref()
-            .is_some_and(|job| {
-                job.snapshot.id == id
-                    && matches!(
+        let mut completed = true;
+        loop {
+            let activity = self
+                .state
+                .lock()
+                .map_err(|_| "Media scan state unavailable")?
+                .jobs
+                .iter()
+                .find(|job| {
+                    matches!(
                         job.snapshot.status,
-                        Status::Running | Status::Paused | Status::Canceling
+                        Status::Queued | Status::Running | Status::Paused | Status::Canceling
                     )
-            })
-        {
+                })
+                .map(|job| (job.activity.subscribe(), job.cancel.subscribe()));
+            let Some((mut activity, canceled)) = activity else {
+                return Ok(completed);
+            };
             activity
                 .changed()
                 .await
                 .map_err(|_| "Media scan session closed")?;
+            completed &= !*canceled.borrow();
         }
-        let completed = !*canceled.borrow();
-        Ok(completed)
     }
 
     pub fn configure(
@@ -313,11 +388,12 @@ impl MediaScans {
         if guard.closed {
             return Err("Rust core stopped".into());
         }
-        if guard.job.as_ref().is_some_and(|job| {
-            matches!(
-                job.snapshot.status,
-                Status::Running | Status::Paused | Status::Canceling
-            )
+        if guard.jobs.iter().any(|job| {
+            job.snapshot.volume_id.is_none()
+                && matches!(
+                    job.snapshot.status,
+                    Status::Queued | Status::Running | Status::Paused | Status::Canceling
+                )
         }) {
             return Err("Media scan already running".into());
         }
@@ -386,15 +462,30 @@ impl MediaScans {
             .cloned())
     }
 
-    pub fn pause(&self) -> Result<Option<Snapshot>, String> {
-        self.set_paused(true)
+    pub fn snapshot_for(&self, volume_id: &str) -> Result<Option<Snapshot>, String> {
+        Ok(self
+            .state
+            .lock()
+            .map_err(|_| "Media scan state unavailable")?
+            .jobs
+            .iter()
+            .find(|job| job.snapshot.volume_id.as_deref() == Some(volume_id))
+            .map(|job| job.snapshot.clone()))
     }
 
-    pub fn resume(&self) -> Result<Option<Snapshot>, String> {
-        self.set_paused(false)
+    pub fn pause(&self, volume_id: Option<&str>) -> Result<Option<Snapshot>, String> {
+        self.set_paused(volume_id, true)
     }
 
-    fn set_paused(&self, paused: bool) -> Result<Option<Snapshot>, String> {
+    pub fn resume(&self, volume_id: Option<&str>) -> Result<Option<Snapshot>, String> {
+        self.set_paused(volume_id, false)
+    }
+
+    fn set_paused(
+        &self,
+        volume_id: Option<&str>,
+        paused: bool,
+    ) -> Result<Option<Snapshot>, String> {
         let mut guard = self
             .state
             .lock()
@@ -402,55 +493,72 @@ impl MediaScans {
         if guard.closed {
             return Err("Rust core stopped".into());
         }
-        if let Some(job) = guard.job.as_mut()
-            && job.purpose == Purpose::Rebuild
-            && matches!(job.snapshot.status, Status::Running | Status::Paused)
-        {
-            job.snapshot.status = if paused {
-                Status::Paused
+        let mut changed = Vec::new();
+        for job in guard.jobs.iter_mut().filter(|job| {
+            job.purpose == Purpose::Rebuild
+                && volume_id.is_none_or(|id| job.snapshot.volume_id.as_deref() == Some(id))
+        }) {
+            if paused && matches!(job.snapshot.status, Status::Running | Status::Queued) {
+                job.snapshot.status = Status::Paused;
+            } else if !paused && job.snapshot.status == Status::Paused {
+                job.snapshot.status = Status::Queued;
             } else {
-                Status::Running
-            };
+                continue;
+            }
+            changed.push(job.snapshot.id.clone());
             job.activity.send_replace(());
         }
-        if let Some(job) = &guard.job {
-            self.publish(job);
+        guard.schedule();
+        for id in changed {
+            self.publish(&guard, &id);
         }
         Ok(guard.rebuild_snapshot().cloned())
     }
 
-    pub fn cancel(&self) -> Result<Option<Snapshot>, String> {
+    pub fn cancel(&self, volume_id: Option<&str>) -> Result<Option<Snapshot>, String> {
         let mut guard = self
             .state
             .lock()
             .map_err(|_| "Media scan state unavailable")?;
-        if let Some(job) = guard.job.as_mut()
-            && matches!(job.snapshot.status, Status::Running | Status::Paused)
-        {
-            job.snapshot.status = Status::Canceling;
-            let _ = job.cancel.send(true);
-            job.activity.send_replace(());
-        }
-        if let Some(job) = &guard.job {
-            self.publish(job);
+        for id in Self::cancel_jobs(&mut guard, volume_id) {
+            self.publish(&guard, &id);
         }
         Ok(guard.rebuild_snapshot().cloned())
     }
+
+    fn cancel_jobs(guard: &mut State, volume_id: Option<&str>) -> Vec<String> {
+        let mut changed = Vec::new();
+        for job in guard
+            .jobs
+            .iter_mut()
+            .filter(|job| volume_id.is_none_or(|id| job.snapshot.volume_id.as_deref() == Some(id)))
+        {
+            if matches!(
+                job.snapshot.status,
+                Status::Running | Status::Paused | Status::Queued
+            ) {
+                job.snapshot.status = if job.snapshot.status == Status::Running {
+                    Status::Canceling
+                } else {
+                    Status::Canceled
+                };
+                job.cancel.send_replace(true);
+                job.activity.send_replace(());
+                changed.push(job.snapshot.id.clone());
+            }
+        }
+        guard.schedule();
+        changed
+    }
+
     pub fn close(&self) -> Result<(), String> {
         let mut guard = self
             .state
             .lock()
             .map_err(|_| "Media scan state unavailable")?;
         guard.closed = true;
-        if let Some(job) = guard.job.as_mut()
-            && matches!(job.snapshot.status, Status::Running | Status::Paused)
-        {
-            job.snapshot.status = Status::Canceling;
-            let _ = job.cancel.send(true);
-            job.activity.send_replace(());
-        }
-        if let Some(job) = &guard.job {
-            self.publish(job);
+        for id in Self::cancel_jobs(&mut guard, None) {
+            self.publish(&guard, &id);
         }
         Ok(())
     }
@@ -475,13 +583,13 @@ impl Session {
                     return Err("Rust core stopped".into());
                 }
                 let job = guard
-                    .job
-                    .as_ref()
-                    .filter(|job| job.snapshot.id == self.id)
+                    .jobs
+                    .iter()
+                    .find(|job| job.snapshot.id == self.id)
                     .ok_or("Media scan replaced")?;
                 match job.snapshot.status {
                     Status::Running => return Ok(()),
-                    Status::Paused => job.activity.subscribe(),
+                    Status::Paused | Status::Queued => job.activity.subscribe(),
                     _ => return Err("Media scan canceled".into()),
                 }
             };
@@ -509,18 +617,18 @@ impl Session {
                     return Err("Rust core stopped".into());
                 }
                 let job = guard
-                    .job
-                    .as_mut()
-                    .filter(|job| job.snapshot.id == self.id)
+                    .jobs
+                    .iter_mut()
+                    .find(|job| job.snapshot.id == self.id)
                     .ok_or("Media scan replaced")?;
                 match job.snapshot.status {
                     Status::Running => {
                         let value = record.take().ok_or("Media scan record unavailable")?()?;
                         job.snapshot.processed_files += file_count;
-                        self.scans.publish(job);
+                        self.scans.publish(&guard, &self.id);
                         return Ok(value);
                     }
-                    Status::Paused => job.activity.subscribe(),
+                    Status::Paused | Status::Queued => job.activity.subscribe(),
                     _ => return Err("Media scan canceled".into()),
                 }
             };
@@ -538,16 +646,16 @@ impl Session {
             .lock()
             .map_err(|_| "Media scan state unavailable")?;
         let job = guard
-            .job
-            .as_mut()
-            .filter(|job| job.snapshot.id == self.id)
+            .jobs
+            .iter_mut()
+            .find(|job| job.snapshot.id == self.id)
             .ok_or("Media scan replaced")?;
         if job.snapshot.status != Status::Running {
             return Err("Media scan canceled".into());
         }
         let value = record()?;
         job.snapshot.processed_files += 1;
-        self.scans.publish(job);
+        self.scans.publish(&guard, &self.id);
         Ok(value)
     }
 
@@ -558,9 +666,9 @@ impl Session {
             .lock()
             .map_err(|_| "Media scan state unavailable")?;
         let job = guard
-            .job
-            .as_mut()
-            .filter(|job| job.snapshot.id == self.id)
+            .jobs
+            .iter_mut()
+            .find(|job| job.snapshot.id == self.id)
             .ok_or("Media scan replaced")?;
         job.snapshot.sources = paths
             .iter()
@@ -585,9 +693,9 @@ impl Session {
             .lock()
             .map_err(|_| "Media scan state unavailable")?;
         let job = guard
-            .job
-            .as_mut()
-            .filter(|job| job.snapshot.id == self.id)
+            .jobs
+            .iter_mut()
+            .find(|job| job.snapshot.id == self.id)
             .ok_or("Media scan replaced")?;
         if let Some(source) = job
             .snapshot
@@ -598,7 +706,7 @@ impl Session {
             source.state = state;
             source.error = error;
         }
-        self.scans.publish(job);
+        self.scans.publish(&guard, &self.id);
         Ok(())
     }
 
@@ -609,15 +717,18 @@ impl Session {
             .lock()
             .map_err(|_| "Media scan state unavailable")?;
         let job = guard
-            .job
-            .as_mut()
-            .filter(|job| job.snapshot.id == self.id)
+            .jobs
+            .iter_mut()
+            .find(|job| job.snapshot.id == self.id)
             .ok_or("Media scan replaced")?;
-        if !matches!(job.snapshot.status, Status::Running | Status::Paused) {
+        if !matches!(
+            job.snapshot.status,
+            Status::Running | Status::Paused | Status::Queued
+        ) {
             return Err("Media scan canceled".into());
         }
         job.snapshot.total_files = Some(total_files);
-        self.scans.publish(job);
+        self.scans.publish(&guard, &self.id);
         Ok(())
     }
 
@@ -628,9 +739,9 @@ impl Session {
             .lock()
             .map_err(|_| "Media scan state unavailable")?;
         let job = guard
-            .job
-            .as_mut()
-            .filter(|job| job.snapshot.id == self.id)
+            .jobs
+            .iter_mut()
+            .find(|job| job.snapshot.id == self.id)
             .ok_or("Media scan replaced")?;
         if job.snapshot.status == Status::Canceling {
             job.snapshot.status = Status::Canceled;
@@ -647,24 +758,27 @@ impl Session {
             let _ = job.cancel.send(true);
         }
         job.activity.send_replace(());
-        self.scans.publish(job);
-        Ok(job.snapshot.clone())
+        let snapshot = job.snapshot.clone();
+        guard.schedule();
+        self.scans.publish(&guard, &self.id);
+        Ok(snapshot)
     }
 }
 
 impl Drop for Session {
     fn drop(&mut self) {
         if let Ok(mut guard) = self.scans.state.lock()
-            && let Some(job) = guard.job.as_mut().filter(|job| job.snapshot.id == self.id)
+            && let Some(job) = guard.jobs.iter_mut().find(|job| job.snapshot.id == self.id)
             && matches!(
                 job.snapshot.status,
-                Status::Running | Status::Paused | Status::Canceling
+                Status::Queued | Status::Running | Status::Paused | Status::Canceling
             )
         {
             let _ = job.cancel.send(true);
             job.activity.send_replace(());
             job.snapshot.status = Status::Canceled;
-            self.scans.publish(job);
+            guard.schedule();
+            self.scans.publish(&guard, &self.id);
         }
     }
 }
@@ -676,3 +790,7 @@ pub async fn wait_stop(receiver: &mut watch::Receiver<bool>) {
 #[cfg(test)]
 #[path = "../../../../../tests/plain-rs/unit/features/services/files/media_scans.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "../../../../../tests/plain-rs/unit/features/services/files/volume_queue.rs"]
+mod volume_queue;

@@ -159,13 +159,18 @@ async fn native_identity_without_the_private_transport_token_cannot_claim_local_
     let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::server::ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state();
+    let remote = plain_rs::features::services::sessions::create(&state, "Remote fixture".into())
+        .unwrap();
+    let native_token = core.native_url_token().unwrap();
+    assert_eq!(native_token, state.token.as_ref());
     let mut headers = HeaderMap::new();
     headers.insert("c-id", state.native_client_id().unwrap().parse().unwrap());
-    let body = Bytes::from_static(br#"{"query":"{ sessions { clientId } }"}"#);
+    let body = Bytes::from_static(br#"{"query":"{ sessions { clientId } app { urlToken } }"}"#);
     for token in [
         None,
         Some("wrong".to_owned()),
-        Some(core.native_url_token().unwrap()),
+        Some(remote.url_token.clone()),
+        Some(remote.token.clone()),
     ] {
         headers.remove("authorization");
         if let Some(token) = token {
@@ -182,11 +187,17 @@ async fn native_identity_without_the_private_transport_token_cannot_claim_local_
         "authorization",
         format!("Bearer {}", state.token).parse().unwrap(),
     );
+    let response = call(State(state.clone()), headers, body).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let bytes = plain_libs::axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let result: plain_libs::serde_json::Value = plain_libs::serde_json::from_slice(&bytes).unwrap();
+    assert!(result.get("errors").is_none());
+    assert_eq!(result["data"]["app"]["urlToken"], native_token);
     assert_eq!(
-        call(State(state.clone()), headers.clone(), body)
-            .await
-            .status(),
-        StatusCode::OK
+        result["data"]["sessions"],
+        plain_libs::serde_json::json!([{ "clientId": remote.client_id }])
     );
     core.stop_core().await;
 }

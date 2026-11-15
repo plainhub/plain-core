@@ -1,7 +1,8 @@
 use super::types::FileIndexScanProgress;
 use crate::server::ServerState;
-use plain_graphql::{Context, ID, Object, Result, SimpleObject};
-use plain_rs::infrastructure::db::FileIndexMode;
+use plain_graphql::{Context, ID, InputObject, Object, Result, SimpleObject};
+use plain_rs::infrastructure::db::{FileIndexMode, FileIndexScanStatus};
+use plain_rs::infrastructure::types::{Instant, Long};
 
 use plain_rs::features::services::files::scanning;
 use plain_rs::features::services::files::scanning::Command;
@@ -28,9 +29,15 @@ async fn index_state<'a>(ctx: &'a Context<'_>) -> Result<&'a ServerState> {
 pub struct FileIndexScanQuery;
 #[Object]
 impl FileIndexScanQuery {
-    async fn file_index_scan_progress(&self, ctx: &Context<'_>) -> Result<FileIndexScanProgress> {
-        let progress = scanning::progress(state(ctx).await?).await?;
+    async fn file_index_scan_progress(
+        &self,
+        ctx: &Context<'_>,
+        volume_id: Option<ID>,
+    ) -> Result<FileIndexScanProgress> {
+        let progress =
+            scanning::progress(state(ctx).await?, volume_id.as_ref().map(|id| id.as_str())).await?;
         Ok(FileIndexScanProgress {
+            volume_id: progress.volume_id.map(ID::from),
             indexed: progress.indexed,
             pending: progress
                 .total
@@ -56,36 +63,46 @@ impl FileIndexScanQuery {
     async fn file_index_volumes(&self, ctx: &Context<'_>) -> Result<Vec<FileIndexVolume>> {
         let state = index_state(ctx).await?;
         let volumes = plain_rs::features::services::files::indexing::discover(state).await?;
-        Ok(volumes
+        volumes
             .into_iter()
             .filter(|volume| !volume.path.contains("://"))
-            .map(|volume| FileIndexVolume {
-                included_dirs: volume
-                    .included_dirs
-                    .iter()
-                    .map(|dir| {
-                        plain_rs::features::files::index_scope::absolute_directory(
-                            &volume.path,
-                            dir,
-                        )
-                    })
-                    .collect(),
-                excluded_dirs: volume
-                    .excluded_dirs
-                    .iter()
-                    .map(|dir| {
-                        plain_rs::features::files::index_scope::absolute_directory(
-                            &volume.path,
-                            dir,
-                        )
-                    })
-                    .collect(),
-                id: volume.id.into(),
-                path: volume.path,
-                is_available: volume.is_available,
-                index_mode: volume.index_mode,
+            .map(|volume| -> Result<FileIndexVolume> {
+                Ok(FileIndexVolume {
+                    included_dirs: volume
+                        .included_dirs
+                        .iter()
+                        .map(|dir| {
+                            plain_rs::features::files::index_scope::absolute_directory(
+                                &volume.path,
+                                dir,
+                            )
+                        })
+                        .collect(),
+                    excluded_dirs: volume
+                        .excluded_dirs
+                        .iter()
+                        .map(|dir| {
+                            plain_rs::features::files::index_scope::absolute_directory(
+                                &volume.path,
+                                dir,
+                            )
+                        })
+                        .collect(),
+                    id: volume.id.into(),
+                    path: volume.path,
+                    is_available: volume.is_available,
+                    index_mode: volume.index_mode,
+                    last_scan_at: volume
+                        .last_scan_at
+                        .as_deref()
+                        .map(crate::graphql::types::parse_instant)
+                        .transpose()?,
+                    last_scan_status: volume.last_scan_status,
+                    last_scan_count: volume.last_scan_count.map(Long),
+                    last_scan_total: volume.last_scan_total.map(Long),
+                })
             })
-            .collect())
+            .collect()
     }
 }
 async fn command(ctx: &Context<'_>, action: Command) -> Result<bool> {
@@ -99,29 +116,26 @@ impl FileIndexScanMutation {
     async fn rebuild_file_index(&self, ctx: &Context<'_>, volume_id: Option<ID>) -> Result<bool> {
         command(ctx, Command::Rebuild(volume_id.map(String::from))).await
     }
-    async fn pause_file_index_scan(&self, ctx: &Context<'_>) -> Result<bool> {
-        command(ctx, Command::Pause).await
+    async fn pause_file_index(&self, ctx: &Context<'_>, volume_id: Option<ID>) -> Result<bool> {
+        command(ctx, Command::Pause(volume_id.map(String::from))).await
     }
-    async fn resume_file_index_scan(&self, ctx: &Context<'_>) -> Result<bool> {
-        command(ctx, Command::Resume).await
+    async fn resume_file_index(&self, ctx: &Context<'_>, volume_id: Option<ID>) -> Result<bool> {
+        command(ctx, Command::Resume(volume_id.map(String::from))).await
     }
-    async fn stop_file_index_scan(&self, ctx: &Context<'_>) -> Result<bool> {
-        command(ctx, Command::Stop).await
+    async fn stop_file_index(&self, ctx: &Context<'_>, volume_id: Option<ID>) -> Result<bool> {
+        command(ctx, Command::Stop(volume_id.map(String::from))).await
     }
     async fn set_file_index_volume(
         &self,
         ctx: &Context<'_>,
-        id: ID,
-        index_mode: FileIndexMode,
-        included_dirs: Vec<String>,
-        excluded_dirs: Vec<String>,
+        input: FileIndexVolumeInput,
     ) -> Result<bool> {
         plain_rs::features::services::files::indexing::set(
             index_state(ctx).await?,
-            id.as_ref(),
-            index_mode,
-            included_dirs,
-            excluded_dirs,
+            input.volume_id.as_ref(),
+            input.index_mode,
+            input.included_dirs,
+            input.excluded_dirs,
         )
         .await?;
         Ok(true)
@@ -140,6 +154,10 @@ pub struct FileIndexVolume {
     pub index_mode: FileIndexMode,
     pub included_dirs: Vec<String>,
     pub excluded_dirs: Vec<String>,
+    pub last_scan_at: Option<Instant>,
+    pub last_scan_status: Option<FileIndexScanStatus>,
+    pub last_scan_count: Option<Long>,
+    pub last_scan_total: Option<Long>,
 }
 
 #[derive(SimpleObject)]
@@ -148,4 +166,12 @@ pub struct FileIndexDefaults {
     pub excluded_names: Vec<String>,
     pub excluded_packages: Vec<String>,
     pub excluded_user_libraries: bool,
+}
+
+#[derive(InputObject)]
+pub struct FileIndexVolumeInput {
+    pub volume_id: ID,
+    pub index_mode: FileIndexMode,
+    pub included_dirs: Vec<String>,
+    pub excluded_dirs: Vec<String>,
 }

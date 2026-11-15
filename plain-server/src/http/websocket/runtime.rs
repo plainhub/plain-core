@@ -207,8 +207,11 @@ pub(super) fn upgrade(
         .into_response()
 }
 
-fn login_failure(state: &ServerState, client_id: &str, code: u16, reason: &'static str) -> Message {
-    match crate::http::auth::ws_login::record_failure(state, client_id, reason) {
+fn login_failure(state: &ServerState, client_id: &str, ip: &str, code: u16, reason: &'static str) -> Message {
+    let client = plain_rs::infrastructure::db::AuditEventClient {
+        client_id: client_id.to_owned(), client_ip: ip.to_owned(), ..Default::default()
+    };
+    match crate::http::auth::ws_login::record_failure(state, &client, reason) {
         Ok(()) => close(code, reason),
         Err(error) => {
             log::error!("Cannot record login failure: {error}");
@@ -255,7 +258,7 @@ async fn run(
                 "invalid_login_request"
             };
             let _ = socket
-                .send(login_failure(&state, &params.cid, 1013, reason))
+                .send(login_failure(&state, &params.cid, &ip, 1013, reason))
                 .await;
             return;
         }
@@ -347,7 +350,7 @@ async fn run(
                             Ok(None) => {}
                             Err(error) => {
                                 let failure = LoginError::from_error(&error);
-                                let _ = socket.send(login_failure(&state, &params.cid, failure.close_code(), failure.reason())).await;
+                                let _ = socket.send(login_failure(&state, &params.cid, &ip, failure.close_code(), failure.reason())).await;
                                 break;
                             }
                         }
@@ -395,7 +398,7 @@ async fn run(
                             continue;
                         }
                         Ok(Ok(ready)) => ready,
-                        Err(error) => { let failure = LoginError::from_error(&error); let _ = socket.send(login_failure(&state, &params.cid, failure.close_code(), failure.reason())).await; break; }
+                        Err(error) => { let failure = LoginError::from_error(&error); let _ = socket.send(login_failure(&state, &params.cid, &ip, failure.close_code(), failure.reason())).await; break; }
                     };
                     let request = crate::http::auth::ws_login::Request::Issue {
                         client_id: params.cid.clone(),
@@ -515,8 +518,11 @@ async fn run(
             LoginHandshake::Ready(_) | LoginHandshake::Opaque { .. }
         )
     {
+        let client = plain_rs::infrastructure::db::AuditEventClient {
+            client_id: params.cid.clone(), client_ip: ip.clone(), ..Default::default()
+        };
         if let Err(error) =
-            crate::http::auth::ws_login::record_failure(&state, &params.cid, cancel_reason)
+            crate::http::auth::ws_login::record_failure(&state, &client, cancel_reason)
         {
             log::error!("Cannot record incomplete login: {error}");
         }

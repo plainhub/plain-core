@@ -52,6 +52,13 @@ pub struct Event {
     pub r#type: EventType,
     pub message: String,
     pub client_id: Option<ID>,
+    pub client_name: String,
+    pub client_ip: String,
+    pub os_name: String,
+    pub os_version: String,
+    pub app_name: String,
+    pub app_version: String,
+
     pub created_at: Instant,
 }
 

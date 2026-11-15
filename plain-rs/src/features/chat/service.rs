@@ -105,6 +105,7 @@ pub struct ChatService<T: PeerTransport> {
 impl<T: PeerTransport + 'static> ChatService<T> {
     pub fn new(
         db: Db,
+        resource_token: Arc<str>,
         identity: std::sync::Arc<ChatIdentity>,
         wire_device_type: DeviceType,
         data_dir: PathBuf,
@@ -121,6 +122,7 @@ impl<T: PeerTransport + 'static> ChatService<T> {
         Self {
             delivery: std::sync::Arc::new(crate::features::chat::delivery::Delivery::new(
                 db.clone(),
+                resource_token,
             )),
             db,
             cacher,

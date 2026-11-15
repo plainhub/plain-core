@@ -1,4 +1,3 @@
-use crate::features::prefs::Prefs;
 use plain_libs::platform::linux::disks::blockdev::LsblkDevice;
 use plain_libs::platform::linux::disks::blockdev::base_block_device_name;
 use plain_libs::platform::linux::disks::blockdev::disk_id_from_name;
@@ -6,7 +5,6 @@ use plain_libs::platform::linux::disks::blockdev::is_user_visible_disk_name;
 use plain_libs::platform::linux::disks::blockdev::resolve_underlying_single_base_disk;
 use plain_libs::platform::linux::disks::blockdev::run_lsblk;
 use serde::Serialize;
-use plain_libs::serde_json::Value;
 
 const VOLUME_ID_REMOTE_PREFIX: &str = "remote:";
 const VOLUME_ID_FSUUID_PREFIX: &str = "fsuuid:";
@@ -26,15 +24,14 @@ pub struct Mount {
     pub total_bytes: i64,
     pub used_bytes: Option<i64>,
     pub free_bytes: Option<i64>,
-    pub alias: Option<String>,
     pub remote: bool,
     pub drive_type: Option<String>,
     pub disk_id: Option<String>,
     pub disk_model: Option<String>,
 }
 
-pub fn list_mounts(prefs: &Prefs) -> Vec<Mount> {
-    let mut out = list_mounted_volumes(prefs);
+pub fn list_mounts() -> Vec<Mount> {
+    let mut out = list_mounted_volumes();
     out.extend(list_disk_partitions());
     out
 }
@@ -186,13 +183,12 @@ pub fn classify_mount_line(line: &str) -> Option<MountLine> {
     })
 }
 
-fn list_mounted_volumes(prefs: &Prefs) -> Vec<Mount> {
+fn list_mounted_volumes() -> Vec<Mount> {
     let mut volumes = Vec::new();
     let Ok(content) = std::fs::read_to_string("/proc/mounts") else {
         return volumes;
     };
 
-    let alias_map = crate::features::prefs::storage::get_map(prefs);
     let dev_meta = build_volume_dev_meta_map();
 
     let mut seen_src = std::collections::HashSet::new();
@@ -260,12 +256,6 @@ fn list_mounted_volumes(prefs: &Prefs) -> Vec<Mount> {
 
         if is_block {
             apply_volume_block_meta(&mut v, src, &dev_meta);
-        }
-
-        if let Some(Value::String(a)) = alias_map.get(&v.id)
-            && !a.trim().is_empty()
-        {
-            v.alias = Some(a.clone());
         }
 
         if !by_target.contains_key(target) {

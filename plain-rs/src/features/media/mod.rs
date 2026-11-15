@@ -18,3 +18,5 @@ pub mod file_metadata;
 
 #[cfg(feature = "image-metadata")]
 pub mod file_facts;
+
+pub mod visibility;

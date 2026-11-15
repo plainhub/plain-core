@@ -2,21 +2,6 @@ use crate::infrastructure::db::Db;
 use crate::infrastructure::db::SessionRow;
 use crate::runtime::Runtime as CoreRuntime;
 
-pub fn native(state: &CoreRuntime) -> plain_libs::anyhow::Result<SessionRow> {
-    let id = state
-        .native_client_id()
-        .map_err(plain_libs::anyhow::Error::msg)?;
-    let session = state
-        .db
-        .session_get(&id)?
-        .ok_or_else(|| plain_libs::anyhow::anyhow!("Native session unavailable"))?;
-    plain_libs::anyhow::ensure!(
-        session.token == state.token.as_ref(),
-        "Native session changed"
-    );
-    Ok(session)
-}
-
 /// The key a remote client's frames are encrypted with: its session token.
 pub fn key(db: &Db, client_id: &str) -> plain_libs::anyhow::Result<Option<Vec<u8>>> {
     Ok(db.session_get(client_id)?.and_then(|row| {
@@ -29,8 +14,7 @@ pub fn local_key(state: &CoreRuntime, client_id: &str) -> Option<Vec<u8>> {
     if state.native_client_id().ok().as_deref() != Some(client_id) {
         return None;
     }
-    let session = native(state).ok()?;
-    crate::features::sessions::token_key(&session.token)
+    crate::features::sessions::token_key(&state.token)
         .ok()
         .map(Vec::from)
 }
@@ -45,6 +29,8 @@ pub fn touch(state: &CoreRuntime, client_id: &str) -> plain_libs::anyhow::Result
 }
 
 pub fn create(state: &CoreRuntime, name: String) -> plain_libs::anyhow::Result<SessionRow> {
+    let name = name.trim().to_owned();
+    plain_libs::anyhow::ensure!(!name.is_empty(), "API token name is required");
     let now = plain_libs::utils::dbtime::now_iso();
     let row = SessionRow {
         url_token: plain_libs::crypto::gen_token(),

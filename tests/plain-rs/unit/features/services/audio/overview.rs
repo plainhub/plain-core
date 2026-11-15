@@ -35,7 +35,7 @@ async fn sdk_summary_batches_the_full_catalog_without_metadata_or_per_row_host_c
         assert!(requests.try_recv().is_err());
         offsets
     });
-    let summary = read(db.clone(), MediaCatalog::Platform { db, host })
+    let summary = read(db.clone(), MediaCatalog::Platform { db, host, prefs: Arc::new(crate::features::prefs::Prefs::in_memory()) })
         .await
         .unwrap();
     assert_eq!(summary[0].item_count, 1025);
@@ -60,7 +60,7 @@ async fn malformed_or_repeated_catalog_pages_fail_instead_of_returning_partial_t
                 .unwrap();
         });
         assert!(
-            read(db.clone(), MediaCatalog::Platform { db, host })
+            read(db.clone(), MediaCatalog::Platform { db, host, prefs: Arc::new(crate::features::prefs::Prefs::in_memory()) })
                 .await
                 .is_err()
         );
@@ -78,7 +78,7 @@ async fn native_summary_streams_the_full_database() {
          SELECT n+1,1,printf('%d.mp3',n),printf('%d.mp3',n),'AUDIO',printf('Song %d',n),'Artist',123,456,0,0,0,'2026-01-01T00:00:00Z','2026-01-01T00:00:00Z','album',1 FROM entries;
          INSERT INTO media_play_history(media_type,file_id,position_ms,play_count,played_at) VALUES(1,'1100',0,7,'2026-01-02T00:00:00Z');"
     )).unwrap();
-    let summary = read(db.clone(), MediaCatalog::Native(db)).await.unwrap();
+    let summary = read(db.clone(), MediaCatalog::Native(db, Arc::new(crate::features::prefs::Prefs::in_memory()))).await.unwrap();
     assert_eq!(summary[0].item_count, 1100);
     assert_eq!(summary[0].play_count, 7);
 }
@@ -126,7 +126,7 @@ async fn sdk_changed_page_is_discarded_and_summary_restarts_from_zero() {
         }
         assert!(requests.try_recv().is_err());
     });
-    let summary = read(db.clone(), MediaCatalog::Platform { db, host })
+    let summary = read(db.clone(), MediaCatalog::Platform { db, host, prefs: Arc::new(crate::features::prefs::Prefs::in_memory()) })
         .await
         .unwrap();
     assert_eq!(summary.len(), 1);
@@ -158,7 +158,7 @@ async fn sdk_changes_inside_queries_or_version_resets_have_bounded_retries() {
             requests
         });
         assert!(
-            read(db.clone(), MediaCatalog::Platform { db, host })
+            read(db.clone(), MediaCatalog::Platform { db, host, prefs: Arc::new(crate::features::prefs::Prefs::in_memory()) })
                 .await
                 .err()
                 .unwrap()

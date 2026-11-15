@@ -6,10 +6,15 @@ pub(crate) fn init(connection: &Connection) -> plain_libs::rusqlite::Result<()> 
     id TEXT PRIMARY KEY NOT NULL CHECK(length(id)>0),
     identity TEXT NOT NULL UNIQUE CHECK(length(identity)>0),
     path TEXT NOT NULL CHECK(length(path)>0),
+    alias TEXT NOT NULL DEFAULT '',
     is_available INTEGER NOT NULL CHECK(is_available IN (0,1)),
     index_mode TEXT NOT NULL DEFAULT 'UNCONFIGURED' CHECK(index_mode IN ('UNCONFIGURED','DISABLED','ALLOWLIST','BLOCKLIST')),
     included_dirs TEXT NOT NULL DEFAULT '[]',
-    excluded_dirs TEXT NOT NULL DEFAULT '[]'
+    excluded_dirs TEXT NOT NULL DEFAULT '[]',
+    last_scan_at TEXT,
+    last_scan_status TEXT CHECK(last_scan_status IN ('COMPLETED','CANCELED','FAILED')),
+    last_scan_count INTEGER CHECK(last_scan_count>=0),
+    last_scan_total INTEGER CHECK(last_scan_total>=0)
 ) STRICT;
 
 CREATE TABLE IF NOT EXISTS files (

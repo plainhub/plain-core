@@ -5,7 +5,9 @@ pub use plain_rs::features::enums::MediaDataType;
 pub use plain_rs::features::services::files::scanning::FileIndexScanState;
 
 #[derive(SimpleObject, Clone, Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct FileIndexScanProgress {
+    pub volume_id: Option<ID>,
     pub indexed: i32,
     pub pending: Option<i32>,
     pub total: Option<i32>,

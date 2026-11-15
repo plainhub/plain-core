@@ -77,6 +77,11 @@ enum Capability {
 	DISK_MANAGER
 }
 
+type CreatedApiToken {
+	clientId: ID!
+	token: String!
+}
+
 type DeviceInfo {
 	name: String!
 	platform: DevicePlatform!
@@ -133,8 +138,6 @@ type Session {
 	clientId: ID!
 	clientName: String!
 	type: SessionType!
-	token: String!
-	urlToken: String!
 	clientIp: String!
 	osName: String!
 	osVersion: String!
@@ -158,6 +161,7 @@ type Temperature {
 
 extend type Mutation {
 	clearAppLogs: Boolean!
+	createApiToken(name: String!): CreatedApiToken!
 	exportAppLogs: String
 	logout: Boolean!
 	"""

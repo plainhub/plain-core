@@ -251,7 +251,7 @@ async fn service_starts_real_listeners_and_releases_them_and_the_data_lock_on_sh
     .await
     .unwrap();
     assert!(catalog.file_scan_status().unwrap().is_none());
-    catalog.start_source_scan("/").unwrap();
+    catalog.start_volume_scan(None).unwrap().unwrap();
     tokio::time::timeout(std::time::Duration::from_secs(5), async {
         while catalog
             .count(plain_rs::features::enums::DataType::Doc)

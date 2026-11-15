@@ -1,7 +1,7 @@
 use crate::server::ServerState;
 use plain_libs::serde_json::{Value, json};
 use plain_rs::features::prefs::security::PasswordType;
-use plain_rs::infrastructure::db::SessionRow;
+use plain_rs::infrastructure::db::{AuditEventClient, SessionRow};
 use sha2::{Digest, Sha256};
 use std::{
     collections::HashMap,
@@ -505,6 +505,7 @@ async fn issue(state: &ServerState, request: &Pending) -> plain_libs::anyhow::Re
     let frame = request
         .protection
         .encrypt_response(&plain_libs::serde_json::to_vec(&response)?)?;
+    let client = login_client(state, &request.client_id, &request.client_ip, &request.request)?;
     persist(state, request, &token)?;
     if chat_paired {
         let peer = &request.request["peer"];
@@ -523,6 +524,7 @@ async fn issue(state: &ServerState, request: &Pending) -> plain_libs::anyhow::Re
             },
         )?;
     }
+    state.db.audit_event_add("login", "", Some(&client))?;
     Ok(
         json!({"status": "COMPLETED", "token": token, "response": response, "frame": plain_libs::utils::base64::base64_encode(&frame)}),
     )
@@ -547,7 +549,8 @@ fn persist(state: &ServerState, request: &Pending, token: &str) -> plain_libs::a
         name: existing
             .as_ref()
             .map(|row| row.name.clone())
-            .unwrap_or_default(),
+            .filter(|name| !name.is_empty())
+            .unwrap_or_else(|| text(&request.request["peer"], "deviceName")),
         r#type: existing
             .as_ref()
             .map(|row| row.r#type)
@@ -575,14 +578,34 @@ fn persist(state: &ServerState, request: &Pending, token: &str) -> plain_libs::a
     Ok(())
 }
 
-pub(crate) fn record_failure(
+fn login_client(
     state: &ServerState,
     client_id: &str,
+    client_ip: &str,
+    request: &Value,
+) -> plain_libs::anyhow::Result<AuditEventClient> {
+    let client_name = state.db.session_get(client_id)?
+        .map(|row| row.name).filter(|name| !name.is_empty())
+        .unwrap_or_else(|| text(&request["peer"], "deviceName"));
+    Ok(AuditEventClient {
+        client_id: client_id.to_owned(),
+        client_name,
+        client_ip: client_ip.to_owned(),
+        os_name: text(request, "osName"),
+        os_version: text(request, "osVersion"),
+        app_name: text(request, "appName"),
+        app_version: text(request, "appVersion"),
+    })
+}
+
+pub(crate) fn record_failure(
+    state: &ServerState,
+    client: &AuditEventClient,
     reason: &str,
 ) -> plain_libs::anyhow::Result<()> {
     state
         .db
-        .audit_event_add("login_failed", reason, Some(client_id))?;
+        .audit_event_add("login_failed", reason, Some(client))?;
     Ok(())
 }
 
@@ -590,27 +613,20 @@ pub(crate) async fn execute(
     state: &ServerState,
     request: Request,
 ) -> plain_libs::anyhow::Result<Value> {
-    let client = match &request {
-        Request::Issue { client_id, .. } => Some(client_id.clone()),
-        Request::Complete { request_id } => state
-            .login_attempts
-            .lock()
-            .map_err(|_| plain_libs::anyhow::anyhow!("Login state unavailable"))?
-            .pending
-            .get(request_id)
-            .map(|pending| pending.client_id.clone()),
+    let mut client = match &request {
+        Request::Issue { client_id, client_ip, .. } => Some(AuditEventClient {
+            client_id: client_id.clone(), client_ip: client_ip.clone(), ..Default::default()
+        }),
+        Request::Complete { request_id } => {
+            let pending = state.login_attempts.lock()
+                .map_err(|_| plain_libs::anyhow::anyhow!("Login state unavailable"))?
+                .pending.get(request_id)
+                .map(|pending| (pending.client_id.clone(), pending.client_ip.clone(), pending.request.clone()));
+            pending.map(|(id, ip, metadata)| login_client(state, &id, &ip, &metadata)).transpose()?
+        },
         Request::Cancel { .. } => None,
     };
-    let result = execute_request(state, request).await;
-    if let Ok(value) = &result {
-        if value["status"] == "COMPLETED" {
-            state.db.audit_event_add(
-                "login",
-                &text(&value["request"], "appName"),
-                client.as_deref(),
-            )?;
-        }
-    }
+    let result = execute_request(state, request, &mut client).await;
     if let Err(error) = &result {
         if let Some(client) = client {
             record_failure(state, &client, LoginError::from_error(error).reason())?;
@@ -622,6 +638,7 @@ pub(crate) async fn execute(
 async fn execute_request(
     state: &ServerState,
     request: Request,
+    client: &mut Option<AuditEventClient>,
 ) -> plain_libs::anyhow::Result<Value> {
     if matches!(&request, Request::Issue { .. } | Request::Complete { .. }) {
         plain_libs::anyhow::ensure!(
@@ -643,7 +660,8 @@ async fn execute_request(
                 pending
             };
             if let Some(pending) = pending {
-                record_failure(state, &pending.client_id, reason)?;
+                let client = login_client(state, &pending.client_id, &pending.client_ip, &pending.request)?;
+                record_failure(state, &client, reason)?;
             }
             return Ok(json!({"canceled":true}));
         }
@@ -674,6 +692,7 @@ async fn execute_request(
             let frame = plain_libs::utils::base64::base64_decode_checked(&frame)?;
             let bytes = channel.decrypt_request(&frame, now_ms())?;
             let mut request: Value = plain_libs::serde_json::from_slice(&bytes)?;
+            *client = Some(login_client(state, &client_id, &client_ip, &request)?);
             let protection = match &channel {
                 LoginChannel::Opaque(c) => {
                     plain_libs::anyhow::ensure!(

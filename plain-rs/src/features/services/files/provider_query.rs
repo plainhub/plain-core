@@ -27,6 +27,15 @@ pub struct Plan {
     pub trash: Option<bool>,
 }
 impl Plan {
+    pub fn exclude_media_directories(
+        &mut self,
+        prefs: &crate::features::prefs::Prefs,
+    ) -> plain_libs::anyhow::Result<()> {
+        let (clauses, args) = crate::features::media::visibility::selection(prefs)?;
+        self.clauses.extend(clauses);
+        self.args.extend(args);
+        Ok(())
+    }
     pub fn add(&mut self, clause: String, values: Vec<String>) {
         self.clauses.push(clause);
         self.args.extend(values);

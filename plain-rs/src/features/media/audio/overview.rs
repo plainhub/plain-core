@@ -26,7 +26,14 @@ fn history_from_connection(conn: &plain_libs::rusqlite::Connection) -> DomainRes
         .collect::<plain_libs::rusqlite::Result<Vec<_>>>()?)
 }
 
-pub fn native(db: &Db) -> DomainResult<Vec<Artist>> {
+pub fn native(db: &Db, prefs: &crate::features::prefs::Prefs) -> DomainResult<Vec<Artist>> {
+    let (clauses, args) = crate::features::media::visibility::selection(prefs)
+        .map_err(|error| DomainError::Other(error.to_string()))?;
+    let visibility = if clauses.is_empty() {
+        String::new()
+    } else {
+        format!("AND {}", clauses.join(" AND "))
+    };
     db.with_conn(|connection| {
         let transaction = connection.unchecked_transaction()?;
         let mut summary = Accumulator::new(history_from_connection(&transaction)?)?;
@@ -37,9 +44,9 @@ pub fn native(db: &Db) -> DomainResult<Vec<Artist>> {
         });
         {
             let mut statement = transaction.prepare(
-                "SELECT id,artist,path FROM file_catalog WHERE data_type=1 AND trashed=0 AND missing=0 AND indexed=1 AND is_available=1 ORDER BY title COLLATE NOCASE ASC,id",
+                &format!("SELECT id,artist,path,path AS _data FROM file_catalog WHERE data_type=1 AND trashed=0 AND missing=0 AND indexed=1 AND is_available=1 {visibility} ORDER BY title COLLATE NOCASE ASC,id"),
             )?;
-            let mut rows = statement.query([])?;
+            let mut rows = statement.query(plain_libs::rusqlite::params_from_iter(args.iter()))?;
             while let Some(row) = rows.next()? {
                 let id: String = row.get(0)?;
                 let artist: String = row.get(1)?;

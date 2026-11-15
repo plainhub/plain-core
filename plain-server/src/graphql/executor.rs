@@ -32,15 +32,17 @@ pub(crate) fn resource_credentials(
     ctx: &plain_graphql::Context<'_>,
 ) -> plain_graphql::Result<(plain_rs::features::files::resource_link::Scope, String)> {
     use plain_rs::features::files::resource_link::Scope;
-    let row = if ctx.data_opt::<RequestOrigin>() == Some(&RequestOrigin::Remote) {
+    if ctx.data_opt::<RequestOrigin>() == Some(&RequestOrigin::Remote) {
         let id = ctx.data::<RequestClient>()?.client_id();
-        ctx.data::<std::sync::Arc<plain_rs::infrastructure::db::Db>>()?
+        let row = ctx.data::<std::sync::Arc<plain_rs::infrastructure::db::Db>>()?
             .session_get(id)?
-            .ok_or_else(|| plain_graphql::Error::new("Session unavailable"))?
+            .ok_or_else(|| plain_graphql::Error::new("Session unavailable"))?;
+        Ok((Scope::Session(row.client_id), row.url_token))
     } else {
-        plain_rs::features::services::sessions::native(ctx.data::<plain_rs::runtime::Runtime>()?)?
-    };
-    Ok((Scope::Session(row.client_id), row.url_token))
+        let state = ctx.data::<plain_rs::runtime::Runtime>()?;
+        let client_id = state.native_client_id().map_err(plain_graphql::Error::new)?;
+        Ok((Scope::Session(client_id), state.token.to_string()))
+    }
 }
 
 #[derive(Clone)]

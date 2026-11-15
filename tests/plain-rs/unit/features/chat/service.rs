@@ -41,6 +41,7 @@ async fn send_chat_item_requires_prefixed_peer_and_local_targets() {
     let db = Db::open(&dir.join("plain.db")).expect("open db");
     let service = ChatService::new(
         db,
+        std::sync::Arc::from(plain_libs::crypto::gen_token()),
         std::sync::Arc::new(ChatIdentity::new("self", "Self", String::new())),
         DeviceType::Computer,
         dir,
@@ -141,6 +142,7 @@ async fn kicked_channel_rejects_incoming_message() {
     let db = Db::open(&dir.join("plain.db")).expect("open db");
     let service = ChatService::new(
         db,
+        std::sync::Arc::from(plain_libs::crypto::gen_token()),
         std::sync::Arc::new(ChatIdentity::new("self", "Self", String::new())),
         DeviceType::Computer,
         dir,
@@ -202,6 +204,7 @@ async fn unpaired_peer_send_fails_and_local_cache_tracks_deletion() {
     db.upsert_peer(&peer);
     let service = ChatService::new(
         db,
+        std::sync::Arc::from(plain_libs::crypto::gen_token()),
         std::sync::Arc::new(ChatIdentity::new("self", "Self", String::new())),
         DeviceType::Computer,
         dir,

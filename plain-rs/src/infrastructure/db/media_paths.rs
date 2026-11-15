@@ -52,7 +52,9 @@ impl MediaPaths {
             conn.execute_batch(&format!("CREATE TEMP TRIGGER media_path_{event} BEFORE {event} ON main.files {changed} BEGIN
                 {old}
                 INSERT OR IGNORE INTO media_path_changes SELECT NEW.id WHERE NEW.kind IN ('IMAGE','VIDEO','AUDIO','DOC');
-                INSERT OR IGNORE INTO media_path_changes SELECT id FROM files WHERE (rowid=NEW.rowid OR id=NEW.id OR (NEW.missing=0 AND volume_id=NEW.volume_id AND path=NEW.path AND missing=0)) AND {VISIBLE};
+                INSERT OR IGNORE INTO media_path_changes SELECT id FROM files WHERE rowid=NEW.rowid AND {VISIBLE};
+                INSERT OR IGNORE INTO media_path_changes SELECT id FROM files WHERE id=NEW.id AND {VISIBLE};
+                INSERT OR IGNORE INTO media_path_changes SELECT id FROM files WHERE NEW.missing=0 AND volume_id=NEW.volume_id AND path=NEW.path AND missing=0 AND {VISIBLE};
                 END;"))?;
         }
         let files = conn

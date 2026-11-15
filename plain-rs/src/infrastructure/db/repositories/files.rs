@@ -579,13 +579,45 @@ impl Db {
         })
     }
 
+    pub fn set_volume_alias(&self, id: &str, alias: &str) -> plain_libs::rusqlite::Result<bool> {
+        self.with_conn(|conn| {
+            Ok(conn.execute(
+                "UPDATE volumes SET alias=?1 WHERE id=?2",
+                params![alias.trim(), id],
+            )? == 1)
+        })
+    }
+
+    pub fn record_volume_scan(
+        &self,
+        id: &str,
+        status: crate::infrastructure::db::FileIndexScanStatus,
+        count: i64,
+        total: Option<i64>,
+    ) -> plain_libs::rusqlite::Result<()> {
+        let at = super::db_time::now_iso();
+        self.with_conn(|conn| {
+            let changed = conn.execute(
+                "UPDATE volumes SET last_scan_at=?1,last_scan_status=?2,last_scan_count=?3,last_scan_total=?4 WHERE id=?5",
+                params![at, status, count, total, id],
+            )?;
+            if changed != 1 { return Err(plain_libs::rusqlite::Error::QueryReturnedNoRows); }
+            Ok(())
+        })
+    }
+
     pub fn volumes(&self) -> plain_libs::rusqlite::Result<Vec<VolumeRow>> {
         self.with_conn(|conn| {
-            conn.prepare("SELECT id,identity,path,is_available,index_mode,included_dirs,excluded_dirs FROM volumes ORDER BY path")?
+            conn.prepare("SELECT id,identity,path,is_available,index_mode,included_dirs,excluded_dirs,last_scan_at,last_scan_status,last_scan_count,last_scan_total,alias FROM volumes ORDER BY path")?
                 .query_map([], |row| {
                     let path: String = row.get(2)?;
                     let path = if path.contains("://") { path } else { crate::features::files::index_scope::normalized(Path::new(&path)) };
                     Ok(VolumeRow {
+                        alias: row.get(11)?,
+                        last_scan_at: row.get(7)?,
+                        last_scan_status: row.get(8)?,
+                        last_scan_count: row.get(9)?,
+                        last_scan_total: row.get(10)?,
                         id: row.get(0)?,
                         identity: row.get(1)?,
                         path,

@@ -168,6 +168,7 @@ pub(crate) async fn catalog(
             ctx.data_unchecked::<Arc<plain_rs::infrastructure::db::Db>>()
                 .clone(),
             ctx.data_unchecked::<Arc<Host>>().clone(),
+            prefs(ctx).clone(),
         ),
     )
 }

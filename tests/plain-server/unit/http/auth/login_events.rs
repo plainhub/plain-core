@@ -55,6 +55,9 @@ async fn invalid_password_proof_is_recorded_once_without_session_or_secrets() {
     assert_eq!(records.len(), 1);
     assert_eq!(records[0].r#type, "login_failed");
     assert_eq!(records[0].message, "invalid_password");
+    assert_eq!(records[0].client_ip, "127.0.0.1");
+    assert!(records[0].app_name.is_empty());
+    assert!(records[0].os_name.is_empty());
     assert_eq!(
         records[0].client_id.as_deref(),
         Some("731f75a8-4782-5a80-b00a-a2bfae12c134")

@@ -128,6 +128,11 @@ async fn reads_come_from_the_rust_store() {
 #[tokio::test]
 async fn preference_writes_and_removal_use_rust_storage_without_host_calls() {
     let (_directory, schema) = fixture(|method, _| panic!("Unexpected host call: {method}"));
+    schema
+        .data::<Arc<Prefs>>()
+        .unwrap()
+        .set("developer_mode", true)
+        .unwrap();
     let response = schema
         .execute(r#"mutation { setPref(key:"editor_wrap_content",value:true) }"#)
         .await;
@@ -179,7 +184,7 @@ async fn pref_keys_outside_the_safe_set_are_refused() {
         ))
         .await;
     assert_eq!(response.errors.len(), 1);
-    assert_eq!(response.errors[0].message, "Preference is not accessible");
+    assert_eq!(response.errors[0].message, "No permission: developer mode is disabled");
 }
 
 /// The cap is on bytes, not characters - a multi-byte value would slip past
@@ -254,7 +259,14 @@ async fn remote_tools_receive_effective_app_home_features_without_local_settings
     ] {
         let response = schema.execute(mutation).await;
         assert_eq!(response.errors.len(), 1);
-        assert_eq!(response.errors[0].message, "Preference is not accessible");
+        assert_eq!(
+            response.errors[0].message,
+            if mutation.contains("removePref") {
+                "No permission: developer mode is disabled"
+            } else {
+                "Preference is not accessible"
+            }
+        );
     }
     let response = schema
         .execute(r#"{prefs(keys:["editor_wrap_content","app_home_features"])}"#)
@@ -337,4 +349,64 @@ async fn full_preferences_require_live_developer_mode_and_include_every_stored_k
     let response = schema.execute("{prefs(keys:[])}").await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     assert_eq!(response.data.into_json().unwrap()["prefs"], json!({}));
+}
+
+#[tokio::test]
+async fn developer_mode_allows_removing_any_stored_key_for_each_origin() {
+    let (directory, schema) = fixture(|method, _| panic!("Unexpected host call: {method}"));
+    for origin in [
+        crate::graphql::executor::RequestOrigin::Local,
+        crate::graphql::executor::RequestOrigin::Remote,
+    ] {
+        for key in [
+            "adb_token",
+            "master_secret",
+            "signature_key_pair",
+            "client_id",
+            "http_port",
+            "auto_check_update",
+            "skip_version",
+            "custom:key",
+        ] {
+            let value = if key == "http_port" {
+                json!(8181)
+            } else {
+                json!("fixture-value")
+            };
+            let path = directory.path().join("removal.json");
+            let mut entries = plain_libs::serde_json::Map::new();
+            entries.insert(key.into(), value.clone());
+            std::fs::write(&path, plain_libs::serde_json::to_vec(&entries).unwrap()).unwrap();
+            let prefs = Arc::new(Prefs::load(&path).unwrap());
+            for enabled in [false, true, false] {
+                prefs.set("developer_mode", enabled).unwrap();
+                let response = schema
+                    .execute(
+                        plain_graphql::Request::new(format!(
+                            "mutation {{ removePref(key:{key:?}) }}"
+                        ))
+                        .data(origin)
+                        .data(prefs.clone()),
+                    )
+                    .await;
+                if enabled {
+                    assert!(response.errors.is_empty(), "{key}: {:?}", response.errors);
+                    assert_eq!(response.data.into_json().unwrap()["removePref"], true);
+                    assert!(prefs.get::<Value>(key).unwrap().is_none(), "{key}");
+                    assert!(
+                        Prefs::load(&path)
+                            .unwrap()
+                            .get::<Value>(key)
+                            .unwrap()
+                            .is_none()
+                    );
+                } else {
+                    assert_eq!(
+                        response.errors[0].message,
+                        "No permission: developer mode is disabled"
+                    );
+                }
+            }
+        }
+    }
 }

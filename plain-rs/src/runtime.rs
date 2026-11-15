@@ -143,7 +143,7 @@ impl Runtime {
         events: broadcast::Sender<WsEvent>,
     ) -> Result<(Self, watch::Sender<bool>), String> {
         let directory = directory.to_path_buf();
-        let token = token.to_owned();
+        let token: Arc<str> = Arc::from(token);
         crate::features::prefs::security::bootstrap(&prefs).map_err(|error| error.to_string())?;
         log::set_max_level(
             crate::features::prefs::security::log_level(&prefs)
@@ -164,18 +164,7 @@ impl Runtime {
             )
             .map_err(|error| error.to_string())?;
         }
-        let identity = crate::features::prefs::identity::ensure_identity(&prefs);
-        crate::features::sessions::SessionStore::new(&db)
-            .upsert(crate::features::sessions::SessionInfo {
-                client_id: identity.client_id,
-                token: token.clone(),
-                client_name: identity.device_name,
-                app_version: host.startup().app_version.clone(),
-                os_name: host.startup().os_name.clone(),
-                os_version: host.startup().os_version.clone(),
-                ..Default::default()
-            })
-            .map_err(|error| error.to_string())?;
+        crate::features::prefs::identity::ensure_identity(&prefs);
         let (stop, receiver) = watch::channel(false);
         let lan = Arc::new(
             crate::features::services::peers::peer_lan::Lan::new().map_err(|e| e.to_string())?,
@@ -395,6 +384,7 @@ impl Runtime {
             attachments,
             delivery: Arc::new(crate::features::chat::delivery::Delivery::new(
                 (*db).clone(),
+                token.clone(),
             )),
             channel_delivery: Arc::new(tokio::sync::Semaphore::new(4)),
             ble_transport: Arc::new(
@@ -439,7 +429,7 @@ impl Runtime {
                     crate::infrastructure::data_paths::DataPaths::new(&directory).tls_identity(),
                 ),
             )),
-            token: Arc::from(token.as_str()),
+            token,
             temp_values: Default::default(),
             events,
             stop: receiver.clone(),
@@ -503,9 +493,8 @@ impl Runtime {
         Ok((state, stop))
     }
     pub fn native_url_token(&self) -> Result<String, String> {
-        crate::features::services::sessions::native(self)
-            .map(|session| session.url_token)
-            .map_err(|error| error.to_string())
+        self.native_client_id()?;
+        Ok(self.token.to_string())
     }
 
     pub fn native_client_id(&self) -> Result<String, String> {

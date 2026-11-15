@@ -99,3 +99,68 @@ fn preferences_command_requires_key_and_value() {
     assert_eq!(help.code, 0);
     assert!(help.message.contains("<KEY> <VALUE>"));
 }
+
+#[test]
+fn commands_share_default_and_overridden_data_directories() {
+    const FIXTURE: &str = "PLAINAPP_CLI_PATH_TEST_HOME";
+    if let Some(home) = std::env::var_os(FIXTURE) {
+        let home = PathBuf::from(home);
+        for arguments in [
+            vec!["plainapp", "run"],
+            vec!["plainapp", "prefs", "allow_any_host", "true"],
+            vec!["plainapp", "passwd", "--stdin"],
+        ] {
+            let cli = Cli::try_parse_from(arguments.clone()).unwrap();
+            let paths = cli.paths().unwrap();
+            let expected = if cfg!(target_os = "linux") {
+                PathBuf::from("/var/lib/plainapp")
+            } else {
+                home.join(".plainapp/data")
+            };
+            let expected = std::env::var_os("PLAINAPP_DATA_DIR")
+                .map(PathBuf::from)
+                .unwrap_or(expected);
+            assert_eq!(paths.data_dir, expected);
+            assert_eq!(paths.tls_cert, expected.join("tls.pem"));
+            let explicit = home.join("explicit-data");
+            let cli =
+                Cli::try_parse_from(arguments.into_iter().map(std::ffi::OsString::from).chain([
+                    std::ffi::OsString::from("--data-dir"),
+                    explicit.clone().into_os_string(),
+                ]))
+                .unwrap();
+            assert_eq!(cli.paths().unwrap().data_dir, explicit);
+        }
+        return;
+    }
+    let directory = plain_libs::temporary::tempdir().unwrap();
+    let home = directory.path().join("generated-home");
+    std::fs::create_dir(&home).unwrap();
+    for configured in [None, Some(home.join("configured-data"))] {
+        let mut command = std::process::Command::new(std::env::current_exe().unwrap());
+        command
+            .args([
+                "--exact",
+                "cli::tests::commands_share_default_and_overridden_data_directories",
+                "--nocapture",
+            ])
+            .env(FIXTURE, &home)
+            .env("HOME", &home)
+            .env("LOCALAPPDATA", &home)
+            .env("PLAINAPP_CACHE_DIR", directory.path().join("cache"))
+            .env_remove("PLAINAPP_DATA_DIR")
+            .env_remove("PLAINAPP_TLS_CERT")
+            .env_remove("PLAINAPP_TLS_KEY");
+        if let Some(configured) = configured {
+            command.env("PLAINAPP_DATA_DIR", configured);
+        }
+        let output = command.output().unwrap();
+        assert!(
+            output.status.success(),
+            "{}\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    assert!(!home.join(".plainapp/data").exists());
+}

@@ -12,8 +12,8 @@ async fn reconciliation_preserves_rebuild_progress_and_reserves_the_execution_sl
     for _ in 0..2 {
         let reconciliation = scans.begin_discovery(Purpose::Reconcile).unwrap();
         assert!(scans.begin(1).is_err());
-        assert_eq!(scans.pause().unwrap().unwrap().id, completed.id);
-        assert_eq!(scans.resume().unwrap().unwrap().status, Status::Completed);
+        assert_eq!(scans.pause(None).unwrap().unwrap().id, completed.id);
+        assert_eq!(scans.resume(None).unwrap().unwrap().status, Status::Completed);
         reconciliation.wait_running().await.unwrap();
         reconciliation.sources(&["/source/arrived".into()]).unwrap();
         reconciliation.discovered(1).unwrap();
@@ -64,7 +64,7 @@ fn background_failure_cancellation_drop_and_close_preserve_the_rebuild_result() 
                 if end == "close" {
                     scans.close().unwrap();
                 } else {
-                    scans.cancel().unwrap();
+                    scans.cancel(None).unwrap();
                 }
                 let writes = AtomicUsize::new(0);
                 assert!(
@@ -102,11 +102,11 @@ fn reconciliation_without_a_rebuild_has_no_home_progress_and_cannot_replace_a_pa
     assert!(scans.snapshot().unwrap().is_none());
     assert!(received.try_recv().is_err());
     let rebuild = scans.begin(1).unwrap();
-    let paused = scans.pause().unwrap().unwrap();
+    let paused = scans.pause(None).unwrap().unwrap();
     assert!(scans.begin_discovery(Purpose::Reconcile).is_err());
     assert_eq!(scans.snapshot().unwrap().unwrap().id, paused.id);
     assert_eq!(scans.snapshot().unwrap().unwrap().status, Status::Paused);
-    scans.cancel().unwrap();
+    scans.cancel(None).unwrap();
     let stopped = rebuild.finish(Ok(())).unwrap();
     assert_eq!(stopped.status, Status::Canceled);
     let background = scans.begin_discovery(Purpose::Reconcile).unwrap();
@@ -127,7 +127,7 @@ fn cancellation_is_a_commit_barrier_and_busy_or_stale_sessions_do_not_change_job
             Ok(())
         })
         .unwrap();
-    assert_eq!(scans.cancel().unwrap().unwrap().status, Status::Canceling);
+    assert_eq!(scans.cancel(None).unwrap().unwrap().status, Status::Canceling);
     assert!(
         session
             .record(|| {
@@ -222,7 +222,7 @@ async fn pause_is_a_commit_barrier_and_resume_keeps_the_same_session() {
     use std::task::{Context, Poll, Waker};
     let scans = Arc::new(MediaScans::default());
     let session = scans.begin(1).unwrap();
-    let id = scans.pause().unwrap().unwrap().id;
+    let id = scans.pause(None).unwrap().unwrap().id;
     assert_eq!(scans.snapshot().unwrap().unwrap().status, Status::Paused);
     assert!(scans.begin(1).is_err());
     let writes = AtomicUsize::new(0);
@@ -233,14 +233,14 @@ async fn pause_is_a_commit_barrier_and_resume_keeps_the_same_session() {
     let mut context = Context::from_waker(Waker::noop());
     assert!(matches!(record.as_mut().poll(&mut context), Poll::Pending));
     assert_eq!(writes.load(Ordering::SeqCst), 0);
-    assert_eq!(scans.resume().unwrap().unwrap().id, id);
+    assert_eq!(scans.resume(None).unwrap().unwrap().id, id);
     record.await.unwrap();
     assert_eq!(writes.load(Ordering::SeqCst), 1);
     let completed = session.finish(Ok(())).unwrap();
     assert_eq!(completed.id, id);
     assert_eq!(completed.processed_files, 1);
     assert_eq!(completed.status, Status::Completed);
-    assert_eq!(scans.resume().unwrap().unwrap().status, Status::Completed);
+    assert_eq!(scans.resume(None).unwrap().unwrap().status, Status::Completed);
 }
 
 #[tokio::test]
@@ -250,7 +250,7 @@ async fn canceling_or_closing_a_paused_scan_wakes_it_without_a_write() {
     for close in [false, true] {
         let scans = Arc::new(MediaScans::default());
         let session = scans.begin(1).unwrap();
-        scans.pause().unwrap();
+        scans.pause(None).unwrap();
         let writes = AtomicUsize::new(0);
         let mut record = Box::pin(session.record_when_running(1, || {
             writes.fetch_add(1, Ordering::SeqCst);
@@ -261,7 +261,7 @@ async fn canceling_or_closing_a_paused_scan_wakes_it_without_a_write() {
         if close {
             scans.close().unwrap();
         } else {
-            scans.cancel().unwrap();
+            scans.cancel(None).unwrap();
         }
         assert!(record.await.is_err());
         assert_eq!(writes.load(Ordering::SeqCst), 0);
@@ -314,12 +314,12 @@ fn core_scan_events_report_real_lifecycle_and_unknown_totals() {
     assert_eq!(first["state"], "RUNNING");
     assert_eq!(first["total"], plain_libs::serde_json::Value::Null);
     assert_eq!(first["pending"], plain_libs::serde_json::Value::Null);
-    scans.pause().unwrap();
+    scans.pause(None).unwrap();
     let paused: plain_libs::serde_json::Value =
         plain_libs::serde_json::from_str(&received.try_recv().unwrap().payload).unwrap();
     assert_eq!(paused["state"], "PAUSED");
     assert_eq!(paused["id"], first["id"]);
-    scans.resume().unwrap();
+    scans.resume(None).unwrap();
     assert!(received.try_recv().is_ok());
     session.record(|| Ok(())).unwrap();
     let progress: plain_libs::serde_json::Value =

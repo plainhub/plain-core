@@ -436,12 +436,8 @@ async fn app_preferences_do_not_call_the_platform() {
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     assert_eq!(response.data.into_json().unwrap()["app"]["urlToken"], {
         let runtime = schema.data::<plain_rs::runtime::Runtime>().unwrap();
-        runtime
-            .db
-            .session_get(&runtime.native_client_id().unwrap())
-            .unwrap()
-            .unwrap()
-            .url_token
+        assert!(runtime.db.session_get(&runtime.native_client_id().unwrap()).unwrap().is_none());
+        runtime.token.to_string()
     });
 }
 

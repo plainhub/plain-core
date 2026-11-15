@@ -1,5 +1,6 @@
 use crate::features::prefs::Prefs;
-use crate::features::prefs::pref_keys::AI_IMAGE_SEARCH_MODEL;
+use crate::features::prefs::pref_keys::{AI_IMAGE_SEARCH_MODEL, MEDIA_EXCLUDED_DIRS};
+use crate::features::enums::DataType;
 use crate::infrastructure::events::WsEvent;
 use plain_libs::serde_json::Value;
 use tokio::sync::broadcast;
@@ -33,6 +34,9 @@ impl<'a> Preferences<'a> {
             "Preference is not accessible"
         );
         plain_libs::anyhow::ensure!(value.to_string().len() <= 65536, "invalid_pref_value");
+        if key == MEDIA_EXCLUDED_DIRS {
+            crate::features::media::visibility::validate(&value)?;
+        }
         if key == AI_IMAGE_SEARCH_MODEL {
             plain_libs::anyhow::ensure!(
                 matches!(value.as_str(), Some("default" | "imported")),
@@ -73,6 +77,10 @@ impl<'a> Preferences<'a> {
         write: impl FnOnce(&Prefs) -> plain_libs::anyhow::Result<bool>,
     ) -> plain_libs::anyhow::Result<bool> {
         let before = crate::features::prefs::settings::snapshot(self.prefs)?;
+        let before_media_dirs = self
+            .prefs
+            .get::<Vec<String>>(MEDIA_EXCLUDED_DIRS)?
+            .unwrap_or_default();
         let before_model = self
             .prefs
             .get_or(AI_IMAGE_SEARCH_MODEL, String::from("default"));
@@ -81,6 +89,15 @@ impl<'a> Preferences<'a> {
         if changed {
             if let Some(events) = self.events {
                 let _ = events.send(WsEvent::broadcast("PREFS_UPDATED", "{}".into()));
+                if before_media_dirs
+                    != self.prefs.get::<Vec<String>>(MEDIA_EXCLUDED_DIRS)?.unwrap_or_default()
+                {
+                    crate::features::services::files::catalog_events::publish(
+                        events,
+                        [DataType::Image, DataType::Video, DataType::Audio, DataType::Doc]
+                            .map(DataType::kind),
+                    );
+                }
             }
         }
         if let Some(state) = self.server {

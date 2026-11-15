@@ -4,7 +4,6 @@ pub mod identity;
 pub mod pref_keys;
 pub mod security;
 pub mod settings;
-pub mod storage;
 
 pub use identity::{AppIdentity, ensure_identity, ensure_mdns_hostname};
 

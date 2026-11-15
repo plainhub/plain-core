@@ -119,10 +119,7 @@ impl FilePlatform {
         }
     }
 
-    pub async fn mounts(
-        &self,
-        prefs: Arc<crate::features::prefs::Prefs>,
-    ) -> Result<plain_libs::serde_json::Value> {
+    async fn mount_facts(&self) -> Result<plain_libs::serde_json::Value> {
         if self.uses_sdk() {
             return self
                 .host
@@ -133,11 +130,25 @@ impl FilePlatform {
                 .await
                 .map_err(plain_libs::anyhow::Error::msg);
         }
-        tokio::task::spawn_blocking(move || {
-            crate::features::services::files::mounts::native_facts(&prefs)
-        })
-        .await?
-        .map_err(plain_libs::anyhow::Error::msg)
+        tokio::task::spawn_blocking(crate::features::services::files::mounts::native_facts)
+            .await?
+            .map_err(plain_libs::anyhow::Error::msg)
+    }
+
+    pub async fn mounts(&self) -> Result<plain_libs::serde_json::Value> {
+        let facts = self.mount_facts().await?;
+        let db = self.db.clone();
+        tokio::task::spawn_blocking(move || super::mounts::apply_aliases(&db, facts))
+            .await?
+            .map_err(plain_libs::anyhow::Error::msg)
+    }
+
+    pub async fn set_mount_alias(&self, id: String, alias: String) -> Result<()> {
+        let facts = self.mount_facts().await?;
+        let db = self.db.clone();
+        tokio::task::spawn_blocking(move || super::mounts::set_alias(&db, &facts, &id, &alias))
+            .await?
+            .map_err(plain_libs::anyhow::Error::msg)
     }
 
     pub fn watchable(&self, path: &Path) -> bool {

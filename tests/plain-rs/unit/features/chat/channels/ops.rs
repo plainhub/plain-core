@@ -49,6 +49,7 @@ fn service(dir_label: &str) -> ChatService<TestTransport> {
     );
     ChatService::new(
         db,
+        std::sync::Arc::from(plain_libs::crypto::gen_token()),
         std::sync::Arc::new(identity),
         DeviceType::Nas,
         dir,

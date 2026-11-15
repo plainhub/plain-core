@@ -34,8 +34,8 @@ pub use repositories::{bookmark, chat_store};
 pub use crate::infrastructure::db::browse::TableColumnMeta;
 #[cfg(feature = "library")]
 pub use models::{
-    ArchivedConversationRow, AuditEventRow, ClipboardRow, FavoriteFolderRow, FileKind, FileRow,
-    HISTORY_KEEP, ImageEmbeddingRow, FileIndexMode, MediaPlayHistoryRow, Playlist, PlaylistItem,
+    ArchivedConversationRow, AuditEventClient, AuditEventRow, ClipboardRow, FavoriteFolderRow, FileKind, FileRow,
+    HISTORY_KEEP, ImageEmbeddingRow, FileIndexMode, FileIndexScanStatus, MediaPlayHistoryRow, Playlist, PlaylistItem,
     PomodoroItemRow, QueueItem, SessionRow, ShareRow, TagRelationRow, TagRow, TrashedMessageRow,
     VolumeRow,
 };

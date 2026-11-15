@@ -7,15 +7,21 @@ async fn public_events_read_the_core_database_without_host_or_legacy_store() {
     let state = core.runtime_state();
     let id = state
         .db
-        .audit_event_add("login", "ÄBC", Some("client"))
+        .audit_event_add("login", "ÄBC", Some(&plain_rs_client()))
         .unwrap();
     let result = core.native_graphql().unwrap().execute(plain_graphql::Request::new(
-        r#"{ events(query:"text:äbc",offset:0,limit:10) { id type message clientId createdAt } }"#
+        r#"{ events(query:"text:äbc",offset:0,limit:10) { id type message clientId clientName clientIp osName osVersion appName appVersion createdAt } }"#
     )).await;
     assert!(result.errors.is_empty(), "{:?}", result.errors);
     let data = result.data.into_json().unwrap();
     assert_eq!(data["events"][0]["id"], id);
     assert_eq!(data["events"][0]["clientId"], "client");
+    assert_eq!(data["events"][0]["clientName"], "Fixture client");
+    assert_eq!(data["events"][0]["clientIp"], "192.0.2.24");
+    assert_eq!(data["events"][0]["osName"], "Windows");
+    assert_eq!(data["events"][0]["osVersion"], "11");
+    assert_eq!(data["events"][0]["appName"], "Fixture browser");
+    assert_eq!(data["events"][0]["appVersion"], "142");
     let system_id = state
         .db
         .audit_event_add("mount", "/mnt/example", None)
@@ -33,7 +39,7 @@ async fn public_events_read_the_core_database_without_host_or_legacy_store() {
     assert!(data["events"][0]["clientId"].is_null());
     state
         .db
-        .with_conn(|conn| conn.execute_batch("DROP TABLE audit_events"))
+        .with_conn(|conn| conn.execute_batch("DROP TABLE events"))
         .unwrap();
     let result = core
         .native_graphql()
@@ -83,20 +89,51 @@ async fn public_disk_commands_reach_the_registered_provider() {
 }
 
 #[tokio::test]
-async fn public_mount_alias_uses_the_same_preferences_as_the_platform_adapter() {
+async fn public_mount_alias_is_database_owned_and_ignores_retired_preferences() {
     let directory = plain_libs::temporary::tempdir().unwrap();
+    std::fs::write(directory.path().join("prefs.json"), r#"{"volume_alias":{"fixture-mount":"Retired name"}}"#).unwrap();
+    let source = directory.path().join("generated-volume");
+    std::fs::create_dir(&source).unwrap();
     let core = crate::server::ContentServer::open(directory.path()).unwrap();
-    let result = core
-        .native_graphql()
-        .unwrap()
-        .execute("mutation { setMountAlias(id:\"volume-example\",alias:\" Photos \") }".into())
-        .await;
-    assert!(result.errors.is_empty(), "{:?}", result.errors);
-    assert_eq!(
-        plain_rs::features::prefs::storage::get_map(core.preferences().unwrap())["volume-example"],
-        "Photos"
-    );
+    let state = core.runtime_state();
+    state.file_platform.use_sdk_for_test();
+    let host = state.host.clone();
+    let (generation, mut requests) = host.connect();
+    let facts = plain_libs::serde_json::json!([{"id":"fixture-mount","name":"Fixture volume","path":source,"mountPoint":source,"totalBytes":100,"freeBytes":60,"driveType":"USB_STORAGE"}]);
+    let provider = tokio::spawn(async move {
+        while let Some(request) = requests.recv().await {
+            let result = match request["method"].as_str().unwrap() {
+                "systemMountFacts" => facts.clone(),
+                "systemCapabilities" => plain_libs::serde_json::json!([]),
+                "systemAccessFacts" => plain_libs::serde_json::json!({"granted":{"FILES":true}}),
+                method => panic!("unexpected {method}"),
+            };
+            host.reply(generation, plain_libs::serde_json::json!({"id":request["id"],"result":result})).unwrap();
+        }
+    });
+    let prefs_path = directory.path().join("prefs.json");
+    let before = std::fs::read(&prefs_path).unwrap();
+    let executor = core.native_graphql().unwrap();
+    let query = executor.execute("{ mounts { id alias } }".into()).await;
+    assert!(query.errors.is_empty(), "{:?}", query.errors);
+    assert_eq!(query.data.into_json().unwrap()["mounts"][0]["alias"], "");
+    for (input, expected) in [(" Photos ", "Photos"), ("", "")] {
+        let response = executor.execute(plain_graphql::Request::new(r#"mutation($alias:String!){setMountAlias(id:"fixture-mount",alias:$alias)}"#)
+            .variables(plain_graphql::Variables::from_json(plain_libs::serde_json::json!({"alias":input})))).await;
+        assert!(response.errors.is_empty(), "{:?}", response.errors);
+        assert!(std::fs::read(&prefs_path).unwrap() == before, "renaming a volume must not write preferences");
+        let volume = state.db.volumes().unwrap().into_iter().find(|volume| std::path::Path::new(&source).starts_with(&volume.path)).unwrap();
+        let alias: String = state.db.with_conn(|conn| conn.query_row("SELECT alias FROM volumes WHERE id=?1", [&volume.id], |row| row.get(0))).unwrap();
+        assert_eq!(alias, expected);
+        let query = executor.execute("{ mounts { id alias } }".into()).await;
+        assert!(query.errors.is_empty(), "{:?}", query.errors);
+        assert_eq!(query.data.into_json().unwrap()["mounts"][0]["alias"], expected);
+    }
+    let rejected = executor.execute(r#"mutation { setMountAlias(id:"missing-volume",alias:"Rejected") }"#.into()).await;
+    assert!(!rejected.errors.is_empty());
+    assert!(std::fs::read(&prefs_path).unwrap() == before);
     core.stop_core().await;
+    provider.abort();
 }
 
 #[tokio::test]
@@ -181,4 +218,9 @@ async fn disk_queries_read_native_rust_after_one_capability_check() {
     provider.abort();
     let _ = provider.await;
     core.stop_core().await;
+}
+
+fn plain_rs_client() -> plain_rs::infrastructure::db::AuditEventClient {
+    plain_rs::infrastructure::db::AuditEventClient { client_id: "client".into(), client_name: "Fixture client".into(), client_ip: "192.0.2.24".into(),
+        os_name: "Windows".into(), os_version: "11".into(), app_name: "Fixture browser".into(), app_version: "142".into() }
 }

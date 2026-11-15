@@ -22,6 +22,19 @@ pub struct Scope {
 }
 
 impl Scope {
+    pub fn matches_volumes(&self, volumes: &[VolumeRow]) -> bool {
+        self.volumes.len() == volumes.len()
+            && self.volumes.iter().zip(volumes).all(|(a, b)| {
+                a.id == b.id
+                    && a.identity == b.identity
+                    && a.path == b.path
+                    && a.is_available == b.is_available
+                    && a.index_mode == b.index_mode
+                    && a.included_dirs == b.included_dirs
+                    && a.excluded_dirs == b.excluded_dirs
+            })
+    }
+
     pub fn load(
         db: &Db,
         data: &Path,

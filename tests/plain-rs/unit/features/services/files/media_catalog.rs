@@ -33,10 +33,10 @@ fn rows_and_count_share_literal_filters_and_stable_pagination() {
         file(DataType::Image, "/photos/one.jpg", "100% Song", 10),
     ])
     .unwrap();
-    assert_eq!(count(&db, DataType::Audio, "text:100%").unwrap(), 1);
+    assert_eq!(count(&db, &crate::features::prefs::Prefs::in_memory(), DataType::Audio, "text:100%").unwrap(), 1);
     assert_eq!(
         rows(
-            &db,
+            &db, &crate::features::prefs::Prefs::in_memory(),
             DataType::Audio,
             "text:100%",
             MediaSortBy::NameAsc,
@@ -47,10 +47,10 @@ fn rows_and_count_share_literal_filters_and_stable_pagination() {
         .len(),
         1
     );
-    let rows = rows(&db, DataType::Audio, "", MediaSortBy::SizeAsc, 1, 1).unwrap();
+    let rows = rows(&db, &crate::features::prefs::Prefs::in_memory(), DataType::Audio, "", MediaSortBy::SizeAsc, 1, 1).unwrap();
     assert_eq!(rows[0].size_bytes, 30);
-    assert_eq!(count(&db, DataType::Audio, "artist:Artist").unwrap(), 2);
-    assert!(count(&db, DataType::Audio, "unknown:selection").is_err());
+    assert_eq!(count(&db, &crate::features::prefs::Prefs::in_memory(), DataType::Audio, "artist:Artist").unwrap(), 2);
+    assert!(count(&db, &crate::features::prefs::Prefs::in_memory(), DataType::Audio, "unknown:selection").is_err());
 }
 
 #[test]
@@ -63,9 +63,9 @@ fn document_filters_and_explicit_trash_selection_use_current_catalog() {
             file(DataType::Doc, "/docs/two.txt", "Another title", 10),
         ])
         .unwrap();
-    assert_eq!(count(&db, DataType::Doc, "ext:pdf").unwrap(), 1);
+    assert_eq!(count(&db, &crate::features::prefs::Prefs::in_memory(), DataType::Doc, "ext:pdf").unwrap(), 1);
     assert_eq!(
-        count(&db, DataType::Doc, "type:application/pdf").unwrap(),
+        count(&db, &crate::features::prefs::Prefs::in_memory(), DataType::Doc, "type:application/pdf").unwrap(),
         1
     );
     db.with_conn(|conn| {
@@ -75,10 +75,10 @@ fn document_filters_and_explicit_trash_selection_use_current_catalog() {
         )
     })
     .unwrap();
-    assert_eq!(count(&db, DataType::Doc, "").unwrap(), 1);
-    assert_eq!(count(&db, DataType::Doc, "trash:true ext:pdf").unwrap(), 1);
+    assert_eq!(count(&db, &crate::features::prefs::Prefs::in_memory(), DataType::Doc, "").unwrap(), 1);
+    assert_eq!(count(&db, &crate::features::prefs::Prefs::in_memory(), DataType::Doc, "trash:true ext:pdf").unwrap(), 1);
     let trashed = rows(
-        &db,
+        &db, &crate::features::prefs::Prefs::in_memory(),
         DataType::Doc,
         "trash:true",
         MediaSortBy::NameAsc,
@@ -126,10 +126,10 @@ fn buckets_use_shared_visibility_and_original_folder_names() {
         )
     })
     .unwrap();
-    let result = buckets(&db, DataType::Image).unwrap();
+    let result = buckets(&db, &crate::features::prefs::Prefs::in_memory(), DataType::Image).unwrap();
     assert_eq!(
         result.iter().map(|b| b.item_count).sum::<u64>(),
-        count(&db, DataType::Image, "").unwrap() as u64
+        count(&db, &crate::features::prefs::Prefs::in_memory(), DataType::Image, "").unwrap() as u64
     );
     assert_eq!(result.len(), 2);
     assert_eq!(result[0].top_items, ["/first/Albums/recent.jpg"]);
@@ -137,7 +137,7 @@ fn buckets_use_shared_visibility_and_original_folder_names() {
     assert_eq!(result[0].name, "Albums");
     assert_eq!(result[0].size, 9_000_000_000i64);
     assert_eq!(result[1].id, "/second/Albums");
-    assert!(buckets(&db, DataType::Contact).is_err());
+    assert!(buckets(&db, &crate::features::prefs::Prefs::in_memory(), DataType::Contact).is_err());
 }
 
 #[test]
@@ -149,10 +149,10 @@ fn document_buckets_keep_the_same_nonempty_document_filter_as_rows() {
         file(DataType::Doc, "/docs/empty.txt", "Empty", 0),
     ])
     .unwrap();
-    let items = buckets(&db, DataType::Doc).unwrap();
+    let items = buckets(&db, &crate::features::prefs::Prefs::in_memory(), DataType::Doc).unwrap();
     assert_eq!(items.len(), 1);
     assert_eq!(items[0].top_items[0], "/docs/readme.txt");
-    assert_eq!(items.len() as i64, count(&db, DataType::Doc, "").unwrap());
+    assert_eq!(items.len() as i64, count(&db, &crate::features::prefs::Prefs::in_memory(), DataType::Doc, "").unwrap());
 }
 
 #[test]
@@ -174,19 +174,19 @@ fn action_ids_share_filters_and_explicit_from_trash_overrides_the_query_mode() {
     })
     .unwrap();
     assert_eq!(
-        ids(&db, DataType::Doc, "ext:pdf", false).unwrap(),
+        ids(&db, &crate::features::prefs::Prefs::in_memory(), DataType::Doc, "ext:pdf", false).unwrap(),
         vec![created[1].id.clone()]
     );
     assert_eq!(
-        ids(&db, DataType::Doc, "trash:false ext:pdf", true).unwrap(),
+        ids(&db, &crate::features::prefs::Prefs::in_memory(), DataType::Doc, "trash:false ext:pdf", true).unwrap(),
         vec![created[0].id.clone()]
     );
     assert_eq!(
-        ids(&db, DataType::Doc, "trash:true ext:pdf", false).unwrap(),
+        ids(&db, &crate::features::prefs::Prefs::in_memory(), DataType::Doc, "trash:true ext:pdf", false).unwrap(),
         vec![created[0].id.clone()]
     );
-    assert!(ids(&db, DataType::Contact, "", false).is_err());
-    assert!(ids(&db, DataType::Doc, "unknown:filter", false).is_err());
+    assert!(ids(&db, &crate::features::prefs::Prefs::in_memory(), DataType::Contact, "", false).is_err());
+    assert!(ids(&db, &crate::features::prefs::Prefs::in_memory(), DataType::Doc, "unknown:filter", false).is_err());
 }
 
 #[test]
@@ -208,18 +208,18 @@ fn bulk_selection_includes_every_row_beyond_ten_thousand_and_deduplicates_ids() 
         )
         .unwrap();
     assert_eq!(
-        ids(&db, DataType::Image, "text:select", false)
+        ids(&db, &crate::features::prefs::Prefs::in_memory(), DataType::Image, "text:select", false)
             .unwrap()
             .len(),
         10003
     );
     assert!(
-        ids(&db, DataType::Audio, "text:select", false)
+        ids(&db, &crate::features::prefs::Prefs::in_memory(), DataType::Audio, "text:select", false)
             .unwrap()
             .is_empty()
     );
     let selected = ids(
-        &db,
+        &db, &crate::features::prefs::Prefs::in_memory(),
         DataType::Image,
         &format!("ids:{},{}", rows[0].id, rows[0].id),
         false,
@@ -239,14 +239,14 @@ fn document_extensions_keep_filters_and_combine_extension_case() {
     ])
     .unwrap();
     assert_eq!(
-        document_extensions(&db, "bucket_id:/documents").unwrap(),
+        document_extensions(&db, &crate::features::prefs::Prefs::in_memory(), "bucket_id:/documents").unwrap(),
         vec![("PDF".into(), 2)]
     );
     assert_eq!(
-        document_extensions(&db, "text:report").unwrap(),
+        document_extensions(&db, &crate::features::prefs::Prefs::in_memory(), "text:report").unwrap(),
         vec![("PDF".into(), 1)]
     );
-    assert!(document_extensions(&db, "trash:true").unwrap().is_empty());
+    assert!(document_extensions(&db, &crate::features::prefs::Prefs::in_memory(), "trash:true").unwrap().is_empty());
 }
 
 #[test]
@@ -274,7 +274,7 @@ fn counting_one_media_kind_does_not_scan_unrelated_files() {
             }),
         )
     });
-    let total = count(&db, DataType::Image, "").unwrap();
+    let total = count(&db, &crate::features::prefs::Prefs::in_memory(), DataType::Image, "").unwrap();
     assert_eq!(db.media_file_count(DataType::Image).unwrap(), 1);
     assert_eq!(db.media_file_list(DataType::Image, 1, 0).unwrap().len(), 1);
     db.with_conn(|connection| connection.progress_handler(0, None::<fn() -> bool>));
@@ -290,7 +290,7 @@ fn counting_one_media_kind_does_not_scan_unrelated_files() {
 fn counts_use_a_covering_index_without_sorting_all_media() {
     let db = crate::infrastructure::db::Db::open(std::path::Path::new(":memory:")).unwrap();
     db.with_conn(|c|c.execute_batch("INSERT INTO volumes(id,identity,path,is_available) VALUES('v','v','/media',1); WITH RECURSIVE n(x) AS(VALUES(1) UNION ALL SELECT x+1 FROM n WHERE x<1000) INSERT INTO files(id,volume_id,path,file_name,kind,updated_at,size_bytes) SELECT 'f'||x,'v','images/'||x||'.jpg',x||'.jpg','IMAGE','2026',100 FROM n;")).unwrap();
-    let (base, args) = super::selection(&db, crate::features::enums::DataType::Image, "").unwrap();
+    let (base, args) = super::selection(&db, &crate::features::prefs::Prefs::in_memory(), crate::features::enums::DataType::Image, "").unwrap();
     let sql = base.replace("{columns}", "COUNT(*)");
     let details = db
         .with_conn(|c| {
@@ -312,7 +312,7 @@ fn counts_use_a_covering_index_without_sorting_all_media() {
         "{details:?}"
     );
     assert_eq!(
-        super::count(&db, crate::features::enums::DataType::Image, "").unwrap(),
+        super::count(&db, &crate::features::prefs::Prefs::in_memory(), crate::features::enums::DataType::Image, "").unwrap(),
         1000
     );
 }
@@ -336,12 +336,12 @@ fn name_title_modified_and_capture_time_have_distinct_ordering() {
         (MediaSortBy::UpdatedAtAsc, "/audio/b.mp3"),
     ] {
         assert_eq!(
-            rows(&db, DataType::Audio, "", sort, 10, 0).unwrap()[0].path,
+            rows(&db, &crate::features::prefs::Prefs::in_memory(), DataType::Audio, "", sort, 10, 0).unwrap()[0].path,
             expected
         );
     }
     assert_eq!(
-        rows(&db, DataType::Image, "", MediaSortBy::TakenAtDesc, 10, 0).unwrap()[0].path,
+        rows(&db, &crate::features::prefs::Prefs::in_memory(), DataType::Image, "", MediaSortBy::TakenAtDesc, 10, 0).unwrap()[0].path,
         "/photos/undated.jpg"
     );
 }
@@ -353,7 +353,7 @@ fn sqlite_buckets_return_one_row_per_folder_with_four_ordered_covers() {
 WITH RECURSIVE n(x) AS (VALUES(1) UNION ALL SELECT x+1 FROM n WHERE x<1000)
 INSERT INTO files(id,volume_id,path,file_name,kind,updated_at,size_bytes)
 SELECT printf('f%04d',x),'v','images/'||x||'.jpg',x||'.jpg','IMAGE',CASE WHEN x=2 THEN '2027' ELSE '2026' END,100 FROM n;")).unwrap();
-    let (sql, args) = bucket_selection(&db, DataType::Image).unwrap();
+    let (sql, args) = bucket_selection(&db, &crate::features::prefs::Prefs::in_memory(), DataType::Image).unwrap();
     db.with_conn(|conn| {
         let mut statement = conn.prepare(&sql).unwrap();
         let mut rows = statement.query(params_from_iter(args.iter())).unwrap();
@@ -380,7 +380,7 @@ SELECT printf('f%04d',x),'v','images/'||x||'.jpg',x||'.jpg','IMAGE',CASE WHEN x=
             .any(|detail| detail.contains("COVERING INDEX idx_files_kind_indexed_updated_at_id")),
         "{details:?}"
     );
-    let result = buckets(&db, DataType::Image).unwrap();
+    let result = buckets(&db, &crate::features::prefs::Prefs::in_memory(), DataType::Image).unwrap();
     assert_eq!(result.len(), 1);
     assert_eq!(result[0].item_count, 1000);
     assert_eq!(result[0].size, 100_000);
@@ -398,7 +398,7 @@ SELECT printf('f%04d',x),'v','images/'||x||'.jpg',x||'.jpg','IMAGE',CASE WHEN x=
 #[test]
 fn sqlite_buckets_preserve_visibility_types_sorting_and_empty_results() {
     let db = Db::open(std::path::Path::new(":memory:")).unwrap();
-    assert!(buckets(&db, DataType::Image).unwrap().is_empty());
+    assert!(buckets(&db, &crate::features::prefs::Prefs::in_memory(), DataType::Image).unwrap().is_empty());
     db.with_conn(|conn| conn.execute_batch("INSERT INTO volumes(id,identity,path,is_available) VALUES('v','v','/media',1),('offline','offline','/offline',0);
 INSERT INTO files(id,volume_id,path,file_name,kind,updated_at,size_bytes,indexed,missing) VALUES
 ('a','v','Zulu/a.jpg','a.jpg','IMAGE','2026',3,1,0),
@@ -410,7 +410,7 @@ INSERT INTO files(id,volume_id,path,file_name,kind,updated_at,size_bytes,indexed
 ('audio','v','Zulu/audio.mp3','audio.mp3','AUDIO','2026',0,1,0),
 ('video','v','Zulu/video.mp4','video.mp4','VIDEO','2026',0,1,0);
 UPDATE files SET trashed_at='2026',original_path=path WHERE id='trashed';")).unwrap();
-    let result = buckets(&db, DataType::Image).unwrap();
+    let result = buckets(&db, &crate::features::prefs::Prefs::in_memory(), DataType::Image).unwrap();
     assert_eq!(
         result.iter().map(|b| b.id.as_str()).collect::<Vec<_>>(),
         ["/media/中国", "/media/Zulu"]
@@ -423,7 +423,7 @@ UPDATE files SET trashed_at='2026',original_path=path WHERE id='trashed';")).unw
         [(1, 4), (1, 3)]
     );
     for kind in [DataType::Audio, DataType::Video] {
-        let result = buckets(&db, kind).unwrap();
+        let result = buckets(&db, &crate::features::prefs::Prefs::in_memory(), kind).unwrap();
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].item_count, 1);
         assert_eq!(result[0].size, 0);
@@ -438,5 +438,5 @@ fn sqlite_buckets_reject_integer_sum_overflow() {
         file(DataType::Image, "/photos/small.jpg", "Small", 1),
     ])
     .unwrap();
-    assert!(buckets(&db, DataType::Image).is_err());
+    assert!(buckets(&db, &crate::features::prefs::Prefs::in_memory(), DataType::Image).is_err());
 }

@@ -7,9 +7,9 @@ fn every_registered_key_has_the_expected_read_and_write_policy() {
             ai_image_search_enabled ai_image_search_model dlna_allowed_senders dlna_denied_senders
             clipboard_directions dark_theme amoled_dark_theme
             pdf_follow_dark_theme locale show_hidden_files feed_font_scale editor_wrap_content
-            editor_font_size editor_status_bar desktop_home_features audio_sort_by video_sort_by
+            editor_font_size editor_status_bar desktop_home_features desktop_rail_features media_excluded_dirs desktop_upload_dirs audio_sort_by video_sort_by
             image_sort_by doc_sort_by file_sort_by pkg_sort_by audio_play_mode audio_playback_speed
-            pomodoro_settings screen_mirror_quality volume_alias"),
+            pomodoro_settings screen_mirror_quality"),
         (PrefAccess::LocalOnly, "http_port https_port background_service_enabled remote_access developer_mode
             allow_any_host nearby_discoverable notification_filter launcher_shortcuts
             image_grid_cells_per_row video_grid_cells_per_row https web_address_bar_expanded
@@ -59,6 +59,9 @@ fn exported_constants_match_the_registered_keys() {
         EDITOR_FONT_SIZE,
         EDITOR_STATUS_BAR,
         DESKTOP_HOME_FEATURES,
+        DESKTOP_RAIL_FEATURES,
+        MEDIA_EXCLUDED_DIRS,
+        DESKTOP_UPLOAD_DIRS,
         AUDIO_SORT_BY,
         VIDEO_SORT_BY,
         IMAGE_SORT_BY,
@@ -69,7 +72,6 @@ fn exported_constants_match_the_registered_keys() {
         AUDIO_PLAYBACK_SPEED,
         POMODORO_SETTINGS,
         SCREEN_MIRROR_QUALITY,
-        VOLUME_ALIAS,
         HTTP_PORT,
         HTTPS_PORT,
         BACKGROUND_SERVICE_ENABLED,
@@ -141,5 +143,14 @@ fn native_read_keys_do_not_allow_generic_preference_writes() {
         assert!(!readable(key, true), "{key}");
         assert!(!writable(key, false), "{key}");
         assert!(!writable(key, true), "{key}");
+    }
+}
+
+#[test]
+fn retired_volume_alias_has_no_preference_access() {
+    assert_eq!(access("volume_alias"), None);
+    for local in [false, true] {
+        assert!(!readable("volume_alias", local));
+        assert!(!writable("volume_alias", local));
     }
 }

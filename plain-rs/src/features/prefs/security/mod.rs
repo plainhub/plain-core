@@ -81,7 +81,6 @@ pub fn bootstrap(prefs: &Prefs) -> Result<()> {
             plain_libs::utils::base64::base64_encode(&plain_libs::crypto::ed25519_generate().0)
         })?;
         ensure(map, MASTER_SECRET, plain_libs::crypto::gen_token)?;
-        ensure(map, ADB_TOKEN, || random_password(32))?;
         ensure(map, MDNS_HOSTNAME, generate_mdns_hostname)?;
         if !map.contains_key(PASSWORD_TYPE) {
             put(map, PASSWORD_TYPE, DEFAULT_PASSWORD_TYPE)?;

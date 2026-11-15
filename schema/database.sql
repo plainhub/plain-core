@@ -49,15 +49,21 @@ CREATE UNIQUE INDEX IF NOT EXISTS uidx_audio_playlist_items_playlist_id_file_id 
 
 CREATE INDEX IF NOT EXISTS idx_audio_playlist_items_playlist_id_sort_order ON audio_playlist_items(playlist_id, sort_order);
 
-CREATE TABLE IF NOT EXISTS audit_events (
+CREATE TABLE IF NOT EXISTS events (
     id TEXT NOT NULL PRIMARY KEY CHECK(length(id)>0),
     type TEXT NOT NULL,
     message TEXT NOT NULL,
     client_id TEXT,
+    client_name TEXT NOT NULL,
+    client_ip TEXT NOT NULL,
+    os_name TEXT NOT NULL,
+    os_version TEXT NOT NULL,
+    app_name TEXT NOT NULL,
+    app_version TEXT NOT NULL,
     created_at TEXT NOT NULL
 );
 
-CREATE INDEX IF NOT EXISTS idx_audit_events_created_at_id ON audit_events(created_at DESC,id DESC);
+CREATE INDEX IF NOT EXISTS idx_events_created_at_id ON events(created_at DESC,id DESC);
 
 CREATE TABLE IF NOT EXISTS bookmarks (
     id TEXT NOT NULL CHECK(length(id)>0),
@@ -183,10 +189,15 @@ CREATE TABLE IF NOT EXISTS volumes (
     id TEXT PRIMARY KEY NOT NULL CHECK(length(id)>0),
     identity TEXT NOT NULL UNIQUE CHECK(length(identity)>0),
     path TEXT NOT NULL CHECK(length(path)>0),
+    alias TEXT NOT NULL DEFAULT '',
     is_available INTEGER NOT NULL CHECK(is_available IN (0,1)),
     index_mode TEXT NOT NULL DEFAULT 'UNCONFIGURED' CHECK(index_mode IN ('UNCONFIGURED','DISABLED','ALLOWLIST','BLOCKLIST')),
     included_dirs TEXT NOT NULL DEFAULT '[]',
-    excluded_dirs TEXT NOT NULL DEFAULT '[]'
+    excluded_dirs TEXT NOT NULL DEFAULT '[]',
+    last_scan_at TEXT,
+    last_scan_status TEXT CHECK(last_scan_status IN ('COMPLETED','CANCELED','FAILED')),
+    last_scan_count INTEGER CHECK(last_scan_count>=0),
+    last_scan_total INTEGER CHECK(last_scan_total>=0)
 ) STRICT;
 
 CREATE TABLE IF NOT EXISTS files (

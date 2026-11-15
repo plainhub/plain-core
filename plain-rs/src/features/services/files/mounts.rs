@@ -1,3 +1,6 @@
+mod aliases;
+pub use aliases::{apply_aliases, mount_id, set_alias};
+
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MountFacts {
@@ -10,7 +13,6 @@ pub struct MountFacts {
     pub used_bytes: i64,
     pub free_bytes: i64,
     pub remote: bool,
-    pub alias: String,
     pub drive_type: String,
     pub disk_id: String,
 }
@@ -36,7 +38,6 @@ pub fn list() -> Vec<MountFacts> {
                 used_bytes: total_bytes.saturating_sub(free_bytes),
                 free_bytes,
                 remote,
-                alias: String::new(),
                 drive_type: if mount_point.starts_with("/Volumes/") {
                     "USB_STORAGE"
                 } else {
@@ -49,11 +50,11 @@ pub fn list() -> Vec<MountFacts> {
         .collect()
 }
 
-pub fn native_facts(prefs: &crate::features::prefs::Prefs) -> Result<plain_libs::serde_json::Value, String> {
+pub fn native_facts() -> Result<plain_libs::serde_json::Value, String> {
     #[cfg(target_os = "linux")]
     {
         Ok(plain_libs::serde_json::Value::Array(
-            crate::infrastructure::platform::linux::mounts::list::list_mounts(prefs)
+            crate::infrastructure::platform::linux::mounts::list::list_mounts()
                 .into_iter()
                 .map(linux_facts)
                 .collect(),
@@ -61,7 +62,6 @@ pub fn native_facts(prefs: &crate::features::prefs::Prefs) -> Result<plain_libs:
     }
     #[cfg(not(target_os = "linux"))]
     {
-        let _ = prefs;
         plain_libs::serde_json::to_value(list()).map_err(|error| error.to_string())
     }
 }
@@ -73,7 +73,7 @@ fn linux_facts(
     plain_libs::serde_json::json!({
         "id":mount.id,"name":mount.name,"path":mount.path,"mountPoint":mount.mount_point,
         "fsType":mount.fs_type,"totalBytes":mount.total_bytes,"usedBytes":mount.used_bytes,
-        "freeBytes":mount.free_bytes,"remote":mount.remote,"alias":mount.alias,"driveType":mount.drive_type,
+        "freeBytes":mount.free_bytes,"remote":mount.remote,"driveType":mount.drive_type,
         "diskId":mount.disk_id,"diskModel":mount.disk_model,"partitionNum":mount.partition_num,"label":mount.label,"uuid":mount.uuid,
     })
 }

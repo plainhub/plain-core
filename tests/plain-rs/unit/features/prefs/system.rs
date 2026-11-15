@@ -6,6 +6,27 @@ fn fixture() -> (plain_libs::temporary::TempDir, Prefs) {
     (dir, prefs)
 }
 #[test]
+fn bootstrap_preserves_adb_automation_state_without_generating_a_token() {
+    for token in [None, Some(""), Some("generated-test-token")] {
+        let (_dir, prefs) = fixture();
+        if let Some(token) = token {
+            prefs.set(ADB_TOKEN, token).unwrap();
+        }
+        for _ in 0..2 {
+            bootstrap(&prefs).unwrap();
+            let reloaded = Prefs::load(prefs.path()).unwrap();
+            assert_eq!(reloaded.get::<String>(ADB_TOKEN).unwrap().as_deref(), token);
+            assert!(!verify_adb_token(&reloaded, "").unwrap());
+            assert!(!verify_adb_token(&reloaded, "wrong-token").unwrap());
+            assert_eq!(
+                verify_adb_token(&reloaded, "generated-test-token").unwrap(),
+                token == Some("generated-test-token")
+            );
+        }
+    }
+}
+
+#[test]
 fn bootstrap_is_stable_and_snapshot_never_contains_private_secrets() {
     let (_dir, prefs) = fixture();
     bootstrap(&prefs).unwrap();

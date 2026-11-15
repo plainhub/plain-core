@@ -12,7 +12,7 @@ pub async fn discover(state: &Runtime) -> Result<Vec<VolumeRow>, String> {
     }
     let facts = state
         .file_platform
-        .mounts(state.prefs.clone())
+        .mounts()
         .await
         .map_err(|error| error.to_string())?;
     #[derive(serde::Deserialize)]
@@ -39,7 +39,7 @@ pub fn discover_native(state: &Runtime) -> Result<Vec<VolumeRow>, String> {
     struct Mount {
         mount_point: Option<String>,
     }
-    let facts = crate::features::services::files::mounts::native_facts(&state.prefs)?;
+    let facts = crate::features::services::files::mounts::native_facts()?;
     let mounts: Vec<Mount> = plain_libs::serde_json::from_value(facts).map_err(|error| error.to_string())?;
     register_mounts(
         &state.db,

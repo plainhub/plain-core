@@ -35,6 +35,9 @@ pref_keys! {
         EDITOR_FONT_SIZE = "editor_font_size",
         EDITOR_STATUS_BAR = "editor_status_bar",
         DESKTOP_HOME_FEATURES = "desktop_home_features",
+        DESKTOP_RAIL_FEATURES = "desktop_rail_features",
+        MEDIA_EXCLUDED_DIRS = "media_excluded_dirs",
+        DESKTOP_UPLOAD_DIRS = "desktop_upload_dirs",
         AUDIO_SORT_BY = "audio_sort_by",
         VIDEO_SORT_BY = "video_sort_by",
         IMAGE_SORT_BY = "image_sort_by",
@@ -45,7 +48,6 @@ pref_keys! {
         AUDIO_PLAYBACK_SPEED = "audio_playback_speed",
         POMODORO_SETTINGS = "pomodoro_settings",
         SCREEN_MIRROR_QUALITY = "screen_mirror_quality",
-        VOLUME_ALIAS = "volume_alias",
     }
     LocalOnly {
         HTTP_PORT = "http_port",

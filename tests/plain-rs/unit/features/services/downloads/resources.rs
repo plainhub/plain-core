@@ -13,10 +13,9 @@ fn fixture(path: &Path) -> crate::test_runtime::Core {
 }
 
 fn resource(state: &CoreRuntime, path: &Path) -> String {
-    let session = crate::features::services::sessions::native(state).unwrap();
     let id = resource_link::seal(
-        &Scope::Session(session.client_id),
-        &plain_libs::utils::base64::base64_decode_checked(&session.url_token).unwrap(),
+        &Scope::Session(state.native_client_id().unwrap()),
+        &plain_libs::utils::base64::base64_decode_checked(&state.native_url_token().unwrap()).unwrap(),
         &Resource::reference(path.to_str().unwrap()),
     )
     .unwrap();

@@ -335,7 +335,7 @@ async fn malformed_login_frames_exhaust_the_ip_limit_before_decryption_despite_r
                 assert!(state.db.session_get(&cid).unwrap().is_none());
             }
             socket.close(None).await.ok();
-            assert_eq!(state.db.session_list().unwrap().len(), 2);
+            assert_eq!(state.db.session_list().unwrap().len(), 1);
             continue;
         }
         let response = tokio::time::timeout(Duration::from_secs(3), socket.next())
@@ -349,7 +349,7 @@ async fn malformed_login_frames_exhaust_the_ip_limit_before_decryption_despite_r
         assert_eq!(frame.reason, "too_many_login_attempts");
         assert!(state.db.session_get(&cid).unwrap().is_none());
         socket.close(None).await.ok();
-        assert_eq!(state.db.session_list().unwrap().len(), 2);
+        assert_eq!(state.db.session_list().unwrap().len(), 1);
     }
     core.shutdown().await;
 }

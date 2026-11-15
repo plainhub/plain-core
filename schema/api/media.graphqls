@@ -13,6 +13,7 @@ enum FileIndexMode {
 }
 
 type FileIndexScanProgress {
+	volumeId: ID
 	indexed: Int!
 	pending: Int
 	total: Int
@@ -25,9 +26,16 @@ File-index scan lifecycle shared by query and subscription progress.
 """
 enum FileIndexScanState {
 	IDLE
+	QUEUED
 	RUNNING
 	PAUSED
 	STOPPED
+	FAILED
+}
+
+enum FileIndexScanStatus {
+	COMPLETED
+	CANCELED
 	FAILED
 }
 
@@ -35,6 +43,17 @@ type FileIndexVolume {
 	id: ID!
 	path: String!
 	isAvailable: Boolean!
+	indexMode: FileIndexMode!
+	includedDirs: [String!]!
+	excludedDirs: [String!]!
+	lastScanAt: Instant
+	lastScanStatus: FileIndexScanStatus
+	lastScanCount: Long
+	lastScanTotal: Long
+}
+
+input FileIndexVolumeInput {
+	volumeId: ID!
 	indexMode: FileIndexMode!
 	includedDirs: [String!]!
 	excludedDirs: [String!]!
@@ -73,18 +92,18 @@ enum PlaybackType {
 }
 
 extend type Mutation {
-	pauseFileIndexScan: Boolean!
+	pauseFileIndex(volumeId: ID): Boolean!
 	rebuildFileIndex(volumeId: ID): Boolean!
 	recordMediaPlay(mediaId: ID!, type: PlaybackType!, positionMs: Long!): Boolean!
-	resumeFileIndexScan: Boolean!
+	resumeFileIndex(volumeId: ID): Boolean!
 	saveMediaPlayProgress(mediaId: ID!, type: PlaybackType!, positionMs: Long!): Boolean!
-	setFileIndexVolume(id: ID!, indexMode: FileIndexMode!, includedDirs: [String!]!, excludedDirs: [String!]!): Boolean!
-	stopFileIndexScan: Boolean!
+	setFileIndexVolume(input: FileIndexVolumeInput!): Boolean!
+	stopFileIndex(volumeId: ID): Boolean!
 }
 
 extend type Query {
 	fileIndexDefaults: FileIndexDefaults!
-	fileIndexScanProgress: FileIndexScanProgress!
+	fileIndexScanProgress(volumeId: ID): FileIndexScanProgress!
 	fileIndexVolumes: [FileIndexVolume!]!
 	mediaBuckets(type: MediaDataType!): [MediaBucket!]!
 	mediaPlayHistory(query: String!, offset: Int!, limit: Int!): [MediaPlayHistory!]!

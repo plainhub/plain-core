@@ -145,7 +145,7 @@ async fn connecting_a_filesystem_media_host_watches_configured_sources_without_r
     .await
     .unwrap();
     assert!(catalog.file_scan_status().unwrap().is_none());
-    catalog.start_source_scan("/").unwrap();
+    catalog.start_volume_scan(None).unwrap().unwrap();
     let indexed = tokio::time::timeout(std::time::Duration::from_secs(5), async {
         loop {
             if catalog

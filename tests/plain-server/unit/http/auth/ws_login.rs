@@ -503,6 +503,24 @@ async fn passwordless_browser_requires_approval_when_enabled_and_only_approval_i
     }
     let records = state.db.audit_events(0, 10, None).unwrap();
     assert_eq!(records.len(), 2);
+    for row in &records {
+        assert_eq!(row.client_ip, "127.0.0.1");
+        assert_eq!(row.app_name, "Fixture");
+        assert_eq!(row.app_version, "1");
+        assert_eq!(row.os_name, "macOS");
+        assert_eq!(row.os_version, "27.2.0");
+    }
+    let result = server.native_graphql().unwrap().execute(plain_graphql::Request::new(
+        "{ events(query: \"text:127.0.0.1\", offset: 0, limit: 10) { clientId clientName clientIp appName appVersion osName osVersion } }"
+    )).await;
+    assert!(result.errors.is_empty(), "{:?}", result.errors);
+    let data = result.data.into_json().unwrap();
+    assert_eq!(data["events"].as_array().unwrap().len(), 2);
+    for row in data["events"].as_array().unwrap() {
+        assert_eq!(row["clientIp"], "127.0.0.1");
+        assert_eq!(row["appName"], "Fixture");
+        assert_eq!(row["osName"], "macOS");
+    }
     assert!(records.iter().any(|row| row.r#type == "login"
         && row.client_id.as_deref() == Some("2a097269-197e-5b02-be80-cdd89f928426")));
     assert!(records.iter().any(|row| row.r#type == "login_failed"
@@ -776,16 +794,7 @@ async fn signed_login_rejects_missing_and_repeated_hellos_before_any_grant() {
                 .unwrap();
         }
         assert!(matches!(login_frame(&mut socket).await, Message::Close(_)));
-        assert_eq!(
-            state
-                .db
-                .session_list()
-                .unwrap()
-                .iter()
-                .map(|row| row.client_id.clone())
-                .collect::<Vec<_>>(),
-            vec![state.native_client_id().unwrap()]
-        );
+        assert!(state.db.session_list().unwrap().is_empty());
         assert!(state.login_attempts.lock().unwrap().pending.is_empty());
         server.shutdown().await;
     }
@@ -921,7 +930,12 @@ async fn first_password_login_completes_without_owner_approval() {
         records[0].client_id.as_deref(),
         Some("c1810f83-b876-5996-9c1b-f4b328cb5d6c")
     );
-    assert_eq!(records[0].message, "Fixture");
+    assert!(records[0].message.is_empty());
+    assert_eq!(records[0].client_ip, "127.0.0.1");
+    assert_eq!(records[0].app_name, "Fixture");
+    assert_eq!(records[0].app_version, "1");
+    assert_eq!(records[0].os_name, "macOS");
+    assert_eq!(records[0].os_version, "27.2.0");
     assert!(!records[0].message.contains("owned-password"));
     assert!(!records[0].message.contains(&saved.token));
     socket.close(None).await.unwrap();
@@ -1092,16 +1106,7 @@ async fn password_login_rejects_frames_without_a_key_exchange_and_without_outer_
         assert!(matches!(login_frame(&mut socket).await, Message::Close(_)));
         assert!(state.db.session_get(client_id).unwrap().is_none());
     }
-    assert_eq!(
-        state
-            .db
-            .session_list()
-            .unwrap()
-            .iter()
-            .map(|row| row.client_id.clone())
-            .collect::<Vec<_>>(),
-        vec![state.native_client_id().unwrap()]
-    );
+    assert!(state.db.session_list().unwrap().is_empty());
     server.shutdown().await;
 }
 
@@ -1231,17 +1236,7 @@ async fn idle_connections_consume_the_login_budget_before_any_message() {
     })
     .await
     .unwrap();
-    assert_eq!(
-        server
-            .runtime_state()
-            .db
-            .session_list()
-            .unwrap()
-            .iter()
-            .map(|row| row.client_id.clone())
-            .collect::<Vec<_>>(),
-        vec![server.runtime_state().native_client_id().unwrap()]
-    );
+    assert!(server.runtime_state().db.session_list().unwrap().is_empty());
     server.shutdown().await;
 }
 
@@ -1280,17 +1275,7 @@ async fn a_signed_hello_starts_the_bounded_handshake_deadline() {
         .unwrap()
         .unwrap();
     assert!(matches!(response, Message::Close(Some(frame)) if frame.reason == "timeout"));
-    assert_eq!(
-        server
-            .runtime_state()
-            .db
-            .session_list()
-            .unwrap()
-            .iter()
-            .map(|row| row.client_id.clone())
-            .collect::<Vec<_>>(),
-        vec![server.runtime_state().native_client_id().unwrap()]
-    );
+    assert!(server.runtime_state().db.session_list().unwrap().is_empty());
     server.shutdown().await;
 }
 
@@ -1344,6 +1329,19 @@ async fn password_login_verifies_the_salted_record_and_rejects_reusable_stored_v
         );
         assert!(state.login_attempts.lock().unwrap().pending.is_empty());
     }
+    let records = state.db.audit_events(0, 10, None).unwrap();
+    assert_eq!(records.len(), 3);
+    for row in &records {
+        assert_eq!(row.r#type, "login_failed");
+        assert_eq!(row.message, "invalid_login_request");
+        assert_eq!(row.client_ip, "fixture");
+        assert_eq!(row.app_name, "Fixture");
+        assert_eq!(row.os_name, "Fixture");
+    }
+    let recorded = format!("{records:?}");
+    for secret in ["owned-password".to_owned(), plain_libs::crypto::sha512_hex("wrong-password"), plain_libs::serde_json::to_string(&stored).unwrap()] {
+        assert!(!recorded.contains(&secret));
+    }
     server.stop_core().await;
 }
 
@@ -1381,12 +1379,13 @@ async fn relogin_rotates_the_session_url_token_and_keeps_the_session_identity() 
 mod event_tests;
 
 #[tokio::test]
-async fn web_login_cannot_replace_the_native_transport_session() {
+async fn web_login_cannot_persist_or_replace_the_native_transport_credentials() {
     let directory = plain_libs::temporary::tempdir().unwrap();
     let server = crate::server::ContentServer::open(directory.path()).unwrap();
     let state = server.runtime_state();
     let id = state.native_client_id().unwrap();
-    let stored = state.db.session_get(&id).unwrap().unwrap();
+    assert!(state.db.session_get(&id).unwrap().is_none());
+    let token = state.token.clone();
     let request = Pending {
         client_id: id.clone(),
         client_ip: "fixture".into(),
@@ -1400,9 +1399,8 @@ async fn web_login_cannot_replace_the_native_transport_session() {
             .to_string(),
         "invalid_login_request"
     );
-    let current = state.db.session_get(&id).unwrap().unwrap();
-    assert_eq!(current.token, stored.token);
-    assert_eq!(current.url_token, stored.url_token);
+    assert!(state.db.session_get(&id).unwrap().is_none());
+    assert_eq!(state.token, token);
     server.shutdown().await;
 }
 
