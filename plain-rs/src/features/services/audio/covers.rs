@@ -5,7 +5,7 @@ pub async fn read(
 ) -> Result<Option<Vec<u8>>, String> {
     crate::features::services::files::input::read_source(resources, directory, path, |reader| {
         Ok(
-            plain_libs::media::cover::extract_embedded_cover_reader(reader)
+            plain_libs::media::cover::extract_embedded_cover_source(reader)
                 .map(|cover| cover.bytes),
         )
     })

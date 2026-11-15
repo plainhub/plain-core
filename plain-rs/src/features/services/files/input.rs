@@ -1,4 +1,5 @@
 use crate::infrastructure::host::resource_stream::NativeResourceFile;
+pub use plain_libs::utils::source_reader::{CancellableReader, SourceReader};
 #[cfg(unix)]
 use std::io::Read;
 use std::{
@@ -149,36 +150,6 @@ impl Drop for ReadCancellation {
         let _ = self.0.send(true);
     }
 }
-
-pub struct CancellableReader<R> {
-    pub reader: R,
-    pub stop: watch::Receiver<bool>,
-}
-impl<R: std::io::Read> std::io::Read for CancellableReader<R> {
-    fn read(&mut self, bytes: &mut [u8]) -> std::io::Result<usize> {
-        if *self.stop.borrow() {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::ConnectionAborted,
-                "Media read canceled",
-            ));
-        }
-        self.reader.read(bytes)
-    }
-}
-impl<R: Seek> Seek for CancellableReader<R> {
-    fn seek(&mut self, from: SeekFrom) -> std::io::Result<u64> {
-        if *self.stop.borrow() {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::ConnectionAborted,
-                "Media read canceled",
-            ));
-        }
-        self.reader.seek(from)
-    }
-}
-
-pub type SourceReader =
-    CancellableReader<plain_libs::utils::range_reader::RangeReader<std::fs::File>>;
 
 pub async fn read_source<T: Send + 'static>(
     resources: &crate::infrastructure::host::resources::NativeResources,

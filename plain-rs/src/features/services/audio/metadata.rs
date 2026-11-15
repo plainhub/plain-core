@@ -15,7 +15,7 @@ pub async fn read_uri(
     crate::features::services::files::input::read_source(resources, cache, path, move |reader| {
         Ok(track(
             &source,
-            plain_libs::media::probe::probe_audio_reader_named(reader, &source),
+            plain_libs::media::probe::probe_audio_source(reader, &source),
         ))
     })
     .await

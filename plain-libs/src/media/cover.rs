@@ -80,6 +80,12 @@ pub fn extract_embedded_cover(path: &str) -> Option<CoverData> {
     extract_embedded_cover_reader(&mut reader)
 }
 
+pub fn extract_embedded_cover_source(
+    reader: &mut crate::utils::source_reader::SourceReader,
+) -> Option<CoverData> {
+    extract_embedded_cover_reader(reader)
+}
+
 pub fn extract_embedded_cover_reader(
     reader: &mut (impl std::io::Read + std::io::Seek),
 ) -> Option<CoverData> {

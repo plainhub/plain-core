@@ -53,6 +53,14 @@ pub fn probe_audio_reader_named(reader: &mut (impl Read + Seek), path: &str) -> 
     probe_audio(reader, Some(path))
 }
 
+// Keep application parser instantiations here by accepting the concrete source reader.
+pub fn probe_audio_source(
+    reader: &mut crate::utils::source_reader::SourceReader,
+    path: &str,
+) -> ProbedMeta {
+    probe_audio(reader, Some(path))
+}
+
 fn probe_audio(reader: &mut (impl Read + Seek), path: Option<&str>) -> ProbedMeta {
     if reader.seek(SeekFrom::Start(0)).is_err() {
         return ProbedMeta::default();
@@ -126,6 +134,18 @@ pub fn probe_duration_secs(path: &str) -> Option<u32> {
 pub fn probe_duration_milliseconds(path: &str) -> Option<i64> {
     let mut reader = File::open(path).ok()?;
     probe_duration_reader(&mut reader)
+}
+
+pub fn probe_duration_source(
+    reader: &mut crate::utils::source_reader::SourceReader,
+) -> Option<i64> {
+    probe_duration_reader(reader)
+}
+
+pub fn probe_duration_file(
+    reader: &mut crate::utils::source_reader::CancellableReader<File>,
+) -> Option<i64> {
+    probe_duration_reader(reader)
 }
 
 /// None is unreadable; Some(0) is parsed without a measurable duration.

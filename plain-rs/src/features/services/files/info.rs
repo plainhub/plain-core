@@ -64,7 +64,7 @@ impl Info {
                 &self.cache,
                 path,
                 |reader| {
-                    let duration = plain_libs::media::probe::probe_duration_reader(reader);
+                    let duration = plain_libs::media::probe::probe_duration_source(reader);
                     let location = plain_libs::media::isobmff::location_reader(reader);
                     Ok(duration
                         .map(|duration| json!({"durationMs":duration,"rawLocation":location})))

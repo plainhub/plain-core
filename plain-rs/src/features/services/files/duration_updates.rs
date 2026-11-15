@@ -40,7 +40,8 @@ impl Physical {
     }
     fn matches(&self, item: &Identity) -> bool {
         i64::try_from(self.size).ok() == Some(item.size_bytes)
-            && plain_libs::chrono::DateTime::<plain_libs::chrono::Utc>::from(self.modified).timestamp()
+            && plain_libs::chrono::DateTime::<plain_libs::chrono::Utc>::from(self.modified)
+                .timestamp()
                 == plain_libs::chrono::DateTime::parse_from_rfc3339(&item.modified_at)
                     .map(|time| time.timestamp())
                     .unwrap_or(i64::MIN)
@@ -94,7 +95,7 @@ impl Runtime {
             biased;
             _ = core_stop.changed() => Err("Media duration runtime stopped".into()),
             result = crate::features::services::files::input::read_source(&self.resources, &self.directory, path, |reader| {
-                Ok(plain_libs::media::probe::probe_duration_reader(reader))
+                Ok(plain_libs::media::probe::probe_duration_source(reader))
             }) => result,
         }
     }
@@ -175,7 +176,7 @@ impl Runtime {
                     reader: file,
                     stop,
                 };
-                plain_libs::media::probe::probe_duration_reader(&mut reader)
+                plain_libs::media::probe::probe_duration_file(&mut reader)
                     .filter(|duration| *duration > 0)
             });
             Some((before, duration))
