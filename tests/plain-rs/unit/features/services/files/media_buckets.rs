@@ -14,7 +14,7 @@ fn aggregation_sums_sizes_counts_items_and_keeps_four_newest_paths() {
     let items = (0..6)
         .map(|index| fact("1", "Photos", &format!("/p/{index}"), 10))
         .collect();
-    let result = aggregate("IMAGE", items).unwrap();
+    let result = aggregate(DataType::Image, items).unwrap();
     assert_eq!(result.len(), 1);
     assert_eq!(result[0].item_count, 6);
     assert_eq!(result[0].size, 60);
@@ -24,7 +24,7 @@ fn aggregation_sums_sizes_counts_items_and_keeps_four_newest_paths() {
 #[test]
 fn aggregation_uses_shared_pinyin_sort_keys_and_rejects_invalid_facts() {
     let result = aggregate(
-        "DOC",
+        DataType::Doc,
         vec![fact("2", "照片", "/z/1", 4), fact("1", "Zulu", "/a/1", 3)],
     )
     .unwrap();
@@ -32,14 +32,14 @@ fn aggregation_uses_shared_pinyin_sort_keys_and_rejects_invalid_facts() {
         result.iter().map(|b| b.id.as_str()).collect::<Vec<_>>(),
         ["2", "1"]
     );
-    assert!(aggregate("CONTACT", vec![]).is_err());
-    assert!(aggregate("IMAGE", vec![fact("1", "Photos", "/p", -1)]).is_err());
+    assert!(aggregate(DataType::Contact, vec![]).is_err());
+    assert!(aggregate(DataType::Image, vec![fact("1", "Photos", "/p", -1)]).is_err());
 }
 
 #[test]
 fn aggregation_orders_equal_names_deterministically_and_rejects_overflow() {
     let result = aggregate(
-        "IMAGE",
+        DataType::Image,
         vec![fact("b", "Same", "/b", 0), fact("a", "Same", "/a", 0)],
     )
     .unwrap();
@@ -52,7 +52,7 @@ fn aggregation_orders_equal_names_deterministically_and_rejects_overflow() {
     );
     assert!(
         aggregate(
-            "AUDIO",
+            DataType::Audio,
             vec![
                 fact("a", "Audio", "/1", i64::MAX),
                 fact("a", "Audio", "/2", 1)
@@ -62,7 +62,7 @@ fn aggregation_orders_equal_names_deterministically_and_rejects_overflow() {
     );
     assert!(
         aggregate(
-            "VIDEO",
+            DataType::Video,
             vec![fact("a", "First", "/1", 1), fact("a", "Other", "/2", 1)]
         )
         .is_err()
@@ -73,7 +73,7 @@ fn aggregation_orders_equal_names_deterministically_and_rejects_overflow() {
 fn sort_keys_are_computed_once_per_bucket_and_shared_across_provider_sources() {
     let mut calls = Vec::new();
     let buckets = aggregate_with_sort_key(
-        "IMAGE",
+        DataType::Image,
         vec![
             fact("b", "中国", "/b/1", 1),
             fact("a", "Zulu", "/a/1", 1),
@@ -100,7 +100,11 @@ fn sort_keys_are_computed_once_per_bucket_and_shared_across_provider_sources() {
         {"id":"b", "name":"中国", "path":"content://image/b", "size":2},
         {"id":"a", "name":"Zulu", "path":"content://image/a", "size":2}
     ]);
-    let platform = aggregate("IMAGE", plain_libs::serde_json::from_value(raw).unwrap()).unwrap();
+    let platform = aggregate(
+        DataType::Image,
+        plain_libs::serde_json::from_value(raw).unwrap(),
+    )
+    .unwrap();
     assert_eq!(
         platform
             .iter()
@@ -127,9 +131,10 @@ fn selected_ids(
         ))
         .unwrap();
     statement
-        .query_map(plain_libs::rusqlite::params_from_iter(plan.args.iter()), |row| {
-            row.get(0)
-        })
+        .query_map(
+            plain_libs::rusqlite::params_from_iter(plan.args.iter()),
+            |row| row.get(0),
+        )
         .unwrap()
         .collect::<plain_libs::rusqlite::Result<Vec<_>>>()
         .unwrap()

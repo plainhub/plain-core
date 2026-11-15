@@ -3,15 +3,15 @@ use crate::graphql::types::facts::integer;
 use crate::graphql::types::facts::optional_instant;
 use crate::graphql::types::facts::text;
 use crate::http::auth::public_gate;
-use plain_libs::chrono::{DateTime, Utc};
 use plain_graphql::{Context, Object};
+use plain_libs::chrono::{DateTime, Utc};
 use plain_rs::features::access::AccessFeature;
 
+use plain_libs::serde_json::Value;
 use plain_rs::features::enums::DataType;
 use plain_rs::infrastructure::host::bridge::Host;
 use plain_rs::infrastructure::types::Instant;
 use plain_rs::infrastructure::types::Long;
-use plain_libs::serde_json::Value;
 use std::sync::Arc;
 
 pub(crate) const STORAGE: AccessFeature = AccessFeature::Files;
@@ -59,16 +59,11 @@ impl MediaQuery {
             return Ok(Vec::new());
         }
         let data_type = data_type_of(r#type.as_str())?;
-        let facts = catalog(ctx, data_type)
+        let buckets = catalog(ctx, data_type)
             .await?
             .buckets(data_type)
             .await
             .map_err(plain_graphql::Error::new)?;
-        let items = plain_libs::serde_json::from_value(facts)
-            .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
-        let buckets =
-            plain_rs::features::services::files::media_buckets::aggregate(r#type.as_str(), items)
-                .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
         buckets
             .into_iter()
             .map(|bucket| {

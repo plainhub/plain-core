@@ -50,7 +50,7 @@ async fn native_catalog_reads_rows_counts_ids_and_buckets_without_a_host() {
             .is_empty()
     );
     let buckets = catalog.buckets(DataType::Image).await.unwrap();
-    assert_eq!(buckets[0]["id"], "/catalog");
+    assert_eq!(buckets[0].id, "/catalog");
 }
 
 #[tokio::test]
@@ -93,7 +93,7 @@ async fn platform_catalog_reads_os_facts_without_a_local_catalogue() {
                         json!(["bucket_display_name != ''"])
                     );
                     assert_eq!(request["params"]["plan"]["args"], json!([]));
-                    json!([{"id":"camera","path":"content://media/images/42"}])
+                    json!([{"id":"camera","name":"Camera","size":2048,"path":"content://media/images/42"}])
                 }
                 other => panic!("unexpected host operation {other}"),
             };
@@ -118,7 +118,7 @@ async fn platform_catalog_reads_os_facts_without_a_local_catalogue() {
         vec!["42"]
     );
     assert_eq!(
-        catalog.buckets(DataType::Image).await.unwrap()[0]["id"],
+        catalog.buckets(DataType::Image).await.unwrap()[0].id,
         "camera"
     );
     assert_eq!(worker.await.unwrap().len(), 4);

@@ -25,7 +25,8 @@ pub fn platform_plan(
     Ok(plan)
 }
 
-use serde::{Deserialize, Serialize};
+use crate::features::enums::DataType;
+use serde::Deserialize;
 use std::collections::HashMap;
 
 #[derive(Deserialize)]
@@ -37,28 +38,32 @@ pub struct ItemFact {
     path: String,
 }
 
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct Bucket {
     pub id: String,
     pub name: String,
     pub item_count: u64,
     pub size: i64,
     pub top_items: Vec<String>,
-    sort_name: String,
+    pub(super) sort_name: String,
 }
 
-pub fn aggregate(data_type: &str, items: Vec<ItemFact>) -> plain_libs::anyhow::Result<Vec<Bucket>> {
+pub fn aggregate(
+    data_type: DataType,
+    items: Vec<ItemFact>,
+) -> plain_libs::anyhow::Result<Vec<Bucket>> {
     aggregate_with_sort_key(data_type, items, plain_libs::utils::sort_name::sort_name)
 }
 
 fn aggregate_with_sort_key(
-    data_type: &str,
+    data_type: DataType,
     items: Vec<ItemFact>,
     mut sort_key: impl FnMut(&str) -> String,
 ) -> plain_libs::anyhow::Result<Vec<Bucket>> {
     plain_libs::anyhow::ensure!(
-        matches!(data_type, "IMAGE" | "VIDEO" | "AUDIO" | "DOC"),
+        matches!(
+            data_type,
+            DataType::Image | DataType::Video | DataType::Audio | DataType::Doc
+        ),
         "unsupported media bucket type"
     );
     let mut positions = HashMap::<String, usize>::new();
@@ -92,8 +97,12 @@ fn aggregate_with_sort_key(
             });
         }
     }
-    buckets.sort_by(|a, b| a.sort_name.cmp(&b.sort_name).then_with(|| a.id.cmp(&b.id)));
+    sort(&mut buckets);
     Ok(buckets)
+}
+
+pub(super) fn sort(buckets: &mut [Bucket]) {
+    buckets.sort_by(|a, b| a.sort_name.cmp(&b.sort_name).then_with(|| a.id.cmp(&b.id)));
 }
 
 #[cfg(test)]

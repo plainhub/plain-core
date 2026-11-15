@@ -24,8 +24,8 @@ fn photo_snapshot_populates_shared_image_queries_and_preserves_identity() {
     assert_eq!(rows[0].path, "ph://asset/L0/001");
     assert_eq!(rows[0].size_bytes, 0);
     assert_eq!(rows[0].bucket_id, "ph://photos");
-    let buckets = media_catalog::bucket_item_facts(&db, DataType::Image).unwrap();
-    assert_eq!(buckets[0]["name"], "photos");
+    let buckets = media_catalog::buckets(&db, DataType::Image).unwrap();
+    assert_eq!(buckets[0].name, "photos");
     let id = rows[0].id.clone();
     assert_eq!(db.media_resource_path(&id).unwrap(), rows[0].path);
     let snapshot = crate::infrastructure::db::image_catalog::snapshot(&db).unwrap();
@@ -121,7 +121,8 @@ fn photo_snapshot_stores_videos_in_the_shared_catalog_without_copying() {
         {"id":"video/L0/001","name":"video.mov","mediaType":2,"durationMs":1250,"width":1920,"height":1080,"createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-01T00:00:00Z","favorite":true}
     ])).unwrap();
     replace(&db, &assets).unwrap();
-    let videos = media_catalog::rows(&db, DataType::Video, "", MediaSortBy::NameAsc, 10, 0).unwrap();
+    let videos =
+        media_catalog::rows(&db, DataType::Video, "", MediaSortBy::NameAsc, 10, 0).unwrap();
     assert_eq!(videos.len(), 1);
     assert_eq!(videos[0].path, "ph://video/L0/001");
     assert_eq!(videos[0].size_bytes, 0);

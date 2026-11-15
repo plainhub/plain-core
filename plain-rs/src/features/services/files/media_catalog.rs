@@ -216,34 +216,56 @@ pub fn add_document_extension(counts: &mut std::collections::BTreeMap<String, i3
     }
 }
 
-pub fn bucket_item_facts(db: &Db, data_type: DataType) -> Result<Vec<plain_libs::serde_json::Value>> {
+fn bucket_selection(db: &Db, data_type: DataType) -> Result<(String, Vec<Value>)> {
     let (sql, args) = selection(db, data_type, "")?;
-    let sql = format!(
-        "{} ORDER BY updated_at DESC,file_id",
-        sql.replace("{columns}", "bucket_id,path,size_bytes")
-    );
-    let items = db.with_conn(|conn| {
+    Ok((
+        format!(
+            "WITH ranked AS ({})
+SELECT bucket_id,COUNT(*),SUM(size_bytes),
+MAX(CASE WHEN position=1 THEN path END),
+MAX(CASE WHEN position=2 THEN path END),
+MAX(CASE WHEN position=3 THEN path END),
+MAX(CASE WHEN position=4 THEN path END)
+FROM ranked GROUP BY bucket_id",
+            sql.replace("{columns}", "bucket_id,path,size_bytes,ROW_NUMBER() OVER (PARTITION BY bucket_id ORDER BY updated_at DESC,file_id) AS position")
+        ),
+        args,
+    ))
+}
+
+pub fn buckets(db: &Db, data_type: DataType) -> Result<Vec<super::media_buckets::Bucket>> {
+    let (sql, args) = bucket_selection(db, data_type)?;
+    let mut buckets = db.with_conn(|conn| {
         let mut statement = conn.prepare(&sql)?;
         statement
             .query_map(params_from_iter(args.iter()), |row| {
-                Ok((
-                    row.get::<_, String>(0)?,
-                    row.get::<_, String>(1)?,
-                    row.get::<_, i64>(2)?,
-                ))
+                let id: String = row.get(0)?;
+                let name = std::path::Path::new(&id)
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .unwrap_or(&id)
+                    .to_owned();
+                Ok(super::media_buckets::Bucket {
+                    sort_name: plain_libs::utils::sort_name::sort_name(&name),
+                    id,
+                    name,
+                    item_count: row.get::<_, i64>(1)? as u64,
+                    size: row.get(2)?,
+                    top_items: [
+                        row.get::<_, Option<String>>(3)?,
+                        row.get(4)?,
+                        row.get(5)?,
+                        row.get(6)?,
+                    ]
+                    .into_iter()
+                    .flatten()
+                    .collect(),
+                })
             })?
             .collect::<plain_libs::rusqlite::Result<Vec<_>>>()
     })?;
-    Ok(items
-        .into_iter()
-        .map(|(id, path, size)| {
-            let name = std::path::Path::new(&id)
-                .file_name()
-                .and_then(|name| name.to_str())
-                .unwrap_or(&id);
-            plain_libs::serde_json::json!({"id":id,"name":name,"size":size,"path":path})
-        })
-        .collect())
+    super::media_buckets::sort(&mut buckets);
+    Ok(buckets)
 }
 
 #[cfg(test)]

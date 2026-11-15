@@ -77,13 +77,21 @@ fn document_filters_and_explicit_trash_selection_use_current_catalog() {
     .unwrap();
     assert_eq!(count(&db, DataType::Doc, "").unwrap(), 1);
     assert_eq!(count(&db, DataType::Doc, "trash:true ext:pdf").unwrap(), 1);
-    let trashed = rows(&db, DataType::Doc, "trash:true", MediaSortBy::NameAsc, 10, 0).unwrap();
+    let trashed = rows(
+        &db,
+        DataType::Doc,
+        "trash:true",
+        MediaSortBy::NameAsc,
+        10,
+        0,
+    )
+    .unwrap();
     assert_eq!(trashed[0].id, created[0].id);
     assert_eq!(trashed[0].title, "one.pdf");
 }
 
 #[test]
-fn bucket_items_use_shared_visibility_and_original_folder_names() {
+fn buckets_use_shared_visibility_and_original_folder_names() {
     let directory = plain_libs::temporary::tempdir().unwrap();
     let db = Db::open(&directory.path().join("plain.db")).unwrap();
     let mut older = file(
@@ -118,25 +126,22 @@ fn bucket_items_use_shared_visibility_and_original_folder_names() {
         )
     })
     .unwrap();
-    let items = bucket_item_facts(&db, DataType::Image).unwrap();
-    assert_eq!(items.len() as i64, count(&db, DataType::Image, "").unwrap());
-    assert_eq!(items.len(), 2);
-    assert_eq!(items[0]["path"], "/first/Albums/recent.jpg");
-    assert_eq!(items[0]["id"], "/first/Albums");
-    assert_eq!(items[0]["name"], "Albums");
-    assert!(items[0].get("sortName").is_none());
-    assert_eq!(items[0]["size"], 9_000_000_000i64);
-    assert_eq!(items[1]["id"], "/second/Albums");
-    assert!(
-        items
-            .iter()
-            .all(|item| item.as_object().unwrap().len() == 4)
+    let result = buckets(&db, DataType::Image).unwrap();
+    assert_eq!(
+        result.iter().map(|b| b.item_count).sum::<u64>(),
+        count(&db, DataType::Image, "").unwrap() as u64
     );
-    assert!(bucket_item_facts(&db, DataType::Contact).is_err());
+    assert_eq!(result.len(), 2);
+    assert_eq!(result[0].top_items, ["/first/Albums/recent.jpg"]);
+    assert_eq!(result[0].id, "/first/Albums");
+    assert_eq!(result[0].name, "Albums");
+    assert_eq!(result[0].size, 9_000_000_000i64);
+    assert_eq!(result[1].id, "/second/Albums");
+    assert!(buckets(&db, DataType::Contact).is_err());
 }
 
 #[test]
-fn document_bucket_items_keep_the_same_nonempty_document_filter_as_rows() {
+fn document_buckets_keep_the_same_nonempty_document_filter_as_rows() {
     let directory = plain_libs::temporary::tempdir().unwrap();
     let db = Db::open(&directory.path().join("plain.db")).unwrap();
     db.record_media_files(&[
@@ -144,9 +149,9 @@ fn document_bucket_items_keep_the_same_nonempty_document_filter_as_rows() {
         file(DataType::Doc, "/docs/empty.txt", "Empty", 0),
     ])
     .unwrap();
-    let items = bucket_item_facts(&db, DataType::Doc).unwrap();
+    let items = buckets(&db, DataType::Doc).unwrap();
     assert_eq!(items.len(), 1);
-    assert_eq!(items[0]["path"], "/docs/readme.txt");
+    assert_eq!(items[0].top_items[0], "/docs/readme.txt");
     assert_eq!(items.len() as i64, count(&db, DataType::Doc, "").unwrap());
 }
 
@@ -282,45 +287,32 @@ fn counting_one_media_kind_does_not_scan_unrelated_files() {
 }
 
 #[test]
-fn counts_and_bucket_facts_use_a_covering_index_without_sorting_all_media() {
+fn counts_use_a_covering_index_without_sorting_all_media() {
     let db = crate::infrastructure::db::Db::open(std::path::Path::new(":memory:")).unwrap();
     db.with_conn(|c|c.execute_batch("INSERT INTO volumes(id,identity,path,is_available) VALUES('v','v','/media',1); WITH RECURSIVE n(x) AS(VALUES(1) UNION ALL SELECT x+1 FROM n WHERE x<1000) INSERT INTO files(id,volume_id,path,file_name,kind,updated_at,size_bytes) SELECT 'f'||x,'v','images/'||x||'.jpg',x||'.jpg','IMAGE','2026',100 FROM n;")).unwrap();
     let (base, args) = super::selection(&db, crate::features::enums::DataType::Image, "").unwrap();
-    for sql in [
-        base.replace("{columns}", "COUNT(*)"),
-        format!(
-            "{} ORDER BY updated_at DESC,file_id",
-            base.replace("{columns}", "bucket_id,path,size_bytes")
-        ),
-    ] {
-        let details = db
-            .with_conn(|c| {
-                c.prepare(&format!("EXPLAIN QUERY PLAN {sql}"))?
-                    .query_map(plain_libs::rusqlite::params_from_iter(args.iter()), |r| {
-                        r.get::<_, String>(3)
-                    })?
-                    .collect::<plain_libs::rusqlite::Result<Vec<_>>>()
-            })
-            .unwrap();
-        assert!(
-            details.iter().any(
-                |detail| detail.contains("COVERING INDEX idx_files_kind_indexed_updated_at_id")
-            ),
-            "{details:?}"
-        );
-        assert!(
-            details.iter().all(|detail| !detail.contains("TEMP B-TREE")),
-            "{details:?}"
-        );
-    }
-    assert_eq!(
-        super::count(&db, crate::features::enums::DataType::Image, "").unwrap(),
-        1000
+    let sql = base.replace("{columns}", "COUNT(*)");
+    let details = db
+        .with_conn(|c| {
+            c.prepare(&format!("EXPLAIN QUERY PLAN {sql}"))?
+                .query_map(plain_libs::rusqlite::params_from_iter(args.iter()), |r| {
+                    r.get::<_, String>(3)
+                })?
+                .collect::<plain_libs::rusqlite::Result<Vec<_>>>()
+        })
+        .unwrap();
+    assert!(
+        details
+            .iter()
+            .any(|detail| detail.contains("COVERING INDEX idx_files_kind_indexed_updated_at_id")),
+        "{details:?}"
+    );
+    assert!(
+        details.iter().all(|detail| !detail.contains("TEMP B-TREE")),
+        "{details:?}"
     );
     assert_eq!(
-        super::bucket_item_facts(&db, crate::features::enums::DataType::Image)
-            .unwrap()
-            .len(),
+        super::count(&db, crate::features::enums::DataType::Image, "").unwrap(),
         1000
     );
 }
@@ -343,7 +335,108 @@ fn name_title_modified_and_capture_time_have_distinct_ordering() {
         (MediaSortBy::TitleAsc, "/audio/b.mp3"),
         (MediaSortBy::UpdatedAtAsc, "/audio/b.mp3"),
     ] {
-        assert_eq!(rows(&db, DataType::Audio, "", sort, 10, 0).unwrap()[0].path, expected);
+        assert_eq!(
+            rows(&db, DataType::Audio, "", sort, 10, 0).unwrap()[0].path,
+            expected
+        );
     }
-    assert_eq!(rows(&db, DataType::Image, "", MediaSortBy::TakenAtDesc, 10, 0).unwrap()[0].path, "/photos/undated.jpg");
+    assert_eq!(
+        rows(&db, DataType::Image, "", MediaSortBy::TakenAtDesc, 10, 0).unwrap()[0].path,
+        "/photos/undated.jpg"
+    );
+}
+
+#[test]
+fn sqlite_buckets_return_one_row_per_folder_with_four_ordered_covers() {
+    let db = Db::open(std::path::Path::new(":memory:")).unwrap();
+    db.with_conn(|conn| conn.execute_batch("INSERT INTO volumes(id,identity,path,is_available) VALUES('v','v','/media',1);
+WITH RECURSIVE n(x) AS (VALUES(1) UNION ALL SELECT x+1 FROM n WHERE x<1000)
+INSERT INTO files(id,volume_id,path,file_name,kind,updated_at,size_bytes)
+SELECT printf('f%04d',x),'v','images/'||x||'.jpg',x||'.jpg','IMAGE',CASE WHEN x=2 THEN '2027' ELSE '2026' END,100 FROM n;")).unwrap();
+    let (sql, args) = bucket_selection(&db, DataType::Image).unwrap();
+    db.with_conn(|conn| {
+        let mut statement = conn.prepare(&sql).unwrap();
+        let mut rows = statement.query(params_from_iter(args.iter())).unwrap();
+        let row = rows.next().unwrap().unwrap();
+        assert_eq!(row.get::<_, String>(0).unwrap(), "/media/images");
+        assert_eq!(row.get::<_, i64>(1).unwrap(), 1000);
+        assert_eq!(row.get::<_, i64>(2).unwrap(), 100_000);
+        assert_eq!(row.as_ref().column_count(), 7);
+        assert!(
+            rows.next().unwrap().is_none(),
+            "SQLite must return one row, not 1000 file facts"
+        );
+    });
+    let details = db
+        .with_conn(|conn| {
+            conn.prepare(&format!("EXPLAIN QUERY PLAN {sql}"))?
+                .query_map(params_from_iter(args.iter()), |row| row.get::<_, String>(3))?
+                .collect::<plain_libs::rusqlite::Result<Vec<_>>>()
+        })
+        .unwrap();
+    assert!(
+        details
+            .iter()
+            .any(|detail| detail.contains("COVERING INDEX idx_files_kind_indexed_updated_at_id")),
+        "{details:?}"
+    );
+    let result = buckets(&db, DataType::Image).unwrap();
+    assert_eq!(result.len(), 1);
+    assert_eq!(result[0].item_count, 1000);
+    assert_eq!(result[0].size, 100_000);
+    assert_eq!(
+        result[0].top_items,
+        [
+            "/media/images/2.jpg",
+            "/media/images/1.jpg",
+            "/media/images/3.jpg",
+            "/media/images/4.jpg"
+        ]
+    );
+}
+
+#[test]
+fn sqlite_buckets_preserve_visibility_types_sorting_and_empty_results() {
+    let db = Db::open(std::path::Path::new(":memory:")).unwrap();
+    assert!(buckets(&db, DataType::Image).unwrap().is_empty());
+    db.with_conn(|conn| conn.execute_batch("INSERT INTO volumes(id,identity,path,is_available) VALUES('v','v','/media',1),('offline','offline','/offline',0);
+INSERT INTO files(id,volume_id,path,file_name,kind,updated_at,size_bytes,indexed,missing) VALUES
+('a','v','Zulu/a.jpg','a.jpg','IMAGE','2026',3,1,0),
+('b','v','中国/b.jpg','b.jpg','IMAGE','2026',4,1,0),
+('unindexed','v','Zulu/unindexed.jpg','unindexed.jpg','IMAGE','2026',8,0,0),
+('missing','v','Zulu/missing.jpg','missing.jpg','IMAGE','2026',16,1,1),
+('offline','offline','offline.jpg','offline.jpg','IMAGE','2026',32,1,0),
+('trashed','v','Zulu/trashed.jpg','trashed.jpg','IMAGE','2026',64,1,0),
+('audio','v','Zulu/audio.mp3','audio.mp3','AUDIO','2026',0,1,0),
+('video','v','Zulu/video.mp4','video.mp4','VIDEO','2026',0,1,0);
+UPDATE files SET trashed_at='2026',original_path=path WHERE id='trashed';")).unwrap();
+    let result = buckets(&db, DataType::Image).unwrap();
+    assert_eq!(
+        result.iter().map(|b| b.id.as_str()).collect::<Vec<_>>(),
+        ["/media/中国", "/media/Zulu"]
+    );
+    assert_eq!(
+        result
+            .iter()
+            .map(|b| (b.item_count, b.size))
+            .collect::<Vec<_>>(),
+        [(1, 4), (1, 3)]
+    );
+    for kind in [DataType::Audio, DataType::Video] {
+        let result = buckets(&db, kind).unwrap();
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].item_count, 1);
+        assert_eq!(result[0].size, 0);
+    }
+}
+
+#[test]
+fn sqlite_buckets_reject_integer_sum_overflow() {
+    let db = Db::open(std::path::Path::new(":memory:")).unwrap();
+    db.record_media_files(&[
+        file(DataType::Image, "/photos/large.jpg", "Large", i64::MAX),
+        file(DataType::Image, "/photos/small.jpg", "Small", 1),
+    ])
+    .unwrap();
+    assert!(buckets(&db, DataType::Image).is_err());
 }

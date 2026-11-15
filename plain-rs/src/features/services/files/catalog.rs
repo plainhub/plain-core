@@ -238,8 +238,8 @@ impl MediaCatalog {
                 loop {
                     let facts = host.call("systemMediaRows", platform_params(db, DataType::Doc, query,
                         json!({"dataType":DataType::Doc,"sortBy":"NAME_ASC","pathsOnly":true,"limit":page_size,"offset":offset}))?).await?;
-                    let paths: Vec<String> =
-                        plain_libs::serde_json::from_value(facts).map_err(|error| error.to_string())?;
+                    let paths: Vec<String> = plain_libs::serde_json::from_value(facts)
+                        .map_err(|error| error.to_string())?;
                     for path in &paths {
                         media_catalog::add_document_extension(&mut counts, path);
                     }
@@ -253,25 +253,30 @@ impl MediaCatalog {
         }
     }
 
-    pub async fn buckets(&self, kind: DataType) -> Result<Value, String> {
+    pub async fn buckets(
+        &self,
+        kind: DataType,
+    ) -> Result<Vec<super::media_buckets::Bucket>, String> {
         match self {
             Self::Platform { db, host } => {
                 let mut plan = crate::features::services::files::media_buckets::platform_plan(kind)
                     .map_err(|error| error.to_string())?;
                 crate::features::services::files::provider_query::index_scope(&mut plan, db)
                     .map_err(|error| error.to_string())?;
-                host.call(
-                    "systemMediaBucketItemFacts",
-                    json!({"dataType":kind,"plan":plan}),
-                )
-                .await
+                let facts = host
+                    .call(
+                        "systemMediaBucketItemFacts",
+                        json!({"dataType":kind,"plan":plan}),
+                    )
+                    .await?;
+                let items =
+                    plain_libs::serde_json::from_value(facts).map_err(|error| error.to_string())?;
+                super::media_buckets::aggregate(kind, items).map_err(|error| error.to_string())
             }
             Self::Native(db) => {
                 let db = db.clone();
                 tokio::task::spawn_blocking(move || {
-                    media_catalog::bucket_item_facts(&db, kind)
-                        .map(Value::Array)
-                        .map_err(|error| error.to_string())
+                    media_catalog::buckets(&db, kind).map_err(|error| error.to_string())
                 })
                 .await
                 .map_err(|error| error.to_string())?
