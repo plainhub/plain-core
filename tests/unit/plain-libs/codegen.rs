@@ -29,30 +29,7 @@ pub fn compile_consumer(fixture: &str, sources: &[&str]) -> String {
         .unwrap()[3]
         .as_u64()
         .unwrap();
-    // Cargo fingerprints identify the exact library linked into this test.
-    let libraries: Vec<_> = std::fs::read_dir(dependencies)
-        .unwrap()
-        .map(|entry| entry.unwrap().path())
-        .filter(|path| {
-            let name = path.file_name().unwrap().to_string_lossy();
-            let Some(hash) = name
-                .strip_prefix("libplain_libs-")
-                .and_then(|name| name.strip_suffix(".rlib"))
-            else {
-                return false;
-            };
-            let fingerprint = std::fs::read_to_string(
-                fingerprints.join(format!("plain-libs-{hash}/lib-plain_libs")),
-            )
-            .unwrap();
-            let bytes: Vec<_> = fingerprint
-                .as_bytes()
-                .chunks_exact(2)
-                .map(|pair| u8::from_str_radix(std::str::from_utf8(pair).unwrap(), 16).unwrap())
-                .collect();
-            u64::from_le_bytes(bytes.try_into().unwrap()) == expected
-        })
-        .collect();
+    let libraries = linked_libraries(dependencies, &fingerprints, expected);
     assert_eq!(libraries.len(), 1, "the exact Cargo library is required");
     let library = &libraries[0];
     let changed = sources
@@ -95,4 +72,57 @@ pub fn compile_consumer(fixture: &str, sources: &[&str]) -> String {
         String::from_utf8_lossy(&result.stderr)
     );
     std::fs::read_to_string(output).unwrap()
+}
+
+fn linked_libraries(
+    dependencies: &std::path::Path,
+    fingerprints: &std::path::Path,
+    expected: u64,
+) -> Vec<std::path::PathBuf> {
+    let expected = expected
+        .to_le_bytes()
+        .map(|byte| format!("{byte:02x}"))
+        .join("");
+    // Cargo fingerprints identify the exact library linked into this test.
+    let libraries: Vec<_> = std::fs::read_dir(dependencies)
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .filter(|path| {
+            let name = path.file_name().unwrap().to_string_lossy();
+            let Some(hash) = name
+                .strip_prefix("libplain_libs-")
+                .and_then(|name| name.strip_suffix(".rlib"))
+            else {
+                return false;
+            };
+            let fingerprint = std::fs::read_to_string(
+                fingerprints.join(format!("plain-libs-{hash}/lib-plain_libs")),
+            )
+            .unwrap();
+            fingerprint == expected
+        })
+        .collect();
+    libraries
+}
+
+#[test]
+fn library_selection_ignores_incomplete_unrelated_cargo_fingerprints() {
+    let directory = plain_libs::temporary::tempdir().unwrap();
+    let dependencies = directory.path().join("deps");
+    let fingerprints = directory.path().join(".fingerprint");
+    std::fs::create_dir(&dependencies).unwrap();
+    for (hash, fingerprint) in [
+        ("1111111111111111", ""),
+        ("2222222222222222", "0807060504030201"),
+        ("3333333333333333", "0000000000000000"),
+    ] {
+        std::fs::write(dependencies.join(format!("libplain_libs-{hash}.rlib")), []).unwrap();
+        let entry = fingerprints.join(format!("plain-libs-{hash}"));
+        std::fs::create_dir_all(&entry).unwrap();
+        std::fs::write(entry.join("lib-plain_libs"), fingerprint).unwrap();
+    }
+    assert_eq!(
+        linked_libraries(&dependencies, &fingerprints, 0x0102030405060708),
+        vec![dependencies.join("libplain_libs-2222222222222222.rlib")]
+    );
 }
