@@ -216,7 +216,28 @@ impl Dom {
                 dom.0[*stack.last().unwrap()].children.push(id);
                 dom.0.push(node);
                 if !closed && !void {
-                    stack.push(id);
+                    let tag = dom.0[id].tag.as_str();
+                    if matches!(tag, "script" | "style") {
+                        let raw = &input[pos..];
+                        let end = raw
+                            .match_indices("</")
+                            .find_map(|(offset, _)| {
+                                let name = &raw[offset + 2..];
+                                (name
+                                    .get(..tag.len())
+                                    .is_some_and(|value| value.eq_ignore_ascii_case(tag))
+                                    && name[tag.len()..].starts_with(|c: char| {
+                                        c == '>' || c == '/' || c.is_ascii_whitespace()
+                                    }))
+                                .then_some(offset)
+                            })
+                            .unwrap_or(raw.len());
+                        text.push_str(&raw[..end]);
+                        dom.flush(id, &mut text);
+                        pos += end;
+                    } else {
+                        stack.push(id);
+                    }
                 }
             } else if tail.starts_with('<') {
                 text.push('<');

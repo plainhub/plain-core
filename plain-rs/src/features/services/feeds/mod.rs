@@ -1,3 +1,4 @@
+mod article;
 mod preview;
 pub use preview::title as preview_title;
 
@@ -13,7 +14,7 @@ use plain_libs::chrono::Utc;
 use futures_util::StreamExt;
 use futures_util::stream;
 use plain_libs::utils::html_to_markdown::dom::Dom;
-use plain_libs::utils::html_to_markdown::dom::Node;
+use article::article_html;
 use plain_libs::utils::html_to_markdown::html_to_markdown;
 use plain_libs::utils::xml;
 use plain_libs::utils::xml::Event;
@@ -185,22 +186,6 @@ fn parse_date(text: &str, fallback: &str) -> String {
         .unwrap_or_else(|| fallback.to_string())
 }
 
-/// Picks the article body out of a fetched page: the first `<article>`, else
-/// `<main>`, else a `role="main"` container, else `<body>`. Pages that have
-/// none of them (minimal HTML, fragments) are used as they are.
-fn article_html(html: &str) -> String {
-    let dom = Dom::parse(html);
-    let pick = |wanted: &dyn Fn(&Node) -> bool| (1..dom.0.len()).find(|&id| wanted(&dom.0[id]));
-    let found = pick(&|node| node.tag == "article")
-        .or_else(|| pick(&|node| node.tag == "main"))
-        .or_else(|| pick(&|node| node.attr("role") == "main"))
-        .or_else(|| pick(&|node| node.tag == "body"));
-    match found {
-        Some(id) => inner_html(&dom, id),
-        None => inner_html(&dom, 0),
-    }
-}
-
 fn item_to_row(feed: &FeedRow, item: ParsedEntry) -> FeedEntryRow {
     let at = now();
     let fallback = plain_libs::utils::hex::bytes_to_hex(&Sha256::digest(
@@ -308,27 +293,26 @@ pub async fn sync_entry_content_with_assets(
     let entry = db
         .feed_entry_get(id)?
         .ok_or_else(|| error(format!("Feed entry {id} not found")))?;
-    {
-        let html = fetch_text(&entry.url, 4 * 1024 * 1024).await?;
-        let article = assets::normalize_html(&article_html(&html), &entry.url);
-        let content = html_to_markdown(&article);
-        if let Some(assets) = assets {
-            if !entry.image.starts_with('/') {
-                if let Some(url) = if entry.image.is_empty() {
-                    assets::main_image(&article, &entry.url)
-                } else {
-                    Some(entry.image.clone())
-                } {
-                    if let Ok(image) = assets.cache(&url).await {
-                        db.feed_entry_set_image(id, &image)?;
-                    }
+    let html = fetch_text(&entry.url, 4 * 1024 * 1024).await?;
+    let article = assets::normalize_html(&article_html(&html), &entry.url);
+    let content = html_to_markdown(&article);
+    if content.is_empty() || content.len() < entry.description.len() {
+        return Ok(entry);
+    }
+    if let Some(assets) = assets {
+        if !entry.image.starts_with('/') {
+            if let Some(url) = if entry.image.is_empty() {
+                assets::main_image(&article, &entry.url)
+            } else {
+                Some(entry.image.clone())
+            } {
+                if let Ok(image) = assets.cache(&url).await {
+                    db.feed_entry_set_image(id, &image)?;
                 }
             }
         }
-        if content.len() >= entry.description.len() && !content.is_empty() {
-            db.feed_entry_set_content(id, &content, &now())?;
-        }
     }
+    db.feed_entry_set_content(id, &content, &now())?;
     Ok(db.feed_entry_get(id)?.unwrap_or(entry))
 }
 

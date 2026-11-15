@@ -318,19 +318,112 @@ fn normalize_html_rewrites_attributes_and_not_text_that_looks_like_one() {
 }
 
 #[test]
-fn article_html_uses_the_main_container_and_falls_back_to_the_page() {
-    // The container's own tag is dropped: only its content is the article.
+fn article_html_uses_the_main_container_without_falling_back_to_the_page() {
     assert_eq!(
         article_html(
             "<html><body><nav>Menu</nav><div role=\"main\"><p>Kept</p></div><footer>Dropped</footer></body></html>"
         ),
         "<p>Kept</p>"
     );
-    // No container at all: the page itself is the article.
     assert_eq!(
-        article_html("<div><p>Plain body</p></div>"),
-        "<div><p>Plain body</p></div>"
+        article_html(
+            "<html><body role=\"main\"><div><p>Menu</p></div><footer>Footer</footer></body></html>"
+        ),
+        ""
     );
+}
+
+#[test]
+fn article_markdown_extracts_untagged_news_body_without_site_chrome() {
+    let page = r#"<html><body>
+        <style>#navbar { color: red }</style><div id="navbar">频道导航</div>
+        <article><a href="/other">推荐头条文章</a></article>
+        <div class="story-wrapper"><h1>新闻标题</h1><div class="left_zw">
+        <p>这是一段完整的新闻正文。报道记录了城市在一周内开放社区公共服务设施的具体安排。</p>
+        <p>第二段介绍活动的时间和参与方式，提供<a href="/details">详情</a>及报名须知。</p>
+        <figure><img src="//example.org/story.jpg" alt="现场"><figcaption>正文图注</figcaption></figure>
+        <style>.picture { display: block }</style><script>var html = "</div>脚本文字"; if (a<b) more();</script>
+        <p>正文最后一段必须保留，不能被脚本字符串里看起来像 HTML 的内容截断。</p>
+        <table class="adInContent"><tr><td>内嵌广告</td></tr></table>
+        <div class="adEditor">编辑署名</div></div><div class="channel">更多精彩内容</div></div>
+        <footer>版权信息</footer></body></html>"#;
+    let html = assets::normalize_html(&article_html(page), "https://example.org/news/story");
+    let content = html_to_markdown(&html);
+    assert!(content.contains("这是一段完整的新闻正文"), "{content}");
+    assert!(
+        content.contains("[详情](https://example.org/details)"),
+        "{content}"
+    );
+    assert!(
+        content.contains("![现场](https://example.org/story.jpg)"),
+        "{content}"
+    );
+    assert!(content.contains("正文图注"), "{content}");
+    assert!(content.contains("正文最后一段必须保留"), "{content}");
+    for noise in [
+        "navbar",
+        "频道导航",
+        "推荐头条文章",
+        "新闻标题",
+        "picture",
+        "脚本文字",
+        "内嵌广告",
+        "编辑署名",
+        "更多精彩内容",
+        "版权信息",
+    ] {
+        assert!(!content.contains(noise), "{noise}: {content}");
+    }
+}
+
+#[tokio::test]
+async fn full_text_sync_keeps_summary_until_a_page_has_an_article() {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    let (_dir, db) = database();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}/news", listener.local_addr().unwrap());
+    let paragraph =
+        "The community library has announced that its reading room will reopen on Monday.";
+    let server = tokio::spawn(async move {
+        for body in [
+            "<html><body><style>#menu { color: red }</style><nav>Menu</nav></body></html>".into(),
+            format!("<html><body><div><p>{paragraph}</p></div></body></html>"),
+        ] {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let mut request = [0_u8; 1024];
+            socket.read(&mut request).await.unwrap();
+            let response = format!(
+                "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                body.len()
+            );
+            socket.write_all(response.as_bytes()).await.unwrap();
+        }
+    });
+    let feed = db.feed_save("feed", "News", &url, true, &now()).unwrap();
+    let row = item_to_row(
+        &feed,
+        ParsedEntry {
+            title: "Library".into(),
+            url,
+            description: "RSS summary".into(),
+            ..Default::default()
+        },
+    );
+    db.feed_entries_insert(std::slice::from_ref(&row)).unwrap();
+
+    let fallback = sync_entry_content(&db, &row.id).await.unwrap();
+    assert!(fallback.content.is_empty());
+    assert_eq!(fallback.description, "RSS summary");
+    assert_eq!(
+        sync_entry_content(&db, &row.id).await.unwrap().content,
+        paragraph
+    );
+    assert_eq!(
+        db.feed_entry_get(&row.id).unwrap().unwrap().content,
+        paragraph
+    );
+    server.await.unwrap();
 }
 
 #[test]
