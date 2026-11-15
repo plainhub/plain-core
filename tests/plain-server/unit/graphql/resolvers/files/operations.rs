@@ -761,3 +761,121 @@ fn file_id_selection_preserves_opaque_values_without_adding_filters() {
     assert_eq!(fields[1].name, "trash");
     assert_eq!(fields[1].value, "false");
 }
+
+#[cfg(target_os = "macos")]
+#[tokio::test]
+async fn moving_audio_between_volumes_preserves_bytes_collisions_and_catalog_identity() {
+    use std::os::unix::fs::MetadataExt;
+    use std::process::Command;
+
+    let (dir, schema) = fixture(GRANTED);
+    let image = dir.path().join("volume.dmg");
+    let destination = dir.path().join("destination");
+    std::fs::create_dir(&destination).unwrap();
+    let created = Command::new("hdiutil")
+        .args([
+            "create",
+            "-size",
+            "32m",
+            "-fs",
+            "HFS+",
+            "-volname",
+            "media-move-fixture",
+        ])
+        .arg(&image)
+        .output()
+        .unwrap();
+    assert!(
+        created.status.success(),
+        "{}",
+        String::from_utf8_lossy(&created.stderr)
+    );
+    let attached = Command::new("hdiutil")
+        .args(["attach", "-nobrowse", "-mountpoint"])
+        .arg(&destination)
+        .arg(&image)
+        .output()
+        .unwrap();
+    assert!(
+        attached.status.success(),
+        "{}",
+        String::from_utf8_lossy(&attached.stderr)
+    );
+    struct Mounted(std::path::PathBuf);
+    impl Drop for Mounted {
+        fn drop(&mut self) {
+            let result = Command::new("hdiutil")
+                .arg("detach")
+                .arg(&self.0)
+                .output()
+                .unwrap();
+            assert!(
+                result.status.success(),
+                "{}",
+                String::from_utf8_lossy(&result.stderr)
+            );
+        }
+    }
+    let _mounted = Mounted(destination.clone());
+    assert_ne!(
+        std::fs::metadata(dir.path()).unwrap().dev(),
+        std::fs::metadata(&destination).unwrap().dev()
+    );
+    let rows = seed_media(
+        &schema,
+        plain_rs::features::enums::DataType::Audio,
+        1,
+        false,
+        "wav",
+    );
+    let row = &rows[0];
+    let original = vec![42_u8; 128 * 1024 + 31];
+    std::fs::write(&row.path, &original).unwrap();
+    let volume_id = || {
+        database(&schema)
+            .with_conn(|connection| {
+                connection.query_row(
+                    "SELECT volume_id FROM files WHERE id=?1",
+                    [&row.id],
+                    |record| record.get::<_, String>(0),
+                )
+            })
+            .unwrap()
+    };
+    let source_volume = volume_id();
+    std::fs::write(destination.join("x1.wav"), b"existing").unwrap();
+    let response = schema
+        .execute(format!(
+            r#"mutation {{moveMediaItems(type:AUDIO,query:{},destDir:{}){{affectedCount}}}}"#,
+            json!(format!("ids:{}", row.id)),
+            json!(destination),
+        ))
+        .await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    assert_eq!(
+        response.data.into_json().unwrap()["moveMediaItems"]["affectedCount"],
+        1
+    );
+    assert!(!std::path::Path::new(&row.path).exists());
+    assert_eq!(
+        std::fs::read(destination.join("x1.wav")).unwrap(),
+        b"existing"
+    );
+    let moved = destination.join("x1 (1).wav").canonicalize().unwrap();
+    assert_eq!(std::fs::read(&moved).unwrap(), original);
+    let catalog = database(&schema)
+        .media_file_by_path(
+            plain_rs::features::enums::DataType::Audio,
+            moved.to_str().unwrap(),
+        )
+        .unwrap()
+        .unwrap();
+    assert_eq!(catalog.id, row.id);
+    assert_ne!(volume_id(), source_volume);
+    assert!(
+        database(&schema)
+            .media_file_by_path(plain_rs::features::enums::DataType::Audio, &row.path)
+            .unwrap()
+            .is_none()
+    );
+}

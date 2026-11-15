@@ -217,18 +217,13 @@ fn files(
                     {
                         return Err("Media parent unchanged".into());
                     }
-                    if plain_libs::platform::mountinfo::resolve_mount_point(source)
-                        .map_err(|error| error.to_string())?
-                        != plain_libs::platform::mountinfo::resolve_mount_point(target)
-                            .map_err(|error| error.to_string())?
-                    {
-                        return Err("Media move must stay in its storage volume".into());
-                    }
                     let base = target.join(source.file_name().ok_or("Media file name required")?);
                     loop {
                         let candidate = plain_libs::utils::unique_path::unique_sibling(&base)
                             .map_err(|error| error.to_string())?;
-                        match plain_libs::filesystem::rename::no_replace(source, &candidate) {
+                        match tokio::runtime::Handle::current()
+                            .block_on(plain_libs::filesystem::rename(source, &candidate))
+                        {
                             Ok(()) => break candidate.to_string_lossy().into_owned(),
                             Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
                                 continue;

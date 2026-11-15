@@ -39,6 +39,8 @@ fn scans() -> Arc<super::super::media_scans::MediaScans> {
 
 #[test]
 fn native_move_runs_one_commit_after_the_physical_move_and_preserves_collisions() {
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+    let _runtime = runtime.enter();
     let directory = plain_libs::temporary::tempdir().unwrap();
     let source_dir = directory.path().join("source");
     let target = directory.path().join("target");
