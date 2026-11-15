@@ -1,12 +1,11 @@
-use plain_server::server::ContentServer;
 use plain_libs::serde_json::Value;
+use plain_server::server::ContentServer;
 use std::sync::Arc;
 
 pub(super) fn handles(method: &str) -> bool {
     matches!(
         method,
-        "systemRelaunchApp"
-            | plain_rs::infrastructure::host::commands::SYSTEM_DISK_FORMAT
+        "systemRelaunchApp" | plain_rs::infrastructure::host::commands::SYSTEM_DISK_FORMAT
     )
 }
 
@@ -31,31 +30,15 @@ pub(super) async fn dispatch(
             let core = core.clone();
             tokio::task::spawn_blocking(move || {
                 let store = core.runtime().store.get().map_err(|e| e.to_string())?;
-                let events = crate::storage::event_sink(&core)?;
-                let db = core.runtime().db.clone();
-                let client = if request.client_id.is_empty() {
-                    None
-                } else {
-                    Some(db.audit_event_client(&request.client_id).map_err(|error| error.to_string())?)
-                };
+                let client = plain_rs::features::services::audit_events::client(core.runtime(), &request.client_id)
+                    .map_err(|error| error.to_string())?;
+                let events = crate::storage::event_sink(&core, Some(client))?;
                 let result =
                     plain_rs::infrastructure::platform::linux::disks::format::format_disk_single_partition(
                         &store,
                         &request.path,
-                        |mount| {
-                            let _ = db.audit_event_add("unmount", mount, client.as_ref());
-                        },
                         &events,
                     );
-                let _ = db.audit_event_add(
-                    if result.is_ok() {
-                        "format_disk"
-                    } else {
-                        "format_disk_failed"
-                    },
-                    &request.path,
-                    client.as_ref(),
-                );
                 result
                     .map(|_| Value::Bool(true))
                     .map_err(|error| error.to_string())

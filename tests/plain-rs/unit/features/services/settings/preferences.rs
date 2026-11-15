@@ -11,6 +11,7 @@ async fn generic_writes_typed_patches_and_removal_share_derived_events() {
         events: Some(&events),
         #[cfg(feature = "runtime")]
         server: None,
+        client_id: None,
     };
     assert!(
         settings
@@ -63,6 +64,7 @@ async fn invalid_generic_values_leave_state_and_events_unchanged() {
         events: Some(&events),
         #[cfg(feature = "runtime")]
         server: None,
+        client_id: None,
     };
     let before = prefs.entries();
     assert!(
@@ -95,6 +97,7 @@ async fn media_exclusions_validate_paths_and_refresh_media_without_scanning() {
         prefs: &prefs,
         events: Some(&events),
         server: None,
+        client_id: None,
     };
     for value in [
         plain_libs::serde_json::json!("/hidden"),

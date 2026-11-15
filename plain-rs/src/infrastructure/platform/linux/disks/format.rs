@@ -122,25 +122,32 @@ fn wait_for_path(path: &str, timeout: Duration) -> Result<()> {
     Err(anyhow!("timeout waiting for {path}"))
 }
 
-fn unmount_mountpoints<F: FnMut(&str)>(mountpoints: &[String], mut on_unmount: F) -> Result<()> {
-    let mut mps: Vec<&str> = mountpoints
-        .iter()
-        .map(|s| s.trim())
-        .filter(|s| !s.is_empty())
-        .collect();
-    mps.sort_by(|a, b| b.len().cmp(&a.len()).then_with(|| b.cmp(a)));
-    mps.dedup();
-    for mp in mps {
-        run_cmd("umount", &[mp])?;
-        on_unmount(mp);
+fn unmount_volumes(
+    mut volumes: Vec<crate::features::audit_events::EventVolume>,
+    mut unmount: impl FnMut(&str) -> Result<()>,
+    events: &crate::infrastructure::platform::linux::mounts::automount::EventSink,
+) -> Result<()> {
+    use crate::features::audit_events::{AuditEvent, VolumeEventData};
+    use crate::infrastructure::platform::linux::mounts::automount::MountEvent;
+    volumes.sort_by(|a, b| {
+        b.mount_path
+            .len()
+            .cmp(&a.mount_path.len())
+            .then_with(|| b.mount_path.cmp(&a.mount_path))
+    });
+    volumes.dedup_by(|a, b| a.mount_path == b.mount_path);
+    for volume in volumes {
+        unmount(&volume.mount_path)?;
+        events(MountEvent::Audit(AuditEvent::Unmount(VolumeEventData {
+            volume,
+        })))?;
     }
     Ok(())
 }
 
-pub fn format_disk_single_partition<F: FnMut(&str)>(
+pub fn format_disk_single_partition(
     store: &std::sync::Arc<plain_libs::kv::Db>,
     disk_path: &str,
-    mut on_unmount: F,
     events: &crate::infrastructure::platform::linux::mounts::automount::EventSink,
 ) -> Result<()> {
     let p = disk_path.trim();
@@ -170,7 +177,28 @@ pub fn format_disk_single_partition<F: FnMut(&str)>(
 
     let mut mps = list_mounted(disk);
     if !mps.is_empty() {
-        unmount_mountpoints(&mps, |mp| on_unmount(mp))?;
+        let mounts = crate::infrastructure::platform::linux::mounts::list::list_mounts();
+        let volumes = mps
+            .iter()
+            .map(|path| {
+                let found = mounts
+                    .iter()
+                    .find(|mount| mount.mount_point.as_deref() == Some(path));
+                crate::features::audit_events::EventVolume {
+                    id: found.map(|mount| mount.id.clone()),
+                    name: found
+                        .map(|mount| mount.label.clone().unwrap_or_else(|| mount.name.clone())),
+                    device_path: found.and_then(|mount| mount.path.clone()),
+                    mount_path: path.to_owned(),
+                    file_system: found.and_then(|mount| mount.fs_type.clone()),
+                }
+            })
+            .collect();
+        unmount_volumes(
+            volumes,
+            |path| run_cmd("umount", &[path]).map(|_| ()),
+            events,
+        )?;
 
         let parsed2 = lsblk()?;
         let disk2 = find_lsblk_disk(&parsed2, p).ok_or_else(|| anyhow!("disk not found: {p}"))?;

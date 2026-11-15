@@ -505,7 +505,12 @@ async fn issue(state: &ServerState, request: &Pending) -> plain_libs::anyhow::Re
     let frame = request
         .protection
         .encrypt_response(&plain_libs::serde_json::to_vec(&response)?)?;
-    let client = login_client(state, &request.client_id, &request.client_ip, &request.request)?;
+    let client = login_client(
+        state,
+        &request.client_id,
+        &request.client_ip,
+        &request.request,
+    )?;
     persist(state, request, &token)?;
     if chat_paired {
         let peer = &request.request["peer"];
@@ -524,7 +529,17 @@ async fn issue(state: &ServerState, request: &Pending) -> plain_libs::anyhow::Re
             },
         )?;
     }
-    state.db.audit_event_add("login", "", Some(&client))?;
+    state
+        .audit_events
+        .record(
+            plain_rs::features::audit_events::AuditEvent::Login(
+                plain_rs::features::audit_events::LoginEventData {
+                    session_type: plain_rs::features::sessions::SessionType::Login,
+                },
+            ),
+            Some(client),
+        )
+        .map_err(plain_libs::anyhow::Error::msg)?;
     Ok(
         json!({"status": "COMPLETED", "token": token, "response": response, "frame": plain_libs::utils::base64::base64_encode(&frame)}),
     )
@@ -584,8 +599,11 @@ fn login_client(
     client_ip: &str,
     request: &Value,
 ) -> plain_libs::anyhow::Result<AuditEventClient> {
-    let client_name = state.db.session_get(client_id)?
-        .map(|row| row.name).filter(|name| !name.is_empty())
+    let client_name = state
+        .db
+        .session_get(client_id)?
+        .map(|row| row.name)
+        .filter(|name| !name.is_empty())
         .unwrap_or_else(|| text(&request["peer"], "deviceName"));
     Ok(AuditEventClient {
         client_id: client_id.to_owned(),
@@ -604,8 +622,16 @@ pub(crate) fn record_failure(
     reason: &str,
 ) -> plain_libs::anyhow::Result<()> {
     state
-        .db
-        .audit_event_add("login_failed", reason, Some(client))?;
+        .audit_events
+        .record(
+            plain_rs::features::audit_events::AuditEvent::LoginFailed(
+                plain_rs::features::audit_events::LoginFailedEventData {
+                    reason: plain_libs::serde_json::from_value(Value::String(reason.to_owned()))?,
+                },
+            ),
+            Some(client.clone()),
+        )
+        .map_err(plain_libs::anyhow::Error::msg)?;
     Ok(())
 }
 
@@ -614,16 +640,33 @@ pub(crate) async fn execute(
     request: Request,
 ) -> plain_libs::anyhow::Result<Value> {
     let mut client = match &request {
-        Request::Issue { client_id, client_ip, .. } => Some(AuditEventClient {
-            client_id: client_id.clone(), client_ip: client_ip.clone(), ..Default::default()
+        Request::Issue {
+            client_id,
+            client_ip,
+            ..
+        } => Some(AuditEventClient {
+            client_id: client_id.clone(),
+            client_ip: client_ip.clone(),
+            ..Default::default()
         }),
         Request::Complete { request_id } => {
-            let pending = state.login_attempts.lock()
+            let pending = state
+                .login_attempts
+                .lock()
                 .map_err(|_| plain_libs::anyhow::anyhow!("Login state unavailable"))?
-                .pending.get(request_id)
-                .map(|pending| (pending.client_id.clone(), pending.client_ip.clone(), pending.request.clone()));
-            pending.map(|(id, ip, metadata)| login_client(state, &id, &ip, &metadata)).transpose()?
-        },
+                .pending
+                .get(request_id)
+                .map(|pending| {
+                    (
+                        pending.client_id.clone(),
+                        pending.client_ip.clone(),
+                        pending.request.clone(),
+                    )
+                });
+            pending
+                .map(|(id, ip, metadata)| login_client(state, &id, &ip, &metadata))
+                .transpose()?
+        }
         Request::Cancel { .. } => None,
     };
     let result = execute_request(state, request, &mut client).await;
@@ -660,7 +703,12 @@ async fn execute_request(
                 pending
             };
             if let Some(pending) = pending {
-                let client = login_client(state, &pending.client_id, &pending.client_ip, &pending.request)?;
+                let client = login_client(
+                    state,
+                    &pending.client_id,
+                    &pending.client_ip,
+                    &pending.request,
+                )?;
                 record_failure(state, &client, reason)?;
             }
             return Ok(json!({"canceled":true}));

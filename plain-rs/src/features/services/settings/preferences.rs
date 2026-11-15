@@ -1,6 +1,6 @@
+use crate::features::enums::DataType;
 use crate::features::prefs::Prefs;
 use crate::features::prefs::pref_keys::{AI_IMAGE_SEARCH_MODEL, MEDIA_EXCLUDED_DIRS};
-use crate::features::enums::DataType;
 use crate::infrastructure::events::WsEvent;
 use plain_libs::serde_json::Value;
 use tokio::sync::broadcast;
@@ -9,6 +9,7 @@ pub struct Preferences<'a> {
     pub prefs: &'a Prefs,
     pub events: Option<&'a broadcast::Sender<WsEvent>>,
     pub server: Option<&'a crate::runtime::Runtime>,
+    pub client_id: Option<&'a str>,
 }
 
 impl<'a> Preferences<'a> {
@@ -17,6 +18,7 @@ impl<'a> Preferences<'a> {
             prefs: &state.prefs,
             events: Some(&state.events),
             server: Some(state),
+            client_id: None,
         }
     }
 
@@ -24,8 +26,11 @@ impl<'a> Preferences<'a> {
         &self,
         patch: crate::features::prefs::settings::SettingsPatch,
     ) -> plain_libs::anyhow::Result<bool> {
-        self.update(move |prefs| crate::features::prefs::settings::patch(prefs, patch))
-            .await
+        let device_name = patch.device_name.is_some();
+        self.update(device_name, move |prefs| {
+            crate::features::prefs::settings::patch(prefs, patch)
+        })
+        .await
     }
 
     pub async fn set(&self, key: &str, value: Value) -> plain_libs::anyhow::Result<bool> {
@@ -52,28 +57,38 @@ impl<'a> Preferences<'a> {
             .set(key, value)
             .await;
         }
-        self.update(move |prefs| {
-            match crate::features::prefs::settings::set_entry(prefs, key, value.clone())? {
+        self.update(
+            key == crate::features::prefs::pref_keys::DEVICE_NAME,
+            move |prefs| match crate::features::prefs::settings::set_entry(
+                prefs,
+                key,
+                value.clone(),
+            )? {
                 Some(changed) => Ok(changed),
                 None => Ok(prefs.set(key, value)?),
-            }
-        })
+            },
+        )
         .await
     }
 
     pub async fn remove(&self, key: &str) -> plain_libs::anyhow::Result<bool> {
-        self.update(move |prefs| Ok(prefs.remove(key)?)).await
+        self.update(
+            key == crate::features::prefs::pref_keys::DEVICE_NAME,
+            move |prefs| Ok(prefs.remove(key)?),
+        )
+        .await
     }
 
     pub async fn action(
         &self,
         action: crate::features::prefs::settings::Action,
     ) -> plain_libs::anyhow::Result<bool> {
-        self.update(move |prefs| action.apply(prefs)).await
+        self.update(false, move |prefs| action.apply(prefs)).await
     }
 
     async fn update(
         &self,
+        device_name: bool,
         write: impl FnOnce(&Prefs) -> plain_libs::anyhow::Result<bool>,
     ) -> plain_libs::anyhow::Result<bool> {
         let before = crate::features::prefs::settings::snapshot(self.prefs)?;
@@ -84,18 +99,54 @@ impl<'a> Preferences<'a> {
         let before_model = self
             .prefs
             .get_or(AI_IMAGE_SEARCH_MODEL, String::from("default"));
+        let actor = match self.server.filter(|_| device_name) {
+            Some(state) => {
+                let id = match self.client_id {
+                    Some(id) => id.to_owned(),
+                    None => state
+                        .native_client_id()
+                        .map_err(plain_libs::anyhow::Error::msg)?,
+                };
+                Some(super::super::audit_events::client(state, &id)?)
+            }
+            None => None,
+        };
         let changed = write(self.prefs)?;
         let after = crate::features::prefs::settings::snapshot(self.prefs)?;
+        if before.device_name != after.device_name {
+            if let Some(state) = self.server {
+                state
+                    .audit_events
+                    .record(
+                        crate::features::audit_events::AuditEvent::UpdateDeviceName(
+                            crate::features::audit_events::DeviceNameEventData {
+                                old_name: before.device_name.clone(),
+                                new_name: after.device_name.clone(),
+                            },
+                        ),
+                        actor,
+                    )
+                    .map_err(plain_libs::anyhow::Error::msg)?;
+            }
+        }
         if changed {
             if let Some(events) = self.events {
                 let _ = events.send(WsEvent::broadcast("PREFS_UPDATED", "{}".into()));
                 if before_media_dirs
-                    != self.prefs.get::<Vec<String>>(MEDIA_EXCLUDED_DIRS)?.unwrap_or_default()
+                    != self
+                        .prefs
+                        .get::<Vec<String>>(MEDIA_EXCLUDED_DIRS)?
+                        .unwrap_or_default()
                 {
                     crate::features::services::files::catalog_events::publish(
                         events,
-                        [DataType::Image, DataType::Video, DataType::Audio, DataType::Doc]
-                            .map(DataType::kind),
+                        [
+                            DataType::Image,
+                            DataType::Video,
+                            DataType::Audio,
+                            DataType::Doc,
+                        ]
+                        .map(DataType::kind),
                     );
                 }
             }

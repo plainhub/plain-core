@@ -19,7 +19,7 @@ impl PlatformQuery {
         offset: i32,
         limit: i32,
     ) -> Result<Vec<crate::graphql::resolvers::app::capability_types::Event>> {
-        use crate::graphql::resolvers::app::capability_types::{Event, EventType};
+        use crate::graphql::resolvers::app::capability_types::Event;
         let state = ctx.data::<ServerState>()?;
         let needle = plain_libs::utils::search_dsl::parse(&query)
             .into_iter()
@@ -32,27 +32,24 @@ impl PlatformQuery {
             (!needle.trim().is_empty()).then_some(needle.as_str()),
         )?;
         rows.into_iter()
-            .filter_map(|row| {
-                let kind = EventType::from_kind(&row.r#type)?;
-                Some(
-                    plain_libs::chrono::DateTime::parse_from_rfc3339(&row.created_at)
-                        .map(|at| Event {
-                            id: row.id.into(),
-                            r#type: kind,
-                            message: row.message,
-                            client_id: row.client_id.map(ID),
-                            client_name: row.client_name,
-                            client_ip: row.client_ip,
-                            os_name: row.os_name,
-                            os_version: row.os_version,
-                            app_name: row.app_name,
-                            app_version: row.app_version,
-                            created_at: plain_rs::infrastructure::types::Instant(
-                                at.with_timezone(&plain_libs::chrono::Utc),
-                            ),
-                        })
-                        .map_err(|error| plain_graphql::Error::new(error.to_string())),
-                )
+            .map(|row| {
+                plain_libs::chrono::DateTime::parse_from_rfc3339(&row.created_at)
+                    .map(|at| Event {
+                        id: row.id.into(),
+                        r#type: row.r#type,
+                        data: row.data,
+                        client_id: row.client_id.map(ID),
+                        client_name: row.client_name,
+                        client_ip: row.client_ip,
+                        os_name: row.os_name,
+                        os_version: row.os_version,
+                        app_name: row.app_name,
+                        app_version: row.app_version,
+                        created_at: plain_rs::infrastructure::types::Instant(
+                            at.with_timezone(&plain_libs::chrono::Utc),
+                        ),
+                    })
+                    .map_err(|error| plain_graphql::Error::new(error.to_string()))
             })
             .collect()
     }
@@ -97,23 +94,12 @@ pub struct PlatformMutation;
 impl PlatformMutation {
     async fn format_disk(&self, ctx: &Context<'_>, path: String) -> Result<bool> {
         require_capability(ctx, "DISK_MANAGER").await?;
-        let state = ctx.data::<ServerState>()?;
-        let request = plain_rs::infrastructure::host::commands::DiskFormatRequest {
+        Ok(plain_rs::features::services::disks::format(
+            ctx.data::<ServerState>()?,
+            ctx.data::<String>()?,
             path,
-            client_id: ctx.data_opt::<String>().cloned().unwrap_or_default(),
-        };
-        let value = state
-            .host
-            .call_wait(
-                plain_rs::infrastructure::host::commands::SYSTEM_DISK_FORMAT,
-                plain_libs::serde_json::to_value(request)?,
-            )
-            .await
-            .map_err(plain_graphql::Error::new)?;
-        if value != plain_libs::serde_json::Value::Bool(true) {
-            return Err("Disk format failed".into());
-        }
-        Ok(true)
+        )
+        .await?)
     }
 
     async fn set_mount_alias(

@@ -91,7 +91,8 @@ impl Service {
         #[cfg(target_os = "linux")]
         if plain_libs::platform::unix::is_root() {
             let store = self.core.runtime().store.get()?;
-            let events = storage::event_sink(&self.core).map_err(plain_libs::anyhow::Error::msg)?;
+            let events =
+                storage::event_sink(&self.core, None).map_err(plain_libs::anyhow::Error::msg)?;
             let mount_store = store.clone();
             let mount_events = events.clone();
             tokio::task::spawn_blocking(move || {

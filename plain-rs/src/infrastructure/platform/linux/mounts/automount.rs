@@ -40,6 +40,7 @@ fn auto_mount_inhibited() -> bool {
 pub struct BlockFs {
     pub path: String,
     pub fsuuid: String,
+    pub label: String,
     pub fstype: String,
     pub size_bytes: u64,
     pub mountpoint: String,
@@ -55,6 +56,7 @@ pub fn scan_filesystems() -> Result<Vec<BlockFs>> {
         "UUID",
         "SIZE",
         "MOUNTPOINT",
+        "LABEL",
     ])?;
     Ok(filesystems_from_devices(&devs))
 }
@@ -81,6 +83,7 @@ fn filesystems_from_devices(
         items.push(BlockFs {
             path: path.to_string(),
             fsuuid: uuid.to_string(),
+            label: d.label.clone(),
             fstype: fstype.to_string(),
             size_bytes: d.size.unwrap_or(0).max(0) as u64,
             mountpoint: d.mountpoint.as_deref().unwrap_or("").trim().to_string(),
@@ -266,7 +269,34 @@ pub fn plan_mounts(filesystems: &[BlockFs], persisted: &SlotMap) -> (Vec<Planned
 }
 
 #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
-pub type EventSink = Arc<dyn Fn(&str, &str) + Send + Sync>;
+pub enum MountEvent {
+    Audit(crate::features::audit_events::AuditEvent),
+    Changed,
+}
+
+pub type EventSink = Arc<dyn Fn(MountEvent) -> Result<()> + Send + Sync>;
+
+fn mount_one(
+    volume: crate::features::audit_events::EventVolume,
+    operation: impl FnOnce() -> Result<()>,
+    events: &EventSink,
+) -> Result<()> {
+    use crate::features::audit_events::*;
+    let event = match operation() {
+        Ok(()) => AuditEvent::Mount(VolumeEventData { volume }),
+        Err(error) => {
+            log::error!("mount {} failed: {error}", volume.mount_path);
+            AuditEvent::MountFailed(VolumeFailedEventData {
+                volume,
+                failure: EventFailure {
+                    reason: EventReason::MountFailed,
+                    detail: None,
+                },
+            })
+        }
+    };
+    events(MountEvent::Audit(event))
+}
 
 pub fn ensure_mounted_usb_volumes(store: &Db, emit_event: &EventSink) -> Result<()> {
     if auto_mount_inhibited() {
@@ -294,30 +324,30 @@ pub fn ensure_mounted_usb_volumes(store: &Db, emit_event: &EventSink) -> Result<
                 continue;
             };
             let target = format!("{MOUNT_ROOT}/{USB_PREFIX}{}", pm.slot);
-            if let Err(e) = std::fs::create_dir_all(&target) {
-                log::error!("mount: mkdir {target} failed: {e}");
-                emit_event("mount_failed", &format!("mkdir {target}: {e}"));
-                continue;
-            }
-            if let Err(e) = unmount_all_at(&target) {
-                log::error!("mount: cleanup {target} failed: {e}");
-                emit_event("mount_failed", &format!("cleanup {target}: {e}"));
-                continue;
-            }
-            if let Err(e) = mount_by_uuid(&fs.fsuuid, &target) {
-                log::error!("mount: UUID {} -> {target} failed: {e}", fs.fsuuid);
-                emit_event(
-                    "mount_failed",
-                    &format!("UUID {} -> {target}: {e}", fs.fsuuid),
-                );
-                continue;
-            }
-            log::info!("mounted UUID {} at {target}", fs.fsuuid);
-            emit_event("mount", &format!("mounted UUID {} at {target}", fs.fsuuid));
+            let volume = crate::features::audit_events::EventVolume {
+                id: Some(super::list::filesystem_id(&fs.fsuuid)),
+                name: Some(if fs.label.is_empty() {
+                    target.rsplit('/').next().unwrap_or_default().to_owned()
+                } else {
+                    fs.label.clone()
+                }),
+                device_path: Some(fs.path.clone()),
+                mount_path: target.clone(),
+                file_system: Some(fs.fstype.clone()),
+            };
+            mount_one(
+                volume,
+                || {
+                    std::fs::create_dir_all(&target)?;
+                    unmount_all_at(&target)?;
+                    mount_by_uuid(&fs.fsuuid, &target)
+                },
+                emit_event,
+            )?;
         }
 
         store_slot_map(store, &merged)?;
-        emit_event("mounts_changed", "");
+        emit_event(MountEvent::Changed)?;
         Ok(())
     }
 }

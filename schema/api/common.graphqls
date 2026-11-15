@@ -184,6 +184,11 @@ type PomodoroAction {
 	completedState: PomodoroState
 }
 
+enum SessionType {
+	LOGIN
+	API_TOKEN
+}
+
 type SmsProviderChange {
 	uris: [String!]!
 }

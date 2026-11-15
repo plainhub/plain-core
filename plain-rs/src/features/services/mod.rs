@@ -46,3 +46,7 @@ pub mod http_status;
 pub mod phone_query;
 
 pub mod buffered_writes;
+
+pub mod audit_events;
+
+pub mod disks;

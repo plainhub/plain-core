@@ -51,7 +51,11 @@ pub fn create(state: &CoreRuntime, name: String) -> plain_libs::anyhow::Result<S
     Ok(row)
 }
 
-pub fn rename(state: &CoreRuntime, client_id: &str, name: &str) -> plain_libs::anyhow::Result<bool> {
+pub fn rename(
+    state: &CoreRuntime,
+    client_id: &str,
+    name: &str,
+) -> plain_libs::anyhow::Result<bool> {
     Ok(state
         .db
         .session_rename(client_id, name, &plain_libs::utils::dbtime::now_iso())?
@@ -64,4 +68,56 @@ pub fn delete(state: &CoreRuntime, client_id: &str) -> plain_libs::anyhow::Resul
         .revoke(client_id)
         .map_err(plain_libs::anyhow::Error::msg)?;
     Ok(state.db.session_delete(client_id)? > 0)
+}
+
+pub fn revoke(
+    state: &CoreRuntime,
+    actor_id: &str,
+    target_id: &str,
+) -> plain_libs::anyhow::Result<bool> {
+    remove(
+        state,
+        actor_id,
+        target_id,
+        crate::features::audit_events::AuditEvent::RevokeSession,
+    )
+}
+
+pub fn logout(state: &CoreRuntime, actor_id: &str) -> plain_libs::anyhow::Result<bool> {
+    remove(
+        state,
+        actor_id,
+        actor_id,
+        crate::features::audit_events::AuditEvent::Logout,
+    )
+}
+
+fn remove(
+    state: &CoreRuntime,
+    actor_id: &str,
+    target_id: &str,
+    event: fn(
+        crate::features::audit_events::SessionEventData,
+    ) -> crate::features::audit_events::AuditEvent,
+) -> plain_libs::anyhow::Result<bool> {
+    use crate::features::audit_events::{EventSession, SessionEventData};
+    let actor = super::audit_events::client(state, actor_id)?;
+    let Some(target) = state.db.session_get(target_id)? else {
+        return Ok(false);
+    };
+    let data = SessionEventData {
+        session: EventSession {
+            client_id: target.client_id,
+            client_name: target.name,
+            r#type: target.r#type,
+        },
+    };
+    if !delete(state, target_id)? {
+        return Ok(false);
+    }
+    state
+        .audit_events
+        .record(event(data), Some(actor))
+        .map_err(plain_libs::anyhow::Error::msg)?;
+    Ok(true)
 }

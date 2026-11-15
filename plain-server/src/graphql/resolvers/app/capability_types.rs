@@ -1,4 +1,4 @@
-use plain_graphql::{Enum, ID, SimpleObject};
+use plain_graphql::{ID, SimpleObject};
 
 use plain_rs::infrastructure::types::Instant;
 use plain_rs::infrastructure::types::Long;
@@ -13,51 +13,20 @@ pub struct Disk {
     pub model: Option<String>,
 }
 
-#[derive(Enum, Copy, Clone, Eq, PartialEq, Debug)]
-#[allow(non_camel_case_types, clippy::upper_case_acronyms)]
-pub enum EventType {
-    LOGIN,
-    LOGIN_FAILED,
-    LOGOUT,
-    REVOKE_SESSION,
-    UPDATE_DEVICE_NAME,
-    MOUNT,
-    MOUNT_FAILED,
-    UNMOUNT,
-    FORMAT_DISK,
-    FORMAT_DISK_FAILED,
-}
-
-impl EventType {
-    pub fn from_kind(kind: &str) -> Option<Self> {
-        match kind {
-            "login" => Some(Self::LOGIN),
-            "login_failed" => Some(Self::LOGIN_FAILED),
-            "logout" => Some(Self::LOGOUT),
-            "revoke" => Some(Self::REVOKE_SESSION),
-            "update_device_name" => Some(Self::UPDATE_DEVICE_NAME),
-            "mount" => Some(Self::MOUNT),
-            "mount_failed" => Some(Self::MOUNT_FAILED),
-            "unmount" => Some(Self::UNMOUNT),
-            "format_disk" => Some(Self::FORMAT_DISK),
-            "format_disk_failed" => Some(Self::FORMAT_DISK_FAILED),
-            _ => None,
-        }
-    }
-}
+pub use plain_rs::features::audit_events::{EventData, EventType};
 
 #[derive(SimpleObject, Clone, Debug)]
 pub struct Event {
     pub id: ID,
     pub r#type: EventType,
-    pub message: String,
+    pub data: EventData,
     pub client_id: Option<ID>,
-    pub client_name: String,
-    pub client_ip: String,
-    pub os_name: String,
-    pub os_version: String,
-    pub app_name: String,
-    pub app_version: String,
+    pub client_name: Option<String>,
+    pub client_ip: Option<String>,
+    pub os_name: Option<String>,
+    pub os_version: Option<String>,
+    pub app_name: Option<String>,
+    pub app_version: Option<String>,
 
     pub created_at: Instant,
 }

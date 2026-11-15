@@ -54,6 +54,7 @@ pub struct Runtime {
     pub host: Arc<crate::infrastructure::host::bridge::Host>,
     pub thumbnails: Arc<crate::features::services::images::thumbnails::Thumbnails>,
     pub db: Arc<Db>,
+    pub audit_events: crate::features::services::audit_events::AuditEvents,
     pub lan: Arc<crate::features::services::peers::peer_lan::Lan>,
     pub transport: Arc<crate::infrastructure::transport::router::Router>,
     pub(crate) transport_delivery: Arc<std::sync::Mutex<bool>>,
@@ -339,6 +340,7 @@ impl Runtime {
         );
         use crate::features::services::images::thumbnails::Thumbnails;
         let thumbnails = Thumbnails::new();
+        let audit_events = crate::features::services::audit_events::AuditEvents::start(db.clone())?;
         let state = Self {
             ble_advertising: Arc::new(
                 crate::features::services::discovery::ble_advertising::Runtime::default(),
@@ -420,6 +422,7 @@ impl Runtime {
             audio: audio,
             host,
             db,
+            audit_events,
             prefs,
             sms_sends: sms_sends.clone(),
             image_models: image_models.clone(),
@@ -564,6 +567,9 @@ impl Runtime {
             log::error!("Media scan task shutdown failed: {error}");
         }
         self.mdns.close(&self.host).await;
+        if let Err(error) = self.audit_events.shutdown().await {
+            log::error!("Event writer shutdown failed: {error}");
+        }
         let writes = self.buffered_writes_task.lock().take();
         if let Some(task) = writes {
             task.await.expect("Buffered writes shutdown failed");

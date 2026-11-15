@@ -89,6 +89,7 @@ fn fs(uuid: &str, mountpoint: &str) -> BlockFs {
     BlockFs {
         path: format!("/dev/disk-{uuid}"),
         fsuuid: uuid.to_string(),
+        label: String::new(),
         fstype: "ext4".to_string(),
         size_bytes: 0,
         mountpoint: mountpoint.to_string(),
@@ -246,7 +247,7 @@ fn inhibition_is_released_after_error_and_nested_guards() {
 async fn watcher_shutdown_reaps_the_monitor_without_output() {
     let directory = plain_libs::temporary::tempdir().unwrap();
     let store = Arc::new(Db::open(&directory.path().join("kv")).unwrap());
-    let events: EventSink = Arc::new(|_, _| panic!("no mount should run"));
+    let events: EventSink = Arc::new(|_| panic!("no mount should run"));
     let child = tokio::process::Command::new("sleep")
         .arg("60")
         .stdout(Stdio::piped())
@@ -269,7 +270,7 @@ async fn watcher_shutdown_reaps_the_monitor_without_output() {
 async fn monitor_exit_is_reported_as_a_failure() {
     let directory = plain_libs::temporary::tempdir().unwrap();
     let store = Arc::new(Db::open(&directory.path().join("kv")).unwrap());
-    let events: EventSink = Arc::new(|_, _| panic!("no mount should run"));
+    let events: EventSink = Arc::new(|_| panic!("no mount should run"));
     let child = tokio::process::Command::new("true")
         .stdout(Stdio::piped())
         .kill_on_drop(true)
@@ -330,4 +331,62 @@ fn absent_incomplete_and_container_devices_are_never_mount_candidates() {
     let (planned, merged) = plan_mounts(&filesystems, &persisted);
     assert!(planned.is_empty());
     assert_eq!(merged, persisted);
+}
+
+#[tokio::test]
+async fn mount_outcomes_submit_typed_snapshots_without_a_client_actor() {
+    use crate::features::audit_events::{
+        AuditEvent, EventData, EventReason, EventType, EventVolume,
+    };
+    use crate::features::services::audit_events::AuditEvents;
+    let db =
+        Arc::new(crate::infrastructure::db::Db::open(std::path::Path::new(":memory:")).unwrap());
+    let writer = AuditEvents::start(db.clone()).unwrap();
+    let sink_writer = writer.clone();
+    let events: EventSink = Arc::new(move |event| match event {
+        MountEvent::Audit(event) => sink_writer
+            .record(event, None)
+            .map_err(plain_libs::anyhow::Error::msg),
+        MountEvent::Changed => panic!("mount_one must not emit a source refresh"),
+    });
+    let volume = EventVolume {
+        id: Some("fsuuid:generated".into()),
+        name: Some("Generated".into()),
+        device_path: Some("/dev/generated1".into()),
+        mount_path: "/mnt/generated".into(),
+        file_system: Some("ext4".into()),
+    };
+    mount_one(volume.clone(), || Ok(()), &events).unwrap();
+    mount_one(
+        volume.clone(),
+        || Err(anyhow!("private-command-output")),
+        &events,
+    )
+    .unwrap();
+    writer.flush().await.unwrap();
+    let rows = db.audit_events(0, 10, None).unwrap();
+    assert_eq!(rows.len(), 2);
+    assert!(
+        rows.iter()
+            .all(|row| row.client_id.is_none() && row.client_name.is_none())
+    );
+    let success = rows
+        .iter()
+        .find(|row| row.r#type == EventType::Mount)
+        .unwrap();
+    assert_eq!(
+        success.data,
+        AuditEvent::Mount(crate::features::audit_events::VolumeEventData {
+            volume: volume.clone()
+        })
+        .data()
+    );
+    assert!(rows.iter().any(|row| matches!(&row.data, EventData::VolumeFailed(data) if data.volume == volume && data.failure.reason == EventReason::MountFailed && data.failure.detail.is_none())));
+    assert!(
+        db.audit_events(0, 10, Some("private-command-output"))
+            .unwrap()
+            .is_empty()
+    );
+    writer.shutdown().await.unwrap();
+    assert!(mount_one(volume, || Ok(()), &events).is_err());
 }

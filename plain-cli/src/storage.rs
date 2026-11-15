@@ -16,12 +16,18 @@ pub(super) fn configure_index(
 #[cfg(target_os = "linux")]
 pub(crate) fn event_sink(
     core: &plain_server::server::ContentServer,
+    client: Option<plain_rs::infrastructure::db::AuditEventClient>,
 ) -> Result<plain_rs::infrastructure::platform::linux::mounts::automount::EventSink, String> {
-    let db = core.runtime().db.clone();
     let catalog = core.native_media_catalog()?;
     let state = core.runtime().clone();
-    Ok(std::sync::Arc::new(move |kind, message| {
-        if kind == "mounts_changed" {
+    Ok(std::sync::Arc::new(move |event| {
+        use plain_rs::infrastructure::platform::linux::mounts::automount::MountEvent;
+        if let MountEvent::Audit(event) = event {
+            state
+                .audit_events
+                .record(event, client.clone())
+                .map_err(plain_libs::anyhow::Error::msg)?;
+        } else {
             if state
                 .peer_status
                 .public_active
@@ -37,11 +43,8 @@ pub(crate) fn event_sink(
                     log::error!("mount sources update failed: {error}");
                 }
             }
-            return;
         }
-        if let Err(error) = db.audit_event_add(kind, message, None) {
-            log::error!("mount audit failed: {error}");
-        }
+        Ok(())
     }))
 }
 

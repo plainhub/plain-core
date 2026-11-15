@@ -229,7 +229,7 @@ fn list_mounted_volumes() -> Vec<Mount> {
                 fs_uuid = meta.uuid.trim().to_string();
             }
             if !fs_uuid.is_empty() {
-                id = format!("{VOLUME_ID_FSUUID_PREFIX}{fs_uuid}");
+                id = filesystem_id(&fs_uuid);
             } else {
                 id = format!("{VOLUME_ID_DEV_PREFIX}{dev_resolved}");
             }
@@ -460,3 +460,7 @@ pub fn df_usage(path: &str) -> (i64, i64) {
 #[cfg(test)]
 #[path = "../../../../../../tests/plain-rs/unit/infrastructure/platform/linux/mounts/list.rs"]
 mod tests;
+
+pub fn filesystem_id(uuid: &str) -> String {
+    format!("{VOLUME_ID_FSUUID_PREFIX}{uuid}")
+}

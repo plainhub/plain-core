@@ -1,10 +1,10 @@
 use plain_graphql::{Context, Result};
+use plain_libs::serde_json::Value;
 use plain_rs::features::prefs::Prefs;
 use plain_rs::features::services::settings::preferences::Preferences;
 use plain_rs::features::services::settings::security_preferences::SecurityPreferences;
 use plain_rs::features::services::settings::security_preferences::security_key;
 use plain_rs::infrastructure::events::WsEvent;
-use plain_libs::serde_json::Value;
 use std::sync::Arc;
 use tokio::sync::broadcast;
 
@@ -28,6 +28,7 @@ pub(crate) fn preferences<'a>(ctx: &'a Context<'_>) -> Result<Preferences<'a>> {
         events: events(ctx),
         #[cfg(feature = "core")]
         server: ctx.data_opt::<plain_rs::runtime::Runtime>(),
+        client_id: ctx.data_opt::<String>().map(String::as_str),
     })
 }
 

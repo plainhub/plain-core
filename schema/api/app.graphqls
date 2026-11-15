@@ -7,6 +7,11 @@ type AppUpdate {
 	url: String
 }
 
+type DeviceNameEventData {
+	oldName: String!
+	newName: String!
+}
+
 type Disk {
 	id: ID!
 	name: String!
@@ -16,18 +21,64 @@ type Disk {
 	model: String
 }
 
+type DiskFormatEventData {
+	disk: EventDisk!
+	fileSystem: String!
+}
+
+type DiskFormatFailedEventData {
+	disk: EventDisk!
+	fileSystem: String!
+	failure: EventFailure!
+}
+
 type Event {
 	id: ID!
 	type: EventType!
-	message: String!
+	data: EventData!
 	clientId: ID
-	clientName: String!
-	clientIp: String!
-	osName: String!
-	osVersion: String!
-	appName: String!
-	appVersion: String!
+	clientName: String
+	clientIp: String
+	osName: String
+	osVersion: String
+	appName: String
+	appVersion: String
 	createdAt: Instant!
+}
+
+union EventData = LoginEventData | LoginFailedEventData | SessionEventData | DeviceNameEventData | VolumeEventData | VolumeFailedEventData | DiskFormatEventData | DiskFormatFailedEventData
+
+type EventDisk {
+	id: String
+	name: String
+	path: String!
+	sizeBytes: Long
+}
+
+type EventFailure {
+	reason: EventReason!
+	detail: String
+}
+
+enum EventReason {
+	INVALID_LOGIN_REQUEST
+	INVALID_PASSWORD
+	PEER_IDENTITY_CHANGED
+	REMOTE_ACCESS_DISABLED
+	LOGIN_EXPIRED
+	TOO_MANY_LOGIN_ATTEMPTS
+	PASSWORD_SETUP_REQUIRED
+	INTERNAL_ERROR
+	REJECTED
+	CANCELED
+	MOUNT_FAILED
+	FORMAT_DISK_FAILED
+}
+
+type EventSession {
+	clientId: String!
+	clientName: String!
+	type: SessionType!
 }
 
 enum EventType {
@@ -41,6 +92,35 @@ enum EventType {
 	UNMOUNT
 	FORMAT_DISK
 	FORMAT_DISK_FAILED
+}
+
+type EventVolume {
+	id: String
+	name: String
+	devicePath: String
+	mountPath: String!
+	fileSystem: String
+}
+
+type LoginEventData {
+	sessionType: SessionType!
+}
+
+type LoginFailedEventData {
+	reason: EventReason!
+}
+
+type SessionEventData {
+	session: EventSession!
+}
+
+type VolumeEventData {
+	volume: EventVolume!
+}
+
+type VolumeFailedEventData {
+	volume: EventVolume!
+	failure: EventFailure!
 }
 
 type Mutation {

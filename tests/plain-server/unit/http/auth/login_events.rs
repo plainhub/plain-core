@@ -1,4 +1,5 @@
 use super::*;
+use plain_rs::features::audit_events::{EventData, EventReason, EventType};
 
 #[cfg(feature = "http_transport")]
 #[tokio::test]
@@ -51,18 +52,21 @@ async fn invalid_password_proof_is_recorded_once_without_session_or_secrets() {
     assert!(
         matches!(login_frame(&mut socket).await, Message::Close(Some(frame)) if frame.reason == "invalid_password")
     );
+    state.audit_events.flush().await.unwrap();
     let records = state.db.audit_events(0, 10, None).unwrap();
     assert_eq!(records.len(), 1);
-    assert_eq!(records[0].r#type, "login_failed");
-    assert_eq!(records[0].message, "invalid_password");
-    assert_eq!(records[0].client_ip, "127.0.0.1");
-    assert!(records[0].app_name.is_empty());
-    assert!(records[0].os_name.is_empty());
+    assert_eq!(records[0].r#type, EventType::LoginFailed);
+    assert!(
+        matches!(&records[0].data, EventData::LoginFailed(data) if data.reason == EventReason::InvalidPassword)
+    );
+    assert_eq!(records[0].client_ip.as_deref(), Some("127.0.0.1"));
+    assert!(records[0].app_name.is_none());
+    assert!(records[0].os_name.is_none());
     assert_eq!(
         records[0].client_id.as_deref(),
         Some("731f75a8-4782-5a80-b00a-a2bfae12c134")
     );
-    assert!(!records[0].message.contains("fixture-password"));
+    assert!(!format!("{:?}", records[0]).contains("fixture-password"));
     assert!(
         state
             .db
@@ -73,7 +77,7 @@ async fn invalid_password_proof_is_recorded_once_without_session_or_secrets() {
     let response = server
         .graphql_executor()
         .execute(plain_graphql::Request::new(
-            "{events(query:\"\",offset:0,limit:10){type message clientId}}",
+            "{events(query:\"\",offset:0,limit:10){type data { ... on LoginFailedEventData { reason } } clientId}}",
         ))
         .await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);

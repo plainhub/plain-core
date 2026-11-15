@@ -58,3 +58,6 @@ pub mod updates;
 
 #[cfg(feature = "prefs")]
 pub mod access;
+
+#[cfg(feature = "library")]
+pub mod audit_events;

@@ -1,4 +1,5 @@
 use super::*;
+use plain_rs::features::audit_events::{EventData, EventReason, EventType};
 
 #[test]
 fn local_request_pages_are_bounded_and_never_expose_request_secrets() {
@@ -501,14 +502,15 @@ async fn passwordless_browser_requires_approval_when_enabled_and_only_approval_i
         assert_eq!(saved.os_name, "macOS");
         assert_eq!(saved.os_version, "27.2.0");
     }
+    state.audit_events.flush().await.unwrap();
     let records = state.db.audit_events(0, 10, None).unwrap();
     assert_eq!(records.len(), 2);
     for row in &records {
-        assert_eq!(row.client_ip, "127.0.0.1");
-        assert_eq!(row.app_name, "Fixture");
-        assert_eq!(row.app_version, "1");
-        assert_eq!(row.os_name, "macOS");
-        assert_eq!(row.os_version, "27.2.0");
+        assert_eq!(row.client_ip.as_deref(), Some("127.0.0.1"));
+        assert_eq!(row.app_name.as_deref(), Some("Fixture"));
+        assert_eq!(row.app_version.as_deref(), Some("1"));
+        assert_eq!(row.os_name.as_deref(), Some("macOS"));
+        assert_eq!(row.os_version.as_deref(), Some("27.2.0"));
     }
     let result = server.native_graphql().unwrap().execute(plain_graphql::Request::new(
         "{ events(query: \"text:127.0.0.1\", offset: 0, limit: 10) { clientId clientName clientIp appName appVersion osName osVersion } }"
@@ -521,10 +523,10 @@ async fn passwordless_browser_requires_approval_when_enabled_and_only_approval_i
         assert_eq!(row["appName"], "Fixture");
         assert_eq!(row["osName"], "macOS");
     }
-    assert!(records.iter().any(|row| row.r#type == "login"
+    assert!(records.iter().any(|row| row.r#type == EventType::Login
         && row.client_id.as_deref() == Some("2a097269-197e-5b02-be80-cdd89f928426")));
-    assert!(records.iter().any(|row| row.r#type == "login_failed"
-        && row.message == "rejected"
+    assert!(records.iter().any(|row| row.r#type == EventType::LoginFailed
+        && matches!(&row.data, EventData::LoginFailed(data) if data.reason == EventReason::Rejected)
         && row.client_id.as_deref() == Some("7180c827-1539-5c81-bac4-739e22f2d8bb")));
     server.shutdown().await;
 }
@@ -686,9 +688,13 @@ async fn passwordless_without_approval_issues_a_session_once_and_preserves_acces
             .unwrap();
         assert_eq!(unchanged.token, saved.token);
         assert_eq!(unchanged.url_token, saved.url_token);
+        state.audit_events.flush().await.unwrap();
         let records = state.db.audit_events(0, 20, None).unwrap();
         assert_eq!(
-            records.iter().filter(|row| row.r#type == "login").count(),
+            records
+                .iter()
+                .filter(|row| row.r#type == EventType::Login)
+                .count(),
             1
         );
         let (mut replay, _) = plain_libs::tokio_tungstenite::connect_async(format!(
@@ -923,21 +929,22 @@ async fn first_password_login_completes_without_owner_approval() {
         .unwrap()
         .unwrap();
     assert_eq!(saved.token, plain_libs::utils::base64::base64_encode(&key));
+    state.audit_events.flush().await.unwrap();
     let records = state.db.audit_events(0, 10, None).unwrap();
     assert_eq!(records.len(), 1);
-    assert_eq!(records[0].r#type, "login");
+    assert_eq!(records[0].r#type, EventType::Login);
     assert_eq!(
         records[0].client_id.as_deref(),
         Some("c1810f83-b876-5996-9c1b-f4b328cb5d6c")
     );
-    assert!(records[0].message.is_empty());
-    assert_eq!(records[0].client_ip, "127.0.0.1");
-    assert_eq!(records[0].app_name, "Fixture");
-    assert_eq!(records[0].app_version, "1");
-    assert_eq!(records[0].os_name, "macOS");
-    assert_eq!(records[0].os_version, "27.2.0");
-    assert!(!records[0].message.contains("owned-password"));
-    assert!(!records[0].message.contains(&saved.token));
+    assert!(matches!(&records[0].data, EventData::Login(_)));
+    assert_eq!(records[0].client_ip.as_deref(), Some("127.0.0.1"));
+    assert_eq!(records[0].app_name.as_deref(), Some("Fixture"));
+    assert_eq!(records[0].app_version.as_deref(), Some("1"));
+    assert_eq!(records[0].os_name.as_deref(), Some("macOS"));
+    assert_eq!(records[0].os_version.as_deref(), Some("27.2.0"));
+    assert!(!format!("{:?}", records[0]).contains("owned-password"));
+    assert!(!format!("{:?}", records[0]).contains(&saved.token));
     socket.close(None).await.unwrap();
     tokio::time::timeout(Duration::from_secs(3), async {
         loop {
@@ -1329,17 +1336,24 @@ async fn password_login_verifies_the_salted_record_and_rejects_reusable_stored_v
         );
         assert!(state.login_attempts.lock().unwrap().pending.is_empty());
     }
+    state.audit_events.flush().await.unwrap();
     let records = state.db.audit_events(0, 10, None).unwrap();
     assert_eq!(records.len(), 3);
     for row in &records {
-        assert_eq!(row.r#type, "login_failed");
-        assert_eq!(row.message, "invalid_login_request");
-        assert_eq!(row.client_ip, "fixture");
-        assert_eq!(row.app_name, "Fixture");
-        assert_eq!(row.os_name, "Fixture");
+        assert_eq!(row.r#type, EventType::LoginFailed);
+        assert!(
+            matches!(&row.data, EventData::LoginFailed(data) if data.reason == EventReason::InvalidLoginRequest)
+        );
+        assert_eq!(row.client_ip.as_deref(), Some("fixture"));
+        assert_eq!(row.app_name.as_deref(), Some("Fixture"));
+        assert_eq!(row.os_name.as_deref(), Some("Fixture"));
     }
     let recorded = format!("{records:?}");
-    for secret in ["owned-password".to_owned(), plain_libs::crypto::sha512_hex("wrong-password"), plain_libs::serde_json::to_string(&stored).unwrap()] {
+    for secret in [
+        "owned-password".to_owned(),
+        plain_libs::crypto::sha512_hex("wrong-password"),
+        plain_libs::serde_json::to_string(&stored).unwrap(),
+    ] {
         assert!(!recorded.contains(&secret));
     }
     server.stop_core().await;

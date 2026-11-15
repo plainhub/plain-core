@@ -1,16 +1,27 @@
 use super::*;
+use plain_rs::features::audit_events::*;
 
 #[tokio::test]
 async fn public_events_read_the_core_database_without_host_or_legacy_store() {
     let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::server::ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state();
-    let id = state
-        .db
-        .audit_event_add("login", "ÄBC", Some(&plain_rs_client()))
+    state
+        .audit_events
+        .record(
+            AuditEvent::UpdateDeviceName(DeviceNameEventData {
+                old_name: "Old".into(),
+                new_name: "ÄBC".into(),
+            }),
+            Some(plain_rs_client()),
+        )
         .unwrap();
+    state.audit_events.flush().await.unwrap();
+    let id = state.db.audit_events(0, 10, Some("äbc")).unwrap()[0]
+        .id
+        .clone();
     let result = core.native_graphql().unwrap().execute(plain_graphql::Request::new(
-        r#"{ events(query:"text:äbc",offset:0,limit:10) { id type message clientId clientName clientIp osName osVersion appName appVersion createdAt } }"#
+        r#"{ events(query:"text:äbc",offset:0,limit:10) { id type data { __typename ... on DeviceNameEventData { oldName newName } } clientId clientName clientIp osName osVersion appName appVersion createdAt } }"#
     )).await;
     assert!(result.errors.is_empty(), "{:?}", result.errors);
     let data = result.data.into_json().unwrap();
@@ -22,10 +33,25 @@ async fn public_events_read_the_core_database_without_host_or_legacy_store() {
     assert_eq!(data["events"][0]["osVersion"], "11");
     assert_eq!(data["events"][0]["appName"], "Fixture browser");
     assert_eq!(data["events"][0]["appVersion"], "142");
-    let system_id = state
-        .db
-        .audit_event_add("mount", "/mnt/example", None)
+    state
+        .audit_events
+        .record(
+            AuditEvent::Mount(VolumeEventData {
+                volume: EventVolume {
+                    id: None,
+                    name: None,
+                    device_path: None,
+                    mount_path: "/mnt/example".into(),
+                    file_system: None,
+                },
+            }),
+            None,
+        )
         .unwrap();
+    state.audit_events.flush().await.unwrap();
+    let system_id = state.db.audit_events(0, 10, Some("/mnt/example")).unwrap()[0]
+        .id
+        .clone();
     let result = core
         .native_graphql()
         .unwrap()
@@ -84,6 +110,17 @@ async fn public_disk_commands_reach_the_registered_provider() {
         .execute("mutation { formatDisk(path:\"/dev/example\") }".into())
         .await;
     assert_eq!(result.errors[0].message, "format refused");
+    state.audit_events.flush().await.unwrap();
+    let events = state.db.audit_events(0, 10, None).unwrap();
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].r#type, EventType::FormatDiskFailed);
+    assert_eq!(
+        events[0].client_id.as_deref(),
+        Some(state.native_client_id().unwrap().as_str())
+    );
+    assert!(
+        matches!(&events[0].data, EventData::DiskFormatFailed(data) if data.disk.path == "/dev/example" && data.file_system == "ext4" && data.failure.reason == EventReason::FormatDiskFailed)
+    );
     provider.await.unwrap();
     core.stop_core().await;
 }
@@ -91,7 +128,11 @@ async fn public_disk_commands_reach_the_registered_provider() {
 #[tokio::test]
 async fn public_mount_alias_is_database_owned_and_ignores_retired_preferences() {
     let directory = plain_libs::temporary::tempdir().unwrap();
-    std::fs::write(directory.path().join("prefs.json"), r#"{"volume_alias":{"fixture-mount":"Retired name"}}"#).unwrap();
+    std::fs::write(
+        directory.path().join("prefs.json"),
+        r#"{"volume_alias":{"fixture-mount":"Retired name"}}"#,
+    )
+    .unwrap();
     let source = directory.path().join("generated-volume");
     std::fs::create_dir(&source).unwrap();
     let core = crate::server::ContentServer::open(directory.path()).unwrap();
@@ -108,7 +149,11 @@ async fn public_mount_alias_is_database_owned_and_ignores_retired_preferences() 
                 "systemAccessFacts" => plain_libs::serde_json::json!({"granted":{"FILES":true}}),
                 method => panic!("unexpected {method}"),
             };
-            host.reply(generation, plain_libs::serde_json::json!({"id":request["id"],"result":result})).unwrap();
+            host.reply(
+                generation,
+                plain_libs::serde_json::json!({"id":request["id"],"result":result}),
+            )
+            .unwrap();
         }
     });
     let prefs_path = directory.path().join("prefs.json");
@@ -118,18 +163,49 @@ async fn public_mount_alias_is_database_owned_and_ignores_retired_preferences() 
     assert!(query.errors.is_empty(), "{:?}", query.errors);
     assert_eq!(query.data.into_json().unwrap()["mounts"][0]["alias"], "");
     for (input, expected) in [(" Photos ", "Photos"), ("", "")] {
-        let response = executor.execute(plain_graphql::Request::new(r#"mutation($alias:String!){setMountAlias(id:"fixture-mount",alias:$alias)}"#)
-            .variables(plain_graphql::Variables::from_json(plain_libs::serde_json::json!({"alias":input})))).await;
+        let response = executor
+            .execute(
+                plain_graphql::Request::new(
+                    r#"mutation($alias:String!){setMountAlias(id:"fixture-mount",alias:$alias)}"#,
+                )
+                .variables(plain_graphql::Variables::from_json(
+                    plain_libs::serde_json::json!({"alias":input}),
+                )),
+            )
+            .await;
         assert!(response.errors.is_empty(), "{:?}", response.errors);
-        assert!(std::fs::read(&prefs_path).unwrap() == before, "renaming a volume must not write preferences");
-        let volume = state.db.volumes().unwrap().into_iter().find(|volume| std::path::Path::new(&source).starts_with(&volume.path)).unwrap();
-        let alias: String = state.db.with_conn(|conn| conn.query_row("SELECT alias FROM volumes WHERE id=?1", [&volume.id], |row| row.get(0))).unwrap();
+        assert!(
+            std::fs::read(&prefs_path).unwrap() == before,
+            "renaming a volume must not write preferences"
+        );
+        let volume = state
+            .db
+            .volumes()
+            .unwrap()
+            .into_iter()
+            .find(|volume| std::path::Path::new(&source).starts_with(&volume.path))
+            .unwrap();
+        let alias: String = state
+            .db
+            .with_conn(|conn| {
+                conn.query_row(
+                    "SELECT alias FROM volumes WHERE id=?1",
+                    [&volume.id],
+                    |row| row.get(0),
+                )
+            })
+            .unwrap();
         assert_eq!(alias, expected);
         let query = executor.execute("{ mounts { id alias } }".into()).await;
         assert!(query.errors.is_empty(), "{:?}", query.errors);
-        assert_eq!(query.data.into_json().unwrap()["mounts"][0]["alias"], expected);
+        assert_eq!(
+            query.data.into_json().unwrap()["mounts"][0]["alias"],
+            expected
+        );
     }
-    let rejected = executor.execute(r#"mutation { setMountAlias(id:"missing-volume",alias:"Rejected") }"#.into()).await;
+    let rejected = executor
+        .execute(r#"mutation { setMountAlias(id:"missing-volume",alias:"Rejected") }"#.into())
+        .await;
     assert!(!rejected.errors.is_empty());
     assert!(std::fs::read(&prefs_path).unwrap() == before);
     core.stop_core().await;
@@ -221,6 +297,58 @@ async fn disk_queries_read_native_rust_after_one_capability_check() {
 }
 
 fn plain_rs_client() -> plain_rs::infrastructure::db::AuditEventClient {
-    plain_rs::infrastructure::db::AuditEventClient { client_id: "client".into(), client_name: "Fixture client".into(), client_ip: "192.0.2.24".into(),
-        os_name: "Windows".into(), os_version: "11".into(), app_name: "Fixture browser".into(), app_version: "142".into() }
+    plain_rs::infrastructure::db::AuditEventClient {
+        client_id: "client".into(),
+        client_name: "Fixture client".into(),
+        client_ip: "192.0.2.24".into(),
+        os_name: "Windows".into(),
+        os_version: "11".into(),
+        app_name: "Fixture browser".into(),
+        app_version: "142".into(),
+    }
+}
+
+#[tokio::test]
+async fn successful_format_records_one_success_event_without_waiting_for_the_writer() {
+    let directory = plain_libs::temporary::tempdir().unwrap();
+    let core = crate::server::ContentServer::open(directory.path()).unwrap();
+    let state = core.runtime_state();
+    let host = state.host.clone();
+    let (generation, mut requests) = host.connect();
+    let provider = tokio::spawn(async move {
+        while let Some(request) = requests.recv().await {
+            let value = match request["method"].as_str().unwrap() {
+                "systemCapabilities" => plain_libs::serde_json::json!(["DISK_MANAGER"]),
+                "systemDiskFormat" => {
+                    assert_eq!(request["params"]["path"], "/dev/generated-disk");
+                    plain_libs::serde_json::json!(true)
+                }
+                method => panic!("unexpected {method}"),
+            };
+            host.reply(
+                generation,
+                plain_libs::serde_json::json!({"id":request["id"],"result":value}),
+            )
+            .unwrap();
+            if request["method"] == "systemDiskFormat" {
+                break;
+            }
+        }
+    });
+    let response = core
+        .native_graphql()
+        .unwrap()
+        .execute("mutation { formatDisk(path:\"/dev/generated-disk\") }".into())
+        .await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    assert_eq!(response.data.into_json().unwrap()["formatDisk"], true);
+    provider.await.unwrap();
+    state.audit_events.flush().await.unwrap();
+    let rows = state.db.audit_events(0, 10, None).unwrap();
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].r#type, EventType::FormatDisk);
+    assert!(
+        matches!(&rows[0].data, EventData::DiskFormat(data) if data.disk.path == "/dev/generated-disk" && data.file_system == "ext4")
+    );
+    core.stop_core().await;
 }

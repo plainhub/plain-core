@@ -52,14 +52,14 @@ CREATE INDEX IF NOT EXISTS idx_audio_playlist_items_playlist_id_sort_order ON au
 CREATE TABLE IF NOT EXISTS events (
     id TEXT NOT NULL PRIMARY KEY CHECK(length(id)>0),
     type TEXT NOT NULL,
-    message TEXT NOT NULL,
+    data TEXT NOT NULL CHECK(json_valid(data)),
     client_id TEXT,
-    client_name TEXT NOT NULL,
-    client_ip TEXT NOT NULL,
-    os_name TEXT NOT NULL,
-    os_version TEXT NOT NULL,
-    app_name TEXT NOT NULL,
-    app_version TEXT NOT NULL,
+    client_name TEXT,
+    client_ip TEXT,
+    os_name TEXT,
+    os_version TEXT,
+    app_name TEXT,
+    app_version TEXT,
     created_at TEXT NOT NULL
 );
 

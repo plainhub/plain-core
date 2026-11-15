@@ -149,11 +149,6 @@ type Session {
 	updatedAt: Instant!
 }
 
-enum SessionType {
-	LOGIN
-	API_TOKEN
-}
-
 type Temperature {
 	label: String!
 	celsius: Float!

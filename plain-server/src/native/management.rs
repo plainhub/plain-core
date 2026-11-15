@@ -1,8 +1,8 @@
-use plain_libs::protocols::http_client;
 use crate::server::ServerState;
+use plain_libs::protocols::http_client;
+use plain_libs::serde_json::json;
 use plain_rs::infrastructure::events::WsEvent;
 use serde::{Deserialize, Serialize};
-use plain_libs::serde_json::json;
 
 pub use plain_rs::features::services::http_status::HttpServerState;
 pub use plain_rs::features::services::settings::update_download::AppUpdateDownload;
@@ -81,6 +81,7 @@ impl NativeManagement {
             prefs: &self.state.prefs,
             events: Some(&self.state.events),
             server: Some(&self.state),
+            client_id: None,
         }
         .action(plain_rs::features::prefs::settings::Action::ToggleNotificationApp(package_name))
         .await

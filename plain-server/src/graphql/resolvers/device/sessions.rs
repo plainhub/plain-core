@@ -33,7 +33,11 @@ impl TryFrom<plain_rs::infrastructure::db::SessionRow> for Session {
     fn try_from(row: plain_rs::infrastructure::db::SessionRow) -> Result<Self> {
         let created_at = crate::graphql::types::parse_instant(&row.created_at)?;
         let updated_at = crate::graphql::types::parse_instant(&row.updated_at)?;
-        let last_seen_at = row.last_seen_at.as_deref().map(crate::graphql::types::parse_instant).transpose()?;
+        let last_seen_at = row
+            .last_seen_at
+            .as_deref()
+            .map(crate::graphql::types::parse_instant)
+            .transpose()?;
         Ok(Self {
             client_id: row.client_id.into(),
             client_name: row.name,
@@ -83,8 +87,12 @@ pub struct SessionsMutation;
 impl SessionsMutation {
     fn create_api_token(&self, ctx: &Context<'_>, name: String) -> Result<CreatedApiToken> {
         caller(ctx)?;
-        let session = plain_rs::features::services::sessions::create(ctx.data::<ServerState>()?, name)?;
-        Ok(CreatedApiToken { client_id: session.client_id.into(), token: session.token })
+        let session =
+            plain_rs::features::services::sessions::create(ctx.data::<ServerState>()?, name)?;
+        Ok(CreatedApiToken {
+            client_id: session.client_id.into(),
+            token: session.token,
+        })
     }
 
     fn rename_session(&self, ctx: &Context<'_>, client_id: ID, name: String) -> Result<bool> {
@@ -96,24 +104,22 @@ impl SessionsMutation {
         )?)
     }
     fn logout(&self, ctx: &Context<'_>) -> Result<bool> {
-        revoke(ctx, caller(ctx)?, "logout")
+        Ok(plain_rs::features::services::sessions::logout(
+            ctx.data::<ServerState>()?,
+            caller(ctx)?,
+        )?)
     }
 
     fn revoke_session(&self, ctx: &Context<'_>, client_id: ID) -> Result<bool> {
         if client_id.trim().is_empty() {
             return Ok(false);
         }
-        caller(ctx)?;
-        revoke(ctx, client_id.as_str(), "revoke")
+        Ok(plain_rs::features::services::sessions::revoke(
+            ctx.data::<ServerState>()?,
+            caller(ctx)?,
+            client_id.as_str(),
+        )?)
     }
-}
-
-fn revoke(ctx: &Context<'_>, client_id: &str, action: &str) -> Result<bool> {
-    let state = ctx.data::<ServerState>()?;
-    let client = state.db.audit_event_client(client_id)?;
-    plain_rs::features::services::sessions::delete(state, client_id)?;
-    state.db.audit_event_add(action, "", Some(&client))?;
-    Ok(true)
 }
 
 #[cfg(test)]
