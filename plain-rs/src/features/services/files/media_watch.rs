@@ -398,4 +398,4 @@ fn watch_tree(
 
 #[cfg(test)]
 #[path = "../../../../../tests/plain-rs/unit/features/services/files/media_watch.rs"]
-mod tests;
+pub(super) mod tests;

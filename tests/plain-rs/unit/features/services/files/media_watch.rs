@@ -613,11 +613,14 @@ async fn directory_scanning_waits_for_watch_registration_and_remains_cancellable
         let catalog = NativeMediaCatalog::new(state.clone());
         let (started, ready) = tokio::sync::watch::channel(false);
         let (stop, _stopped) = tokio::sync::watch::channel(false);
-        *state.media_watch.lock().unwrap() = Some(WatcherHandle {
-            task: tokio::spawn(std::future::pending()),
-            stop,
-            ready,
-        });
+        state.media_watch.lock().unwrap().insert(
+            "fixture-volume".into(),
+            WatcherHandle {
+                task: tokio::spawn(std::future::pending()),
+                stop,
+                ready,
+            },
+        );
         let mut scan = Box::pin(catalog.scan_directory(source.to_str().unwrap()));
         let mut context = std::task::Context::from_waker(std::task::Waker::noop());
         assert!(scan.as_mut().poll(&mut context).is_pending());
@@ -664,4 +667,31 @@ async fn directory_scanning_waits_for_watch_registration_and_remains_cancellable
         );
         core.stop_core().await;
     }
+}
+
+pub(crate) fn pending_watcher(
+    root: &Path,
+) -> (
+    WatcherHandle,
+    tokio::sync::oneshot::Receiver<()>,
+    std::sync::mpsc::Sender<()>,
+) {
+    let (entered, ready) = tokio::sync::oneshot::channel();
+    let (release, gate) = std::sync::mpsc::channel();
+    let handle = start_with_watcher(
+        &[root.to_owned()],
+        None,
+        |callback| {
+            Ok(GatedWatcher {
+                entered: Some(entered),
+                release: gate,
+                dropped: None,
+                calls: Default::default(),
+                callback,
+            })
+        },
+        |_| async { Ok(()) },
+    )
+    .unwrap();
+    (handle, ready, release)
 }

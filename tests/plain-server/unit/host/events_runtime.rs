@@ -31,7 +31,7 @@ async fn unconfigured_volumes_do_not_scan_or_watch_until_a_volume_mode_is_saved(
     });
     host_connected(state.clone(), generation).await.unwrap();
     assert!(state.media_scans.snapshot().unwrap().is_none());
-    assert!(state.media_watch.lock().unwrap().is_none());
+    assert!(state.media_watch.lock().unwrap().is_empty());
     plain_rs::features::services::files::indexing::set(
         &state,
         &volume.id,
@@ -47,7 +47,7 @@ async fn unconfigured_volumes_do_not_scan_or_watch_until_a_volume_mode_is_saved(
         snapshot.status,
         plain_rs::features::services::files::media_scans::Status::Completed
     );
-    assert!(state.media_watch.lock().unwrap().is_some());
+    assert!(!state.media_watch.lock().unwrap().is_empty());
     assert_eq!(
         NativeMediaCatalog::new(state.clone())
             .count(plain_rs::features::enums::DataType::Doc)
@@ -138,7 +138,7 @@ async fn connecting_a_filesystem_media_host_watches_configured_sources_without_r
     }));
     let catalog = core.native_media_catalog().unwrap();
     tokio::time::timeout(std::time::Duration::from_secs(5), async {
-        while core.runtime().media_watch.lock().unwrap().is_none() {
+        while core.runtime().media_watch.lock().unwrap().is_empty() {
             tokio::time::sleep(std::time::Duration::from_millis(10)).await;
         }
     })

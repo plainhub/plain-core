@@ -42,11 +42,14 @@ pub struct Runtime {
     pub files: Arc<crate::features::services::files::file_tasks::FileTasks>,
     #[cfg(feature = "runtime-media")]
     pub media_scans: Arc<crate::features::services::files::media_scans::MediaScans>,
-    /// The live media watcher. Held so `stop_core` can release it; the
-    /// catalog replaces it rather than stacking a second watch.
     #[cfg(feature = "runtime-media")]
     pub media_watch: std::sync::Arc<
-        std::sync::Mutex<Option<crate::features::services::files::media_watch::WatcherHandle>>,
+        std::sync::Mutex<
+            std::collections::BTreeMap<
+                String,
+                crate::features::services::files::media_watch::WatcherHandle,
+            >,
+        >,
     >,
     pub host: Arc<crate::infrastructure::host::bridge::Host>,
     pub thumbnails: Arc<crate::features::services::images::thumbnails::Thumbnails>,
@@ -362,7 +365,9 @@ impl Runtime {
             #[cfg(feature = "runtime-media")]
             media_scans: media_scans.clone(),
             #[cfg(feature = "runtime-media")]
-            media_watch: std::sync::Arc::new(std::sync::Mutex::new(None)),
+            media_watch: std::sync::Arc::new(std::sync::Mutex::new(
+                std::collections::BTreeMap::new(),
+            )),
             lan,
             aware: Arc::new(crate::features::services::peers::aware::Runtime::default()),
             peer_status: Arc::new(
@@ -539,7 +544,7 @@ impl Runtime {
             // The watcher writes into the catalog, so it has to stop before
             // the scan state it feeds is closed.
             if let Ok(mut slot) = self.media_watch.lock() {
-                slot.take();
+                slot.clear();
             }
             if let Err(error) = self.media_scans.close() {
                 log::error!("Media scan cancellation failed: {error}");

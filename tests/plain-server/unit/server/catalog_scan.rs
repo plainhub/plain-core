@@ -502,6 +502,7 @@ async fn the_watcher_stops_with_the_core_and_rejects_after_it() {
         &[source.to_string_lossy().into_owned()],
     )
     .unwrap();
+    catalog.configure_scan_directories(None).unwrap();
     assert!(catalog.watch_source_directories().unwrap());
     plain_rs::features::services::files::indexing::set_directories(
         &core.runtime_state().db,
@@ -511,15 +512,14 @@ async fn the_watcher_stops_with_the_core_and_rejects_after_it() {
     catalog.configure_scan_directories(None).unwrap();
     assert!(catalog.watch_source_directories().unwrap());
     assert!(
-        core.runtime_state().media_watch.lock().unwrap().is_some(),
+        !core.runtime_state().media_watch.lock().unwrap().is_empty(),
         "a configured source directory must be watched"
     );
-    // Re-watching replaces rather than stacking a second one.
     assert!(catalog.watch_source_directories().unwrap());
 
     core.stop_core().await;
     assert!(
-        core.runtime_state().media_watch.lock().unwrap().is_none(),
+        core.runtime_state().media_watch.lock().unwrap().is_empty(),
         "the watcher has to be released with the core"
     );
     assert!(catalog.watch_source_directories().is_err());

@@ -256,13 +256,13 @@ impl NativeMediaCatalog {
 
     #[cfg(feature = "runtime-media")]
     pub async fn refresh_scope(&self, volume_id: &str) -> Result<(), String> {
+        self.state.media_scans.cancel(Some(volume_id))?;
+        self.state.media_scans.wait_volume(volume_id).await?;
         self.state
             .media_watch
             .lock()
             .map_err(|_| "Media watcher unavailable")?
-            .take();
-        self.state.media_scans.cancel(Some(volume_id))?;
-        self.state.media_scans.wait_volume(volume_id).await?;
+            .remove(volume_id);
         self.configure_policy((*self.state.media_scans.policy()?).clone())?;
         self.watch_source_directories()?;
         self.start_volume_scan(Some(volume_id))?;
@@ -285,35 +285,48 @@ impl NativeMediaCatalog {
             .db
             .refresh_volume_availability()
             .map_err(|error| error.to_string())?;
-        let roots = self
-            .source_references("/")?
-            .into_iter()
-            .map(std::path::PathBuf::from)
-            .collect::<Vec<_>>();
-        if roots.is_empty() {
-            self.state
-                .media_watch
-                .lock()
-                .map_err(|_| "Media watcher unavailable")?
-                .take();
-            return Ok(false);
-        }
-        let catalog_state = self.state.clone();
-        let handle = crate::features::services::files::media_watch::start(
-            &roots,
-            self.state.media_scans.policy()?.scope.clone(),
-            move |event| {
-                let catalog = Self::new(catalog_state.clone());
-                async move { catalog.apply_watch_event(event).await }
-            },
-        )?;
-        let mut slot = self
+        let scope = self
+            .state
+            .media_scans
+            .policy()?
+            .scope
+            .clone()
+            .ok_or("Index scope not configured")?;
+        let mut watchers = self
             .state
             .media_watch
             .lock()
-            .map_err(|_| "media watch unavailable")?;
-        *slot = Some(handle);
-        Ok(true)
+            .map_err(|_| "Media watcher unavailable")?;
+        watchers.retain(|id, _| {
+            scope
+                .for_volume(id)
+                .is_ok_and(|scope| !scope.directories.is_empty())
+        });
+        for volume in &scope.volumes {
+            let volume_scope = scope.for_volume(&volume.id)?;
+            if volume_scope.directories.is_empty() || watchers.contains_key(&volume.id) {
+                continue;
+            }
+            let roots = volume_scope
+                .directories
+                .iter()
+                .map(std::path::PathBuf::from)
+                .collect::<Vec<_>>();
+            let roots = plain_libs::filesystem::roots::prune_nested(roots, |root| {
+                root.ends_with("Library/Mobile Documents/com~apple~CloudDocs")
+            });
+            let catalog_state = self.state.clone();
+            let handle = crate::features::services::files::media_watch::start(
+                &roots,
+                Some(volume_scope),
+                move |event| {
+                    let catalog = Self::new(catalog_state.clone());
+                    async move { catalog.apply_watch_event(event).await }
+                },
+            )?;
+            watchers.insert(volume.id.clone(), handle);
+        }
+        Ok(!watchers.is_empty())
     }
 
     #[cfg(feature = "runtime-media")]
@@ -475,23 +488,6 @@ impl NativeMediaCatalog {
     }
 
     #[cfg(feature = "runtime-media")]
-    fn source_references(&self, root: &str) -> Result<Vec<String>, String> {
-        let sources = self.source_directories()?;
-        let roots =
-            crate::features::media::catalog_paths::selected_roots(root.to_owned(), &sources);
-        plain_libs::filesystem::roots::prune_nested(roots, |root| {
-            root.ends_with("Library/Mobile Documents/com~apple~CloudDocs")
-        })
-        .into_iter()
-        .map(|path| {
-            path.into_os_string()
-                .into_string()
-                .map_err(|_| "Invalid media directory path encoding".to_string())
-        })
-        .collect::<Result<Vec<_>, _>>()
-    }
-
-    #[cfg(feature = "runtime-media")]
     pub fn start_volume_scan(
         &self,
         id: Option<&str>,
@@ -602,14 +598,17 @@ impl NativeMediaCatalog {
         let mut volume_scans =
             volume_scans::VolumeScans::new(policy.scope.as_ref(), &references, background);
         let result = async {
-            let ready = self
+            let volume_id = session.volume_id()?;
+            let readiness = self
                 .state
                 .media_watch
                 .lock()
                 .map_err(|_| "Media watcher unavailable")?
-                .as_ref()
-                .map(|watcher| watcher.ready.clone());
-            if let Some(mut ready) = ready {
+                .iter()
+                .filter(|(id, _)| volume_id.as_ref().is_none_or(|selected| selected == *id))
+                .map(|(_, watcher)| watcher.ready.clone())
+                .collect::<Vec<_>>();
+            for mut ready in readiness {
                 ready
                     .wait_for(|ready| *ready)
                     .await
@@ -829,11 +828,9 @@ impl NativeMediaCatalog {
                     let kind = crate::infrastructure::db::FileKind::try_from(data_type)
                         .map_err(|error| error.to_string())?;
                     paths.push((path, kind));
-                    if data_type == DataType::File {
-                        processed += file_count;
-                        if file_count > 0 {
-                            processed_paths.push(actual.clone());
-                        }
+                    processed += file_count;
+                    if file_count > 0 {
+                        processed_paths.push(actual.clone());
                     }
                     if paths.len() == SCAN_BATCH_SIZE {
                         session
@@ -895,13 +892,10 @@ impl NativeMediaCatalog {
                         metadata_batch.push(metadata);
                         if metadata_batch.len() == SCAN_BATCH_SIZE {
                             session
-                                .record_when_running(metadata_batch.len(), || {
+                                .record_when_running(0, || {
                                     self.persist_scan_metadata(
                                         &metadata_batch,
                                         policy.scope.as_ref(),
-                                    )?;
-                                    volume_scans.processed(
-                                        metadata_batch.iter().map(|read| &read.metadata.path),
                                     )
                                 })
                                 .await?;
@@ -916,10 +910,8 @@ impl NativeMediaCatalog {
             }
             if !metadata_batch.is_empty() {
                 session
-                    .record_when_running(metadata_batch.len(), || {
-                        self.persist_scan_metadata(&metadata_batch, policy.scope.as_ref())?;
-                        volume_scans
-                            .processed(metadata_batch.iter().map(|read| &read.metadata.path))
+                    .record_when_running(0, || {
+                        self.persist_scan_metadata(&metadata_batch, policy.scope.as_ref())
                     })
                     .await?;
             }

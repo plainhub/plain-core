@@ -451,7 +451,7 @@ async fn directory_scan_cancellation_preserves_basic_facts_before_metadata() {
     catalog.cancel_file_scan().unwrap();
     let result = worker.await.unwrap().unwrap();
     assert_eq!(result.status, Status::Canceled);
-    assert_eq!(result.processed_files, 0);
+    assert_eq!(result.processed_files, 1);
     assert_eq!(
         catalog
             .count(crate::features::enums::DataType::Doc)
@@ -504,7 +504,7 @@ async fn directory_scan_cancellation_after_discovery_preserves_all_basic_facts()
     catalog.cancel_file_scan().unwrap();
     let result = worker.await.unwrap().unwrap();
     assert_eq!(result.status, Status::Canceled);
-    assert_eq!(result.processed_files, 0);
+    assert_eq!(result.processed_files, 96);
     assert_eq!(result.total_files, Some(96));
     assert!(requests.try_recv().is_err());
     assert_eq!(
@@ -561,7 +561,7 @@ async fn source_directory_scan_keeps_one_session_across_roots_and_partial_failur
             .unwrap();
         let snapshot = catalog.file_scan_status().unwrap().unwrap();
         assert_eq!(snapshot.status, Status::Running);
-        assert_eq!(snapshot.processed_files, 0);
+        assert_eq!(snapshot.processed_files, 2);
         assert_eq!(snapshot.total_files, Some(2));
         if let Some(id) = &session_id {
             assert_eq!(*id, snapshot.id);
@@ -750,7 +750,7 @@ async fn basic_catalog_is_searchable_before_a_blocked_media_probe() {
     assert_eq!(catalog.count(DataType::Doc).unwrap(), 1);
     let progress = catalog.file_scan_status().unwrap().unwrap();
     assert_eq!(progress.total_files, Some(2));
-    assert_eq!(progress.processed_files, 1);
+    assert_eq!(progress.processed_files, 2);
     gate.1.add_permits(1);
     assert_eq!(
         worker.await.unwrap().unwrap().status,
@@ -1561,3 +1561,34 @@ async fn configured_scan_walks_each_root_once_and_commits_bounded_batches() {
 #[cfg(unix)]
 #[path = "catalog_scan/volume_boundary.rs"]
 mod volume_boundary;
+
+#[cfg(feature = "runtime-media")]
+#[tokio::test]
+async fn committed_media_paths_advance_index_progress_before_metadata_enrichment() {
+    use std::sync::Arc;
+    let fixture = directory_scan_fixture();
+    let root = fixture.path().join("source");
+    std::fs::create_dir(&root).unwrap();
+    for index in 0..512 {
+        std::fs::write(root.join(format!("generated-{index}.txt")), b"generated document fixture").unwrap();
+    }
+    let core = crate::test_runtime::Core::open(&fixture.path().join("core")).unwrap();
+    let state = core.runtime_state();
+    crate::features::services::files::indexing::set_directories(&state.db, &[root.to_str().unwrap().to_owned()]).unwrap();
+    let mut catalog = NativeMediaCatalog::new(state.clone());
+    catalog.configure_scan_directories(None).unwrap();
+    let gate = Arc::new((tokio::sync::Notify::new(), tokio::sync::Semaphore::new(0)));
+    catalog.read_gate = Some(gate.clone());
+    let worker = tokio::spawn(async move { catalog.scan_directory(root.to_str().unwrap()).await });
+    tokio::time::timeout(std::time::Duration::from_secs(5), gate.0.notified()).await.unwrap();
+    let progress = state.media_scans.snapshot().unwrap().unwrap();
+    let indexed: i64 = state.db.with_conn(|conn| conn.query_row("SELECT count(*) FROM files WHERE indexed=1 AND kind<>'DIRECTORY'", [], |row| row.get(0))).unwrap();
+    assert_eq!(indexed, 512);
+    assert_eq!(progress.processed_files, 512, "committed media files must not wait for metadata to appear in index progress");
+    assert_eq!(progress.total_files, Some(512));
+    gate.1.add_permits(512);
+    let result = worker.await.unwrap().unwrap();
+    assert_eq!(result.status, crate::features::services::files::media_scans::Status::Completed, "{:?}", result.error);
+    assert_eq!(result.processed_files, 512, "metadata enrichment must not count files twice");
+    core.stop_core().await;
+}

@@ -244,7 +244,7 @@ async fn service_starts_real_listeners_and_releases_them_and_the_data_lock_on_sh
         vec![source.to_string_lossy().into_owned()]
     );
     tokio::time::timeout(std::time::Duration::from_secs(5), async {
-        while service.core.runtime().media_watch.lock().unwrap().is_none() {
+        while service.core.runtime().media_watch.lock().unwrap().is_empty() {
             tokio::time::sleep(std::time::Duration::from_millis(10)).await;
         }
     })

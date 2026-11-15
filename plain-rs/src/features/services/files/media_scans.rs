@@ -571,6 +571,20 @@ pub struct Session {
 }
 
 impl Session {
+    pub fn volume_id(&self) -> Result<Option<String>, String> {
+        let guard = self
+            .scans
+            .state
+            .lock()
+            .map_err(|_| "Media scan state unavailable")?;
+        let job = guard
+            .jobs
+            .iter()
+            .find(|job| job.snapshot.id == self.id)
+            .ok_or("Media scan replaced")?;
+        Ok(job.snapshot.volume_id.clone())
+    }
+
     pub async fn wait_running(&self) -> Result<(), String> {
         loop {
             let mut activity = {
