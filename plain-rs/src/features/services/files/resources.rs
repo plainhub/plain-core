@@ -121,15 +121,8 @@ async fn native(operation: &str, path: &str, params: Value) -> Result<Value, Str
                 .to_owned();
             let path = path.to_owned();
             tokio::task::spawn_blocking(move || -> Result<Value, String> {
-                let image = match plain_libs::image::open(path) {
-                    Ok(image) => image,
-                    Err(plain_libs::image::ImageError::Unsupported(_)) => return Ok(Value::Bool(false)),
-                    Err(error) => return Err(error.to_string()),
-                };
-                image
-                    .save_with_format(output, plain_libs::image::ImageFormat::Png)
-                    .map_err(|error| error.to_string())?;
-                Ok(Value::Bool(true))
+                plain_libs::media::image_io::convert_to_png(Path::new(&path), Path::new(&output))
+                    .map(Value::Bool)
             })
             .await
             .map_err(|error| error.to_string())?

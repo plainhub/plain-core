@@ -2,7 +2,7 @@ use crate::features::enums::DataType;
 use crate::infrastructure::host::bridge::Host;
 use plain_libs::serde_json::{Value, json};
 use std::{
-    io::{BufReader, Read, Seek, SeekFrom},
+    io::{Read, Seek, SeekFrom},
     path::PathBuf,
 };
 
@@ -136,7 +136,9 @@ fn apply_image_bounds(facts: &mut Value, sample: Value) -> Result<(), String> {
     Ok(())
 }
 
-fn image_reader(mut reader: impl Read + Seek) -> Result<Value, String> {
+fn image_reader(
+    mut reader: &mut plain_libs::utils::source_reader::SourceReader,
+) -> Result<Value, String> {
     let bytes = image_prefix(&mut reader).map_err(|error| error.to_string())?;
     let exif = match plain_libs::utils::image_exif::read(&mut reader) {
         Ok(exif) => exif,
@@ -150,11 +152,7 @@ fn image_reader(mut reader: impl Read + Seek) -> Result<Value, String> {
         reader
             .seek(SeekFrom::Start(0))
             .map_err(|error| error.to_string())?;
-        if let Some((width, height)) = plain_libs::image::ImageReader::new(BufReader::new(reader))
-            .with_guessed_format()
-            .ok()
-            .and_then(|reader| reader.into_dimensions().ok())
-        {
+        if let Some((width, height)) = plain_libs::media::image_io::source_dimensions(reader) {
             let swapped = matches!(facts["rotation"].as_i64(), Some(90 | 270));
             facts["width"] = json!(if swapped { height } else { width });
             facts["height"] = json!(if swapped { width } else { height });

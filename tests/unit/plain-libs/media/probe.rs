@@ -1,3 +1,6 @@
+#[path = "../codegen.rs"]
+mod codegen;
+
 use plain_libs::audio_tags::{
     config::ParseOptions,
     file::{FileType, TaggedFileExt},
@@ -8,9 +11,6 @@ use std::io::{BufReader, Cursor};
 
 #[test]
 fn application_sources_keep_id3_parsers_in_the_library() {
-    let directory = plain_libs::temporary::tempdir().unwrap();
-    let input = directory.path().join("consumer.rs");
-    let output = directory.path().join("consumer.ll");
     let owner = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
     let workspace = owner.parent().unwrap();
     let entries = |name: &str, namespace: &str| {
@@ -44,80 +44,15 @@ fn application_sources_keep_id3_parsers_in_the_library() {
         .replace("FILE_DURATION_ENTRY", &duration[1])
         .replace("DURATION_ENTRY", &duration[0])
         .replace("COVER_ENTRY", &cover[0]);
-    std::fs::write(&input, fixture).unwrap();
-    let dependencies = std::env::current_exe()
-        .unwrap()
-        .parent()
-        .unwrap()
-        .to_path_buf();
-    let changed = [
-        "src/media/probe.rs",
-        "src/media/cover.rs",
-        "src/utils/source_reader.rs",
-        "src/utils/mod.rs",
-    ]
-    .map(|name| {
-        std::fs::metadata(owner.join(name))
-            .unwrap()
-            .modified()
-            .unwrap()
-    })
-    .into_iter()
-    .max()
-    .unwrap();
-    let mut libraries: Vec<_> = std::fs::read_dir(&dependencies)
-        .unwrap()
-        .map(|entry| entry.unwrap().path())
-        .filter(|path| {
-            path.file_name()
-                .unwrap()
-                .to_string_lossy()
-                .starts_with("libplain_libs-")
-                && path
-                    .extension()
-                    .is_some_and(|extension| extension == "rlib")
-        })
-        .map(|path| (std::fs::metadata(&path).unwrap().modified().unwrap(), path))
-        .filter(|(modified, _)| *modified >= changed)
-        .collect();
-    libraries.sort_by(|left, right| right.0.cmp(&left.0));
-    let compiler = std::env::var_os("RUSTC").unwrap_or_else(|| "rustc".into());
-    let mut compiled = false;
-    for (_, library) in libraries {
-        let result = std::process::Command::new(&compiler)
-            .args([
-                "--edition=2024",
-                "--crate-type=lib",
-                "--crate-name=consumer",
-                "--emit=llvm-ir",
-                "-O",
-                "-Ccodegen-units=1",
-                "--extern",
-            ])
-            .arg(format!("plain_libs={}", library.display()))
-            .arg("-L")
-            .arg(format!("dependency={}", dependencies.display()))
-            .arg(&input)
-            .arg("-o")
-            .arg(&output)
-            .output()
-            .unwrap();
-        if !result.status.success()
-            && String::from_utf8_lossy(&result.stderr)
-                .contains("could not find `media` in `plain_libs`")
-        {
-            continue;
-        }
-        assert!(
-            result.status.success(),
-            "{}",
-            String::from_utf8_lossy(&result.stderr)
-        );
-        compiled = true;
-        break;
-    }
-    assert!(compiled, "a current media-enabled library is required");
-    let ir = std::fs::read_to_string(output).unwrap();
+    let ir = codegen::compile_consumer(
+        &fixture,
+        &[
+            "src/media/probe.rs",
+            "src/media/cover.rs",
+            "src/utils/source_reader.rs",
+            "src/utils/mod.rs",
+        ],
+    );
     assert!(
         !ir.contains("UTF-16 string has an invalid byte order mark"),
         "the caller instantiated the ID3 character parser"

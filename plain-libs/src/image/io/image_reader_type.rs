@@ -17,6 +17,30 @@ pub struct ImageReader<R: Read + Seek> {
     format: Option<Format>,
     limits: Limits,
 }
+
+trait DecoderOperation<'a> {
+    type Output;
+    fn apply<D: ImageDecoder + 'a>(self, decoder: D) -> Self::Output;
+}
+
+struct BoxDecoder;
+impl<'a> DecoderOperation<'a> for BoxDecoder {
+    type Output = Box<dyn ImageDecoder + 'a>;
+    fn apply<D: ImageDecoder + 'a>(self, decoder: D) -> Self::Output {
+        Box::new(decoder)
+    }
+}
+
+// Metadata queries keep constructor validation without materializing pixel-decoder vtables.
+struct ReadDimensions(Limits);
+impl<'a> DecoderOperation<'a> for ReadDimensions {
+    type Output = ImageResult<(u32, u32)>;
+    fn apply<D: ImageDecoder + 'a>(self, mut decoder: D) -> Self::Output {
+        decoder.set_limits(self.0)?;
+        Ok(decoder.dimensions())
+    }
+}
+
 impl<'a, R: 'a + BufRead + Seek> ImageReader<R> {
     pub fn new(buffered_reader: R) -> Self {
         ImageReader {
@@ -46,11 +70,12 @@ impl<'a, R: 'a + BufRead + Seek> ImageReader<R> {
     pub fn into_inner(self) -> R {
         self.inner
     }
-    fn make_decoder(
+    fn with_decoder<O: DecoderOperation<'a>>(
         format: Format,
         reader: R,
         limits_for_png: Limits,
-    ) -> ImageResult<Box<dyn ImageDecoder + 'a>> {
+        operation: O,
+    ) -> ImageResult<O::Output> {
         use crate::image::codecs::*;
         let format = match format {
             Format::BuiltIn(format) => format,
@@ -59,13 +84,14 @@ impl<'a, R: 'a + BufRead + Seek> ImageReader<R> {
             )?,
         };
         Ok(match format {
-            ImageFormat::Png => Box::new(crate::image::codecs::png::PngDecoder::with_limits(
-                reader,
-                limits_for_png,
-            )?),
-            ImageFormat::Gif => Box::new(crate::image::codecs::gif::GifDecoder::new(reader)?),
-            ImageFormat::Jpeg => Box::new(jpeg::JpegDecoder::new(reader)?),
-            ImageFormat::WebP => Box::new(webp::WebPDecoder::new(reader)?),
+            ImageFormat::Png => operation.apply(
+                crate::image::codecs::png::PngDecoder::with_limits(reader, limits_for_png)?,
+            ),
+            ImageFormat::Gif => {
+                operation.apply(crate::image::codecs::gif::GifDecoder::new(reader)?)
+            }
+            ImageFormat::Jpeg => operation.apply(jpeg::JpegDecoder::new(reader)?),
+            ImageFormat::WebP => operation.apply(webp::WebPDecoder::new(reader)?),
             format => {
                 return Err(ImageError::Unsupported(
                     ImageFormatHint::Exact(format).into(),
@@ -74,8 +100,12 @@ impl<'a, R: 'a + BufRead + Seek> ImageReader<R> {
         })
     }
     pub fn into_decoder(mut self) -> ImageResult<impl ImageDecoder + 'a> {
-        let mut decoder =
-            Self::make_decoder(self.require_format()?, self.inner, self.limits.clone())?;
+        let mut decoder = Self::with_decoder(
+            self.require_format()?,
+            self.inner,
+            self.limits.clone(),
+            BoxDecoder,
+        )?;
         decoder.set_limits(self.limits)?;
         Ok(decoder)
     }
@@ -97,13 +127,18 @@ impl<'a, R: 'a + BufRead + Seek> ImageReader<R> {
         }
         Ok(None)
     }
-    pub fn into_dimensions(self) -> ImageResult<(u32, u32)> {
-        self.into_decoder().map(|d| d.dimensions())
+    pub fn into_dimensions(mut self) -> ImageResult<(u32, u32)> {
+        Self::with_decoder(
+            self.require_format()?,
+            self.inner,
+            self.limits.clone(),
+            ReadDimensions(self.limits),
+        )?
     }
     pub fn decode(mut self) -> ImageResult<DynamicImage> {
         let format = self.require_format()?;
         let mut limits = self.limits;
-        let mut decoder = Self::make_decoder(format, self.inner, limits.clone())?;
+        let mut decoder = Self::with_decoder(format, self.inner, limits.clone(), BoxDecoder)?;
         limits.reserve(decoder.total_bytes())?;
         decoder.set_limits(limits)?;
         DynamicImage::from_decoder(decoder)

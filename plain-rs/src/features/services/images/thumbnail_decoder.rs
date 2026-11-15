@@ -24,44 +24,7 @@ pub async fn native(
     let width = request.width.min(16384);
     let height = request.height.min(16384);
     tokio::task::spawn_blocking(move || {
-        use plain_libs::image::ImageDecoder;
-        let reader = plain_libs::image::ImageReader::open(path)
-            .map_err(|error| error.to_string())?
-            .with_guessed_format()
-            .map_err(|error| error.to_string())?;
-        let format = reader.format();
-        let mut decoder = match reader.into_decoder() {
-            Ok(decoder) => decoder,
-            Err(plain_libs::image::ImageError::Unsupported(_)) => return Ok(None),
-            Err(error) => return Err(error.to_string()),
-        };
-        let orientation = decoder
-            .orientation()
-            .unwrap_or(plain_libs::image::metadata::Orientation::NoTransforms);
-        let mut image =
-            plain_libs::image::DynamicImage::from_decoder(decoder).map_err(|error| error.to_string())?;
-        image.apply_orientation(orientation);
-        let (width, height) = plain_libs::media::thumbnail_limits::compute_target_size(
-            image.width(),
-            image.height(),
-            width,
-            height,
-        );
-        let image = image.thumbnail_exact(width, height);
-        let mut bytes = Vec::new();
-        if format == Some(plain_libs::image::ImageFormat::Png) {
-            image
-                .write_to(
-                    &mut std::io::Cursor::new(&mut bytes),
-                    plain_libs::image::ImageFormat::Png,
-                )
-                .map_err(|error| error.to_string())?;
-        } else {
-            plain_libs::image::codecs::jpeg::JpegEncoder::new_with_quality(&mut bytes, 85)
-                .encode_image(&image)
-                .map_err(|error| error.to_string())?;
-        }
-        Ok(Some(bytes))
+        plain_libs::media::image_io::thumbnail(std::path::Path::new(&path), width, height)
     })
     .await
     .map_err(|error| error.to_string())?

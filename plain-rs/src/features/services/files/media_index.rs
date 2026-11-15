@@ -1,6 +1,6 @@
 use crate::features::enums::DataType;
 use crate::infrastructure::db::MediaFileMetadataRead;
-use std::{fs::File, io::BufReader, path::Path};
+use std::path::Path;
 
 pub struct FileReads {
     pub media: Vec<MediaFileMetadataRead>,
@@ -73,13 +73,11 @@ pub fn read_files(
             files.generic.push(name.to_owned());
             continue;
         };
-        let read = crate::features::media::file_metadata::read(&path, data_type, |reader: File| {
-            plain_libs::image::ImageReader::new(BufReader::new(reader))
-                .with_guessed_format()
-                .ok()?
-                .into_dimensions()
-                .ok()
-        })
+        let read = crate::features::media::file_metadata::read(
+            &path,
+            data_type,
+            plain_libs::media::image_io::file_dimensions,
+        )
         .map_err(|error| error.to_string())?;
         files.media.push(read);
     }

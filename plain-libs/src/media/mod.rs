@@ -8,6 +8,8 @@ mod flv;
 mod h264;
 mod hevc;
 mod hevc_config;
+#[cfg(feature = "image")]
+pub mod image_io;
 pub mod isobmff;
 mod matroska;
 mod midi;
