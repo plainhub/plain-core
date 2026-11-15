@@ -93,7 +93,7 @@ async fn receiver_starts_without_http_and_retries_when_platform_permissions_chan
     let prefs = Arc::new(
         crate::features::prefs::Prefs::load(&directory.path().join("prefs.json")).unwrap(),
     );
-    prefs.set("client_id", "fixture-resident-receiver").unwrap();
+    prefs.set("client_id", "706c6169-89ad-886b-9a4d-ac76b25c31f1").unwrap();
     prefs
         .set("mdns_hostname", "fixture-resident-receiver.local")
         .unwrap();
@@ -162,7 +162,7 @@ async fn discovery_requests_multicast_permission_without_querying_capabilities()
         crate::features::prefs::Prefs::load(&directory.path().join("prefs.json")).unwrap(),
     );
     prefs
-        .set("client_id", "fixture-discovery-permission")
+        .set("client_id", "706c6169-3c9a-85fa-a79c-5c17af93e7ae")
         .unwrap();
     prefs
         .set("mdns_hostname", "fixture-discovery-permission.local")
@@ -219,7 +219,7 @@ async fn refused_or_canceled_multicast_grants_release_the_next_acquisition() {
         let directory = plain_libs::temporary::tempdir().unwrap();
         let core = crate::test_runtime::Core::open(directory.path()).unwrap();
         let state = core.runtime_state();
-        state.prefs.set("client_id", "fixture-mdns-grant").unwrap();
+        state.prefs.set("client_id", "706c6169-0c18-8a4f-bf12-2bffc28a687a").unwrap();
         state
             .prefs
             .set("mdns_hostname", "fixture-mdns-grant.local")
@@ -303,7 +303,7 @@ async fn canceled_multicast_release_leaves_the_next_runtime_available() {
     let state = core.runtime_state();
     state
         .prefs
-        .set("client_id", "fixture-mdns-release")
+        .set("client_id", "706c6169-7ab2-84f9-a3b8-88bad7cee04c")
         .unwrap();
     state
         .prefs

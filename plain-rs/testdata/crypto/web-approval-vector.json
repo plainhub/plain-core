@@ -1,17 +1,17 @@
 {
-  "clientId": "fixture-browser",
-  "clientPrivate": "cdCxuWO5FeK32Hd7cYLEoQd2XUSc1T0FhbTUToPMe14=",
-  "fingerprint": "ad3ce33898b6ad21f63d717c3900baa72794eac39eddfff6c2f532d117060e0c",
-  "key": "maqwBvACUtrLzUXiWm1hV/JMatYvPzCZzc5ls0FbQCQ=",
+  "clientId": "706c6169-76ca-875b-a559-d6fd7695ee9b",
+  "clientPrivate": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=",
+  "fingerprint": "513fb6c374c24253318e2597c3b3d205784ac9e169da321740bbb1330f60f428",
+  "key": "9FMe0M6GAfLGLjKdm/hSV6+GWIC6UmLSIRwVwiiklkE=",
   "request": {
-    "publicKey": "BNa9BVMQqeS9GamB8EGul7AdIaaNdDTE1dNp9GgtNDv7wnMQ70sJRTJcQOig3o6a9LIbO/HFd5nT8dFGiCqoORM="
+    "publicKey": "BG/wO5SSQc4drdQ1GeaWDgqFtBppoFwygQOqK84VlMoWPE91OlW/AdxT9sCwx+7ni0DG/30lqW4igrmJzvccFEo="
   },
   "response": {
-    "deviceId": "fixture-device",
+    "deviceId": "706c6169-510c-8348-9a2c-7c92f6ee2e7f",
+    "serverPublicKey": "BFUPRxAD89+Xw99QaseX9nIfsaH7e49vg9IkSYplyI4kE2CT1wEuUJpzcVy9CwCjzA/0tcAbP/oZarH7MnA2uOY=",
     "expiresAt": 1700000300000,
-    "serverPublicKey": "BIECiaGgwDMPTYPU/7QgAaomPxcN1p1h6m2uUTe7fWLBDA4k97Km85xbzm82K2H5CS6NjY/0UYzOpIJKz9elPf0=",
-    "signature": "O6v3461SiYp2crne26ycdPB56D5OVZcHbMcizKbt8/ciQH3V1aPIFD+vyXnSeXEI/aPB4/iDoN8TRdB0wvJMAw=="
+    "signature": "wEL4vvebjqCAVPJM3NbUFUiO1Ibhy3iWN3Dmrb/nslJs+pNX5lztCkpWIPZgz9NxFc8ZPKJP6Nv2PHblpdqqAg=="
   },
-  "serverIdentity": "7vTC1lO+Q/rqeCsw5zmeQ0EfmH8iJ7rFt92ezg+g6iY=",
-  "signedPayload": "[\"AUTH_SERVER_HELLO\",\"fixture-device\",\"7vTC1lO+Q/rqeCsw5zmeQ0EfmH8iJ7rFt92ezg+g6iY=\",\"fixture-browser\",{\"publicKey\":\"BNa9BVMQqeS9GamB8EGul7AdIaaNdDTE1dNp9GgtNDv7wnMQ70sJRTJcQOig3o6a9LIbO/HFd5nT8dFGiCqoORM=\"},{\"deviceId\":\"fixture-device\",\"serverPublicKey\":\"BIECiaGgwDMPTYPU/7QgAaomPxcN1p1h6m2uUTe7fWLBDA4k97Km85xbzm82K2H5CS6NjY/0UYzOpIJKz9elPf0=\",\"expiresAt\":1700000300000}]"
+  "serverIdentity": "7UkoxijRwsbq6QM4kFmVYSlZJzpcY/k2NsFGFKyHN9E=",
+  "signedPayload": "[\"AUTH_SERVER_HELLO\",\"706c6169-510c-8348-9a2c-7c92f6ee2e7f\",\"7UkoxijRwsbq6QM4kFmVYSlZJzpcY/k2NsFGFKyHN9E=\",\"706c6169-76ca-875b-a559-d6fd7695ee9b\",{\"publicKey\":\"BG/wO5SSQc4drdQ1GeaWDgqFtBppoFwygQOqK84VlMoWPE91OlW/AdxT9sCwx+7ni0DG/30lqW4igrmJzvccFEo=\"},{\"deviceId\":\"706c6169-510c-8348-9a2c-7c92f6ee2e7f\",\"serverPublicKey\":\"BFUPRxAD89+Xw99QaseX9nIfsaH7e49vg9IkSYplyI4kE2CT1wEuUJpzcVy9CwCjzA/0tcAbP/oZarH7MnA2uOY=\",\"expiresAt\":1700000300000}]"
 }

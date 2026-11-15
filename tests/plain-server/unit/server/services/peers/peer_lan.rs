@@ -40,14 +40,14 @@ fn peer(id: &str, port: u16, pk: &[u8]) -> DPeer {
 }
 #[tokio::test]
 async fn direct_tls_peer_exchange_uses_xchacha_and_current_identity_without_host() {
-    let (_a, a, kp, _) = root("a");
-    let (_b, b, bkp, _) = root("b");
+    let (_a, a, kp, _) = root("706c6169-fdbb-865c-ab5a-2260e9b9f142");
+    let (_b, b, bkp, _) = root("706c6169-e28a-8959-996d-cc20540e4c47");
     let (cert_pem, cert_key) = plain_libs::tls::generate_pem(&["localhost".into()]).unwrap();
     let (_, https) = b
         .start_public(0, 0, cert_pem.clone(), cert_key.clone())
         .await
         .unwrap();
-    let remote = peer("b", https, &bkp[32..]);
+    let remote = peer("706c6169-e28a-8959-996d-cc20540e4c47", https, &bkp[32..]);
     peers::save(
         &a.runtime_state().core.db,
         &[remote.clone()],
@@ -56,7 +56,7 @@ async fn direct_tls_peer_exchange_uses_xchacha_and_current_identity_without_host
     .unwrap();
     peers::save(
         &b.runtime_state().core.db,
-        &[peer("a", 443, &kp[32..])],
+        &[peer("706c6169-fdbb-865c-ab5a-2260e9b9f142", 443, &kp[32..])],
         SaveMode::Insert,
     )
     .unwrap();
@@ -99,19 +99,19 @@ async fn direct_tls_peer_exchange_uses_xchacha_and_current_identity_without_host
 
 #[tokio::test]
 async fn queued_peer_send_uses_refreshed_address_with_unchanged_pairing() {
-    let (_a, a, kp, _) = root("a");
-    let (_b, b, bkp, _) = root("b");
+    let (_a, a, kp, _) = root("706c6169-fdbb-865c-ab5a-2260e9b9f142");
+    let (_b, b, bkp, _) = root("706c6169-e28a-8959-996d-cc20540e4c47");
     let (cert_pem, cert_key) = plain_libs::tls::generate_pem(&["localhost".into()]).unwrap();
     let (_, https) = b
         .start_public(0, 0, cert_pem.clone(), cert_key.clone())
         .await
         .unwrap();
     let state = a.runtime_state().core;
-    let remote = peer("b", 1, &bkp[32..]);
+    let remote = peer("706c6169-e28a-8959-996d-cc20540e4c47", 1, &bkp[32..]);
     peers::save(&state.db, &[remote.clone()], SaveMode::Insert).unwrap();
     peers::save(
         &b.runtime_state().core.db,
-        &[peer("a", 443, &kp[32..])],
+        &[peer("706c6169-fdbb-865c-ab5a-2260e9b9f142", 443, &kp[32..])],
         SaveMode::Insert,
     )
     .unwrap();

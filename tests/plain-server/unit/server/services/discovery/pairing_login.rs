@@ -693,8 +693,8 @@ async fn web_management_pairs_by_device_id_and_keeps_the_grant_on_a() {
     );
     peers::save(&a_state.db, &[peer], SaveMode::Insert).unwrap();
     let mut browser =
-        sessions::create(&a_state, "48c31447-a359-454e-8eda-199fd6483fd1".into()).unwrap();
-    browser.client_id = "48c31447-a359-454e-8eda-199fd6483fd1".into();
+        sessions::create(&a_state, "706c6169-7af8-8738-8c61-247c919c5705".into()).unwrap();
+    browser.client_id = "706c6169-7af8-8738-8c61-247c919c5705".into();
     browser.r#type = plain_rs::features::sessions::SessionType::Login;
     a_state.db.session_save(&browser).unwrap();
     let http = http_client::builder()

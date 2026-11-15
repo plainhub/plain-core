@@ -78,7 +78,7 @@ fn audit_events_preserve_optional_client_ids() {
             .unwrap()
             .client_id
             .as_deref(),
-        Some("client")
+        Some("706c6169-26be-890e-b404-adf1389070db")
     );
     let is_null: bool = db
         .with_conn(|conn| {
@@ -94,7 +94,7 @@ fn audit_events_preserve_optional_client_ids() {
 
 fn plain_rs_client() -> crate::infrastructure::db::AuditEventClient {
     crate::infrastructure::db::AuditEventClient {
-        client_id: "client".into(),
+        client_id: "706c6169-26be-890e-b404-adf1389070db".into(),
         ..Default::default()
     }
 }
@@ -103,7 +103,7 @@ fn plain_rs_client() -> crate::infrastructure::db::AuditEventClient {
 fn audit_snapshots_survive_session_changes_and_search_every_client_field() {
     let db = Db::open(std::path::Path::new(":memory:")).unwrap();
     let mut session = crate::infrastructure::db::SessionRow {
-        client_id: "fixture-client".into(),
+        client_id: "706c6169-b9ef-8b64-b37d-1162ef232835".into(),
         name: "Study computer".into(),
         client_ip: "192.0.2.24".into(),
         app_name: "Fixture browser".into(),
@@ -139,7 +139,7 @@ fn audit_snapshots_survive_session_changes_and_search_every_client_field() {
         "11",
         "Fixture browser",
         "142",
-        "fixture-client",
+        "706c6169-b9ef-8b64-b37d-1162ef232835",
     ] {
         let rows = db.audit_events(0, 10, Some(needle)).unwrap();
         assert_eq!(rows.len(), 1, "{needle}");
@@ -191,7 +191,7 @@ fn every_event_roundtrips_its_exact_payload_and_rejects_unknown_contracts() {
     };
     let session = SessionEventData {
         session: EventSession {
-            client_id: "target".into(),
+            client_id: "706c6169-15b2-8ac4-83ea-4e6b0c3a4b3c".into(),
             client_name: "Target".into(),
             r#type: SessionType::ApiToken,
         },
@@ -272,7 +272,7 @@ fn every_event_roundtrips_its_exact_payload_and_rejects_unknown_contracts() {
         if kind == "REVOKE_SESSION" {
             assert_eq!(
                 data,
-                json!({"session":{"clientId":"target","clientName":"Target","type":"API_TOKEN"}})
+                json!({"session":{"clientId":"706c6169-15b2-8ac4-83ea-4e6b0c3a4b3c","clientName":"Target","type":"API_TOKEN"}})
             );
         }
         if kind == "LOGIN_FAILED" {
@@ -295,7 +295,7 @@ fn every_event_roundtrips_its_exact_payload_and_rejects_unknown_contracts() {
     assert!(db.audit_events(0, 100, None).is_err());
     for payload in [
         json!({"type":"LOGIN_FAILED","data":{"reason":"unknown"}}),
-        json!({"type":"REVOKE_SESSION","data":{"session":{"clientId":"x","clientName":"X","type":"UNKNOWN"}}}),
+        json!({"type":"REVOKE_SESSION","data":{"session":{"clientId":"706c6169-c03b-8906-9beb-520d0cf78a03","clientName":"X","type":"UNKNOWN"}}}),
     ] {
         assert!(plain_libs::serde_json::from_value::<AuditEvent>(payload).is_err());
     }

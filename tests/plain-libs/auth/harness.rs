@@ -17,7 +17,7 @@ fn decode(line: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let identity = [7u8; 32];
-    let context = plain_libs::auth::context("wasm-test-client", &identity);
+    let context = plain_libs::auth::context("706c6169-0001-8000-8000-000000000001", &identity);
     let registration = plain_libs::auth::server::register(b"test password for OPAQUE", &identity)?;
     println!(
         "{}",

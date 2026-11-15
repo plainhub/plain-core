@@ -39,7 +39,7 @@ async fn tls() -> (
                     plain_rs::features::files::resource_link::parse(&params["id"]).unwrap();
                 assert_eq!(
                     scope,
-                    plain_rs::features::files::resource_link::Scope::Share("fixture".into())
+                    plain_rs::features::files::resource_link::Scope::Share("706c6169-1dfd-8b72-82bb-3ad00a9928ca".into())
                 );
                 let resource =
                     plain_rs::features::files::resource_link::open(&scope, &[8; 32], payload)
@@ -92,7 +92,7 @@ fn fixture() -> (
     let prefs = Arc::new(
         plain_rs::features::prefs::Prefs::load(&directory.path().join("prefs.json")).unwrap(),
     );
-    prefs.set("client_id", "fixture").unwrap();
+    prefs.set("client_id", "706c6169-1dfd-8b72-82bb-3ad00a9928ca").unwrap();
     let server = crate::server::ContentServer::start(
         directory.path(),
         &plain_libs::utils::base64::base64_encode(&[3; 32]),
@@ -111,7 +111,7 @@ async fn enqueue(
     let link = plain_rs::features::files::shares::client::Link::new(
         "127.0.0.1",
         port,
-        "fixture",
+        "706c6169-1dfd-8b72-82bb-3ad00a9928ca",
         &plain_libs::utils::base64::base64_encode(&[7; 32]),
     )
     .unwrap();

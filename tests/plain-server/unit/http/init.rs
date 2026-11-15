@@ -8,7 +8,7 @@ async fn fixed_password_without_a_secret_never_advertises_remote_setup() {
     state.prefs.set("password_type", "FIXED").unwrap();
     state.prefs.remove("password").unwrap();
     let mut headers = HeaderMap::new();
-    headers.insert("c-id", "c1810f83-b876-5996-9c1b-f4b328cb5d6c".parse().unwrap());
+    headers.insert("c-id", "706c6169-9266-8deb-bf26-e52b57339757".parse().unwrap());
     let response = init(
         State(state),
         ConnectInfo("127.0.0.1:1234".parse().unwrap()),
@@ -48,7 +48,7 @@ async fn init_advertises_the_running_https_port_instead_of_the_preference() {
     for (scheme, port) in [("http", http), ("https", https)] {
         let response = client
             .post(format!("{scheme}://localhost:{port}/init"))
-            .header("c-id", "c114813c-e148-549b-b727-514269ebd033")
+            .header("c-id", "706c6169-f717-8cef-9e51-e0dade79d050")
             .body(Vec::new())
             .send()
             .await
@@ -70,7 +70,7 @@ async fn init_advertises_the_running_https_port_instead_of_the_preference() {
     }
     core.stop_public().await;
     let mut headers = HeaderMap::new();
-    headers.insert("c-id", "c114813c-e148-549b-b727-514269ebd033".parse().unwrap());
+    headers.insert("c-id", "706c6169-f717-8cef-9e51-e0dade79d050".parse().unwrap());
     let response = init(
         State(state),
         ConnectInfo("127.0.0.1:1234".parse().unwrap()),
@@ -102,7 +102,7 @@ async fn init_requires_a_client_id_and_returns_forbidden_when_access_is_disabled
     );
     state.prefs.set("remote_access", false).unwrap();
     let mut headers = HeaderMap::new();
-    headers.insert("c-id", "8407a845-18e8-58be-b39d-48d613ba89db".parse().unwrap());
+    headers.insert("c-id", "706c6169-9169-8164-b803-8f53dcb90304".parse().unwrap());
     assert_eq!(
         init(State(state), remote, headers, Bytes::new())
             .await
@@ -182,7 +182,7 @@ async fn unauthenticated_init_never_returns_or_rotates_passwords_and_reports_exp
                 .unwrap(),
         ] {
             let mut headers = HeaderMap::new();
-            headers.insert("c-id", "c114813c-e148-549b-b727-514269ebd033".parse().unwrap());
+            headers.insert("c-id", "706c6169-f717-8cef-9e51-e0dade79d050".parse().unwrap());
             let response = init(
                 State(state.clone()),
                 ConnectInfo("127.0.0.1:1234".parse().unwrap()),
@@ -224,7 +224,7 @@ async fn unauthenticated_init_never_returns_or_rotates_passwords_and_reports_exp
             before
         );
         assert!(events.try_recv().is_err());
-        assert!(state.db.session_get("c114813c-e148-549b-b727-514269ebd033").unwrap().is_none());
+        assert!(state.db.session_get("706c6169-f717-8cef-9e51-e0dade79d050").unwrap().is_none());
     }
     core.stop_core().await;
 }

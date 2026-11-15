@@ -13,7 +13,7 @@ async fn submission_never_waits_for_sqlite_and_flush_drains_owned_snapshots() {
     let db = Arc::new(Db::open(std::path::Path::new(":memory:")).unwrap());
     let writer = AuditEvents::start(db.clone()).unwrap();
     let mut actor = AuditEventClient {
-        client_id: "actor".into(),
+        client_id: "706c6169-5847-8f52-9073-afe9de5f9211".into(),
         client_name: "Before".into(),
         ..Default::default()
     };

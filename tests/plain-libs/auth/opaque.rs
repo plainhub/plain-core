@@ -6,7 +6,7 @@ use rand_core::OsRng;
 fn registration_and_login_bind_identity_context_and_key() {
     let identity = [7; 32];
     let registration = server::register(b"correct horse", &identity).unwrap();
-    let context = context("client", &identity);
+    let context = context("706c6169-0001-8000-8000-000000000001", &identity);
     let client = ClientLogin::start(&mut OsRng, b"correct horse").unwrap();
     let (server, ke2) = server::start(&registration.setup, &registration.record,
         &client.message.serialize(), &context, &identity).unwrap();
@@ -25,7 +25,7 @@ fn registration_and_login_bind_identity_context_and_key() {
 fn rejects_wrong_password_context_identity_and_tampered_messages() {
     let identity = [7; 32];
     let registration = server::register(b"correct horse", &identity).unwrap();
-    let context = context("client", &identity);
+    let context = context("706c6169-0001-8000-8000-000000000001", &identity);
     for case in 0..5 {
         let password = if case == 0 { b"wrong password".as_slice() } else { b"correct horse".as_slice() };
         let client = ClientLogin::start(&mut OsRng, password).unwrap();
@@ -53,7 +53,7 @@ fn rejects_wrong_password_context_identity_and_tampered_messages() {
 fn independent_logins_have_different_keys() {
     let identity = [7;32];
     let registration = server::register(b"correct horse", &identity).unwrap();
-    let context = context("client", &identity);
+    let context = context("706c6169-0001-8000-8000-000000000001", &identity);
     let mut keys = Vec::new();
     for _ in 0..2 {
         let client = ClientLogin::start(&mut OsRng, b"correct horse").unwrap();
@@ -72,13 +72,13 @@ fn native_client_wrapper_verifies_password_pin_and_derived_outputs() {
     let identity = [7; 32];
     let registration = server::register(b"native test password", &identity).unwrap();
     let public_key = server::public_key(&registration.setup).unwrap();
-    let context = context("native-client", &identity);
+    let context = context("706c6169-0001-8000-8000-000000000002", &identity);
     for case in 0..3 {
         let password = if case == 1 { b"wrong".to_vec() } else { b"native test password".to_vec() };
         let client = plain_libs::auth::client::OpaqueLogin::start(password).unwrap();
         let (server, ke2) = server::start(&registration.setup, &registration.record,
             &client.request(), &context, &identity).unwrap();
-        let result = client.finish(&ke2, "native-client", &identity,
+        let result = client.finish(&ke2, "706c6169-0001-8000-8000-000000000002", &identity,
             if case == 2 { &[0; 32] } else { &public_key });
         if case != 0 {
             assert!(result.is_err(), "case {case}");
@@ -98,9 +98,9 @@ fn context_binds_fixed_login_purpose_client_and_server_identity() {
     let identity = [7; 32];
     let mut expected = vec![0, 0, 0, 14];
     expected.extend_from_slice(b"LOGIN_PASSWORD");
-    expected.extend_from_slice(&[0, 0, 0, 6]);
-    expected.extend_from_slice(b"client");
+    expected.extend_from_slice(&[0, 0, 0, 36]);
+    expected.extend_from_slice(b"706c6169-0001-8000-8000-000000000001");
     expected.extend_from_slice(&[0, 0, 0, 32]);
     expected.extend_from_slice(&identity);
-    assert_eq!(context("client", &identity), expected);
+    assert_eq!(context("706c6169-0001-8000-8000-000000000001", &identity), expected);
 }

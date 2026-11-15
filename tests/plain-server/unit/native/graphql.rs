@@ -12,7 +12,7 @@ async fn closed_native_page_cancels_its_pending_main_schema_request_before_radio
     let prefs = Arc::new(
         plain_rs::features::prefs::Prefs::load(&directory.path().join("prefs.json")).unwrap(),
     );
-    prefs.set("client_id", "fixture-native-scope").unwrap();
+    prefs.set("client_id", "706c6169-bd03-8c05-8ec6-0b8309a55eb9").unwrap();
     prefs
         .set("mdns_hostname", "fixture-native-scope.local")
         .unwrap();

@@ -3,8 +3,8 @@ use super::*;
 #[test]
 fn scopes_roundtrip_variable_identifiers_and_encode_only_binary_payload() {
     for scope in [
-        Scope::Session("a".into()),
-        Scope::Session("客户.id/?#%+".repeat(20)),
+        Scope::Session("706c6169-fdbb-865c-ab5a-2260e9b9f142".into()),
+        Scope::Session("706c6169-0001-8000-8000-000000000002".into()),
         Scope::Share("share.with.dots".into()),
     ] {
         let resource = Resource {
@@ -31,10 +31,10 @@ fn scopes_roundtrip_variable_identifiers_and_encode_only_binary_payload() {
 
 #[test]
 fn rejects_scope_substitution_wrong_key_legacy_and_unknown_resources() {
-    let scope = Scope::Session("client.with.dots".into());
+    let scope = Scope::Session("706c6169-3e41-8320-8ca4-ff94dfb3a1dd".into());
     let id = seal(&scope, &[7; 32], &Resource::reference("/file")).unwrap();
     let (_, payload) = parse(&id).unwrap();
-    assert!(open(&Scope::Session("another".into()), &[7; 32], payload).is_err());
+    assert!(open(&Scope::Session("706c6169-df10-8d43-83db-3169a609af14".into()), &[7; 32], payload).is_err());
     assert!(open(&scope, &[8; 32], payload).is_err());
     assert!(decrypt(&scope, ResourcePurpose::ZipFiles, &[7; 32], payload).is_err());
     for invalid in [
@@ -84,16 +84,16 @@ fn noble_vector_decrypts_with_the_same_envelope_and_associated_data() {
 
 #[test]
 fn native_reference_input_requires_its_session() {
-    let envelope = seal_reference(&[7; 32], r#"{"path":"fid:item","clientId":"client"}"#).unwrap();
+    let envelope = seal_reference(&[7; 32], r#"{"path":"fid:item","clientId":"706c6169-26be-890e-b404-adf1389070db"}"#).unwrap();
     let (scope, payload) = parse(&envelope).unwrap();
-    assert_eq!(scope, Scope::Session("client".into()));
+    assert_eq!(scope, Scope::Session("706c6169-26be-890e-b404-adf1389070db".into()));
     assert_eq!(
         open(&scope, &[7; 32], payload).unwrap(),
         Resource::reference("fid:item")
     );
     for input in [
         r#"{"path":"/document.docx"}"#,
-        r#"{"clientId":"client"}"#,
+        r#"{"clientId":"706c6169-26be-890e-b404-adf1389070db"}"#,
         r#"{"path":"/document","clientId":false}"#,
         r#"{"path":"/document","clientId":""}"#,
     ] {

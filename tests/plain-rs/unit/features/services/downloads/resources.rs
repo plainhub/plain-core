@@ -8,7 +8,7 @@ use std::{path::Path, sync::Arc};
 fn fixture(path: &Path) -> crate::test_runtime::Core {
     std::fs::create_dir_all(path).unwrap();
     let prefs = Arc::new(crate::features::prefs::Prefs::load(&path.join("prefs.json")).unwrap());
-    prefs.set("client_id", "fixture").unwrap();
+    prefs.set("client_id", "706c6169-1dfd-8b72-82bb-3ad00a9928ca").unwrap();
     crate::test_runtime::Core::start(path, &plain_libs::crypto::gen_token(), prefs).unwrap()
 }
 

@@ -3,12 +3,12 @@ use super::*;
 #[test]
 fn fixed_peer_wire_vector() {
     let request = Request::PeerGraphql {
-        client_id: "A".into(),
+        client_id: "706c6169-0001-8000-8000-000000000001".into(),
         channel_id: "".into(),
         body: vec![0, 255],
     };
     let data = request.encode().unwrap();
-    assert_eq!(data, [6, 0, 0, 0, 2, 0, 0, 0, 1, 1, 0, 65, 0, 0, 0, 255]);
+    assert_eq!(data, [vec![41, 0, 0, 0, 2, 0, 0, 0, 1, 36, 0], b"706c6169-0001-8000-8000-000000000001".to_vec(), vec![0, 0, 0, 255]].concat());
     assert_eq!(Request::decode(&data).unwrap(), request);
     assert_eq!(
         frame(&data, 0x12345678, true, 0, 512).unwrap().unwrap(),
@@ -38,7 +38,7 @@ fn assembler_roundtrips_all_bytes_across_mtu_sizes() {
 #[test]
 fn utf8_and_empty_nearby() {
     let data = Request::PeerGraphql {
-        client_id: "身份😀".into(),
+        client_id: "706c6169-0001-8000-8000-000000000001".into(),
         channel_id: "频道".into(),
         body: vec![],
     }
@@ -52,7 +52,7 @@ fn utf8_and_empty_nearby() {
 #[test]
 fn file_range_checks_and_exact_decode() {
     let request = Request::FileChunk {
-        client_id: "actor".into(),
+        client_id: "706c6169-0001-8000-8000-000000000001".into(),
         file_id: "encrypted+/=".into(),
         offset: 1u64 << 40,
         length: 8192,
@@ -64,7 +64,7 @@ fn file_range_checks_and_exact_decode() {
     for (offset, length) in [(0, 0), (0, 8193), (u64::MAX, 1)] {
         assert!(
             Request::FileChunk {
-                client_id: "a".into(),
+                client_id: "706c6169-0001-8000-8000-000000000001".into(),
                 file_id: "f".into(),
                 offset,
                 length

@@ -77,7 +77,7 @@ fn fixture() -> (
         DeviceType::Computer,
     );
     let identity = Identity {
-        url: "wss://127.0.0.1:18443/?cid=fixture".into(),
+        url: "wss://127.0.0.1:18443/?cid=706c6169-1dfd-8b72-82bb-3ad00a9928ca".into(),
         token: plain_libs::utils::base64::base64_encode(&[7; 32]),
         ip: peer.ip.clone(),
         port: peer.port,
@@ -132,7 +132,7 @@ async fn baseline_diffs_and_repeated_hints_only_alert_new_confirmed_items() {
     assert!(event(&mut receiver)["group"]["loading"].as_bool().unwrap());
     store
         .apply(
-            "local",
+            "706c6169-185c-8ca2-84a2-2e1dbaf20a51",
             &peer.id,
             &identity,
             observation(vec![notification("old")]),
@@ -145,7 +145,7 @@ async fn baseline_diffs_and_repeated_hints_only_alert_new_confirmed_items() {
     let icon = baseline["group"]["items"][0]["icon"].clone();
     store
         .apply(
-            "local",
+            "706c6169-185c-8ca2-84a2-2e1dbaf20a51",
             &peer.id,
             &identity,
             observation(vec![notification("old")]),
@@ -157,7 +157,7 @@ async fn baseline_diffs_and_repeated_hints_only_alert_new_confirmed_items() {
     updated.body = "Updated".into();
     store
         .apply(
-            "local",
+            "706c6169-185c-8ca2-84a2-2e1dbaf20a51",
             &peer.id,
             &identity,
             observation(vec![notification("new"), updated]),
@@ -170,7 +170,7 @@ async fn baseline_diffs_and_repeated_hints_only_alert_new_confirmed_items() {
     assert_eq!(update["group"]["items"][0]["icon"], icon);
     assert_eq!(update["group"]["items"][1]["body"], "Updated");
     store
-        .apply("local", &peer.id, &identity, observation(vec![]), &events)
+        .apply("706c6169-185c-8ca2-84a2-2e1dbaf20a51", &peer.id, &identity, observation(vec![]), &events)
         .unwrap();
     assert!(
         event(&mut receiver)["group"]["items"]
@@ -188,7 +188,7 @@ async fn silent_items_and_active_updates_do_not_alert_but_a_dismissed_id_can_not
     once.only_once = true;
     store
         .apply(
-            "local",
+            "706c6169-185c-8ca2-84a2-2e1dbaf20a51",
             &peer.id,
             &identity,
             observation(vec![once.clone()]),
@@ -198,7 +198,7 @@ async fn silent_items_and_active_updates_do_not_alert_but_a_dismissed_id_can_not
     event(&mut receiver);
     store
         .apply(
-            "local",
+            "706c6169-185c-8ca2-84a2-2e1dbaf20a51",
             &peer.id,
             &identity,
             Err(plain_libs::anyhow::anyhow!("offline")),
@@ -213,7 +213,7 @@ async fn silent_items_and_active_updates_do_not_alert_but_a_dismissed_id_can_not
     silent.silent = true;
     store
         .apply(
-            "local",
+            "706c6169-185c-8ca2-84a2-2e1dbaf20a51",
             &peer.id,
             &identity,
             observation(vec![once.clone(), silent]),
@@ -227,12 +227,12 @@ async fn silent_items_and_active_updates_do_not_alert_but_a_dismissed_id_can_not
             .is_empty()
     );
     store
-        .apply("local", &peer.id, &identity, observation(vec![]), &events)
+        .apply("706c6169-185c-8ca2-84a2-2e1dbaf20a51", &peer.id, &identity, observation(vec![]), &events)
         .unwrap();
     event(&mut receiver);
     store
         .apply(
-            "local",
+            "706c6169-185c-8ca2-84a2-2e1dbaf20a51",
             &peer.id,
             &identity,
             observation(vec![once]),
@@ -242,7 +242,7 @@ async fn silent_items_and_active_updates_do_not_alert_but_a_dismissed_id_can_not
     assert_eq!(event(&mut receiver)["alerts"][0]["id"], "once");
     store
         .apply(
-            "local",
+            "706c6169-185c-8ca2-84a2-2e1dbaf20a51",
             &peer.id,
             &identity,
             observation(vec![notification("ordinary")]),
@@ -259,7 +259,7 @@ async fn capability_or_permission_revocation_clears_data_and_regrant_starts_a_fr
         event(&mut receiver);
         store
             .apply(
-                "local",
+                "706c6169-185c-8ca2-84a2-2e1dbaf20a51",
                 &peer.id,
                 &identity,
                 observation(vec![notification("old")]),
@@ -275,7 +275,7 @@ async fn capability_or_permission_revocation_clears_data_and_regrant_starts_a_fr
         }
         store
             .apply(
-                "local",
+                "706c6169-185c-8ca2-84a2-2e1dbaf20a51",
                 &peer.id,
                 &identity,
                 Ok((app, vec![], base)),
@@ -287,7 +287,7 @@ async fn capability_or_permission_revocation_clears_data_and_regrant_starts_a_fr
         assert_eq!(revoked["group"]["online"], true);
         store
             .apply(
-                "local",
+                "706c6169-185c-8ca2-84a2-2e1dbaf20a51",
                 &peer.id,
                 &identity,
                 observation(vec![notification("after-regrant")]),
@@ -309,7 +309,7 @@ async fn snapshots_recover_without_alerts_and_credentials_or_membership_retire_o
     event(&mut receiver);
     store
         .apply(
-            "local",
+            "706c6169-185c-8ca2-84a2-2e1dbaf20a51",
             &peer.id,
             &identity,
             observation(vec![notification("old")]),
@@ -331,7 +331,7 @@ async fn snapshots_recover_without_alerts_and_credentials_or_membership_retire_o
     assert_eq!(renamed["group"]["items"][0]["id"], "old");
     let mut moved = identity.clone();
     moved.ip = "127.0.0.2".into();
-    moved.url = "wss://127.0.0.2:18443/?cid=fixture".into();
+    moved.url = "wss://127.0.0.2:18443/?cid=706c6169-1dfd-8b72-82bb-3ad00a9928ca".into();
     store.reconcile(
         std::slice::from_ref(&peer),
         &HashMap::from([(peer.id.clone(), moved.clone())]),
@@ -342,7 +342,7 @@ async fn snapshots_recover_without_alerts_and_credentials_or_membership_retire_o
     assert_eq!(retained["groups"][0]["items"][0]["id"], "old");
     store
         .apply(
-            "local",
+            "706c6169-185c-8ca2-84a2-2e1dbaf20a51",
             &peer.id,
             &identity,
             observation(vec![notification("stale-address")]),
@@ -354,7 +354,7 @@ async fn snapshots_recover_without_alerts_and_credentials_or_membership_retire_o
         observation(vec![notification("old"), notification("fresh-after-move")]).unwrap();
     store
         .apply(
-            "local",
+            "706c6169-185c-8ca2-84a2-2e1dbaf20a51",
             &peer.id,
             &moved,
             Ok((
@@ -388,7 +388,7 @@ async fn snapshots_recover_without_alerts_and_credentials_or_membership_retire_o
     );
     store
         .apply(
-            "local",
+            "706c6169-185c-8ca2-84a2-2e1dbaf20a51",
             &peer.id,
             &identity,
             observation(vec![notification("stale")]),
@@ -400,7 +400,7 @@ async fn snapshots_recover_without_alerts_and_credentials_or_membership_retire_o
     assert!(event(&mut receiver)["group"].is_null());
     store
         .apply(
-            "local",
+            "706c6169-185c-8ca2-84a2-2e1dbaf20a51",
             &peer.id,
             &identity,
             observation(vec![notification("removed")]),
@@ -418,7 +418,7 @@ async fn invalid_snapshots_do_not_mutate_projection_and_icons_decrypt_with_stand
     assert!(
         store
             .apply(
-                "local",
+                "706c6169-185c-8ca2-84a2-2e1dbaf20a51",
                 &peer.id,
                 &identity,
                 observation(vec![duplicate.clone(), duplicate]),
@@ -432,7 +432,7 @@ async fn invalid_snapshots_do_not_mutate_projection_and_icons_decrypt_with_stand
     assert!(
         store
             .apply(
-                "local",
+                "706c6169-185c-8ca2-84a2-2e1dbaf20a51",
                 &peer.id,
                 &identity,
                 Ok((app, items, base)),
@@ -443,7 +443,7 @@ async fn invalid_snapshots_do_not_mutate_projection_and_icons_decrypt_with_stand
     assert!(receiver.try_recv().is_err());
     store
         .apply(
-            "local",
+            "706c6169-185c-8ca2-84a2-2e1dbaf20a51",
             &peer.id,
             &identity,
             observation(vec![notification("valid")]),
@@ -461,7 +461,7 @@ async fn invalid_snapshots_do_not_mutate_projection_and_icons_decrypt_with_stand
     let (scope, payload) = crate::features::files::resource_link::parse(&file_id).unwrap();
     assert_eq!(
         scope,
-        crate::features::files::resource_link::Scope::Session("local".into())
+        crate::features::files::resource_link::Scope::Session("706c6169-185c-8ca2-84a2-2e1dbaf20a51".into())
     );
     let resource = crate::features::files::resource_link::open(&scope, &[9; 32], payload).unwrap();
     assert_eq!(
@@ -480,7 +480,7 @@ async fn confirmed_authorization_failures_clear_data_instead_of_looking_like_net
         event(&mut receiver);
         store
             .apply(
-                "local",
+                "706c6169-185c-8ca2-84a2-2e1dbaf20a51",
                 &peer.id,
                 &identity,
                 observation(vec![notification("old")]),
@@ -494,14 +494,14 @@ async fn confirmed_authorization_failures_clear_data_instead_of_looking_like_net
             AuthorizationError::Session
         };
         store
-            .apply("local", &peer.id, &identity, Err(error.into()), &events)
+            .apply("706c6169-185c-8ca2-84a2-2e1dbaf20a51", &peer.id, &identity, Err(error.into()), &events)
             .unwrap();
         let denied = event(&mut receiver);
         assert_eq!(denied["group"]["online"], permission);
         assert!(denied["group"]["items"].as_array().unwrap().is_empty());
         store
             .apply(
-                "local",
+                "706c6169-185c-8ca2-84a2-2e1dbaf20a51",
                 &peer.id,
                 &identity,
                 observation(vec![notification("after-login")]),
@@ -523,7 +523,7 @@ async fn notifications_arriving_after_snapshot_retain_their_host_callback() {
     event(&mut callbacks);
     store
         .apply(
-            "local",
+            "706c6169-185c-8ca2-84a2-2e1dbaf20a51",
             &peer.id,
             &identity,
             observation(vec![notification("old")]),
@@ -534,7 +534,7 @@ async fn notifications_arriving_after_snapshot_retain_their_host_callback() {
     let initial = store.snapshot();
     store
         .apply(
-            "local",
+            "706c6169-185c-8ca2-84a2-2e1dbaf20a51",
             &peer.id,
             &identity,
             observation(vec![notification("new"), notification("old")]),
@@ -553,7 +553,7 @@ async fn reconnecting_host_receives_a_complete_notification_snapshot_without_ale
     event(&mut old);
     store
         .apply(
-            "local",
+            "706c6169-185c-8ca2-84a2-2e1dbaf20a51",
             &peer.id,
             &identity,
             observation(vec![notification("old")]),
@@ -568,7 +568,7 @@ async fn reconnecting_host_receives_a_complete_notification_snapshot_without_ale
     assert!(snapshot.get("alerts").is_none());
     store
         .apply(
-            "local",
+            "706c6169-185c-8ca2-84a2-2e1dbaf20a51",
             &peer.id,
             &identity,
             observation(vec![notification("new")]),
@@ -586,7 +586,7 @@ async fn saturated_host_recovers_the_latest_snapshot_and_missed_alerts() {
     event(&mut callbacks);
     store
         .apply(
-            "local",
+            "706c6169-185c-8ca2-84a2-2e1dbaf20a51",
             &peer.id,
             &identity,
             observation(vec![notification("old")]),
@@ -599,7 +599,7 @@ async fn saturated_host_recovers_the_latest_snapshot_and_missed_alerts() {
     }
     store
         .apply(
-            "local",
+            "706c6169-185c-8ca2-84a2-2e1dbaf20a51",
             &peer.id,
             &identity,
             observation(vec![notification("new")]),
@@ -609,7 +609,7 @@ async fn saturated_host_recovers_the_latest_snapshot_and_missed_alerts() {
     assert!(callbacks.try_recv().is_err());
     store
         .apply(
-            "local",
+            "706c6169-185c-8ca2-84a2-2e1dbaf20a51",
             &peer.id,
             &identity,
             observation(vec![notification("latest")]),
@@ -642,7 +642,7 @@ async fn state_changes_before_host_attachment_are_delivered_as_the_initial_snaps
         .load(std::sync::atomic::Ordering::Relaxed);
     store
         .apply(
-            "local",
+            "706c6169-185c-8ca2-84a2-2e1dbaf20a51",
             &peer.id,
             &identity,
             observation(vec![notification("before-attach")]),
@@ -661,7 +661,7 @@ async fn state_changes_before_host_attachment_are_delivered_as_the_initial_snaps
     assert!(snapshot.get("alerts").is_none());
     store
         .apply(
-            "local",
+            "706c6169-185c-8ca2-84a2-2e1dbaf20a51",
             &peer.id,
             &identity,
             observation(vec![notification("after-attach")]),

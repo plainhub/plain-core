@@ -2,11 +2,11 @@ use super::*;
 #[test]
 fn signed_exchange_binds_identity_client_request_and_direction() {
     let (signing, public) = plain_libs::crypto::ed25519_generate();
-    let (client, request) = Client::start("browser").unwrap();
+    let (client, request) = Client::start("706c6169-fe7e-818e-a0f0-a71b7c0f3f75").unwrap();
     let (server, response) =
-        ServerHandshake::start("browser", "device", &request, &signing, 100).unwrap();
+        ServerHandshake::start("706c6169-fe7e-818e-a0f0-a71b7c0f3f75", "706c6169-070b-8226-915b-f78c137ec2f0", &request, &signing, 100).unwrap();
     let client = client
-        .accept(&response, &base64_encode(&public), "device", 101)
+        .accept(&response, &base64_encode(&public), "706c6169-070b-8226-915b-f78c137ec2f0", 101)
         .unwrap();
     assert_eq!(client.api_key(), server.api_key());
     assert_eq!(client.context, server.context);
@@ -37,20 +37,20 @@ fn display_code_is_fixed_width_and_keeps_leading_zeroes() {
 fn altered_client_key_cid_identity_signature_and_expiry_are_rejected() {
     let (signing, public) = plain_libs::crypto::ed25519_generate();
     for case in 0..5 {
-        let (client, mut request) = Client::start("browser").unwrap();
+        let (client, mut request) = Client::start("706c6169-fe7e-818e-a0f0-a71b7c0f3f75").unwrap();
         if case == 0 {
             request.public_key = base64_encode(&EcdhSession::generate().public_key_bytes);
         }
         let (_, mut response) = ServerHandshake::start(
-            if case == 1 { "other" } else { "browser" },
-            "device",
+            if case == 1 { "706c6169-6596-83ad-9bfa-f02fb831ba40" } else { "706c6169-fe7e-818e-a0f0-a71b7c0f3f75" },
+            "706c6169-070b-8226-915b-f78c137ec2f0",
             &request,
             &signing,
             100,
         )
         .unwrap();
         if case == 2 {
-            response.device_id = "other".into();
+            response.device_id = "706c6169-6596-83ad-9bfa-f02fb831ba40".into();
         }
         if case == 3 {
             response.signature = base64_encode(&[0; 64]);
@@ -58,7 +58,7 @@ fn altered_client_key_cid_identity_signature_and_expiry_are_rejected() {
         let result = client.accept(
             &response,
             &base64_encode(&public),
-            "device",
+            "706c6169-070b-8226-915b-f78c137ec2f0",
             if case == 4 { 300100 } else { 101 },
         );
         assert!(result.is_err(), "case {case}");
@@ -67,20 +67,20 @@ fn altered_client_key_cid_identity_signature_and_expiry_are_rejected() {
 #[test]
 fn independent_exchanges_have_distinct_keys_and_fingerprints() {
     let (signing, _) = plain_libs::crypto::ed25519_generate();
-    let (_, request) = Client::start("browser").unwrap();
-    let (a, _) = ServerHandshake::start("browser", "device", &request, &signing, 100).unwrap();
-    let (b, _) = ServerHandshake::start("browser", "device", &request, &signing, 100).unwrap();
+    let (_, request) = Client::start("706c6169-fe7e-818e-a0f0-a71b7c0f3f75").unwrap();
+    let (a, _) = ServerHandshake::start("706c6169-fe7e-818e-a0f0-a71b7c0f3f75", "706c6169-070b-8226-915b-f78c137ec2f0", &request, &signing, 100).unwrap();
+    let (b, _) = ServerHandshake::start("706c6169-fe7e-818e-a0f0-a71b7c0f3f75", "706c6169-070b-8226-915b-f78c137ec2f0", &request, &signing, 100).unwrap();
     assert_ne!(a.api_key(), b.api_key());
     assert_ne!(a.context, b.context);
 }
 #[test]
 fn exports_browser_interop_vector() {
     let (signing, public) = plain_libs::crypto::ed25519_generate();
-    let (client, request) = Client::start("fixture-browser").unwrap();
+    let (client, request) = Client::start("706c6169-76ca-875b-a559-d6fd7695ee9b").unwrap();
     let private = client.key.private_key_bytes();
     let (server, response) = ServerHandshake::start(
-        "fixture-browser",
-        "fixture-device",
+        "706c6169-76ca-875b-a559-d6fd7695ee9b",
+        "706c6169-510c-8348-9a2c-7c92f6ee2e7f",
         &request,
         &signing,
         1700000000000,
@@ -90,13 +90,13 @@ fn exports_browser_interop_vector() {
         .accept(
             &response,
             &base64_encode(&public),
-            "fixture-device",
+            "706c6169-510c-8348-9a2c-7c92f6ee2e7f",
             1700000000001,
         )
         .unwrap();
     assert_eq!(verified.api_key(), server.api_key());
     if let Ok(path) = std::env::var("PLAIN_WEB_APPROVAL_VECTOR") {
-        let vector = json!({"signedPayload":String::from_utf8(signed_bytes("fixture-browser", &base64_encode(&public), &request, &response)).unwrap(),"clientId":"fixture-browser","clientPrivate":base64_encode(&private),"serverIdentity":base64_encode(&public),"request":request,"response":response,"fingerprint":server.context,"key":base64_encode(&server.api_key())});
+        let vector = json!({"signedPayload":String::from_utf8(signed_bytes("706c6169-76ca-875b-a559-d6fd7695ee9b", &base64_encode(&public), &request, &response)).unwrap(),"clientId":"706c6169-76ca-875b-a559-d6fd7695ee9b","clientPrivate":base64_encode(&private),"serverIdentity":base64_encode(&public),"request":request,"response":response,"fingerprint":server.context,"key":base64_encode(&server.api_key())});
         std::fs::write(path, plain_libs::serde_json::to_vec_pretty(&vector).unwrap()).unwrap();
     }
 }
@@ -104,9 +104,9 @@ fn exports_browser_interop_vector() {
 #[test]
 fn response_signature_has_one_purpose_and_keeps_all_bindings() {
     let (signing, public) = plain_libs::crypto::ed25519_generate();
-    let (_, hello) = Client::start("browser").unwrap();
-    let (_, response) = ServerHandshake::start("browser", "device", &hello, &signing, 100).unwrap();
-    let bytes = signed_bytes("browser", &base64_encode(&public), &hello, &response);
+    let (_, hello) = Client::start("706c6169-fe7e-818e-a0f0-a71b7c0f3f75").unwrap();
+    let (_, response) = ServerHandshake::start("706c6169-fe7e-818e-a0f0-a71b7c0f3f75", "706c6169-070b-8226-915b-f78c137ec2f0", &hello, &signing, 100).unwrap();
+    let bytes = signed_bytes("706c6169-fe7e-818e-a0f0-a71b7c0f3f75", &base64_encode(&public), &hello, &response);
     assert!(ed25519_verify(&base64_encode(&public), &bytes, &response.signature));
     let payload: plain_libs::serde_json::Value = plain_libs::serde_json::from_slice(&bytes).unwrap();
     assert_eq!(payload[0], "AUTH_SERVER_HELLO");
@@ -122,7 +122,7 @@ fn response_signature_has_one_purpose_and_keeps_all_bindings() {
 fn fixed_login_purpose_separates_confirmation_channels() {
     let (signing, _) = plain_libs::crypto::ed25519_generate();
     let (_, request) = Client::start("client").unwrap();
-    let (_, response) = ServerHandshake::start("client", "device", &request, &signing, 100).unwrap();
+    let (_, response) = ServerHandshake::start("client", "706c6169-070b-8226-915b-f78c137ec2f0", &request, &signing, 100).unwrap();
     let bytes = transcript("client", &request, &response);
     let value: plain_libs::serde_json::Value = plain_libs::serde_json::from_slice(&bytes).unwrap();
     assert_eq!(value[0], "LOGIN_NO_PASSWORD");

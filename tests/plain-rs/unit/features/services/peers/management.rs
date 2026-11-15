@@ -60,10 +60,10 @@ fn chat_only_self_invalid_token_and_missing_address_records_do_not_open_manageme
     let mut peer = peer();
     assert!(identity(&peer, "peer", "https://[::1]:18443").is_none());
     assert!(identity(&peer, "", "https://[::1]:18443").is_none());
-    assert!(identity(&peer, "actor", "").is_none());
-    assert!(identity(&peer, "actor", "http://[::1]:8080").is_none());
+    assert!(identity(&peer, "706c6169-5847-8f52-9073-afe9de5f9211", "").is_none());
+    assert!(identity(&peer, "706c6169-5847-8f52-9073-afe9de5f9211", "http://[::1]:8080").is_none());
     peer.port = None;
-    assert!(identity(&peer, "actor", "https://[::1]:18443").is_none());
+    assert!(identity(&peer, "706c6169-5847-8f52-9073-afe9de5f9211", "https://[::1]:18443").is_none());
     peer.port = Some(18443);
     for token in [
         String::new(),
@@ -71,14 +71,14 @@ fn chat_only_self_invalid_token_and_missing_address_records_do_not_open_manageme
         plain_libs::utils::base64::base64_encode(&[7; 31]),
     ] {
         peer.token = token;
-        assert!(identity(&peer, "actor", "https://[::1]:18443").is_none());
+        assert!(identity(&peer, "706c6169-5847-8f52-9073-afe9de5f9211", "https://[::1]:18443").is_none());
     }
 }
 
 #[tokio::test]
 async fn reconciliation_reuses_unchanged_workers_and_retires_replaced_and_removed_workers() {
     let (_directory, core, state) = fixture().await;
-    let identity = identity(&peer(), "actor", "https://[::1]:18443").unwrap();
+    let identity = identity(&peer(), "706c6169-5847-8f52-9073-afe9de5f9211", "https://[::1]:18443").unwrap();
     let (cancel, canceled) = watch::channel(false);
     let job = tokio::spawn(std::future::pending::<()>());
     let id = job.id();
@@ -122,7 +122,7 @@ async fn relay_rechecks_credentials_and_addresses_under_the_database_lock() {
     peer.port = None;
     peers::save(&state.db, &[peer.clone()], SaveMode::Insert).unwrap();
     let expected = Identity {
-        url: "wss://[::1]/?cid=actor".into(),
+        url: "wss://[::1]/?cid=706c6169-5847-8f52-9073-afe9de5f9211".into(),
         token: peer.token.clone(),
         ip: peer.ip.clone(),
         port: None,
@@ -204,7 +204,7 @@ async fn peer_snapshot_waits_for_the_database_without_blocking_the_async_thread(
         });
     });
     ready.await.unwrap();
-    let mut pending = Box::pin(desired(&state, "actor"));
+    let mut pending = Box::pin(desired(&state, "706c6169-5847-8f52-9073-afe9de5f9211"));
     std::future::poll_fn(|context| {
         assert!(std::future::Future::poll(pending.as_mut(), context).is_pending());
         std::task::Poll::Ready(())
@@ -221,7 +221,7 @@ async fn a_canceled_worker_cannot_publish_even_while_credentials_still_match() {
     let (_directory, core, state) = fixture().await;
     let peer = peer();
     peers::save(&state.db, &[peer.clone()], SaveMode::Insert).unwrap();
-    let expected = identity(&peer, "actor", "https://[::1]:18443").unwrap();
+    let expected = identity(&peer, "706c6169-5847-8f52-9073-afe9de5f9211", "https://[::1]:18443").unwrap();
     let (generation, mut requests) = state.host.connect();
     let (_cancel, canceled) = watch::channel(true);
     assert!(

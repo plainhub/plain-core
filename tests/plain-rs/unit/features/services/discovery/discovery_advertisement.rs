@@ -9,7 +9,7 @@ fn core_with_host(directory: &std::path::Path) -> (crate::test_runtime::Core, Co
     let prefs = std::sync::Arc::new(
         crate::features::prefs::Prefs::load(&directory.join("system.json")).unwrap(),
     );
-    prefs.set("client_id", "fixture-root").unwrap();
+    prefs.set("client_id", "706c6169-76f9-8bd9-8ad7-b9a861b6096b").unwrap();
     let core = crate::test_runtime::Core::start_core(
         &directory,
         &plain_libs::utils::base64::base64_encode(&[9; 32]),
@@ -26,7 +26,7 @@ async fn native_advertisements_use_current_preferences_without_host_calls() {
     let (core, state) = core_with_host(directory.path());
     let (generation, mut requests) = state.host.connect();
     let first = execute(&state, Request::Reply {}).await.unwrap();
-    assert_eq!(first["id"], "fixture-root");
+    assert_eq!(first["id"], "706c6169-76f9-8bd9-8ad7-b9a861b6096b");
     assert_eq!(first["remoteAccess"], true);
     assert_eq!(plain_libs::utils::base64::base64_decode(first["signaturePublicKey"].as_str().unwrap()).len(), 32);
     assert_eq!(first["deviceType"], "COMPUTER");

@@ -47,7 +47,7 @@ fn build(
 fn build_member_peers_includes_owner_when_owner_is_member() {
     let db = Db::open(&unique_tmp_dir("owner-member").join("plain.db")).expect("open db");
     let (kp_bytes, _vk_bytes) = ed25519_generate();
-    let client_id = "owner-1";
+    let client_id = "706c6169-a355-8065-83a4-b79b622b0460";
     let device_name = "NAS";
 
     let mut channel = DChannel::new("Channel", client_id);
@@ -73,7 +73,7 @@ fn build_member_peers_includes_owner_when_owner_is_member() {
 fn build_member_peers_includes_owner_alongside_members() {
     let db = Db::open(&unique_tmp_dir("owner-plus-member").join("plain.db")).expect("open db");
     let (kp_bytes, _vk_bytes) = ed25519_generate();
-    let client_id = "owner-1";
+    let client_id = "706c6169-a355-8065-83a4-b79b622b0460";
     let member_id = "member-1";
     db.upsert_peer(&DPeer::new(
         member_id,
@@ -105,7 +105,7 @@ fn build_member_peers_includes_owner_alongside_members() {
 fn build_member_peers_includes_owner_even_when_not_in_members() {
     let db = Db::open(&unique_tmp_dir("owner-not-in-members").join("plain.db")).expect("open db");
     let (kp_bytes, _vk_bytes) = ed25519_generate();
-    let client_id = "owner-1";
+    let client_id = "706c6169-a355-8065-83a4-b79b622b0460";
     let member_id = "member-1";
     db.upsert_peer(&DPeer::new(
         member_id,

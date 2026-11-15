@@ -15,7 +15,7 @@ async fn authenticated_runtime_preserves_radio_modes_and_releases_global_owner()
     let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs =
         Arc::new(plain_rs::features::prefs::Prefs::load(&dir.path().join("system.json")).unwrap());
-    prefs.set("client_id", "fixture-mdns-root").unwrap();
+    prefs.set("client_id", "706c6169-e798-8c39-bf32-d441ca36ff89").unwrap();
     prefs
         .set("mdns_hostname", "fixture-mdns-root.local")
         .unwrap();

@@ -41,7 +41,7 @@ fn fixture(
     let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs = Arc::new(Prefs::load(&dir.path().join("prefs.json")).unwrap());
     plain_rs::features::prefs::security::bootstrap(&prefs).unwrap();
-    prefs.set("client_id", "c1").unwrap();
+    prefs.set("client_id", "706c6169-b44a-8a65-8768-0c507e483d69").unwrap();
     prefs.set("api_permissions", vec!["SMS"]).unwrap();
     prefs.set("http_port", 8080).unwrap();
     prefs.set("https_port", 8443).unwrap();
@@ -201,7 +201,7 @@ async fn the_app_root_exposes_the_identity_and_the_capability_lists() {
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 2);
     let app = response.data.into_json().unwrap()["app"].clone();
-    assert_eq!(app["clientId"], "c1");
+    assert_eq!(app["clientId"], "706c6169-b44a-8a65-8768-0c507e483d69");
     assert_eq!(app["httpPort"], 8080);
     assert_eq!(app["deviceType"], "PHONE");
     assert_eq!(app["buildChannel"], "GITHUB");
@@ -329,7 +329,7 @@ async fn discovery_commands_use_the_shared_runtime_and_platform_multicast_lease(
         .await;
     let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs = Arc::new(Prefs::load(&dir.path().join("prefs.json")).unwrap());
-    prefs.set("client_id", "discovery-test").unwrap();
+    prefs.set("client_id", "706c6169-ea44-84e7-b8f7-63295a6cffa2").unwrap();
     let server = crate::server::ContentServer::start(
         dir.path(),
         &plain_libs::utils::base64::base64_encode(&[4; 32]),

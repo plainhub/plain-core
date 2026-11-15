@@ -39,7 +39,7 @@ fn removed_gateway_and_nearby_actions_cannot_be_called_through_native_codecs() {
     for action in [5, 6, 7, 8, 10, 11, 12] {
         for data in [
             &[][..],
-            br#"{"clientId":"peer","token":"key","body":"{}"}"#.as_slice(),
+            br#"{"clientId":"706c6169-89f1-81c6-8bc7-6b67c2ffa178","token":"key","body":"{}"}"#.as_slice(),
         ] {
             assert_eq!(
                 call(action, 0, 0, 0, 0, false, data).unwrap_err(),

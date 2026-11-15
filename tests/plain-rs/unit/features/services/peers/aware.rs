@@ -15,6 +15,7 @@ fn server() -> (plain_libs::temporary::TempDir, ContentServer, CoreRuntime) {
     let prefs = Arc::new(
         crate::features::prefs::Prefs::load(&directory.path().join("system.json")).unwrap(),
     );
+    prefs.set("client_id", "706c6169-0001-8000-8000-000000000001").unwrap();
     let server = ContentServer::start(
         directory.path(),
         &plain_libs::utils::base64::base64_encode(&[5; 32]),
@@ -22,7 +23,7 @@ fn server() -> (plain_libs::temporary::TempDir, ContentServer, CoreRuntime) {
     )
     .unwrap();
     let state = server.runtime_state();
-    let mut peer = DPeer::new("remote", "remote", "", Some(443), DeviceType::Phone);
+    let mut peer = DPeer::new("706c6169-0001-8000-8000-000000000002", "706c6169-0001-8000-8000-000000000002", "", Some(443), DeviceType::Phone);
     peer.status = PeerStatus::Paired;
     peer.key = plain_libs::utils::base64::base64_encode(&[7; 32]);
     peers::save(&state.db, &[peer], SaveMode::Insert).unwrap();
@@ -65,27 +66,27 @@ async fn subscriptions_reuse_unchanged_parameters_and_refresh_live_key_role_and_
     let (_directory, server, state) = server();
     let (messages, task) = host(&state);
     let runtime = Runtime::default();
-    assert!(runtime.subscribe(&state, "remote").await.unwrap());
+    assert!(runtime.subscribe(&state, "706c6169-0001-8000-8000-000000000002").await.unwrap());
     for _ in 0..4 {
-        assert!(runtime.subscribe(&state, "remote").await.unwrap());
+        assert!(runtime.subscribe(&state, "706c6169-0001-8000-8000-000000000002").await.unwrap());
     }
     assert_eq!(messages.lock().unwrap().len(), 1);
     let first = messages.lock().unwrap()[0]["params"].clone();
     assert_eq!(
         first,
-        json!({"peer":{"id":"remote","port":443},"config":{"pmk":plain_libs::utils::base64::base64_encode(&[7;32]),"isClient":true,"localPort":8443}})
+        json!({"peer":{"id":"706c6169-0001-8000-8000-000000000002","port":443},"config":{"pmk":plain_libs::utils::base64::base64_encode(&[7;32]),"isClient":true,"localPort":8443}})
     );
-    let mut peer = peers::get(&state.db, "remote").unwrap().unwrap();
+    let mut peer = peers::get(&state.db, "706c6169-0001-8000-8000-000000000002").unwrap().unwrap();
     peer.key = plain_libs::utils::base64::base64_encode(&[9; 32]);
     peer.port = Some(5443);
     peers::save(&state.db, &[peer], SaveMode::Update).unwrap();
-    state.prefs.set("client_id", "z-local").unwrap();
+    state.prefs.set("client_id", "706c6169-0001-8000-8000-000000000003").unwrap();
     state.prefs.set("https_port", 6443).unwrap();
     runtime.refresh(&state).await.unwrap();
     assert_eq!(messages.lock().unwrap().len(), 2);
     assert_eq!(
         messages.lock().unwrap()[1]["params"],
-        json!({"peer":{"id":"remote","port":5443},"config":{"pmk":plain_libs::utils::base64::base64_encode(&[9;32]),"isClient":false,"localPort":6443}})
+        json!({"peer":{"id":"706c6169-0001-8000-8000-000000000002","port":5443},"config":{"pmk":plain_libs::utils::base64::base64_encode(&[9;32]),"isClient":false,"localPort":6443}})
     );
     runtime.refresh(&state).await.unwrap();
     assert_eq!(messages.lock().unwrap().len(), 2);
@@ -102,20 +103,20 @@ async fn unpair_removes_subscription_and_rolled_back_updates_do_not_reconfigure_
     runtime.ensure(&state).await.unwrap();
     state.db.with_conn(|connection| {
         let transaction = connection.unchecked_transaction().unwrap();
-        transaction
-            .execute("UPDATE peers SET key='invalid' WHERE id='remote'", [])
-            .unwrap();
+        assert_eq!(transaction
+            .execute("UPDATE peers SET key='invalid' WHERE id=?1", ["706c6169-0001-8000-8000-000000000002"])
+            .unwrap(), 1);
         transaction.rollback().unwrap();
     });
     runtime.refresh(&state).await.unwrap();
     assert_eq!(messages.lock().unwrap().len(), 1);
-    peers::unpair(&state.db, "remote").unwrap();
+    peers::unpair(&state.db, "706c6169-0001-8000-8000-000000000002").unwrap();
     runtime.refresh(&state).await.unwrap();
     assert_eq!(messages.lock().unwrap().len(), 2);
     assert_eq!(messages.lock().unwrap()[1]["method"], "peerStopAware");
     assert_eq!(
         messages.lock().unwrap()[1]["params"],
-        json!({"id":"remote"})
+        json!({"id":"706c6169-0001-8000-8000-000000000002"})
     );
     runtime.refresh(&state).await.unwrap();
     assert_eq!(messages.lock().unwrap().len(), 2);
@@ -128,13 +129,13 @@ async fn channel_only_peers_use_open_sdk_parameters_and_corrupt_keys_revoke_old_
     let (_directory, server, state) = server();
     let (messages, task) = host(&state);
     let runtime = Runtime::default();
-    let mut peer = peers::get(&state.db, "remote").unwrap().unwrap();
+    let mut peer = peers::get(&state.db, "706c6169-0001-8000-8000-000000000002").unwrap().unwrap();
     peer.status = PeerStatus::Channel;
     peer.key.clear();
     peers::save(&state.db, &[peer.clone()], SaveMode::Update).unwrap();
     runtime.ensure(&state).await.unwrap();
     assert!(messages.lock().unwrap().is_empty());
-    assert!(runtime.subscribe(&state, "remote").await.unwrap());
+    assert!(runtime.subscribe(&state, "706c6169-0001-8000-8000-000000000002").await.unwrap());
     assert!(messages.lock().unwrap()[0]["params"]["config"]["pmk"].is_null());
     peer.key = "%%%".to_owned();
     peers::save(&state.db, &[peer], SaveMode::Update).unwrap();
@@ -176,14 +177,11 @@ async fn database_watch_pushes_key_changes_without_platform_graphql_queries() {
             sent.send(request).unwrap();
         }
     });
-    assert!(state.aware.subscribe(&state, "remote").await.unwrap());
+    assert!(state.aware.subscribe(&state, "706c6169-0001-8000-8000-000000000002").await.unwrap());
     received.recv().await.unwrap();
-    state
-        .db
-        .with_conn(|connection| {
-            connection.execute("UPDATE peers SET port=5443 WHERE id='remote'", [])
-        })
-        .unwrap();
+    assert_eq!(state.db.with_conn(|connection| {
+        connection.execute("UPDATE peers SET port=5443 WHERE id=?1", ["706c6169-0001-8000-8000-000000000002"])
+    }).unwrap(), 1);
     let changed = tokio::time::timeout(std::time::Duration::from_secs(2), received.recv())
         .await
         .unwrap()
@@ -191,7 +189,7 @@ async fn database_watch_pushes_key_changes_without_platform_graphql_queries() {
     assert_eq!(changed["params"]["peer"]["port"], 5443);
     state.aware.refresh(&state).await.unwrap();
     assert_eq!(observed.lock().unwrap().len(), 2);
-    peers::delete(&state.db, &["remote".into()]).unwrap();
+    peers::delete(&state.db, &["706c6169-0001-8000-8000-000000000002".into()]).unwrap();
     let removed = tokio::time::timeout(std::time::Duration::from_secs(2), received.recv())
         .await
         .unwrap()
@@ -229,12 +227,12 @@ async fn denied_start_is_not_repeated_by_refresh_but_explicit_retry_can_acquire_
         }
     });
     let runtime = Runtime::default();
-    assert!(!runtime.subscribe(&state, "remote").await.unwrap());
+    assert!(!runtime.subscribe(&state, "706c6169-0001-8000-8000-000000000002").await.unwrap());
     for _ in 0..4 {
         runtime.refresh(&state).await.unwrap();
     }
     assert_eq!(count.load(std::sync::atomic::Ordering::SeqCst), 1);
-    assert!(runtime.subscribe(&state, "remote").await.unwrap());
+    assert!(runtime.subscribe(&state, "706c6169-0001-8000-8000-000000000002").await.unwrap());
     assert_eq!(count.load(std::sync::atomic::Ordering::SeqCst), 2);
     runtime.stop(&state).await.unwrap();
     server.shutdown().await;
@@ -246,7 +244,7 @@ async fn host_replacement_resends_subscription_even_when_parameters_are_identica
     let (_directory, server, state) = server();
     let (first, first_task) = host(&state);
     let runtime = Runtime::default();
-    assert!(runtime.subscribe(&state, "remote").await.unwrap());
+    assert!(runtime.subscribe(&state, "706c6169-0001-8000-8000-000000000002").await.unwrap());
     assert_eq!(first.lock().unwrap().len(), 1);
     let (replacement, second_task) = host(&state);
     runtime.refresh(&state).await.unwrap();
@@ -291,7 +289,7 @@ async fn permission_events_retry_rejected_subscriptions_without_a_page_command()
             sent.send(request).unwrap();
         }
     });
-    assert!(!state.aware.subscribe(&state, "remote").await.unwrap());
+    assert!(!state.aware.subscribe(&state, "706c6169-0001-8000-8000-000000000002").await.unwrap());
     let first = received.recv().await.unwrap();
     for _ in 0..4 {
         state.aware.refresh(&state).await.unwrap();

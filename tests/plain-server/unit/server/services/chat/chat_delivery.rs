@@ -14,7 +14,7 @@ async fn explicit_message_retry_root_probes_open_transport_and_sends_original_ro
     let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs =
         Arc::new(plain_rs::features::prefs::Prefs::load(&dir.path().join("system.json")).unwrap());
-    prefs.set("client_id", "self").unwrap();
+    prefs.set("client_id", "706c6169-1ac2-825a-8c79-0951ec181d4a").unwrap();
     let server = crate::server::ContentServer::start(
         dir.path(),
         &plain_libs::utils::base64::base64_encode(&[1; 32]),

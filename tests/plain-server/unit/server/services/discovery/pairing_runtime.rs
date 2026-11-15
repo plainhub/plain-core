@@ -328,7 +328,7 @@ async fn lan_runtime_sends_signed_tls_requests_and_cancel_cannot_remove_replacem
 #[cfg(feature = "http_transport")]
 #[tokio::test]
 async fn native_main_pairing_queries_are_read_only_and_reject_stale_request_identity() {
-    let (_dir, server) = fixture("fixture");
+    let (_dir, server) = fixture("706c6169-1dfd-8b72-82bb-3ad00a9928ca");
     let native = server.native_graphql().unwrap();
     let response = native
         .execute(plain_graphql::Request::new(

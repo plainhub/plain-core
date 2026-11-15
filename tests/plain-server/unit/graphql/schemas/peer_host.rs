@@ -50,6 +50,7 @@ async fn encrypted_public_and_ble_rpc_share_auth_executor_and_receipts() {
         Arc::new(plain_rs::features::prefs::Prefs::load(&dir.path().join("system.json")).unwrap());
     prefs.set("background_service_enabled", true).unwrap();
     prefs.set("device_name", "fixture tablet").unwrap();
+    prefs.set("client_id", "706c6169-0000-8000-8000-000000000001").unwrap();
     let (local_keypair, local_public_key) = plain_libs::crypto::ed25519_generate();
     prefs
         .set(
@@ -61,7 +62,7 @@ async fn encrypted_public_and_ble_rpc_share_auth_executor_and_receipts() {
     let db = Db::open(&dir.path().join("plain.db")).unwrap();
     let key = [7; 32];
     let (kp, public_key) = plain_libs::crypto::ed25519_generate();
-    let mut peer = DPeer::new("peer", "phone", "", Some(443), DeviceType::Phone);
+    let mut peer = DPeer::new("706c6169-89f1-81c6-8bc7-6b67c2ffa178", "phone", "", Some(443), DeviceType::Phone);
     peer.status = PeerStatus::Paired;
     peer.key = plain_libs::utils::base64::base64_encode(&key);
     peer.public_key = plain_libs::utils::base64::base64_encode(&public_key);
@@ -95,7 +96,7 @@ async fn encrypted_public_and_ble_rpc_share_auth_executor_and_receipts() {
                     assert_eq!(
                         request["params"],
                         json!({
-                            "peer":{"id":"peer","port":port},
+                            "peer":{"id":"706c6169-89f1-81c6-8bc7-6b67c2ffa178","port":port},
                             "config":{"pmk":plain_libs::utils::base64::base64_encode(&[7;32]),"isClient":true,"localPort":https}
                         })
                     );
@@ -197,7 +198,7 @@ async fn encrypted_public_and_ble_rpc_share_auth_executor_and_receipts() {
     );
     let response = client
         .post(&public_url)
-        .header("c-id", "peer")
+        .header("c-id", "706c6169-89f1-81c6-8bc7-6b67c2ffa178")
         .body(body.clone())
         .send()
         .await
@@ -209,7 +210,7 @@ async fn encrypted_public_and_ble_rpc_share_auth_executor_and_receipts() {
     let content: Value = plain_libs::serde_json::from_slice(&content).unwrap();
     assert!(content.get("errors").is_none(), "{content}");
     let id = content["data"]["renamed"][0]["id"].as_str().unwrap();
-    assert_eq!(messages::get(&db, id).unwrap().unwrap().from_id, "peer");
+    assert_eq!(messages::get(&db, id).unwrap().unwrap().from_id, "706c6169-89f1-81c6-8bc7-6b67c2ffa178");
     assert!(content["data"]["renamed"][0]["channelId"].is_null());
     let event = std::iter::from_fn(|| received_events.try_recv().ok())
         .take(32)
@@ -222,14 +223,14 @@ async fn encrypted_public_and_ble_rpc_share_auth_executor_and_receipts() {
     );
     for expected in [false, true] {
         if expected {
-            let mut current = peers::get(&db, "peer").unwrap().unwrap();
+            let mut current = peers::get(&db, "706c6169-89f1-81c6-8bc7-6b67c2ffa178").unwrap().unwrap();
             current.port = Some(5443);
             peers::save(&db, &[current], SaveMode::Update).unwrap();
         }
         let body = wire(json!({"query":"mutation { startAware }"}));
         let response = client
             .post(&public_url)
-            .header("c-id", "peer")
+            .header("c-id", "706c6169-89f1-81c6-8bc7-6b67c2ffa178")
             .body(body.clone())
             .send()
             .await
@@ -246,7 +247,7 @@ async fn encrypted_public_and_ble_rpc_share_auth_executor_and_receipts() {
         wire(json!({"query":"mutation { channelSystemMessage(type:INVITE,payload:\"invalid\") }"}));
     let response = client
         .post(&public_url)
-        .header("c-id", "peer")
+        .header("c-id", "706c6169-89f1-81c6-8bc7-6b67c2ffa178")
         .body(body.clone())
         .send()
         .await
@@ -261,7 +262,7 @@ async fn encrypted_public_and_ble_rpc_share_auth_executor_and_receipts() {
     assert_eq!(
         client
             .post(&public_url)
-            .header("c-id", "unknown")
+            .header("c-id", "706c6169-443e-8fb9-853c-6a0a69b6663d")
             .body(wire(json!({"query":"mutation { startAware }"})))
             .send()
             .await
@@ -276,7 +277,7 @@ async fn encrypted_public_and_ble_rpc_share_auth_executor_and_receipts() {
         &client_id,
         &channel.id,
         plain_rs::features::chat::channels::state::Action::Invite {
-            peer: "peer".into(),
+            peer: "706c6169-89f1-81c6-8bc7-6b67c2ffa178".into(),
         },
     )
     .unwrap();
@@ -286,7 +287,7 @@ async fn encrypted_public_and_ble_rpc_share_auth_executor_and_receipts() {
     );
     let response = client
         .post(&public_url)
-        .header("c-id", "peer")
+        .header("c-id", "706c6169-89f1-81c6-8bc7-6b67c2ffa178")
         .body(body.clone())
         .send()
         .await
@@ -321,7 +322,7 @@ async fn encrypted_public_and_ble_rpc_share_auth_executor_and_receipts() {
     assert_eq!(
         client
             .post(&public_url)
-            .header("c-id", "peer")
+            .header("c-id", "706c6169-89f1-81c6-8bc7-6b67c2ffa178")
             .body(wire(json!({"query":"mutation { startAware }"})))
             .send()
             .await

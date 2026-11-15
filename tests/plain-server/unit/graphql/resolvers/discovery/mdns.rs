@@ -9,7 +9,7 @@ async fn native_main_schema_reads_and_stops_idle_mdns_without_initializing_the_h
     let prefs = Arc::new(
         plain_rs::features::prefs::Prefs::load(&directory.path().join("prefs.json")).unwrap(),
     );
-    prefs.set("client_id", "mdns-fixture").unwrap();
+    prefs.set("client_id", "706c6169-1dd8-8210-a8d0-11b90de918c3").unwrap();
     let server = ContentServer::start(
         directory.path(),
         &plain_libs::utils::base64::base64_encode(&[3; 32]),

@@ -695,7 +695,7 @@ async fn session_urls_revoke_new_requests_without_canceling_started_transfers() 
     let state = server.runtime_state();
     let mut first = plain_rs::features::services::sessions::create(&state, "first".into()).unwrap();
     state.db.session_delete(&first.client_id).unwrap();
-    first.client_id = "客户.with.dots/?+#".into();
+    first.client_id = "706c6169-29b4-8d36-a1d3-e2ea4a2f0d38".into();
     state.db.session_save(&first).unwrap();
     let second = plain_rs::features::services::sessions::create(&state, "second".into()).unwrap();
     assert_ne!(first.url_token, second.url_token);

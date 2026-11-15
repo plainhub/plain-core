@@ -30,8 +30,8 @@ fn device() -> pairing::Device {
 #[tokio::test]
 async fn scanner_sends_only_the_response_and_both_tls_peers_save_the_same_key() {
     use plain_rs::features::services::discovery::{pairing_attempts, pairing_qr};
-    let (_local_dir, local_server) = fixture("display");
-    let (_remote_dir, remote_server) = fixture("scanner");
+    let (_local_dir, local_server) = fixture("706c6169-f9bd-8908-9bd5-f02ea4f40dea");
+    let (_remote_dir, remote_server) = fixture("706c6169-a13e-8ac0-9d42-e0221c9fec7e");
     let mut ports = Vec::new();
     for server in [&local_server, &remote_server] {
         let (cert_pem, cert_key) = plain_libs::tls::generate_pem(&["localhost".into()]).unwrap();
@@ -41,14 +41,14 @@ async fn scanner_sends_only_the_response_and_both_tls_peers_save_the_same_key() 
     let local = local_server.runtime_state().core;
     let remote = remote_server.runtime_state().core;
     assert!(
-        pairing_attempts::start(&remote, "display".into(), Mode::Chat, None, None)
+        pairing_attempts::start(&remote, "706c6169-f9bd-8908-9bd5-f02ea4f40dea".into(), Mode::Chat, None, None)
         .await
         .is_err()
     );
     let mut advertised = device();
     advertised.port = ports[0];
     advertised.ips.push("127.0.0.1".into());
-    let qr = pairing_qr::create_display(&local, "display".into(), advertised).unwrap();
+    let qr = pairing_qr::create_display(&local, "706c6169-f9bd-8908-9bd5-f02ea4f40dea".into(), advertised).unwrap();
     let mut incoming = local.events.subscribe();
     let read_peer = |state: &plain_rs::runtime::Runtime, id| {
         plain_rs::infrastructure::db::chat_store::peers::get(&state.db, id)
@@ -78,13 +78,13 @@ async fn scanner_sends_only_the_response_and_both_tls_peers_save_the_same_key() 
             "127.0.0.1",
             ports[0],
             &message,
-            Some("scanner"),
+            Some("706c6169-a13e-8ac0-9d42-e0221c9fec7e"),
         )
         .await
         .unwrap()
     );
     assert!(
-        plain_rs::infrastructure::db::chat_store::peers::get(&local.db, "scanner")
+        plain_rs::infrastructure::db::chat_store::peers::get(&local.db, "706c6169-a13e-8ac0-9d42-e0221c9fec7e")
             .unwrap()
             .is_none()
     );
@@ -93,10 +93,10 @@ async fn scanner_sends_only_the_response_and_both_tls_peers_save_the_same_key() 
     let parsed = native.execute(plain_graphql::Request::new("query($code:String!){parsePairingQrCode(code:$code){id}}")
         .variables(plain_graphql::Variables::from_json(plain_libs::serde_json::json!({"code":qr.payload})))).await;
     assert!(parsed.errors.is_empty(), "{:?}", parsed.errors);
-    assert_eq!(parsed.data.into_json().unwrap()["parsePairingQrCode"]["id"], "display");
+    assert_eq!(parsed.data.into_json().unwrap()["parsePairingQrCode"]["id"], "706c6169-f9bd-8908-9bd5-f02ea4f40dea");
     for _ in 0..2 {
         let mut notices = remote.events.subscribe();
-        let response = native.execute(plain_graphql::Request::new(r#"mutation{pairPeer(input:{peerId:"display",mode:CHAT})}"#)).await;
+        let response = native.execute(plain_graphql::Request::new(r#"mutation{pairPeer(input:{peerId:"706c6169-f9bd-8908-9bd5-f02ea4f40dea",mode:CHAT})}"#)).await;
         assert!(response.errors.is_empty(), "{:?}", response.errors);
         assert_eq!(response.data.into_json().unwrap()["pairPeer"], true);
         tokio::time::timeout(std::time::Duration::from_secs(5), async {
@@ -113,8 +113,8 @@ async fn scanner_sends_only_the_response_and_both_tls_peers_save_the_same_key() 
                 .all(|byte| byte.is_ascii_digit())
         );
         assert_eq!(
-            read_peer(&local, "scanner").key,
-            read_peer(&remote, "display").key
+            read_peer(&local, "706c6169-a13e-8ac0-9d42-e0221c9fec7e").key,
+            read_peer(&remote, "706c6169-f9bd-8908-9bd5-f02ea4f40dea").key
         );
     }
     let mut completed = 0;

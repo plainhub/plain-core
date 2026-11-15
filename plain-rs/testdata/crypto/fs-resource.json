@@ -1,9 +1,9 @@
 {
-  "clientId": "客户.a/b",
+  "clientId": "706c6169-0001-8000-8000-000000000011",
   "key": "BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc=",
   "resource": {
     "type": "FILE",
     "id": "/photos/a.jpg"
   },
-  "envelope": "c.客户.a/b.AAECAwQFBgcICQoLDA0ODxAREhMUFRYX0zXf_Ip5eZ8HgcgLo8CDjjayGi022EcZnGnY8rWtuv1zWa0RVaCDphaOCoK7O_L2pfgvhg"
+  "envelope": "c.706c6169-0001-8000-8000-000000000011.AAECAwQFBgcICQoLDA0ODxAREhMUFRYX0zXf_Ip5eZ8HgcgLo8CDjjayGi022EcZnGnY8rWtuv1zWa0R5M-ual3_yRNrjCRAhr_VoA"
 }

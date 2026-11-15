@@ -9,7 +9,7 @@ async fn download_directories_use_startup_facts_and_preserve_explicit_native_pat
         let prefs = Arc::new(
             crate::features::prefs::Prefs::load(&directory.path().join("prefs.json")).unwrap(),
         );
-        prefs.set("client_id", "fixture").unwrap();
+        prefs.set("client_id", "706c6169-1dfd-8b72-82bb-3ad00a9928ca").unwrap();
         let mut config = crate::infrastructure::platform::startup::config();
         config.downloads_dir = default.into();
         let core = crate::test_runtime::Core::start_core_with_config(

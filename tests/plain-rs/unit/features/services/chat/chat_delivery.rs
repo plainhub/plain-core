@@ -10,7 +10,7 @@ async fn host_transport_preserves_signed_wire_and_requires_an_actual_receipt() {
     let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs =
         Arc::new(crate::features::prefs::Prefs::load(&dir.path().join("system.json")).unwrap());
-    prefs.set("client_id", "self").unwrap();
+    prefs.set("client_id", "706c6169-1ac2-825a-8c79-0951ec181d4a").unwrap();
     let server = crate::test_runtime::Core::start(
         dir.path(),
         &plain_libs::utils::base64::base64_encode(&[1; 32]),
@@ -88,19 +88,19 @@ async fn host_transport_preserves_signed_wire_and_requires_an_actual_receipt() {
     };
     assert!(
         transport
-            .message(&peer, "self", "channel", &[7; 32], "signed|123|request")
+            .message(&peer, "706c6169-1ac2-825a-8c79-0951ec181d4a", "channel", &[7; 32], "signed|123|request")
             .await
             .is_ok()
     );
     assert!(
         transport
-            .message(&peer, "self", "channel", &[7; 32], "signed|123|request")
+            .message(&peer, "706c6169-1ac2-825a-8c79-0951ec181d4a", "channel", &[7; 32], "signed|123|request")
             .await
             .is_err()
     );
     assert!(
         transport
-            .message(&peer, "self", "channel", &[7; 32], "signed|123|request")
+            .message(&peer, "706c6169-1ac2-825a-8c79-0951ec181d4a", "channel", &[7; 32], "signed|123|request")
             .await
             .is_err()
     );

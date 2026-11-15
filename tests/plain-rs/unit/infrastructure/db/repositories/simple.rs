@@ -83,7 +83,7 @@ fn session_save_get_and_touch() {
     let db = test_db("session");
     let row = SessionRow {
         url_token: "resource-key".into(),
-        client_id: "client-1".into(),
+        client_id: "706c6169-f768-893d-8f88-928c24f13ffa".into(),
         name: "Browser".into(),
         r#type: crate::features::sessions::SessionType::Login,
         client_ip: "192.168.1.5".into(),
@@ -98,14 +98,14 @@ fn session_save_get_and_touch() {
     };
     db.session_save(&row).unwrap();
 
-    let got = db.session_get("client-1").unwrap().expect("session");
+    let got = db.session_get("706c6169-f768-893d-8f88-928c24f13ffa").unwrap().expect("session");
     assert_eq!(got.r#type, crate::features::sessions::SessionType::Login);
     assert_eq!(got.app_name, "Chrome");
     assert_eq!(got.url_token, row.url_token);
 
-    db.session_touch(&[("client-1".into(), "2026-03-01T00:00:00.000Z".into())])
+    db.session_touch(&[("706c6169-f768-893d-8f88-928c24f13ffa".into(), "2026-03-01T00:00:00.000Z".into())])
         .unwrap();
-    let touched = db.session_get("client-1").unwrap().unwrap();
+    let touched = db.session_get("706c6169-f768-893d-8f88-928c24f13ffa").unwrap().unwrap();
     assert_eq!(
         touched.last_seen_at.as_deref(),
         Some("2026-03-01T00:00:00.000Z")
@@ -114,17 +114,17 @@ fn session_save_get_and_touch() {
     assert_eq!(touched.app_version, "120");
 
     assert_eq!(db.session_list().unwrap().len(), 1);
-    assert_eq!(db.session_delete("client-1").unwrap(), 1);
-    assert!(db.session_get("client-1").unwrap().is_none());
+    assert_eq!(db.session_delete("706c6169-f768-893d-8f88-928c24f13ffa").unwrap(), 1);
+    assert!(db.session_get("706c6169-f768-893d-8f88-928c24f13ffa").unwrap().is_none());
 }
 
 #[test]
 fn session_list_orders_by_last_active_desc() {
     let db = test_db("session_order");
     for (id, at) in [
-        ("old", "2026-01-01T00:00:00.000Z"),
-        ("new", "2026-05-01T00:00:00.000Z"),
-        ("mid", "2026-03-01T00:00:00.000Z"),
+        ("706c6169-8448-864b-8a1c-17c1e55fdef1", "2026-01-01T00:00:00.000Z"),
+        ("706c6169-7e5f-8b68-a53c-097a5f8c7dae", "2026-05-01T00:00:00.000Z"),
+        ("706c6169-89a9-8691-892c-c40b57acf47b", "2026-03-01T00:00:00.000Z"),
     ] {
         db.session_save(&SessionRow {
             url_token: "resource-key".into(),
@@ -149,7 +149,7 @@ fn session_list_orders_by_last_active_desc() {
         .into_iter()
         .map(|r| r.client_id)
         .collect();
-    assert_eq!(ids, vec!["new", "mid", "old"]);
+    assert_eq!(ids, vec!["706c6169-7e5f-8b68-a53c-097a5f8c7dae", "706c6169-89a9-8691-892c-c40b57acf47b", "706c6169-8448-864b-8a1c-17c1e55fdef1"]);
 }
 
 #[test]
@@ -342,7 +342,7 @@ fn rows_round_trip_through_serde() {
 fn serialized_field_names_are_snake_case() {
     let row = SessionRow {
         url_token: "resource-key".into(),
-        client_id: "c".into(),
+        client_id: "706c6169-b201-8698-bbcd-44140e826ea8".into(),
         name: "n".into(),
         r#type: crate::features::sessions::SessionType::Login,
         client_ip: "1.2.3.4".into(),
@@ -400,7 +400,7 @@ fn repeated_session_lookups_do_not_execute_sql() {
             db.session_get(&row.client_id).unwrap().unwrap().token,
             row.token
         );
-        assert!(db.session_get("unknown-session").unwrap().is_none());
+        assert!(db.session_get("706c6169-cf57-8566-8255-f5fff431882f").unwrap().is_none());
     }
     db.with_conn(|connection| connection.progress_handler(0, None::<fn() -> bool>));
     assert_eq!(
@@ -413,7 +413,7 @@ fn repeated_session_lookups_do_not_execute_sql() {
 #[cfg(feature = "chat")]
 fn session_cache_row() -> SessionRow {
     SessionRow {
-        client_id: "cache-client".into(),
+        client_id: "706c6169-652f-80e7-971c-a830a6ebe7e3".into(),
         name: "Browser".into(),
         r#type: crate::features::sessions::SessionType::Login,
         client_ip: "127.0.0.1".into(),

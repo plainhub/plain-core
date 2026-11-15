@@ -78,7 +78,7 @@ fn rejecting_confirmation_closes_with_policy_violation() {
         "connection".into(),
         Connection {
             channel: Channel::Auth,
-            client_id: "client".into(),
+            client_id: "706c6169-26be-890e-b404-adf1389070db".into(),
             registered: false,
             native: false,
             pending: Some("request".into()),
@@ -106,7 +106,7 @@ async fn auth_confirmation_uses_host_callbacks_and_returns_the_hosts_decision_to
     prefs.set("remote_access", true).unwrap();
     prefs.set("login_require_approval", true).unwrap();
     prefs.set("password_type", "FIXED").unwrap();
-    prefs.set("client_id", "phone").unwrap();
+    prefs.set("client_id", "706c6169-ae4d-8730-99d0-b5c298c58ce1").unwrap();
     let (private, _) = plain_libs::crypto::ed25519_generate();
     prefs
         .set(
@@ -358,7 +358,7 @@ async fn malformed_login_frames_exhaust_the_ip_limit_before_decryption_despite_r
 async fn root_serves_the_spa_and_old_ws_path_never_upgrades() {
     let (_directory, core) = public_fixture();
     let client = http_client::builder().build().unwrap();
-    for path in ["/", "/ws?cid=browser"] {
+    for path in ["/", "/ws?cid=706c6169-fe7e-818e-a0f0-a71b7c0f3f75"] {
         let response = client
             .get(format!("http://127.0.0.1:{}{path}", core.port))
             .send()
@@ -373,7 +373,7 @@ async fn root_serves_the_spa_and_old_ws_path_never_upgrades() {
         );
         assert!(response.text().await.unwrap().contains("fixture"));
     }
-    for path in ["/?cid=browser", "/ws?cid=browser"] {
+    for path in ["/?cid=706c6169-fe7e-818e-a0f0-a71b7c0f3f75", "/ws?cid=706c6169-fe7e-818e-a0f0-a71b7c0f3f75"] {
         let denied = plain_libs::tokio_tungstenite::connect_async(format!(
             "ws://127.0.0.1:{}{path}",
             core.port

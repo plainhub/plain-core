@@ -22,7 +22,7 @@ async fn public_status_auth_scoped_connections_key_rotation_and_stop_use_rust_wi
     let db = Db::open(&path).unwrap();
     let key = [8; 32];
     let (kp, pk) = plain_libs::crypto::ed25519_generate();
-    let mut peer = DPeer::new("peer", "phone", "127.0.0.1", Some(443), DeviceType::Phone);
+    let mut peer = DPeer::new("706c6169-89f1-81c6-8bc7-6b67c2ffa178", "phone", "127.0.0.1", Some(443), DeviceType::Phone);
     peer.status = PeerStatus::Paired;
     peer.key = plain_libs::utils::base64::base64_encode(&key);
     peer.public_key = plain_libs::utils::base64::base64_encode(&pk);
@@ -50,13 +50,13 @@ async fn public_status_auth_scoped_connections_key_rotation_and_stop_use_rust_wi
         kp: &[u8],
         id: &str,
     ) -> (crypto::Stream, Vec<u8>, Vec<u8>) {
-        let init = crypto::registration(key, "peer", "/status").unwrap();
+        let init = crypto::registration(key, "706c6169-89f1-81c6-8bc7-6b67c2ffa178", "/status").unwrap();
         socket
             .send(Message::Binary(init.clone().into()))
             .await
             .unwrap();
         let ack = socket.next().await.unwrap().unwrap().into_data();
-        let mut stream = crypto::acknowledge(key, "peer", "/status", &init, &ack).unwrap();
+        let mut stream = crypto::acknowledge(key, "706c6169-89f1-81c6-8bc7-6b67c2ffa178", "/status", &init, &ack).unwrap();
         let signature = plain_rs::features::peers::status::proof(kp, id, &init, &ack).unwrap();
         let body = stream.encode(signature.as_bytes(), key).unwrap();
         socket
@@ -78,13 +78,13 @@ async fn public_status_auth_scoped_connections_key_rotation_and_stop_use_rust_wi
             Some(b"ok".as_slice())
         );
     }
-    let url = format!("ws://127.0.0.1:{http}/status?cid=peer");
+    let url = format!("ws://127.0.0.1:{http}/status?cid=706c6169-89f1-81c6-8bc7-6b67c2ffa178");
     let (mut bad, _) = connect_async(&url).await.unwrap();
     wire(&mut bad, &key, &kp, "other").await;
     assert!(!matches!(bad.next().await,Some(Ok(Message::Text(t))) if t=="ok"));
     assert_eq!(snapshot(&server)["online"], json!([]));
     let (mut first, _) = connect_async(&url).await.unwrap();
-    let (mut first_stream, original_init, original) = wire(&mut first, &key, &kp, "peer").await;
+    let (mut first_stream, original_init, original) = wire(&mut first, &key, &kp, "706c6169-89f1-81c6-8bc7-6b67c2ffa178").await;
     confirmed(&mut first, &mut first_stream, &key).await;
     let (mut replay, _) = connect_async(&url).await.unwrap();
     replay
@@ -97,14 +97,14 @@ async fn public_status_auth_scoped_connections_key_rotation_and_stop_use_rust_wi
         .await
         .unwrap();
     assert!(!matches!(replay.next().await, Some(Ok(Message::Binary(_)))));
-    assert_eq!(snapshot(&server)["online"], json!(["peer"]));
+    assert_eq!(snapshot(&server)["online"], json!(["706c6169-89f1-81c6-8bc7-6b67c2ffa178"]));
     let (mut second, _) = connect_async(&url).await.unwrap();
-    let (mut second_stream, _, _) = wire(&mut second, &key, &kp, "peer").await;
+    let (mut second_stream, _, _) = wire(&mut second, &key, &kp, "706c6169-89f1-81c6-8bc7-6b67c2ffa178").await;
     confirmed(&mut second, &mut second_stream, &key).await;
     first.send(Message::Binary(original.into())).await.unwrap();
     assert!(!matches!(first.next().await, Some(Ok(Message::Binary(_)))));
     let _ = first.close(None).await;
-    assert_eq!(snapshot(&server)["online"], json!(["peer"]));
+    assert_eq!(snapshot(&server)["online"], json!(["706c6169-89f1-81c6-8bc7-6b67c2ffa178"]));
     let new_key = [9; 32];
     let (new_kp, new_pk) = plain_libs::crypto::ed25519_generate();
     peer.key = plain_libs::utils::base64::base64_encode(&new_key);
@@ -112,12 +112,12 @@ async fn public_status_auth_scoped_connections_key_rotation_and_stop_use_rust_wi
     peers::save(&db, &[peer], SaveMode::Update).unwrap();
     assert_eq!(snapshot(&server)["online"], json!([]));
     let (mut replacement, _) = connect_async(&url).await.unwrap();
-    let (mut replacement_stream, _, _) = wire(&mut replacement, &new_key, &new_kp, "peer").await;
+    let (mut replacement_stream, _, _) = wire(&mut replacement, &new_key, &new_kp, "706c6169-89f1-81c6-8bc7-6b67c2ffa178").await;
     confirmed(&mut replacement, &mut replacement_stream, &new_key).await;
     let _ = tokio::time::timeout(Duration::from_secs(3), second.next())
         .await
         .unwrap();
-    assert_eq!(snapshot(&server)["online"], json!(["peer"]));
+    assert_eq!(snapshot(&server)["online"], json!(["706c6169-89f1-81c6-8bc7-6b67c2ffa178"]));
     let mut stale = server.runtime_state().events.subscribe();
     server.stop_public().await;
     let _ = tokio::time::timeout(Duration::from_secs(3), replacement.next())
@@ -191,14 +191,14 @@ async fn rust_outgoing_reconnects_same_address_without_native_and_stops_without_
     }
     let a_dir = plain_libs::temporary::tempdir().unwrap();
     let b_dir = plain_libs::temporary::tempdir().unwrap();
-    let (a_prefs, a_pk) = configured(a_dir.path(), "a");
-    let (b_prefs, b_pk) = configured(b_dir.path(), "b");
+    let (a_prefs, a_pk) = configured(a_dir.path(), "706c6169-0001-8000-8000-000000000001");
+    let (b_prefs, b_pk) = configured(b_dir.path(), "706c6169-0001-8000-8000-000000000002");
     let shared = plain_libs::utils::base64::base64_encode(&[17; 32]);
     let a_path = a_dir.path().join("plain.db");
     let b_path = b_dir.path().join("plain.db");
     let a_db = Db::open(&a_path).unwrap();
     let b_db = Db::open(&b_path).unwrap();
-    let mut a_peer = DPeer::new("a", "a", "127.0.0.1", Some(443), DeviceType::Phone);
+    let mut a_peer = DPeer::new("706c6169-0001-8000-8000-000000000001", "706c6169-0001-8000-8000-000000000001", "127.0.0.1", Some(443), DeviceType::Phone);
     a_peer.key = shared.clone();
     a_peer.public_key = plain_libs::utils::base64::base64_encode(&a_pk);
     a_peer.status = PeerStatus::Paired;
@@ -214,7 +214,7 @@ async fn rust_outgoing_reconnects_same_address_without_native_and_stops_without_
         .start_public(0, 0, cert_pem.clone(), cert_key.clone())
         .await
         .unwrap();
-    let mut b_peer = DPeer::new("b", "b", "127.0.0.1", Some(b_https), DeviceType::Phone);
+    let mut b_peer = DPeer::new("706c6169-0001-8000-8000-000000000002", "706c6169-0001-8000-8000-000000000002", "127.0.0.1", Some(b_https), DeviceType::Phone);
     b_peer.key = shared;
     b_peer.public_key = plain_libs::utils::base64::base64_encode(&b_pk);
     b_peer.status = PeerStatus::Paired;
@@ -224,24 +224,24 @@ async fn rust_outgoing_reconnects_same_address_without_native_and_stops_without_
     a.start_public(0, 0, cert_pem.clone(), cert_key.clone())
         .await
         .unwrap();
-    wait_online(&a, "b", true).await;
-    wait_online(&b, "a", true).await;
+    wait_online(&a, "706c6169-0001-8000-8000-000000000002", true).await;
+    wait_online(&b, "706c6169-0001-8000-8000-000000000001", true).await;
     b.stop_public().await;
-    wait_online(&a, "b", false).await;
+    wait_online(&a, "706c6169-0001-8000-8000-000000000002", false).await;
     b.start_public(0, b_https, cert_pem.clone(), cert_key.clone())
         .await
         .unwrap();
-    wait_online(&a, "b", true).await;
+    wait_online(&a, "706c6169-0001-8000-8000-000000000002", true).await;
     b_peer.status = PeerStatus::Unpaired;
     peers::save(&a_db, &[b_peer.clone()], SaveMode::Update).unwrap();
-    wait_online(&a, "b", false).await;
-    wait_online(&b, "a", false).await;
+    wait_online(&a, "706c6169-0001-8000-8000-000000000002", false).await;
+    wait_online(&b, "706c6169-0001-8000-8000-000000000001", false).await;
     b_peer.status = PeerStatus::Paired;
     peers::save(&a_db, &[b_peer], SaveMode::Update).unwrap();
-    wait_online(&a, "b", true).await;
+    wait_online(&a, "706c6169-0001-8000-8000-000000000002", true).await;
     a.stop_public().await;
-    wait_online(&a, "b", false).await;
-    wait_online(&b, "a", false).await;
+    wait_online(&a, "706c6169-0001-8000-8000-000000000002", false).await;
+    wait_online(&b, "706c6169-0001-8000-8000-000000000001", false).await;
     tokio::time::sleep(Duration::from_millis(1100)).await;
     assert_eq!(
         a.runtime_state()
@@ -253,7 +253,7 @@ async fn rust_outgoing_reconnects_same_address_without_native_and_stops_without_
     a.start_public(0, 0, cert_pem.clone(), cert_key.clone())
         .await
         .unwrap();
-    wait_online(&a, "b", true).await;
+    wait_online(&a, "706c6169-0001-8000-8000-000000000002", true).await;
     a.stop_public().await;
     assert_eq!(control(&a, "RECONNECT").await, Ok(true));
     tokio::time::sleep(Duration::from_millis(1100)).await;
@@ -264,7 +264,7 @@ async fn rust_outgoing_reconnects_same_address_without_native_and_stops_without_
             .snapshot(&a.runtime_state().db)["online"],
         json!([])
     );
-    wait_online(&a, "b", false).await;
+    wait_online(&a, "706c6169-0001-8000-8000-000000000002", false).await;
     a.shutdown().await;
     b.shutdown().await;
 }

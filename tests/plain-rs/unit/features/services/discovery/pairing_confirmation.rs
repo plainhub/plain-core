@@ -53,21 +53,21 @@ fn peer(state: &CoreRuntime, id: &str) -> Option<crate::infrastructure::db::DPee
 
 #[tokio::test]
 async fn signed_reply_commits_both_peers_and_retries_keep_original_key() {
-    let (_ad, a) = fixture("a");
-    let (_bd, b) = fixture("b");
+    let (_ad, a) = fixture("706c6169-fdbb-865c-ab5a-2260e9b9f142");
+    let (_bd, b) = fixture("706c6169-e28a-8959-996d-cc20540e4c47");
     let a = a.runtime_state();
     let b = b.runtime_state();
     let (request, _) = begin(&a, &b);
-    assert!(peer(&a, "b").is_none());
-    assert!(peer(&b, "a").is_none());
+    assert!(peer(&a, "706c6169-e28a-8959-996d-cc20540e4c47").is_none());
+    assert!(peer(&b, "706c6169-fdbb-865c-ab5a-2260e9b9f142").is_none());
 
     let (reply, _) = b
         .pairing_runtime
         .confirmations
         .respond(&b, &request, true, device())
         .unwrap();
-    let b_peer = peer(&b, "a").unwrap();
-    assert!(peer(&a, "b").is_none());
+    let b_peer = peer(&b, "706c6169-fdbb-865c-ab5a-2260e9b9f142").unwrap();
+    assert!(peer(&a, "706c6169-e28a-8959-996d-cc20540e4c47").is_none());
     let (retried, _) = b
         .pairing_runtime
         .confirmations
@@ -77,7 +77,7 @@ async fn signed_reply_commits_both_peers_and_retries_keep_original_key() {
         plain_libs::serde_json::to_vec(&retried).unwrap(),
         plain_libs::serde_json::to_vec(&reply).unwrap()
     );
-    assert_eq!(peer(&b, "a").unwrap().updated_at, b_peer.updated_at);
+    assert_eq!(peer(&b, "706c6169-fdbb-865c-ab5a-2260e9b9f142").unwrap().updated_at, b_peer.updated_at);
 
     let mut forged = reply.clone();
     let PairingReply::Accept(accepted) = &mut forged else {
@@ -90,25 +90,25 @@ async fn signed_reply_commits_both_peers_and_retries_keep_original_key() {
             .response(&a, &forged, "")
             .is_err()
     );
-    assert!(peer(&a, "b").is_none());
+    assert!(peer(&a, "706c6169-e28a-8959-996d-cc20540e4c47").is_none());
     a.pairing_runtime
         .confirmations
         .response(&a, &retried, "")
         .unwrap();
-    let a_peer = peer(&a, "b").unwrap();
+    let a_peer = peer(&a, "706c6169-e28a-8959-996d-cc20540e4c47").unwrap();
     assert_eq!(a_peer.key, b_peer.key);
 
     a.pairing_runtime
         .confirmations
         .response(&a, &reply, "")
         .unwrap();
-    assert_eq!(peer(&a, "b").unwrap().updated_at, a_peer.updated_at);
+    assert_eq!(peer(&a, "706c6169-e28a-8959-996d-cc20540e4c47").unwrap().updated_at, a_peer.updated_at);
 }
 
 #[tokio::test]
 async fn a_canceled_attempt_cannot_commit_a_late_reply() {
-    let (_ad, a) = fixture("a");
-    let (_bd, b) = fixture("b");
+    let (_ad, a) = fixture("706c6169-fdbb-865c-ab5a-2260e9b9f142");
+    let (_bd, b) = fixture("706c6169-e28a-8959-996d-cc20540e4c47");
     let a = a.runtime_state();
     let b = b.runtime_state();
     let (request, ticket) = begin(&a, &b);
@@ -117,20 +117,20 @@ async fn a_canceled_attempt_cannot_commit_a_late_reply() {
         .confirmations
         .respond(&b, &request, true, device())
         .unwrap();
-    a.pairing.cancel("b", Some(&ticket.generation)).unwrap();
+    a.pairing.cancel("706c6169-e28a-8959-996d-cc20540e4c47", Some(&ticket.generation)).unwrap();
     assert!(
         a.pairing_runtime
             .confirmations
             .response(&a, &reply, "")
             .is_err()
     );
-    assert!(peer(&a, "b").is_none());
+    assert!(peer(&a, "706c6169-e28a-8959-996d-cc20540e4c47").is_none());
 }
 
 #[tokio::test]
 async fn declined_reply_is_cached_and_does_not_write_peers() {
-    let (_ad, a) = fixture("a");
-    let (_bd, b) = fixture("b");
+    let (_ad, a) = fixture("706c6169-fdbb-865c-ab5a-2260e9b9f142");
+    let (_bd, b) = fixture("706c6169-e28a-8959-996d-cc20540e4c47");
     let a = a.runtime_state();
     let b = b.runtime_state();
     let (request, _) = begin(&a, &b);
@@ -156,14 +156,14 @@ async fn declined_reply_is_cached_and_does_not_write_peers() {
         .response(&a, &cached, "")
         .unwrap();
 
-    assert!(peer(&a, "b").is_none());
-    assert!(peer(&b, "a").is_none());
+    assert!(peer(&a, "706c6169-e28a-8959-996d-cc20540e4c47").is_none());
+    assert!(peer(&b, "706c6169-fdbb-865c-ab5a-2260e9b9f142").is_none());
 }
 
 #[tokio::test]
 async fn failed_peer_write_retries_the_same_signed_reply() {
-    let (_ad, a) = fixture("a");
-    let (_bd, b) = fixture("b");
+    let (_ad, a) = fixture("706c6169-fdbb-865c-ab5a-2260e9b9f142");
+    let (_bd, b) = fixture("706c6169-e28a-8959-996d-cc20540e4c47");
     let a = a.runtime_state();
     let b = b.runtime_state();
     let (request, _) = begin(&a, &b);
@@ -179,12 +179,12 @@ async fn failed_peer_write_retries_the_same_signed_reply() {
             .response(&a, &reply, "")
             .is_err()
     );
-    assert!(peer(&a, "b").is_none());
+    assert!(peer(&a, "706c6169-e28a-8959-996d-cc20540e4c47").is_none());
     a.db.with_conn(|c| c.execute_batch("DROP TRIGGER fail_pair"))
         .unwrap();
     a.pairing_runtime
         .confirmations
         .response(&a, &reply, "")
         .unwrap();
-    assert_eq!(peer(&a, "b").unwrap().key, peer(&b, "a").unwrap().key);
+    assert_eq!(peer(&a, "706c6169-e28a-8959-996d-cc20540e4c47").unwrap().key, peer(&b, "706c6169-fdbb-865c-ab5a-2260e9b9f142").unwrap().key);
 }

@@ -15,7 +15,7 @@ async fn native_main_record_queries_preserve_addresses_keys_members_and_checked_
     let prefs = Arc::new(
         plain_rs::features::prefs::Prefs::load(&directory.path().join("prefs.json")).unwrap(),
     );
-    prefs.set("client_id", "fixture").unwrap();
+    prefs.set("client_id", "706c6169-1dfd-8b72-82bb-3ad00a9928ca").unwrap();
     let server = ContentServer::start(
         directory.path(),
         &plain_libs::utils::base64::base64_encode(&[3; 32]),
@@ -27,7 +27,7 @@ async fn native_main_record_queries_preserve_addresses_keys_members_and_checked_
     peer.key = plain_libs::utils::base64::base64_encode(&[7; 32]);
     peer.status = PeerStatus::Paired;
     peers::save(&state.db, &[peer.clone()], SaveMode::Insert).unwrap();
-    let mut channel = DChannel::new("Channel", "fixture");
+    let mut channel = DChannel::new("Channel", "706c6169-1dfd-8b72-82bb-3ad00a9928ca");
     channel.id = "channel".into();
     channel.key = "channel-key".into();
     channel.members = r#"[{"peerId":"peer","status":"JOINED"}]"#.into();
@@ -165,7 +165,7 @@ async fn remote_requests_cannot_access_or_change_local_login_sessions() {
     state
         .db
         .login_peer(
-            "fixture",
+            "706c6169-1dfd-8b72-82bb-3ad00a9928ca",
             "Fixture",
             "127.0.0.1",
             9443,

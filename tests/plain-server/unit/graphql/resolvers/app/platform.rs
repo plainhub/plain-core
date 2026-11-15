@@ -26,7 +26,7 @@ async fn public_events_read_the_core_database_without_host_or_legacy_store() {
     assert!(result.errors.is_empty(), "{:?}", result.errors);
     let data = result.data.into_json().unwrap();
     assert_eq!(data["events"][0]["id"], id);
-    assert_eq!(data["events"][0]["clientId"], "client");
+    assert_eq!(data["events"][0]["clientId"], "706c6169-26be-890e-b404-adf1389070db");
     assert_eq!(data["events"][0]["clientName"], "Fixture client");
     assert_eq!(data["events"][0]["clientIp"], "192.0.2.24");
     assert_eq!(data["events"][0]["osName"], "Windows");
@@ -298,7 +298,7 @@ async fn disk_queries_read_native_rust_after_one_capability_check() {
 
 fn plain_rs_client() -> plain_rs::infrastructure::db::AuditEventClient {
     plain_rs::infrastructure::db::AuditEventClient {
-        client_id: "client".into(),
+        client_id: "706c6169-26be-890e-b404-adf1389070db".into(),
         client_name: "Fixture client".into(),
         client_ip: "192.0.2.24".into(),
         os_name: "Windows".into(),

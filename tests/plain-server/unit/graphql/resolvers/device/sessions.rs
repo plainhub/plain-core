@@ -11,7 +11,7 @@ fn fixture() -> (plain_libs::temporary::TempDir, ContentServer) {
     state.prefs.set("background_service_enabled", true).unwrap();
     state.prefs.set("remote_access", true).unwrap();
     state.prefs.set("device_name", "Fixture host").unwrap();
-    for id in ["first", "second"] {
+    for id in ["706c6169-7caa-8624-826a-f1e2faa59369", "706c6169-61a2-83b0-bf56-34d332e83e8f"] {
         let mut session =
             plain_rs::features::services::sessions::create(&state, id.into()).unwrap();
         state.db.session_delete(&session.client_id).unwrap();
@@ -49,7 +49,7 @@ async fn authenticated_native_and_remote_clients_can_list_session_metadata() {
     let state = server.runtime_state();
     let remote = execute(
         &state,
-        "first",
+        "706c6169-7caa-8624-826a-f1e2faa59369",
         RequestOrigin::Remote,
         "{ sessions { clientId clientName } }",
     )
@@ -68,12 +68,12 @@ async fn authenticated_native_and_remote_clients_can_list_session_metadata() {
     assert!(
         sessions
             .iter()
-            .any(|session| session["clientId"] == "first")
+            .any(|session| session["clientId"] == "706c6169-7caa-8624-826a-f1e2faa59369")
     );
     assert!(
         sessions
             .iter()
-            .any(|session| session["clientId"] == "second")
+            .any(|session| session["clientId"] == "706c6169-61a2-83b0-bf56-34d332e83e8f")
     );
     let local = execute(
         &state,
@@ -99,21 +99,21 @@ async fn authenticated_revocation_and_logout_remove_the_keys_used_by_http_authen
     let state = server.runtime_state();
     let revoked = execute(
         &state,
-        "first",
+        "706c6169-7caa-8624-826a-f1e2faa59369",
         RequestOrigin::Remote,
-        "mutation { revokeSession(clientId:\"second\") }",
+        "mutation { revokeSession(clientId:\"706c6169-61a2-83b0-bf56-34d332e83e8f\") }",
     )
     .await;
     assert!(revoked.errors.is_empty(), "{:?}", revoked.errors);
     assert!(
-        plain_rs::features::services::sessions::key(&state.db, "second")
+        plain_rs::features::services::sessions::key(&state.db, "706c6169-61a2-83b0-bf56-34d332e83e8f")
             .unwrap()
             .is_none()
     );
-    let token = state.db.session_get("first").unwrap().unwrap().token;
+    let token = state.db.session_get("706c6169-7caa-8624-826a-f1e2faa59369").unwrap().unwrap().token;
     let logout = execute(
         &state,
-        "first",
+        "706c6169-7caa-8624-826a-f1e2faa59369",
         RequestOrigin::Remote,
         "mutation { logout }",
     )
@@ -121,12 +121,12 @@ async fn authenticated_revocation_and_logout_remove_the_keys_used_by_http_authen
     assert!(logout.errors.is_empty(), "{:?}", logout.errors);
     assert_eq!(logout.data.into_json().unwrap()["logout"], true);
     assert!(
-        plain_rs::features::services::sessions::key(&state.db, "first")
+        plain_rs::features::services::sessions::key(&state.db, "706c6169-7caa-8624-826a-f1e2faa59369")
             .unwrap()
             .is_none()
     );
     let mut headers = plain_libs::axum::http::HeaderMap::new();
-    headers.insert("c-id", "first".parse().unwrap());
+    headers.insert("c-id", "706c6169-7caa-8624-826a-f1e2faa59369".parse().unwrap());
     headers.insert("authorization", format!("Bearer {token}").parse().unwrap());
     let response = crate::http::graphql::call(
         plain_libs::axum::extract::State(state.clone()),
@@ -141,14 +141,14 @@ async fn authenticated_revocation_and_logout_remove_the_keys_used_by_http_authen
     state.audit_events.flush().await.unwrap();
     let records = state.db.audit_events(0, 10, None).unwrap();
     assert!(records.iter().any(|row| row.r#type == EventType::Logout
-        && row.client_id.as_deref() == Some("first")
-        && row.client_name.as_deref() == Some("first")));
+        && row.client_id.as_deref() == Some("706c6169-7caa-8624-826a-f1e2faa59369")
+        && row.client_name.as_deref() == Some("706c6169-7caa-8624-826a-f1e2faa59369")));
     assert!(
         records
             .iter()
             .any(|row| row.r#type == EventType::RevokeSession
-                && row.client_id.as_deref() == Some("first")
-                && row.client_name.as_deref() == Some("first"))
+                && row.client_id.as_deref() == Some("706c6169-7caa-8624-826a-f1e2faa59369")
+                && row.client_name.as_deref() == Some("706c6169-7caa-8624-826a-f1e2faa59369"))
     );
     let revoked = records
         .iter()
@@ -158,8 +158,8 @@ async fn authenticated_revocation_and_logout_remove_the_keys_used_by_http_authen
         revoked.data,
         EventData::Session(SessionEventData {
             session: EventSession {
-                client_id: "second".into(),
-                client_name: "second".into(),
+                client_id: "706c6169-61a2-83b0-bf56-34d332e83e8f".into(),
+                client_name: "706c6169-61a2-83b0-bf56-34d332e83e8f".into(),
                 r#type: SessionType::ApiToken,
             }
         })
@@ -178,11 +178,11 @@ async fn management_requires_a_trusted_caller_identity() {
         &state,
         "native",
         RequestOrigin::Local,
-        "mutation { revokeSession(clientId:\"second\") }",
+        "mutation { revokeSession(clientId:\"706c6169-61a2-83b0-bf56-34d332e83e8f\") }",
     )
     .await;
     assert!(revoked.errors.is_empty(), "{:?}", revoked.errors);
-    assert!(state.db.session_get("second").unwrap().is_none());
+    assert!(state.db.session_get("706c6169-61a2-83b0-bf56-34d332e83e8f").unwrap().is_none());
     state.audit_events.flush().await.unwrap();
     let audit = state.db.audit_events(0, 10, None).unwrap();
     assert_eq!(audit[0].r#type, EventType::RevokeSession);
@@ -200,7 +200,7 @@ async fn management_requires_a_trusted_caller_identity() {
         Some(state.native_client_id().unwrap().as_str())
     );
     assert!(
-        matches!(&audit[0].data, EventData::Session(data) if data.session.client_id == "second" && data.session.client_name == "second")
+        matches!(&audit[0].data, EventData::Session(data) if data.session.client_id == "706c6169-61a2-83b0-bf56-34d332e83e8f" && data.session.client_name == "706c6169-61a2-83b0-bf56-34d332e83e8f")
     );
     server.shutdown().await;
 }
@@ -212,7 +212,7 @@ async fn retired_create_session_stays_removed_and_native_management_can_mint_tok
     let before = state.db.session_list().unwrap().len();
     let remote = execute(
         &state,
-        "first",
+        "706c6169-7caa-8624-826a-f1e2faa59369",
         RequestOrigin::Remote,
         "mutation { createSession(name:\"Rejected remote credential\") { clientId } }",
     )
@@ -267,7 +267,7 @@ async fn authenticated_browser_and_native_clients_can_create_named_api_tokens() 
             assert!(response.errors.is_empty(), "{:?}", response.errors);
             response.data.into_json().unwrap()["createApiToken"].clone()
         } else {
-            let mut caller = state.db.session_get("first").unwrap().unwrap();
+            let mut caller = state.db.session_get("706c6169-7caa-8624-826a-f1e2faa59369").unwrap().unwrap();
             caller.r#type = SessionType::Login;
             state.db.session_save(&caller).unwrap();
             let key = plain_rs::features::sessions::token_key(&caller.token).unwrap();
@@ -343,13 +343,13 @@ async fn session_schema_contains_metadata_only_and_login_authentication_keeps_wo
     assert!(fields.contains(&"clientId"));
     assert!(!fields.contains(&"token"));
     assert!(!fields.contains(&"urlToken"));
-    let mut login = state.db.session_get("first").unwrap().unwrap();
+    let mut login = state.db.session_get("706c6169-7caa-8624-826a-f1e2faa59369").unwrap().unwrap();
     login.r#type = SessionType::Login;
     state.db.session_save(&login).unwrap();
     for origin in [RequestOrigin::Local, RequestOrigin::Remote] {
         let response = execute(
             &state,
-            "first",
+            "706c6169-7caa-8624-826a-f1e2faa59369",
             origin,
             "{ sessions { clientId clientName type } }",
         )
@@ -373,7 +373,7 @@ async fn session_schema_contains_metadata_only_and_login_authentication_keeps_wo
     )
     .unwrap();
     let mut headers = plain_libs::axum::http::HeaderMap::new();
-    headers.insert("c-id", "first".parse().unwrap());
+    headers.insert("c-id", "706c6169-7caa-8624-826a-f1e2faa59369".parse().unwrap());
     let response = crate::http::graphql::call(
         plain_libs::axum::extract::State(state.clone()),
         headers,
@@ -391,7 +391,7 @@ async fn session_schema_contains_metadata_only_and_login_authentication_keeps_wo
     assert!(result.get("errors").is_none(), "{result}");
     assert_eq!(result["data"]["sessions"].as_array().unwrap().len(), 2);
     assert_eq!(result["data"]["app"]["urlToken"], login.url_token);
-    let saved = state.db.session_get("first").unwrap().unwrap();
+    let saved = state.db.session_get("706c6169-7caa-8624-826a-f1e2faa59369").unwrap().unwrap();
     assert_eq!(saved.token, login.token);
     assert_eq!(saved.url_token, login.url_token);
     core.stop_core().await;
@@ -403,7 +403,7 @@ async fn self_revocation_snapshots_the_actor_and_missing_targets_do_not_create_e
     let state = server.runtime_state();
     let missing = execute(
         &state,
-        "first",
+        "706c6169-7caa-8624-826a-f1e2faa59369",
         RequestOrigin::Remote,
         "mutation { revokeSession(clientId:\"missing\") }",
     )
@@ -412,9 +412,9 @@ async fn self_revocation_snapshots_the_actor_and_missing_targets_do_not_create_e
     assert_eq!(missing.data.into_json().unwrap()["revokeSession"], false);
     let response = execute(
         &state,
-        "first",
+        "706c6169-7caa-8624-826a-f1e2faa59369",
         RequestOrigin::Remote,
-        "mutation { revokeSession(clientId:\"first\") }",
+        "mutation { revokeSession(clientId:\"706c6169-7caa-8624-826a-f1e2faa59369\") }",
     )
     .await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
@@ -422,11 +422,11 @@ async fn self_revocation_snapshots_the_actor_and_missing_targets_do_not_create_e
     let rows = state.db.audit_events(0, 10, None).unwrap();
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].r#type, EventType::RevokeSession);
-    assert_eq!(rows[0].client_id.as_deref(), Some("first"));
-    assert_eq!(rows[0].client_name.as_deref(), Some("first"));
-    assert!(matches!(&rows[0].data, EventData::Session(data) if data.session.client_id == "first"));
-    assert!(state.db.session_get("first").unwrap().is_none());
-    assert!(state.db.session_get("second").unwrap().is_some());
+    assert_eq!(rows[0].client_id.as_deref(), Some("706c6169-7caa-8624-826a-f1e2faa59369"));
+    assert_eq!(rows[0].client_name.as_deref(), Some("706c6169-7caa-8624-826a-f1e2faa59369"));
+    assert!(matches!(&rows[0].data, EventData::Session(data) if data.session.client_id == "706c6169-7caa-8624-826a-f1e2faa59369"));
+    assert!(state.db.session_get("706c6169-7caa-8624-826a-f1e2faa59369").unwrap().is_none());
+    assert!(state.db.session_get("706c6169-61a2-83b0-bf56-34d332e83e8f").unwrap().is_some());
     server.stop_core().await;
 }
 
@@ -439,7 +439,7 @@ async fn device_rename_records_the_authenticated_actor_and_before_after_names() 
         .device_name;
     let response = execute(
         &state,
-        "first",
+        "706c6169-7caa-8624-826a-f1e2faa59369",
         RequestOrigin::Remote,
         "mutation { updateDeviceName(name:\"Fixture renamed device\") }",
     )
@@ -448,14 +448,14 @@ async fn device_rename_records_the_authenticated_actor_and_before_after_names() 
     state.audit_events.flush().await.unwrap();
     let rows = state.db.audit_events(0, 10, None).unwrap();
     assert_eq!(rows.len(), 1);
-    assert_eq!(rows[0].client_id.as_deref(), Some("first"));
-    assert_eq!(rows[0].client_name.as_deref(), Some("first"));
+    assert_eq!(rows[0].client_id.as_deref(), Some("706c6169-7caa-8624-826a-f1e2faa59369"));
+    assert_eq!(rows[0].client_name.as_deref(), Some("706c6169-7caa-8624-826a-f1e2faa59369"));
     assert!(
         matches!(&rows[0].data, EventData::DeviceName(data) if data.old_name == before && data.new_name == "Fixture renamed device")
     );
     let response = execute(
         &state,
-        "first",
+        "706c6169-7caa-8624-826a-f1e2faa59369",
         RequestOrigin::Remote,
         "mutation { updateDeviceName(name:\"Fixture renamed device\") }",
     )

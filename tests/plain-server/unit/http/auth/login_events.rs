@@ -15,10 +15,10 @@ async fn invalid_password_proof_is_recorded_once_without_session_or_secrets() {
         .unwrap();
     let signing = plain_rs::features::prefs::security::signing_keypair(&state.prefs).unwrap();
     let identity = &signing[32..];
-    let context = plain_libs::auth::context("731f75a8-4782-5a80-b00a-a2bfae12c134", identity);
+    let context = plain_libs::auth::context("706c6169-ef5c-852f-b5d6-8277a11c9541", identity);
     let client = ClientLogin::start(&mut rand_core::OsRng, b"fixture-password").unwrap();
     let (mut socket, _) = plain_libs::tokio_tungstenite::connect_async(format!(
-        "ws://127.0.0.1:{port}/auth?cid=731f75a8-4782-5a80-b00a-a2bfae12c134"
+        "ws://127.0.0.1:{port}/auth?cid=706c6169-ef5c-852f-b5d6-8277a11c9541"
     ))
     .await
     .unwrap();
@@ -64,13 +64,13 @@ async fn invalid_password_proof_is_recorded_once_without_session_or_secrets() {
     assert!(records[0].os_name.is_none());
     assert_eq!(
         records[0].client_id.as_deref(),
-        Some("731f75a8-4782-5a80-b00a-a2bfae12c134")
+        Some("706c6169-ef5c-852f-b5d6-8277a11c9541")
     );
     assert!(!format!("{:?}", records[0]).contains("fixture-password"));
     assert!(
         state
             .db
-            .session_get("731f75a8-4782-5a80-b00a-a2bfae12c134")
+            .session_get("706c6169-ef5c-852f-b5d6-8277a11c9541")
             .unwrap()
             .is_none()
     );

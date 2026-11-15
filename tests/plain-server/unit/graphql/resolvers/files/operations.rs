@@ -45,7 +45,7 @@ fn fixture_with(
             json!(plain_libs::serde_json::from_str::<Vec<String>>(permissions).unwrap()),
         )
         .unwrap();
-    prefs.set("client_id", "file-test").unwrap();
+    prefs.set("client_id", "706c6169-3c49-873c-ad12-6bcff602a9bd").unwrap();
     let db = Arc::new(Db::open(&dir.path().join("data.db")).unwrap());
     let host = Arc::new(Host::default());
     stub(host.clone(), handler);
@@ -208,7 +208,7 @@ async fn a_refused_rename_reports_false() {
     let response = schema
         .execute(
             plain_graphql::Request::new(r#"mutation { renameFile(path:"/a", name:"..") }"#)
-                .data("file-test".to_owned()),
+                .data("706c6169-3c49-873c-ad12-6bcff602a9bd".to_owned()),
         )
         .await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
@@ -224,7 +224,7 @@ async fn copy_and_move_use_the_shared_file_tasks() {
         std::fs::write(&source, "new").unwrap();
         std::fs::write(&destination, "old").unwrap();
         let response = schema.execute(plain_graphql::Request::new(format!("mutation($src:String!,$dst:String!){{createFileTask(type:{kind},title:\"{kind}\",ops:[{{src:$src,dst:$dst,overwrite:true}}],waitForCompletion:true){{status error completedOps{{src dst}}}}}}"))
-            .variables(plain_graphql::Variables::from_json(json!({"src":source,"dst":destination}))).data("file-test".to_owned())).await;
+            .variables(plain_graphql::Variables::from_json(json!({"src":source,"dst":destination}))).data("706c6169-3c49-873c-ad12-6bcff602a9bd".to_owned())).await;
         assert!(response.errors.is_empty(), "{:?}", response.errors);
         let task = response.data.into_json().unwrap()["createFileTask"].clone();
         assert_eq!(task["status"], "DONE");
@@ -238,7 +238,7 @@ async fn copy_and_move_use_the_shared_file_tasks() {
         let tasks = schema
             .data::<Arc<plain_rs::features::services::files::file_tasks::FileTasks>>()
             .unwrap()
-            .list("file-test".into())
+            .list("706c6169-3c49-873c-ad12-6bcff602a9bd".into())
             .await
             .unwrap();
         assert!(tasks.iter().any(|task| task.title == kind));

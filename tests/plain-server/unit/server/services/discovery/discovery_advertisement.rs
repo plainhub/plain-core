@@ -10,7 +10,7 @@ fn core_with_host(directory: &std::path::Path) -> (crate::server::ContentServer,
     let prefs = std::sync::Arc::new(
         plain_rs::features::prefs::Prefs::load(&directory.join("system.json")).unwrap(),
     );
-    prefs.set("client_id", "fixture-root").unwrap();
+    prefs.set("client_id", "706c6169-76f9-8bd9-8ad7-b9a861b6096b").unwrap();
     let core = crate::server::ContentServer::start_core(
         &directory,
         &plain_libs::utils::base64::base64_encode(&[9; 32]),

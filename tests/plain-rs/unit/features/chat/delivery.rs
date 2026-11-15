@@ -88,7 +88,7 @@ async fn attachment_delivery_uses_runtime_credentials_without_a_session_row() {
             let content: Value = plain_libs::serde_json::from_str(wire["request"]["variables"]["content"].as_str().unwrap()).unwrap();
             let id = content["value"]["items"][0]["uri"].as_str().unwrap().strip_prefix("fsid:").unwrap();
             let (scope, payload) = crate::features::files::resource_link::parse(id).unwrap();
-            assert_eq!(scope, crate::features::files::resource_link::Scope::Session("self".into()));
+            assert_eq!(scope, crate::features::files::resource_link::Scope::Session("706c6169-1ac2-825a-8c79-0951ec181d4a".into()));
             assert_eq!(crate::features::files::resource_link::open(&scope, &self.key, payload).unwrap(), crate::features::files::resource_link::Resource::reference(&self.reference));
             Ok(())
         }
@@ -102,7 +102,7 @@ async fn attachment_delivery_uses_runtime_credentials_without_a_session_row() {
     let delivery = Delivery::new(db.clone(), Arc::from(token));
     let content = json!({"type":"FILES","value":{"items":[{"uri":reference,"fileName":"fixture.txt","size":7}]}}).to_string();
     let chat = message_lifecycle::create(&db, "peer", "", &content).unwrap();
-    let receipt = delivery.send(&transport, "self", &signing_key, &chat.id, None).await.unwrap();
+    let receipt = delivery.send(&transport, "706c6169-1ac2-825a-8c79-0951ec181d4a", &signing_key, &chat.id, None).await.unwrap();
     assert_eq!(receipt.chat.unwrap().status, ChatStatus::Sent);
     assert_eq!(transport.calls.load(Ordering::SeqCst), 1);
     assert!(db.session_list().unwrap().is_empty());
@@ -121,7 +121,7 @@ async fn routing_uses_current_db_and_retries_only_current_joined_members() {
     let local = message_lifecycle::create(&db, "local", "", TEXT).unwrap();
     assert_eq!(
         delivery
-            .send(&transport, "self", &key, &local.id, None)
+            .send(&transport, "706c6169-1ac2-825a-8c79-0951ec181d4a", &key, &local.id, None)
             .await
             .unwrap()
             .chat
@@ -132,7 +132,7 @@ async fn routing_uses_current_db_and_retries_only_current_joined_members() {
     let unpaired = message_lifecycle::create(&db, "unpaired", "", TEXT).unwrap();
     assert_eq!(
         delivery
-            .send(&transport, "self", &key, &unpaired.id, None)
+            .send(&transport, "706c6169-1ac2-825a-8c79-0951ec181d4a", &key, &unpaired.id, None)
             .await
             .unwrap()
             .chat
@@ -144,7 +144,7 @@ async fn routing_uses_current_db_and_retries_only_current_joined_members() {
     let peer = message_lifecycle::create(&db, "peer", "", TEXT).unwrap();
     assert_eq!(
         delivery
-            .send(&transport, "self", &key, &peer.id, None)
+            .send(&transport, "706c6169-1ac2-825a-8c79-0951ec181d4a", &key, &peer.id, None)
             .await
             .unwrap()
             .chat
@@ -152,14 +152,14 @@ async fn routing_uses_current_db_and_retries_only_current_joined_members() {
             .status,
         ChatStatus::Sent
     );
-    let mut channel = crate::infrastructure::db::DChannel::new("group", "self");
+    let mut channel = crate::infrastructure::db::DChannel::new("group", "706c6169-1ac2-825a-8c79-0951ec181d4a");
     channel.id = "group".into();
     channel.key = base64_encode(&[7; 32]);
-    channel.members=json!([{"peerId":"self","status":"JOINED"},{"peerId":"peer","status":"JOINED"},{"peerId":"offline","status":"JOINED"},{"peerId":"pending","status":"PENDING"}]).to_string();
+    channel.members=json!([{"peerId":"706c6169-1ac2-825a-8c79-0951ec181d4a","status":"JOINED"},{"peerId":"peer","status":"JOINED"},{"peerId":"offline","status":"JOINED"},{"peerId":"pending","status":"PENDING"}]).to_string();
     channels::save(&db, &[channel.clone()], SaveMode::Insert).unwrap();
     let group = message_lifecycle::create(&db, "", "group", TEXT).unwrap();
     let partial = delivery
-        .send(&transport, "self", &key, &group.id, None)
+        .send(&transport, "706c6169-1ac2-825a-8c79-0951ec181d4a", &key, &group.id, None)
         .await
         .unwrap()
         .chat
@@ -170,7 +170,7 @@ async fn routing_uses_current_db_and_retries_only_current_joined_members() {
         delivery
             .send(
                 &transport,
-                "self",
+                "706c6169-1ac2-825a-8c79-0951ec181d4a",
                 &key,
                 &group.id,
                 Some(vec!["pending".into()])
@@ -182,7 +182,7 @@ async fn routing_uses_current_db_and_retries_only_current_joined_members() {
         delivery
             .send(
                 &transport,
-                "self",
+                "706c6169-1ac2-825a-8c79-0951ec181d4a",
                 &key,
                 &group.id,
                 Some(vec!["peer".into(), "peer".into()])
@@ -194,7 +194,7 @@ async fn routing_uses_current_db_and_retries_only_current_joined_members() {
     let retry = delivery
         .send(
             &transport,
-            "self",
+            "706c6169-1ac2-825a-8c79-0951ec181d4a",
             &key,
             &group.id,
             Some(vec!["peer".into()]),
@@ -225,7 +225,7 @@ async fn changed_content_cannot_be_marked_sent_by_an_older_attempt() {
     let chat = message_lifecycle::create(&db, "peer", "", TEXT).unwrap();
     assert!(
         delivery
-            .send(&transport, "self", &key, &chat.id, None)
+            .send(&transport, "706c6169-1ac2-825a-8c79-0951ec181d4a", &key, &chat.id, None)
             .await
             .is_err()
     );
@@ -244,7 +244,7 @@ fn attachment_uris_and_response_receipts_match_mobile_contract() {
     ] {
         let content =
             json!({"type":"FILES","value":{"items":[{"uri":uri,"name":"x"}]}}).to_string();
-        let wire = crate::features::chat::messages::content::peer_content(&content, "sender", &token)
+        let wire = crate::features::chat::messages::content::peer_content(&content, "706c6169-2f9c-8c04-9f46-531986c5d258", &token)
             .unwrap();
         let wire: Value = plain_libs::serde_json::from_str(&wire).unwrap();
         let uri_wire = wire["value"]["items"][0]["uri"].as_str().unwrap();
@@ -253,7 +253,7 @@ fn attachment_uris_and_response_receipts_match_mobile_contract() {
                 .unwrap();
         assert_eq!(
             scope,
-            crate::features::files::resource_link::Scope::Session("sender".into())
+            crate::features::files::resource_link::Scope::Session("706c6169-2f9c-8c04-9f46-531986c5d258".into())
         );
         let resource = crate::features::files::resource_link::open(
             &scope,
@@ -268,7 +268,7 @@ fn attachment_uris_and_response_receipts_match_mobile_contract() {
         assert!(
             crate::features::chat::messages::content::peer_content(
                 &content,
-                "sender",
+                "706c6169-2f9c-8c04-9f46-531986c5d258",
                 "invalid-token"
             )
             .is_err()
@@ -341,7 +341,7 @@ async fn concurrent_sends_serialize_and_reload_content_after_old_attempt_finishe
         let t = transport.clone();
         let k = key.clone();
         let id = chat.id.clone();
-        tokio::spawn(async move { d.send(&t, "self", &k, &id, None).await })
+        tokio::spawn(async move { d.send(&t, "706c6169-1ac2-825a-8c79-0951ec181d4a", &k, &id, None).await })
     };
     transport.entered.notified().await;
     messages::content(&db, &chat.id, r#"{"type":"TEXT","value":{"text":"newer"}}"#).unwrap();
@@ -349,7 +349,7 @@ async fn concurrent_sends_serialize_and_reload_content_after_old_attempt_finishe
         let d = delivery.clone();
         let t = transport.clone();
         let id = chat.id.clone();
-        tokio::spawn(async move { d.send(&t, "self", &key, &id, None).await })
+        tokio::spawn(async move { d.send(&t, "706c6169-1ac2-825a-8c79-0951ec181d4a", &key, &id, None).await })
     };
     transport.release.notify_one();
     assert!(one.await.unwrap().is_err());

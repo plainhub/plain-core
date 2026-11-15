@@ -53,8 +53,8 @@ fn ensure_identity_is_idempotent_and_reuses_stored_values() {
     assert_eq!(first.ed25519_keypair, second.ed25519_keypair);
 
     // Pre-stored values win over generation.
-    prefs.set("client_id", "existing").unwrap();
-    assert_eq!(ensure_identity(&prefs).client_id, "existing");
+    prefs.set("client_id", "706c6169-6a3b-8a0e-b4e8-26c3ea7efa78").unwrap();
+    assert_eq!(ensure_identity(&prefs).client_id, "706c6169-6a3b-8a0e-b4e8-26c3ea7efa78");
 }
 
 #[test]

@@ -48,20 +48,20 @@ fn target(prefs: &Prefs, id: &str) -> Target {
 #[test]
 fn signed_request_response_bind_recipient_identity_and_ecdh() {
     let dir = plain_libs::temporary::tempdir().unwrap();
-    let a = prefs(dir.path(), "a");
-    let b = prefs(dir.path(), "b");
-    let c = prefs(dir.path(), "c");
-    let (req, ak) = request(&a, device(), &target(&b, "b")).unwrap();
+    let a = prefs(dir.path(), "706c6169-fdbb-865c-ab5a-2260e9b9f142");
+    let b = prefs(dir.path(), "706c6169-e28a-8959-996d-cc20540e4c47");
+    let c = prefs(dir.path(), "706c6169-b201-8698-bbcd-44140e826ea8");
+    let (req, ak) = request(&a, device(), &target(&b, "706c6169-e28a-8959-996d-cc20540e4c47")).unwrap();
     assert!(security::verify_request(&req));
     let (reply, bk) = response(&b, req.clone(), true, device()).unwrap().unwrap();
     let PairingReply::Accept(reply) = reply else { panic!("Expected acceptance") };
     assert!(security::verify_accept(
         &reply,
-        &target(&b, "b").device_public_key
+        &target(&b, "706c6169-e28a-8959-996d-cc20540e4c47").device_public_key
     ));
     assert!(!security::verify_accept(
         &reply,
-        &target(&c, "c").device_public_key
+        &target(&c, "706c6169-b201-8698-bbcd-44140e826ea8").device_public_key
     ));
     assert!(response(&c, req.clone(), true, device()).is_err());
     assert_eq!(
@@ -74,19 +74,19 @@ fn signed_request_response_bind_recipient_identity_and_ecdh() {
             ))
     );
     let mut forged = req.clone();
-    forged.target_public_key = target(&c, "c").device_public_key;
+    forged.target_public_key = target(&c, "706c6169-b201-8698-bbcd-44140e826ea8").device_public_key;
     assert!(!security::verify_request(&forged));
     let mut forged = reply;
     forged.ecdh_public_key.clear();
     assert!(!security::verify_accept(
         &forged,
-        &target(&b, "b").device_public_key
+        &target(&b, "706c6169-e28a-8959-996d-cc20540e4c47").device_public_key
     ));
     let (denied, key) = response(&b, req.clone(), false, device()).unwrap().unwrap();
     let PairingReply::Reject(denied) = denied else { panic!("Expected rejection") };
     assert_eq!(denied.request_id, req.payload.request_id());
-    assert!(security::verify_reject(&denied, &target(&b, "b").device_public_key));
-    assert!(!security::verify_reject(&denied, &target(&c, "c").device_public_key));
+    assert!(security::verify_reject(&denied, &target(&b, "706c6169-e28a-8959-996d-cc20540e4c47").device_public_key));
+    assert!(!security::verify_reject(&denied, &target(&c, "706c6169-b201-8698-bbcd-44140e826ea8").device_public_key));
     assert_eq!(plain_libs::serde_json::to_value(&denied).unwrap().as_object().unwrap().len(), 2);
     assert!(key.is_none());
     for timestamp in [i64::MIN, i64::MAX] {
@@ -98,44 +98,44 @@ fn signed_request_response_bind_recipient_identity_and_ecdh() {
 #[test]
 fn incoming_cancel_matches_current_signed_invitation() {
     let dir = plain_libs::temporary::tempdir().unwrap();
-    let a = prefs(dir.path(), "a");
-    let b = prefs(dir.path(), "b");
+    let a = prefs(dir.path(), "706c6169-fdbb-865c-ab5a-2260e9b9f142");
+    let b = prefs(dir.path(), "706c6169-e28a-8959-996d-cc20540e4c47");
     let sessions = Sessions::default();
-    let (old, _) = request(&a, device(), &target(&b, "b")).unwrap();
+    let (old, _) = request(&a, device(), &target(&b, "706c6169-e28a-8959-996d-cc20540e4c47")).unwrap();
     assert_eq!(receive_request(&sessions, &old), Some(true));
     assert_eq!(receive_request(&sessions, &old), Some(false));
-    let (new, _) = request(&a, device(), &target(&b, "b")).unwrap();
+    let (new, _) = request(&a, device(), &target(&b, "706c6169-e28a-8959-996d-cc20540e4c47")).unwrap();
     assert_eq!(receive_request(&sessions, &new), Some(true));
     assert!(
-        receive_cancel(&b, &sessions, signed_cancel(&a, &old, "b"))
+        receive_cancel(&b, &sessions, signed_cancel(&a, &old, "706c6169-e28a-8959-996d-cc20540e4c47"))
             .unwrap()
             .is_null()
     );
-    let mut forged = signed_cancel(&a, &new, "b");
+    let mut forged = signed_cancel(&a, &new, "706c6169-e28a-8959-996d-cc20540e4c47");
     forged.signature.clear();
     assert!(receive_cancel(&b, &sessions, forged).unwrap().is_null());
     assert_eq!(
-        receive_cancel(&b, &sessions, signed_cancel(&a, &new, "b")).unwrap()["deviceId"],
-        "a"
+        receive_cancel(&b, &sessions, signed_cancel(&a, &new, "706c6169-e28a-8959-996d-cc20540e4c47")).unwrap()["deviceId"],
+        "706c6169-fdbb-865c-ab5a-2260e9b9f142"
     );
     assert!(
         sessions
-            .incoming_target("a", &new.payload.signature)
+            .incoming_target("706c6169-fdbb-865c-ab5a-2260e9b9f142", &new.payload.signature)
             .is_none()
     );
 }
 #[test]
 fn cancellation_is_bound_to_generation_and_private_key_never_serialized() {
     let dir = plain_libs::temporary::tempdir().unwrap();
-    let a = prefs(dir.path(), "a");
-    let b = prefs(dir.path(), "b");
+    let a = prefs(dir.path(), "706c6169-fdbb-865c-ab5a-2260e9b9f142");
+    let b = prefs(dir.path(), "706c6169-e28a-8959-996d-cc20540e4c47");
     let sessions = Sessions::default();
-    let value = start(&a, &sessions, target(&b, "b"), device()).unwrap();
+    let value = start(&a, &sessions, target(&b, "706c6169-e28a-8959-996d-cc20540e4c47"), device()).unwrap();
     assert!(value.get("privateKey").is_none());
-    assert!(cancel(&a, &sessions, "b", Some("stale")).unwrap().is_null());
+    assert!(cancel(&a, &sessions, "706c6169-e28a-8959-996d-cc20540e4c47", Some("stale")).unwrap().is_null());
     assert_eq!(
-        cancel(&a, &sessions, "b", value["ticket"]["generation"].as_str()).unwrap()["cancel"]["toId"],
-        "b"
+        cancel(&a, &sessions, "706c6169-e28a-8959-996d-cc20540e4c47", value["ticket"]["generation"].as_str()).unwrap()["cancel"]["toId"],
+        "706c6169-e28a-8959-996d-cc20540e4c47"
     );
     assert!(EcdhSession::from_private_key(&[0; 32]).is_none());
 }

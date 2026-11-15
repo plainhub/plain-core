@@ -4,7 +4,7 @@ use std::path::Path;
 
 fn fixture() -> SessionRow {
     SessionRow {
-        client_id: "fixture-client".into(), name: "Fixture app".into(),
+        client_id: "706c6169-b9ef-8b64-b37d-1162ef232835".into(), name: "Fixture app".into(),
         r#type: SessionType::Login, token: plain_libs::crypto::gen_token(),
         url_token: plain_libs::crypto::gen_token(), client_ip: String::new(),
         app_name: "Fixture app".into(), app_version: "1".into(),
@@ -29,7 +29,7 @@ fn session_types_preserve_storage_and_wire_values() {
         let mut row = fixture();
         row.r#type = kind;
         db.session_save(&row).unwrap();
-        assert_eq!(db.session_get("fixture-client").unwrap().unwrap().r#type, kind);
+        assert_eq!(db.session_get("706c6169-b9ef-8b64-b37d-1162ef232835").unwrap().unwrap().r#type, kind);
         assert_eq!(plain_libs::serde_json::to_value(kind).unwrap(), wire);
         assert_eq!(plain_libs::serde_json::from_value::<SessionType>(plain_libs::serde_json::json!(wire)).unwrap(), kind);
     }

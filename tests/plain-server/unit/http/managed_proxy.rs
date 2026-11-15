@@ -39,8 +39,8 @@ fn login(state: &ServerState, id: &str) -> SessionRow {
 #[tokio::test]
 async fn managed_proxy_keeps_the_browser_session_and_streams_a_peer_range() {
     let dir = plain_libs::temporary::tempdir().unwrap();
-    let a = start(&dir.path().join("a"), "device-a");
-    let b = start(&dir.path().join("b"), "device-b");
+    let a = start(&dir.path().join("a"), "706c6169-7efd-857c-91a3-7471150200cd");
+    let b = start(&dir.path().join("b"), "706c6169-02de-8bc5-8fe4-50bb3e139c1b");
     let (cert, cert_key) = plain_libs::tls::generate_pem(&["localhost".into()]).unwrap();
     let (a_http, a_port) = a
         .start_public(0, 0, cert.clone(), cert_key.clone())
@@ -843,7 +843,7 @@ async fn first_login_and_chat_range_use_proxy_without_a_management_token() {
 #[tokio::test]
 async fn native_proxy_streams_rest_through_the_main_listener() {
     let dir = plain_libs::temporary::tempdir().unwrap();
-    let a = start(&dir.path().join("a"), "device-a");
+    let a = start(&dir.path().join("a"), "706c6169-7efd-857c-91a3-7471150200cd");
     let (cert, key) = plain_libs::tls::generate_pem(&["localhost".into()]).unwrap();
     let (port, _) = a.start_public(0, 0, cert, key).await.unwrap();
     let state = a.runtime_state();
@@ -860,7 +860,7 @@ async fn native_proxy_streams_rest_through_the_main_listener() {
                     "/arbitrary/a%2Bb?raw=%2F+x"
                 );
                 assert!(!headers.contains_key(header::ORIGIN));
-                assert_eq!(headers["c-id"], "native-device");
+                assert_eq!(headers["c-id"], "706c6169-26ec-89f0-bfdd-ade56bb2fded");
                 assert_eq!(&body[..], b"chunk one chunk two");
                 (
                     [
@@ -892,7 +892,7 @@ async fn native_proxy_streams_rest_through_the_main_listener() {
     let response = http
         .request(Method::PATCH, &url)
         .header(header::ORIGIN, "tauri://localhost")
-        .header("c-id", "native-device")
+        .header("c-id", "706c6169-26ec-89f0-bfdd-ade56bb2fded")
         .body(body)
         .send()
         .await
@@ -1058,7 +1058,7 @@ async fn subscription(url: &str, client: &str, key: &[u8], pin: [u8; 32]) {
 #[tokio::test]
 async fn auth_proxy_requires_fresh_confirmation_before_opening_upstream() {
     let dir = plain_libs::temporary::tempdir().unwrap();
-    let core = start(dir.path(), "proxy-device");
+    let core = start(dir.path(), "706c6169-bc2e-8e5a-8b9f-77659a457ba0");
     core.runtime_state().management.shutdown().await;
     let (cert, key) = plain_libs::tls::generate_pem(&["localhost".into()]).unwrap();
     let (_, port) = core.start_public(0, 0, cert, key).await.unwrap();
@@ -1182,8 +1182,8 @@ async fn idle_peer_subscription_serializes_concurrent_commands_over_tls() {
     use plain_rs::features::services::peers::subscriptions::PeerSubscription;
     use plain_rs::infrastructure::protocols::graphql::PeerSubscriptionTarget;
     let dir = plain_libs::temporary::tempdir().unwrap();
-    let local = start(&dir.path().join("local"), "idle-local");
-    let remote = start(&dir.path().join("remote"), "idle-remote");
+    let local = start(&dir.path().join("local"), "706c6169-5540-82b6-a004-725e445a50cc");
+    let remote = start(&dir.path().join("remote"), "706c6169-30da-86f4-b191-9844e3012621");
     let local_state = local.runtime_state();
     let remote_state = remote.runtime_state();
     local_state.management.shutdown().await;

@@ -42,7 +42,7 @@ async fn unmount_records_only_successful_effects_with_saved_volume_and_actor_fac
             .record(
                 event,
                 Some(AuditEventClient {
-                    client_id: "initiator".into(),
+                    client_id: "706c6169-8833-840e-a693-365203ce72a0".into(),
                     client_name: "Operator".into(),
                     ..Default::default()
                 }),
@@ -82,7 +82,7 @@ async fn unmount_records_only_successful_effects_with_saved_volume_and_actor_fac
     let rows = db.audit_events(0, 10, None).unwrap();
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].r#type, EventType::Unmount);
-    assert_eq!(rows[0].client_id.as_deref(), Some("initiator"));
+    assert_eq!(rows[0].client_id.as_deref(), Some("706c6169-8833-840e-a693-365203ce72a0"));
     assert!(matches!(&rows[0].data, EventData::Volume(data) if data.volume == child));
     writer.shutdown().await.unwrap();
 }

@@ -58,7 +58,7 @@ fn server_with_cache() -> (plain_libs::temporary::TempDir, ContentServer, std::p
     let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs =
         Arc::new(crate::features::prefs::Prefs::load(&dir.path().join("system.json")).unwrap());
-    prefs.set("client_id", "thumb-fixture").unwrap();
+    prefs.set("client_id", "706c6169-9052-8f83-87af-3929ef3aa462").unwrap();
     let cache = dir.path().join("cache");
     let core = ContentServer::start(
         dir.path(),

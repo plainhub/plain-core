@@ -49,15 +49,15 @@ async fn public(server: &ContentServer) -> u16 {
 }
 #[tokio::test]
 async fn aware_host_only_moves_raw_socket_bytes_rust_performs_tls_crypto_and_graphql() {
-    let (_a, a, kp, _) = root("a");
-    let (_b, b, bkp, _) = root("b");
+    let (_a, a, kp, _) = root("706c6169-fdbb-865c-ab5a-2260e9b9f142");
+    let (_b, b, bkp, _) = root("706c6169-e28a-8959-996d-cc20540e4c47");
     let port = public(&b).await;
-    let remote = peer("b", port, &bkp[32..], "");
+    let remote = peer("706c6169-e28a-8959-996d-cc20540e4c47", port, &bkp[32..], "");
     let state = a.runtime_state();
     peers::save(&state.db, &[remote.clone()], SaveMode::Insert).unwrap();
     peers::save(
         &b.runtime_state().db,
-        &[peer("a", 443, &kp[32..], "")],
+        &[peer("706c6169-fdbb-865c-ab5a-2260e9b9f142", 443, &kp[32..], "")],
         SaveMode::Insert,
     )
     .unwrap();
@@ -218,7 +218,7 @@ async fn ble_incoming_file_uses_root_encrypted_fid_and_eof_without_native_http_b
         (12, 8192, 416, b"".as_slice()),
     ] {
         let request = plain_rs::infrastructure::protocols::ble::Request::FileChunk {
-            client_id: "peer".into(),
+            client_id: "706c6169-89f1-81c6-8bc7-6b67c2ffa178".into(),
             file_id: encrypted.clone(),
             offset,
             length,
