@@ -1,3 +1,4 @@
+pub mod app_feature;
 pub mod client_identity;
 pub mod record_id;
 

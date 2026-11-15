@@ -137,6 +137,8 @@ Use release builds for performance measurements. Consumer workspaces must config
 
 ## Generated contracts
 
+`plain-rs/src/features/app_feature.rs` owns app feature names. Generate the sibling Desktop and App enums with `node scripts/gen-app-features.mjs --write`; omit `--write` to check them.
+
 Regenerate the contracts with Node.js and Rust:
 
 ```sh
