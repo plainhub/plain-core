@@ -1,3 +1,4 @@
+pub const HTTP_SERVER_CHANGED: &str = "HTTP_SERVER_CHANGED";
 pub const MEDIA_UPDATED: &str = "MEDIA_UPDATED";
 pub const MEDIA_SCAN_PROGRESS: &str = "MEDIA_SCAN_PROGRESS";
 pub const WS_PAIRING_COMPLETED: &str = "PAIRING_COMPLETED";
@@ -76,7 +77,8 @@ impl WsEvent {
     pub fn is_internal(&self) -> bool {
         matches!(
             self.event_type,
-            "PEER_CONNECTIONS_UPDATED"
+            HTTP_SERVER_CHANGED
+                | "PEER_CONNECTIONS_UPDATED"
                 | "IMAGE_INDEX_UPDATED"
                 | "IMAGE_MODELS_UPDATED"
                 | "PREFS_UPDATED"

@@ -17,8 +17,9 @@ pub(crate) async fn authorized_capabilities(ctx: &Context<'_>) -> Result<Vec<Cap
     Ok(capabilities)
 }
 
-#[derive(SimpleObject)]
-struct HttpServer {
+#[derive(SimpleObject, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct HttpServer {
     state: HttpServerState,
     addresses: Vec<String>,
     online_clients: Vec<ID>,
@@ -33,27 +34,29 @@ pub struct HttpServerQuery;
 impl HttpServerQuery {
     async fn http_server(&self, ctx: &Context<'_>) -> Result<HttpServer> {
         authorized_capabilities(ctx).await?;
-        let state = ctx.data::<ServerState>()?;
-        Ok(HttpServer {
-            state: state.http_server.snapshot(),
-            remote_access: plain_rs::features::prefs::settings::snapshot(&state.prefs)?
-                .remote_access,
-            mdns_hostname: state
-                .prefs
-                .get::<String>(plain_rs::features::prefs::pref_keys::MDNS_HOSTNAME)?
-                .ok_or_else(|| plain_graphql::Error::new("mDNS hostname is unavailable"))?,
-            addresses: plain_rs::infrastructure::platform::network::host::lan_ipv4_addresses(
-                &state.host,
-            )
-            .await?,
-            online_clients: state
-                .subscription_sessions
-                .snapshot()
-                .into_iter()
-                .map(ID)
-                .collect(),
-        })
+        snapshot(ctx.data::<ServerState>()?).await
     }
+}
+
+pub(crate) async fn snapshot(state: &ServerState) -> Result<HttpServer> {
+    Ok(HttpServer {
+        state: state.http_server.snapshot(),
+        remote_access: plain_rs::features::prefs::settings::snapshot(&state.prefs)?.remote_access,
+        mdns_hostname: state
+            .prefs
+            .get::<String>(plain_rs::features::prefs::pref_keys::MDNS_HOSTNAME)?
+            .ok_or_else(|| plain_graphql::Error::new("mDNS hostname is unavailable"))?,
+        addresses: plain_rs::infrastructure::platform::network::host::lan_ipv4_addresses(
+            &state.host,
+        )
+        .await?,
+        online_clients: state
+            .subscription_sessions
+            .snapshot()
+            .into_iter()
+            .map(ID)
+            .collect(),
+    })
 }
 
 #[derive(Default)]

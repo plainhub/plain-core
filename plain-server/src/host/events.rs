@@ -261,6 +261,9 @@ impl HostEvents {
             .network_revision
             .send_modify(|revision| *revision = revision.wrapping_add(1));
         self.state.host.invalidate("networkInterfacesChanged");
+        let _ = self.state.events.send(plain_rs::infrastructure::events::WsEvent::broadcast(
+            plain_rs::infrastructure::events::HTTP_SERVER_CHANGED, "{}".into(),
+        ));
         return Ok(());
     }
 

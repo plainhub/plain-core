@@ -11,6 +11,15 @@ pub struct EventSpec {
 }
 pub const EVENTS: &[EventSpec] = &[
     EventSpec {
+        field: "httpServerChanged",
+        event: crate::infrastructure::events::HTTP_SERVER_CHANGED,
+        aliases: &["PREFS_UPDATED"],
+        invalidation: false,
+        selection: "{ state { revision restarting httpPort httpsPort error } addresses onlineClients remoteAccess mdnsHostname }",
+        access: &[],
+        capability: Some(Capability::HttpServer),
+    },
+    EventSpec {
         field: "dlnaSenderChanged",
         event: "DLNA_SENDER_CHANGED",
         aliases: &[],

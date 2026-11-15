@@ -140,6 +140,10 @@ async fn snapshot(state: &ServerState, name: &str) -> Result<Option<String>> {
         }
         "DLNA_SENDER_CHANGED" => plain_libs::serde_json::to_string(&state.cast.snapshot())
             .map_err(|error| plain_graphql::Error::new(error.to_string()))?,
+        plain_rs::infrastructure::events::HTTP_SERVER_CHANGED => {
+            plain_libs::serde_json::to_string(&crate::graphql::resolvers::app::http_server::snapshot(state).await?)
+                .map_err(|error| plain_graphql::Error::new(error.to_string()))?
+        }
         "IMAGE_MODELS_UPDATED" => state.image_models.snapshot().event().payload,
         _ => return Ok(None),
     };

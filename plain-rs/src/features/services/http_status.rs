@@ -2,7 +2,7 @@ use crate::infrastructure::types::Long;
 use crate::runtime::Runtime as CoreRuntime;
 use std::sync::Mutex;
 
-#[derive(Clone, Default, serde::Serialize)]
+#[derive(Clone, Default, serde::Serialize, serde::Deserialize)]
 #[cfg_attr(feature = "graphql", derive(plain_graphql::SimpleObject))]
 #[serde(rename_all = "camelCase")]
 pub struct HttpServerState {
@@ -30,6 +30,12 @@ struct HostStatus {
 
 impl CoreRuntime {
     pub fn publish_http_status(&self) {
+        let _ = self
+            .events
+            .send(crate::infrastructure::events::WsEvent::broadcast(
+                crate::infrastructure::events::HTTP_SERVER_CHANGED,
+                "{}".into(),
+            ));
         let mut recovering = self.http_server.host_delivery.lock().unwrap();
         if !self.host.connected() {
             return;

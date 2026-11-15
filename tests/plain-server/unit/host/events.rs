@@ -267,6 +267,9 @@ async fn raw_ble_advertisements_are_consumed_without_public_rebroadcast() {
         .unwrap();
     assert!(network.has_changed().unwrap());
     assert_eq!(*network.borrow_and_update(), 1);
+    let changed = public.try_recv().unwrap();
+    assert_eq!(changed.event_type, plain_rs::infrastructure::events::HTTP_SERVER_CHANGED);
+    assert!(changed.into_public().is_none());
     assert!(public.try_recv().is_err());
     assert!(
         bridge

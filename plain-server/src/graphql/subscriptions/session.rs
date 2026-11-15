@@ -222,6 +222,9 @@ impl Sessions {
     }
 
     fn notify(state: &ServerState) {
+        let _ = state.events.send(plain_rs::infrastructure::events::WsEvent::broadcast(
+            plain_rs::infrastructure::events::HTTP_SERVER_CHANGED, "{}".into(),
+        ));
         let sessions = &state.subscription_sessions;
         let mut recovering = sessions.host_delivery.lock().unwrap();
         if let Err(error) = state.host.notify(

@@ -2,8 +2,11 @@ use super::*;
 use plain_rs::features::access::AccessFeature;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
+static MDNS_TEST_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
 #[tokio::test]
 async fn management_pairing_with_cli_requires_password_without_second_approval() {
+    let _mdns = MDNS_TEST_LOCK.lock().await;
     use plain_rs::features::services::discovery::pairing_attempts::{self, Mode};
     use plain_rs::infrastructure::db::chat_store::peers;
 
@@ -110,6 +113,7 @@ async fn management_pairing_with_cli_requires_password_without_second_approval()
 
 #[tokio::test]
 async fn service_grants_remote_file_features_and_preserves_other_settings_across_restart() {
+    let _mdns = MDNS_TEST_LOCK.lock().await;
     let defaults = AccessFeature::FILE_FEATURES.as_slice();
     for (configured, expected_access) in [
         (vec![], defaults.to_vec()),
@@ -228,6 +232,7 @@ async fn service_grants_remote_file_features_and_preserves_other_settings_across
 #[tokio::test]
 async fn service_starts_real_listeners_and_releases_them_and_the_data_lock_on_shutdown_or_failure()
 {
+    let _mdns = MDNS_TEST_LOCK.lock().await;
     let directory = plain_libs::temporary::Builder::new()
         .prefix("cli-service-")
         .tempdir_in(plain_rs::infrastructure::platform::system::consts::home_directory().unwrap())
@@ -410,6 +415,7 @@ async fn unconfigured_service_fails_before_listeners_or_passwordless_access() {
 
 #[tokio::test]
 async fn web_http_server_card_reads_state_and_changes_the_serving_port() {
+    let _mdns = MDNS_TEST_LOCK.lock().await;
     use plain_libs::protocols::http_client;
     let directory = plain_libs::temporary::tempdir().unwrap();
     let paths = AppPaths {

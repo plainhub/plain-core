@@ -5,10 +5,14 @@ use plain_graphql::{Context, Result, Subscription};
 pub struct AppStateSubscriptions;
 #[Subscription]
 impl AppStateSubscriptions {
-    async fn prefs_changed(
+    async fn http_server_changed(
         &self,
         ctx: &Context<'_>,
-    ) -> Result<BoxStream<'static, Result<bool>>> {
+    ) -> Result<BoxStream<'static, Result<crate::graphql::resolvers::app::http_server::HttpServer>>>
+    {
+        events::stream(ctx, plain_rs::infrastructure::events::HTTP_SERVER_CHANGED).await
+    }
+    async fn prefs_changed(&self, ctx: &Context<'_>) -> Result<BoxStream<'static, Result<bool>>> {
         events::stream(ctx, "PREFS_UPDATED").await
     }
     async fn peers_changed(&self, ctx: &Context<'_>) -> Result<BoxStream<'static, Result<bool>>> {

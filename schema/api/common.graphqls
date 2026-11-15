@@ -200,6 +200,7 @@ type SmsSendResult {
 }
 
 type Subscription {
+	httpServerChanged: HttpServer!
 	prefsChanged: Boolean!
 	peersChanged: Boolean!
 	downloadsChanged: Boolean!
