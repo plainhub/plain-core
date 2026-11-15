@@ -29,6 +29,7 @@ async fn other_hosts_and_unauthenticated_callers_cannot_manage_the_http_server()
         "{httpServer{remoteAccess}}",
         "mutation{restartHttpServer(httpPort:0){revision}}",
         "mutation{acquireMdnsDebugSession(token:\"fixture\")}",
+        "mutation{releaseMdnsDebugSession(token:\"fixture\")}",
     ] {
         let response = execute_graphql(
             &state.public,

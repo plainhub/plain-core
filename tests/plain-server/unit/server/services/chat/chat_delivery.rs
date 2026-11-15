@@ -1,9 +1,9 @@
 #![cfg(feature = "http_transport")]
 
-use plain_rs::features::services::chat::chat_delivery::*;
-use plain_rs::infrastructure::db::DPeer;
 use plain_libs::serde_json::Value;
 use plain_libs::serde_json::json;
+use plain_rs::features::services::chat::chat_delivery::*;
+use plain_rs::infrastructure::db::DPeer;
 use std::sync::Arc;
 
 #[tokio::test]
@@ -14,7 +14,9 @@ async fn explicit_message_retry_root_probes_open_transport_and_sends_original_ro
     let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs =
         Arc::new(plain_rs::features::prefs::Prefs::load(&dir.path().join("system.json")).unwrap());
-    prefs.set("client_id", "706c6169-1ac2-825a-8c79-0951ec181d4a").unwrap();
+    prefs
+        .set("client_id", "706c6169-1ac2-825a-8c79-0951ec181d4a")
+        .unwrap();
     let server = crate::server::ContentServer::start(
         dir.path(),
         &plain_libs::utils::base64::base64_encode(&[1; 32]),
@@ -75,8 +77,7 @@ async fn explicit_message_retry_root_probes_open_transport_and_sends_original_ro
                         &request["params"],
                         &[7; 32],
                     );
-                    let document: Value =
-                        plain_libs::serde_json::from_str::<Value>(&wire).unwrap()["request"].clone();
+                    let document: Value = plain_libs::serde_json::from_str(&wire).unwrap();
                     assert_eq!(
                         document["query"],
                         plain_rs::infrastructure::transport::contract::CREATE_CHAT_ITEM
@@ -97,11 +98,7 @@ async fn explicit_message_retry_root_probes_open_transport_and_sends_original_ro
                 .unwrap();
         }
     });
-    let automatic = deliver(&state, &original.id)
-        .await
-        .unwrap()
-        .chat
-        .unwrap();
+    let automatic = deliver(&state, &original.id).await.unwrap().chat.unwrap();
     assert_eq!(automatic.status, ChatStatus::Failed);
     assert!(automatic.status_data.as_deref().is_some_and(|value| {
         value.contains("All peer transports unavailable or temporarily blocked")

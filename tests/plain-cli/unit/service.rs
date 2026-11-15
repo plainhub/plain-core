@@ -494,6 +494,29 @@ async fn web_http_server_card_reads_state_and_changes_the_serving_port() {
         prefs.get_or("mdns_hostname", String::new()),
         "fixture-http-card.local"
     );
+    for (operation, query) in [
+        (
+            "acquireMdnsDebugSession",
+            r#"mutation { acquireMdnsDebugSession(token:"00000000-0000-4000-8000-000000000001") }"#,
+        ),
+        (
+            "releaseMdnsDebugSession",
+            r#"mutation { releaseMdnsDebugSession(token:"00000000-0000-4000-8000-000000000001") }"#,
+        ),
+    ] {
+        let response: plain_libs::serde_json::Value = plain_libs::serde_json::from_str(
+            &request(port, query)
+                .send()
+                .await
+                .unwrap()
+                .text()
+                .await
+                .unwrap(),
+        )
+        .unwrap();
+        assert!(response["errors"].is_null(), "{response}");
+        assert_eq!(response["data"][operation], true);
+    }
     for invalid in [
         "mutation { restartHttpServer(httpPort:-1) { revision } }",
         "mutation { restartHttpServer(httpsPort:65536) { revision } }",

@@ -4,6 +4,7 @@ pub enum PrefAccess {
     Default,
     LocalOnly,
     LocalOrHttpServer,
+    LocalOrFiles,
     RemoteReadOnly,
     RustOnly,
 }
@@ -77,6 +78,9 @@ pref_keys! {
     LocalOrHttpServer {
         MDNS_HOSTNAME = "mdns_hostname",
     }
+    LocalOrFiles {
+        RECENT_SELECTED_DIRS = "recent_selected_dirs",
+    }
     RemoteReadOnly {
         APP_HOME_FEATURES = "app_home_features",
     }
@@ -103,7 +107,7 @@ pub fn access(key: &str) -> Option<PrefAccess> {
 pub fn readable(key: &str, local: bool, capabilities: &[Capability]) -> bool {
     match access(key) {
         Some(PrefAccess::Default | PrefAccess::RemoteReadOnly) => true,
-        Some(PrefAccess::LocalOnly) => local,
+        Some(PrefAccess::LocalOnly | PrefAccess::LocalOrFiles) => local,
         Some(PrefAccess::LocalOrHttpServer) => {
             local || capabilities.contains(&Capability::HttpServer)
         }
@@ -113,7 +117,9 @@ pub fn readable(key: &str, local: bool, capabilities: &[Capability]) -> bool {
 pub fn writable(key: &str, local: bool, capabilities: &[Capability]) -> bool {
     match access(key) {
         Some(PrefAccess::Default) => true,
-        Some(PrefAccess::LocalOnly | PrefAccess::RemoteReadOnly) => local,
+        Some(PrefAccess::LocalOnly | PrefAccess::LocalOrFiles | PrefAccess::RemoteReadOnly) => {
+            local
+        }
         Some(PrefAccess::LocalOrHttpServer) => {
             local || capabilities.contains(&Capability::HttpServer)
         }

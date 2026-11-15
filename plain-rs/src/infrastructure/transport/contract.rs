@@ -198,27 +198,27 @@ pub fn signed_request(
     variables: plain_libs::serde_json::Value,
     channel_id: &str,
 ) -> Result<String, String> {
-    let graphql_json =
-        plain_libs::serde_json::to_string(&json!({"query":query,"variables":variables}))
-            .map_err(|e| e.to_string())?;
-    let request = super::graphql_request::Envelope::new(&graphql_json)?.json()?;
-    let signed = super::auth::signature_payload(channel_id, &request);
-    let signature = ed25519_sign(kp_bytes, signed.as_bytes());
+    let mut request = super::graphql_request::SignedEnvelope {
+        signature: String::new(),
+        request_id: crate::features::record_id::generate(),
+        query: query.to_owned(),
+        variables: match variables {
+            plain_libs::serde_json::Value::Object(map) => map,
+            _ => return Err("Expected GraphQL variables object".into()),
+        },
+    };
+    let signed = request.signing_bytes(channel_id);
+    request.signature = ed25519_sign(kp_bytes, &signed);
     if kp_bytes.len() != 64
         || !plain_libs::crypto::ed25519_verify(
             &plain_libs::utils::base64::base64_encode(&kp_bytes[32..]),
-            signed.as_bytes(),
-            &signature,
+            &signed,
+            &request.signature,
         )
     {
         return Err("Invalid peer signing keypair".into());
     }
-    plain_libs::serde_json::to_string(&super::graphql_request::SignedEnvelope {
-        signature,
-        request: plain_libs::serde_json::value::RawValue::from_string(request)
-            .map_err(|e| e.to_string())?,
-    })
-    .map_err(|e| e.to_string())
+    plain_libs::serde_json::to_string(&request).map_err(|e| e.to_string())
 }
 pub fn chat_item_request(
     kp_bytes: &[u8],

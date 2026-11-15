@@ -86,18 +86,14 @@ async fn signed_invites_ack_keys_and_deleted_broadcast_use_rust_snapshot() {
                     );
                     assert!(plain_libs::crypto::ed25519_verify(
                         &public,
-                        plain_rs::infrastructure::transport::auth::signature_payload(
-                            if p["peer"]["id"] == "paired" {
+                        &pieces.signing_bytes(if p["peer"]["id"] == "paired" {
                                 ""
                             } else {
                                 &channel_id
-                            },
-                            pieces.request.get()
-                        )
-                        .as_bytes(),
+                            }),
                         &pieces.signature
                     ));
-                    let wire: Value = plain_libs::serde_json::from_str(pieces.request.get()).unwrap();
+                    let wire: Value = plain_libs::serde_json::from_str(&body).unwrap();
                     let payload: Value =
                         plain_libs::serde_json::from_str(wire["variables"]["payload"].as_str().unwrap())
                             .unwrap();
@@ -312,7 +308,7 @@ async fn peer_key_changes_before_physical_send_are_rejected_and_accept_leave_dec
                         &[9; 32],
                     );
                     let wire: Value =
-                        plain_libs::serde_json::from_str::<Value>(&body).unwrap()["request"].clone();
+                        plain_libs::serde_json::from_str::<Value>(&body).unwrap();
                     let kind = wire["variables"]["type"].as_str().unwrap().to_string();
                     if kind == "INVITE_ACCEPT" {
                         let payload: Value =

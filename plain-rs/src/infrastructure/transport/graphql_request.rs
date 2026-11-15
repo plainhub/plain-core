@@ -21,7 +21,12 @@ impl Envelope {
         })
     }
     pub fn parse(payload: &str) -> Result<Self, &'static str> {
-        plain_libs::serde_json::from_str(payload).map_err(|_| "Invalid GraphQL request")
+        let envelope: Self =
+            plain_libs::serde_json::from_str(payload).map_err(|_| "Invalid GraphQL request")?;
+        if envelope.content.contains_key("signature") {
+            return Err("Peer signatures require peer GraphQL transport");
+        }
+        Ok(envelope)
     }
     pub fn id(&self) -> Option<RequestId> {
         RequestId::parse(&self.request_id)
@@ -32,10 +37,32 @@ impl Envelope {
 }
 
 #[derive(Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SignedEnvelope {
     pub signature: String,
-    pub request: Box<plain_libs::serde_json::value::RawValue>,
+    pub request_id: String,
+    pub query: String,
+    pub variables: Map<String, Value>,
+}
+impl SignedEnvelope {
+    pub fn signing_bytes(&self, channel_id: &str) -> Vec<u8> {
+        plain_libs::serde_json::to_vec(&(
+            crate::infrastructure::signature::SignaturePurpose::PeerRequest,
+            channel_id,
+            &self.request_id,
+            &self.query,
+            &self.variables,
+        ))
+        .expect("peer signing tuple is JSON")
+    }
+    pub(super) fn graphql_json(&self) -> String {
+        plain_libs::serde_json::json!({
+            "requestId": self.request_id,
+            "query": self.query,
+            "variables": self.variables,
+        })
+        .to_string()
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]

@@ -1,11 +1,10 @@
-use super::graphql_request::{Envelope as GraphqlEnvelope, RequestId, SignedEnvelope};
+use super::graphql_request::{RequestId, SignedEnvelope};
 use crate::infrastructure::db::CHANNEL_COLS;
 use crate::infrastructure::db::DPeer;
 use crate::infrastructure::db::Db;
 use crate::infrastructure::db::PEER_COLS;
 use crate::infrastructure::db::row_to_channel;
 use crate::infrastructure::db::row_to_peer;
-use crate::infrastructure::signature::SignaturePurpose;
 use plain_libs::crypto::ed25519_verify;
 use plain_libs::rusqlite::OptionalExtension;
 use plain_libs::utils::base64::base64_decode;
@@ -64,9 +63,6 @@ impl AuthError {
         }
     }
 }
-pub fn signature_payload(channel_id: &str, request: &str) -> String {
-    plain_libs::serde_json::json!([SignaturePurpose::PeerRequest, channel_id, request]).to_string()
-}
 fn decrypt(
     key: &[u8],
     public_key: &str,
@@ -78,9 +74,7 @@ fn decrypt(
     let plaintext = std::str::from_utf8(&plaintext).map_err(|_| AuthError::NotUtf8)?;
     let signed: SignedEnvelope =
         plain_libs::serde_json::from_str(plaintext).map_err(|_| AuthError::MissingFields)?;
-    let request =
-        GraphqlEnvelope::parse(signed.request.get()).map_err(|_| AuthError::MissingFields)?;
-    let id = request.id().ok_or(AuthError::MissingFields)?;
+    let id = RequestId::parse(&signed.request_id).ok_or(AuthError::MissingFields)?;
     let now = plain_libs::chrono::Utc::now().timestamp_millis();
     if !id.is_fresh(now, GRAPHQL_WINDOW_MS) {
         return Err(AuthError::TimestampExpired);
@@ -90,16 +84,17 @@ fn decrypt(
     }
     if !ed25519_verify(
         public_key,
-        signature_payload(channel_id, signed.request.get()).as_bytes(),
+        &signed.signing_bytes(channel_id),
         &signed.signature,
     ) {
         return Err(AuthError::BadSignature);
     }
+    let content = signed.graphql_json();
     Ok(Envelope {
         request_id: id,
         signature_b64: signed.signature,
         timestamp: id.timestamp(),
-        content: signed.request.get().to_owned(),
+        content,
     })
 }
 

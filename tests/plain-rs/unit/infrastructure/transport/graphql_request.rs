@@ -28,6 +28,7 @@ fn common_envelope_preserves_graphql_fields_and_replaces_caller_id() {
         r#"{"query":"x"}"#,
         r#"{"requestId":null}"#,
         r#"{"requestId":"a","requestId":"b"}"#,
+        r#"{"signature":"s","requestId":"id","query":"x","variables":{}}"#,
     ] {
         assert!(Envelope::parse(bad).is_err(), "{bad}");
     }
@@ -112,18 +113,16 @@ fn persistent_ids_survive_reopen_and_keep_client_and_scope_isolation() {
 }
 
 #[test]
-fn peer_outer_is_strict_and_preserves_exact_signed_request_bytes() {
-    let inner =
-        "{ \"requestId\": \"00000000-0000-7000-8000-000000000000\", \"variables\": {\"n\":1e+30} }";
-    let outer = format!("{{\"signature\":\"s\",\"request\":{inner}}}");
-    let parsed: SignedEnvelope = plain_libs::serde_json::from_str(&outer).unwrap();
-    assert_eq!(parsed.request.get(), inner);
+fn peer_envelope_requires_only_the_flat_signed_fields() {
+    let flat = r#"{"signature":"s","requestId":"id","query":"{ __typename }","variables":{}}"#;
+    let parsed: SignedEnvelope = plain_libs::serde_json::from_str(flat).unwrap();
+    assert_eq!(parsed.request_id, "id");
     for bad in [
-        format!("{{\"signature\":\"s\",\"request\":{inner},\"query\":\"x\"}}"),
-        format!("{{\"request\":{inner}}}"),
-        inner.to_string(),
+        r#"{"signature":"s","request":{"requestId":"id","query":"x","variables":{}}}"#,
+        r#"{"signature":"s","requestId":"id","query":"x"}"#,
+        r#"{"signature":"s","requestId":"id","query":"x","variables":{},"operationName":"x"}"#,
+        r#"{"signature":"s","requestId":"id","query":"x","query":"y","variables":{}}"#,
     ] {
-        assert!(plain_libs::serde_json::from_str::<SignedEnvelope>(&bad).is_err());
+        assert!(plain_libs::serde_json::from_str::<SignedEnvelope>(bad).is_err());
     }
-    assert!(Envelope::parse(&outer).is_err());
 }

@@ -27,6 +27,11 @@ impl NativeManagement {
         }
         let state = &self.state;
         match key {
+            keys::RECENT_SELECTED_DIRS => Ok(json!(state
+                .prefs
+                .get::<Vec<String>>(key)
+                .map_err(|error| error.to_string())?
+                .unwrap_or_default())),
             keys::UPDATE_INFO => Ok(json!(
                 plain_rs::features::services::settings::updates::info(state)
                     .map_err(|error| error.to_string())?

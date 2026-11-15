@@ -38,12 +38,11 @@ fn signing_current_peer_and_channel_keys_and_authenticated_crypto_roundtrip() {
         plain_libs::serde_json::from_str(&first.body).unwrap();
     assert!(plain_libs::crypto::ed25519_verify(
         &base64_encode(&public),
-        crate::infrastructure::transport::auth::signature_payload("", split.request.get())
-            .as_bytes(),
+        &split.signing_bytes(""),
         &split.signature
     ));
     let gql: plain_libs::serde_json::Value =
-        plain_libs::serde_json::from_str(split.request.get()).unwrap();
+        plain_libs::serde_json::from_str(&first.body).unwrap();
     assert_eq!(gql["variables"]["content"], content);
     assert_eq!(first.key, peer.key);
     let decoded_key = plain_libs::utils::base64::base64_decode(&first.key);

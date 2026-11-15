@@ -44,6 +44,7 @@ fn device(debug: bool) -> (plain_libs::temporary::TempDir, ContentServer, Header
     );
     (dir, server, headers)
 }
+
 #[tokio::test]
 async fn http_server_capability_cannot_disable_remote_access_through_the_api() {
     use plain_rs::features::capability::Capability;
@@ -301,4 +302,101 @@ async fn debug_build_allows_database_and_prefs_without_developer_mode() {
         Some(false)
     );
     server.shutdown().await;
+}
+
+#[tokio::test]
+async fn recent_selected_directories_require_file_access_and_stay_on_the_target() {
+    let (_a, first, headers) = device(false);
+    let (_b, second, other) = device(false);
+    let state = first.runtime_state();
+    let read = r#"{prefs(keys:["recent_selected_dirs"])}"#;
+    let write = r#"mutation{setPref(key:"recent_selected_dirs",value:["D:/Projects/Photos","E:/Backup/Photos","C:/"])}"#;
+    for doc in [read, write] {
+        let (status, response) = call(state.clone(), &headers, doc).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(
+            response["errors"][0]["message"],
+            "Preference is not accessible"
+        );
+    }
+    state
+        .prefs
+        .set("api_permissions", json!(["FILES"]))
+        .unwrap();
+    second
+        .runtime_state()
+        .prefs
+        .set("api_permissions", json!(["FILES"]))
+        .unwrap();
+    let (_, result) = call(state.clone(), &headers, write).await;
+    assert_eq!(result["data"]["setPref"], true, "{result}");
+    let (_, result) = call(state.clone(), &headers, read).await;
+    let expected = json!(["D:/Projects/Photos", "E:/Backup/Photos", "C:/"]);
+    assert_eq!(result["data"]["prefs"]["recent_selected_dirs"], expected);
+    let (_, result) = call(second.runtime_state(), &other, read).await;
+    assert_eq!(result["data"]["prefs"], json!({}));
+    for value in [
+        r#"["D:"]"#,
+        r#"["relative"]"#,
+        r#"[1]"#,
+        r#"["/a","/b","/c","/d","/e","/f","/g","/h","/i"]"#,
+    ] {
+        let (_, result) = call(
+            state.clone(),
+            &headers,
+            &format!(r#"mutation{{setPref(key:"recent_selected_dirs",value:{value})}}"#),
+        )
+        .await;
+        assert!(result.get("errors").is_some(), "{value}: {result}");
+        assert_eq!(
+            state.prefs.get::<Value>("recent_selected_dirs").unwrap(),
+            Some(expected.clone())
+        );
+    }
+    state.prefs.set("api_permissions", json!([])).unwrap();
+    let (_, result) = call(state.clone(), &headers, read).await;
+    assert_eq!(
+        result["errors"][0]["message"],
+        "Preference is not accessible"
+    );
+    state.prefs.set("developer_mode", true).unwrap();
+    let (_, result) = call(state.clone(), &headers, "{prefs}").await;
+    assert!(result.get("errors").is_none(), "{result}");
+    assert!(
+        result["data"]["prefs"]
+            .get("recent_selected_dirs")
+            .is_none()
+    );
+    let (_, result) = call(
+        state.clone(),
+        &headers,
+        r#"mutation{removePref(key:"recent_selected_dirs")}"#,
+    )
+    .await;
+    assert_eq!(
+        result["errors"][0]["message"],
+        "Preference is not accessible"
+    );
+    let local = first.native_graphql().unwrap();
+    let result = local.execute(plain_graphql::Request::new(read)).await;
+    assert!(result.errors.is_empty(), "{:?}", result.errors);
+    assert_eq!(
+        result.data.into_json().unwrap()["prefs"]["recent_selected_dirs"],
+        expected
+    );
+    let management = first.native_management().unwrap();
+    assert_eq!(
+        management.get_pref("recent_selected_dirs").unwrap(),
+        expected
+    );
+    assert!(
+        management
+            .set_pref("recent_selected_dirs", json!(["/storage/photos"]))
+            .await
+            .unwrap()
+    );
+    assert_eq!(
+        management.get_pref("recent_selected_dirs").unwrap(),
+        json!(["/storage/photos"])
+    );
 }

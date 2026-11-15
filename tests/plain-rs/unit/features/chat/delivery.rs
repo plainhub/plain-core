@@ -33,7 +33,7 @@ impl PeerTransport for Transport {
     ) -> std::result::Result<(), String> {
         self.calls.fetch_add(1, Ordering::SeqCst);
         assert_eq!(key, &[7; 32]);
-        let graphql: Value = plain_libs::serde_json::from_str::<Value>(&body).unwrap()["request"].clone();
+        let graphql: Value = plain_libs::serde_json::from_str(&body).unwrap();
         let content: Value =
             plain_libs::serde_json::from_str(graphql["variables"]["content"].as_str().unwrap()).unwrap();
         assert_eq!(content["type"], "TEXT");
@@ -85,7 +85,7 @@ async fn attachment_delivery_uses_runtime_credentials_without_a_session_row() {
         async fn message(&self, _: &DPeer, _: &str, _: &str, _: &[u8], body: &str) -> std::result::Result<(), String> {
             self.calls.fetch_add(1, Ordering::SeqCst);
             let wire: Value = plain_libs::serde_json::from_str(body).unwrap();
-            let content: Value = plain_libs::serde_json::from_str(wire["request"]["variables"]["content"].as_str().unwrap()).unwrap();
+            let content: Value = plain_libs::serde_json::from_str(wire["variables"]["content"].as_str().unwrap()).unwrap();
             let id = content["value"]["items"][0]["uri"].as_str().unwrap().strip_prefix("fsid:").unwrap();
             let (scope, payload) = crate::features::files::resource_link::parse(id).unwrap();
             assert_eq!(scope, crate::features::files::resource_link::Scope::Session("706c6169-1ac2-825a-8c79-0951ec181d4a".into()));

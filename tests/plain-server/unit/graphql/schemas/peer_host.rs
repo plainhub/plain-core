@@ -124,15 +124,10 @@ async fn encrypted_public_and_ble_rpc_share_auth_executor_and_receipts() {
                     let parts: plain_rs::infrastructure::transport::graphql_request::SignedEnvelope = plain_libs::serde_json::from_str(&wire).unwrap();
                     assert!(plain_libs::crypto::ed25519_verify(
                         &plain_libs::utils::base64::base64_encode(&local_public_key),
-                        plain_rs::infrastructure::transport::auth::signature_payload(
-                            "",
-                            parts.request.get()
-                        )
-                        .as_bytes(),
+                        &parts.signing_bytes(""),
                         &parts.signature
                     ));
-                    let document: Value =
-                        plain_libs::serde_json::from_str(parts.request.get()).unwrap();
+                    let document: Value = plain_libs::serde_json::from_str(&wire).unwrap();
                     assert_eq!(document["variables"]["type"], "UPDATE");
                     let payload: Value = plain_libs::serde_json::from_str(
                         document["variables"]["payload"].as_str().unwrap(),
@@ -177,26 +172,21 @@ async fn encrypted_public_and_ble_rpc_share_auth_executor_and_receipts() {
         .build()
         .unwrap();
     let wire = |document: Value| {
-        let content = document.to_string();
-        let request = plain_rs::infrastructure::transport::graphql_request::Envelope::new(&content)
-            .unwrap()
-            .json()
-            .unwrap();
-        let signature = plain_libs::crypto::ed25519_sign(
+        let envelope = plain_rs::infrastructure::transport::contract::signed_request(
             &kp,
-            plain_rs::infrastructure::transport::auth::signature_payload("", &request).as_bytes(),
-        );
-        let envelope = plain_rs::infrastructure::transport::graphql_request::SignedEnvelope {
-            signature,
-            request: plain_libs::serde_json::value::RawValue::from_string(request).unwrap(),
-        };
+            document["query"].as_str().unwrap(),
+            document
+                .get("variables")
+                .cloned()
+                .unwrap_or_else(|| json!({})),
+            "",
+        )
+        .unwrap();
         plain_rs::infrastructure::transport::http_request::encrypt_raw(
             &key,
             "POST",
             "/peer_graphql",
-            plain_libs::serde_json::to_string(&envelope)
-                .unwrap()
-                .as_bytes(),
+            envelope.as_bytes(),
         )
         .unwrap()
     };

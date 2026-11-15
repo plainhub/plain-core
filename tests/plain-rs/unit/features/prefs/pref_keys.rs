@@ -16,6 +16,7 @@ fn every_registered_key_has_the_expected_read_and_write_policy() {
             password password_type login_require_approval
             api_permissions dev_token log_level auto_check_update skip_version"),
         (PrefAccess::LocalOrHttpServer, "mdns_hostname"),
+        (PrefAccess::LocalOrFiles, "recent_selected_dirs"),
         (PrefAccess::RemoteReadOnly, "app_home_features"),
         (PrefAccess::RustOnly, "opaque_server_setup opaque_password_record client_id adb_token master_secret signature_key_pair"),
     ];
@@ -107,6 +108,7 @@ fn exported_constants_match_the_registered_keys() {
         AUTO_CHECK_UPDATE,
         SKIP_VERSION,
         MDNS_HOSTNAME,
+        RECENT_SELECTED_DIRS,
         APP_HOME_FEATURES,
         OPAQUE_SERVER_SETUP,
         OPAQUE_PASSWORD_RECORD,

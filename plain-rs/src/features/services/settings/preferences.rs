@@ -1,6 +1,8 @@
 use crate::features::enums::DataType;
 use crate::features::prefs::Prefs;
-use crate::features::prefs::pref_keys::{AI_IMAGE_SEARCH_MODEL, MEDIA_EXCLUDED_DIRS};
+use crate::features::prefs::pref_keys::{
+    AI_IMAGE_SEARCH_MODEL, MEDIA_EXCLUDED_DIRS, RECENT_SELECTED_DIRS,
+};
 use crate::infrastructure::events::WsEvent;
 use plain_libs::serde_json::Value;
 use tokio::sync::broadcast;
@@ -41,6 +43,16 @@ impl<'a> Preferences<'a> {
         plain_libs::anyhow::ensure!(value.to_string().len() <= 65536, "invalid_pref_value");
         if key == MEDIA_EXCLUDED_DIRS {
             crate::features::media::visibility::validate(&value)?;
+        }
+        if key == RECENT_SELECTED_DIRS {
+            let dirs: Vec<String> = plain_libs::serde_json::from_value(value.clone())?;
+            plain_libs::anyhow::ensure!(
+                dirs.len() <= 8 && dirs.iter().all(|dir| {
+                    !dir.contains('\0') && (dir.starts_with('/') ||
+                        matches!(dir.as_bytes(), [drive, b':', b'/', ..] if drive.is_ascii_alphabetic()))
+                }),
+                "Expected at most 8 absolute directories"
+            );
         }
         if key == AI_IMAGE_SEARCH_MODEL {
             plain_libs::anyhow::ensure!(

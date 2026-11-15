@@ -4,7 +4,9 @@ use plain_graphql::{Context, Json, Object};
 
 use plain_libs::serde_json::Value;
 use plain_rs::features::prefs::Prefs;
-use plain_rs::features::prefs::pref_keys::{APP_HOME_FEATURES, PrefAccess, access};
+use plain_rs::features::prefs::pref_keys::{
+    APP_HOME_FEATURES, PrefAccess, RECENT_SELECTED_DIRS, access,
+};
 use std::sync::Arc;
 
 #[derive(Default)]
@@ -20,7 +22,14 @@ impl PrefsQuery {
         let prefs = prefs(ctx);
         let Some(keys) = keys else {
             super::super::common::require_developer_mode(ctx)?;
-            return Ok(Json(Value::Object(prefs.entries().into_iter().collect())));
+            let can_read_recent_dirs = files_preference_allowed(ctx);
+            return Ok(Json(Value::Object(
+                prefs
+                    .entries()
+                    .into_iter()
+                    .filter(|(key, _)| key != RECENT_SELECTED_DIRS || can_read_recent_dirs)
+                    .collect(),
+            )));
         };
         let mut values = plain_libs::serde_json::Map::new();
         for key in keys {
@@ -61,6 +70,9 @@ impl PrefsMutation {
 
     async fn remove_pref(&self, ctx: &Context<'_>, key: String) -> plain_graphql::Result<bool> {
         super::super::common::require_developer_mode(ctx)?;
+        if key == RECENT_SELECTED_DIRS {
+            authorize(ctx, &key).await?;
+        }
         super::state::remove_pref(ctx, &key).await?;
         Ok(true)
     }
@@ -79,8 +91,12 @@ fn is_local(ctx: &Context<'_>) -> bool {
         == Some(&crate::graphql::executor::RequestOrigin::Local)
 }
 pub(crate) async fn authorize(ctx: &Context<'_>, key: &str) -> plain_graphql::Result<()> {
-    let capabilities = preference_capabilities(ctx, key).await?;
-    let allowed = plain_rs::features::prefs::pref_keys::writable(key, is_local(ctx), &capabilities);
+    let allowed = if access(key) == Some(PrefAccess::LocalOrFiles) {
+        files_preference_allowed(ctx)
+    } else {
+        let capabilities = preference_capabilities(ctx, key).await?;
+        plain_rs::features::prefs::pref_keys::writable(key, is_local(ctx), &capabilities)
+    };
     if !allowed {
         return Err(plain_graphql::Error::new("Preference is not accessible"));
     }
@@ -88,6 +104,9 @@ pub(crate) async fn authorize(ctx: &Context<'_>, key: &str) -> plain_graphql::Re
 }
 
 async fn readable(ctx: &Context<'_>, key: &str) -> plain_graphql::Result<bool> {
+    if access(key) == Some(PrefAccess::LocalOrFiles) {
+        return Ok(files_preference_allowed(ctx));
+    }
     let capabilities = preference_capabilities(ctx, key).await?;
     Ok(plain_rs::features::prefs::pref_keys::readable(
         key,
@@ -104,4 +123,13 @@ async fn preference_capabilities(
         return Ok(Vec::new());
     }
     crate::graphql::resolvers::app::http_server::authorized_capabilities(ctx).await
+}
+
+fn files_preference_allowed(ctx: &Context<'_>) -> bool {
+    use crate::graphql::executor::RequestClient;
+    use plain_rs::features::access::AccessFeature;
+    is_local(ctx)
+        || (ctx.data_opt::<RequestClient>().is_some()
+            && crate::http::auth::public_gate::require(ctx, prefs(ctx), &[AccessFeature::Files])
+                .is_ok())
 }

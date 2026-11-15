@@ -75,14 +75,22 @@ fn request_at(content: &str, timestamp: i64) -> String {
             .to_string()
             .into(),
     );
-    request.to_string()
+    let request = request.as_object_mut().unwrap();
+    request
+        .entry("query")
+        .or_insert_with(|| "{ __typename }".into());
+    request
+        .entry("variables")
+        .or_insert_with(|| plain_libs::serde_json::json!({}));
+    plain_libs::serde_json::to_string(request).unwrap()
 }
 fn signed_payload(kp: &[u8], channel: &str, request: &str) -> String {
-    plain_libs::serde_json::to_string(&SignedEnvelope {
-        signature: ed25519_sign(kp, signature_payload(channel, request).as_bytes()),
-        request: plain_libs::serde_json::value::RawValue::from_string(request.to_owned()).unwrap(),
-    })
-    .unwrap()
+    let mut value: plain_libs::serde_json::Value =
+        plain_libs::serde_json::from_str(request).unwrap();
+    value["signature"] = "".into();
+    let mut wire: SignedEnvelope = plain_libs::serde_json::from_value(value).unwrap();
+    wire.signature = ed25519_sign(kp, &wire.signing_bytes(channel));
+    plain_libs::serde_json::to_string(&wire).unwrap()
 }
 fn build_body(kp: &[u8], key: &[u8; 32], content: &str, timestamp: i64) -> Vec<u8> {
     encrypt_peer(
@@ -105,7 +113,7 @@ fn authenticate_roundtrip_paired_peer() {
     assert_eq!(authed.key, key.to_vec());
     assert_eq!(
         authed.timestamp,
-        GraphqlEnvelope::parse(&request)
+        super::super::graphql_request::Envelope::parse(&request)
             .unwrap()
             .id()
             .unwrap()
@@ -315,12 +323,13 @@ fn graphql_rejects_status_signature_purpose() {
     let (db, _) = unique_db();
     let (id, key, kp) = seed_paired_peer(&db);
     let request = request_at("{}", now_ms());
-    let wrong_purpose = plain_libs::serde_json::json!(["PEER_STATUS", "", request]).to_string();
-    let signature = ed25519_sign(&kp, wrong_purpose.as_bytes());
-    let payload = plain_libs::serde_json::json!({
-        "signature": signature,
-        "request": plain_libs::serde_json::from_str::<plain_libs::serde_json::Value>(&request).unwrap(),
-    }).to_string();
+    let mut wire: SignedEnvelope =
+        plain_libs::serde_json::from_str(&signed_payload(&kp, "", &request)).unwrap();
+    let mut tuple: plain_libs::serde_json::Value =
+        plain_libs::serde_json::from_slice(&wire.signing_bytes("")).unwrap();
+    tuple[0] = "PEER_STATUS".into();
+    wire.signature = ed25519_sign(&kp, tuple.to_string().as_bytes());
+    let payload = plain_libs::serde_json::to_string(&wire).unwrap();
     assert!(matches!(
         authenticate(
             &db,
@@ -355,7 +364,7 @@ fn peer_request_rejects_unsigned_outer_extras_and_wrong_route_aad() {
     }
     let mut extra: plain_libs::serde_json::Value =
         plain_libs::serde_json::from_str(&payload).unwrap();
-    extra["requestId"] = GraphqlEnvelope::parse(&request).unwrap().request_id.into();
+    extra["operationName"] = "unsigned".into();
     for plain in [
         request,
         format!("{}|{NONCE}|{{}}", now_ms()),
@@ -417,7 +426,11 @@ fn same_millisecond_requests_have_distinct_signed_uuid_ids_and_tampering_is_reje
     let mut ids = std::collections::HashSet::new();
     for _ in 0..2 {
         let request = request_at("{}", timestamp);
-        ids.insert(GraphqlEnvelope::parse(&request).unwrap().request_id);
+        ids.insert(
+            super::super::graphql_request::Envelope::parse(&request)
+                .unwrap()
+                .request_id,
+        );
         let payload = signed_payload(&kp, "", &request);
         assert!(
             authenticate(
@@ -429,9 +442,7 @@ fn same_millisecond_requests_have_distinct_signed_uuid_ids_and_tampering_is_reje
             .is_ok()
         );
         let mut altered: SignedEnvelope = plain_libs::serde_json::from_str(&payload).unwrap();
-        altered.request =
-            plain_libs::serde_json::value::RawValue::from_string(request_at("{}", timestamp))
-                .unwrap();
+        altered.request_id = crate::features::record_id::generate();
         assert!(matches!(
             authenticate(
                 &db,
@@ -451,32 +462,38 @@ fn same_millisecond_requests_have_distinct_signed_uuid_ids_and_tampering_is_reje
     assert_eq!(ids.len(), 2);
 }
 #[test]
-fn signatures_cover_exact_request_bytes_including_whitespace_and_numbers() {
+fn peer_signature_covers_flat_fields_not_json_key_order() {
     let (db, _) = unique_db();
     let (id, key, kp) = seed_paired_peer(&db);
-    let rid = GraphqlEnvelope::parse(&request_at("{}", now_ms()))
-        .unwrap()
-        .request_id;
-    let request = format!(
-        "{{ \"requestId\":\"{rid}\", \"query\":\"{{ __typename }}\", \"variables\":{{\"number\":1e+30}} }}"
+    let request = request_at(
+        r#"{"query":"{ __typename }","variables":{"nested":{"a":1,"z":2}}}"#,
+        now_ms(),
     );
     let payload = signed_payload(&kp, "", &request);
-    let body = encrypt_peer(&key, payload.as_bytes()).unwrap();
+    let wire: SignedEnvelope = plain_libs::serde_json::from_str(&payload).unwrap();
+    for tampered in [
+        payload.replace("__typename", "other"),
+        payload.replace(r#""z":2"#, r#""z":3"#),
+    ] {
+        assert!(matches!(
+            authenticate(
+                &db,
+                &id,
+                "",
+                &encrypt_peer(&key, tampered.as_bytes()).unwrap()
+            ),
+            Err(AuthError::BadSignature)
+        ));
+    }
+    let reordered = format!(
+        r#"{{"variables":{{"nested":{{"z":2,"a":1}}}},"query":"{{ __typename }}","requestId":"{}","signature":"{}"}}"#,
+        wire.request_id, wire.signature,
+    );
+    let body = encrypt_peer(&key, reordered.as_bytes()).unwrap();
     assert_eq!(
         authenticate(&db, &id, "", &body).unwrap().graphql_json,
         request
     );
-    let altered = payload.replace("1e+30", "1e30");
-    assert_ne!(payload, altered);
-    assert!(matches!(
-        authenticate(
-            &db,
-            &id,
-            "",
-            &encrypt_peer(&key, altered.as_bytes()).unwrap()
-        ),
-        Err(AuthError::BadSignature)
-    ));
 }
 #[test]
 fn graphql_freshness_is_one_minute() {
@@ -495,10 +512,14 @@ fn graphql_freshness_is_one_minute() {
 }
 #[test]
 fn peer_signature_has_explicit_leading_purpose() {
-    let graphql: plain_libs::serde_json::Value =
-        plain_libs::serde_json::from_str(&signature_payload("channel", "request JSON")).unwrap();
+    let wire = SignedEnvelope {
+        signature: String::new(),
+        request_id: "id".into(),
+        query: "{ __typename }".into(),
+        variables: Default::default(),
+    };
     assert_eq!(
-        graphql,
-        plain_libs::serde_json::json!(["PEER_REQUEST", "channel", "request JSON"])
+        wire.signing_bytes("channel"),
+        br#"["PEER_REQUEST","channel","id","{ __typename }",{}]"#
     );
 }
