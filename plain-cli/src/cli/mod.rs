@@ -2,11 +2,12 @@ mod help;
 mod options;
 mod parser;
 
-pub mod prefs;
 pub mod install;
 pub mod login;
 pub mod passwd;
+pub mod prefs;
 pub mod run;
+pub mod status;
 pub mod uninstall;
 pub mod update;
 
@@ -36,7 +37,8 @@ impl Cli {
 
     pub(crate) fn paths(
         &self,
-    ) -> plain_libs::anyhow::Result<plain_rs::infrastructure::platform::system::consts::AppPaths> {
+    ) -> plain_libs::anyhow::Result<plain_rs::infrastructure::platform::system::consts::AppPaths>
+    {
         let mut paths =
             plain_rs::infrastructure::platform::system::consts::AppPaths::detect_with_directories(
                 self.data_dir.clone(),
@@ -69,6 +71,7 @@ pub(crate) enum Cmd {
         command: login::Command,
     },
     Update,
+    Status,
     Prefs {
         key: String,
         value: String,

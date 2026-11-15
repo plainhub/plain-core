@@ -18,6 +18,7 @@ pub(super) enum Scope {
     Allow,
     Deny,
     Update,
+    Status,
     Prefs,
     RootHelp,
     LoginHelp,
@@ -84,6 +85,7 @@ impl Cli {
                     (Scope::Root, "passwd") => Scope::Passwd,
                     (Scope::Root, "login") => Scope::Login,
                     (Scope::Root, "update") => Scope::Update,
+                    (Scope::Root, "status") => Scope::Status,
                     (Scope::Root, "prefs") => Scope::Prefs,
                     (Scope::Prefs, _) if !help_command && values.pref_key.is_none() => {
                         values.pref_key = Some(word);
@@ -140,6 +142,7 @@ impl Cli {
                 }
             }
             Scope::Update => Cmd::Update,
+            Scope::Status => Cmd::Status,
             Scope::Prefs => Cmd::Prefs {
                 key: values
                     .pref_key
@@ -162,6 +165,7 @@ impl Cli {
                     | Scope::Uninstall
                     | Scope::Passwd
                     | Scope::Prefs
+                    | Scope::Status
                     | Scope::Requests
                     | Scope::Allow
                     | Scope::Deny
@@ -171,8 +175,7 @@ impl Cli {
                 "--data-dir is not used by this command",
             ));
         }
-        if values.cache_dir.is_some() && !matches!(scope, Scope::Run | Scope::Passwd | Scope::Prefs)
-        {
+        if values.cache_dir.is_some() && !matches!(scope, Scope::Run | Scope::Passwd) {
             return Err(ParseError::invalid(
                 "--cache-dir is not used by this command",
             ));

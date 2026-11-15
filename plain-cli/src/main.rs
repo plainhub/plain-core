@@ -3,7 +3,7 @@ use plain_libs::anyhow::Result;
 mod bootstrap;
 mod cli;
 mod host;
-mod login_socket;
+mod management_socket;
 mod service;
 mod storage;
 mod version;

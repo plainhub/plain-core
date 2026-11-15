@@ -292,7 +292,7 @@ async fn service_starts_real_listeners_and_releases_them_and_the_data_lock_on_sh
     );
     #[cfg(any(target_os = "linux", target_os = "macos"))]
     assert!(
-        login::requests(&paths.data_dir, None)
+        management_socket::requests(&paths.data_dir, None)
             .await
             .unwrap()
             .requests
@@ -311,11 +311,11 @@ async fn service_starts_real_listeners_and_releases_them_and_the_data_lock_on_sh
             .await
             .is_err()
     );
-    assert!(login::requests(&paths.data_dir, None).await.is_err());
+    assert!(management_socket::requests(&paths.data_dir, None).await.is_err());
     let mut invalid = options();
     invalid.web_root = Some(directory.path().join("missing-web"));
     assert!(Service::start(&paths, invalid).await.is_err());
-    assert!(login::requests(&paths.data_dir, None).await.is_err());
+    assert!(management_socket::requests(&paths.data_dir, None).await.is_err());
     let reopened = ContentServer::open_with_cache(&paths.data_dir, &paths.cache_dir).unwrap();
     reopened.stop_core().await;
 }
@@ -348,5 +348,5 @@ async fn unconfigured_service_fails_before_listeners_or_passwordless_access() {
             .unwrap()
             .is_none()
     );
-    assert!(login::requests(&paths.data_dir, None).await.is_err());
+    assert!(management_socket::requests(&paths.data_dir, None).await.is_err());
 }

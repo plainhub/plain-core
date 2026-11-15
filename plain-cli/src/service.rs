@@ -1,5 +1,5 @@
 use crate::host::Host;
-use crate::login_socket as login;
+use crate::management_socket;
 use crate::storage;
 use plain_libs::anyhow::{Result, anyhow};
 use plain_rs::features::access::AccessFeature;
@@ -19,7 +19,7 @@ pub struct Options {
 pub struct Service {
     core: Arc<ContentServer>,
     host: tokio::task::JoinHandle<Result<(), String>>,
-    login: Option<login::Service>,
+    management: Option<management_socket::Service>,
     #[cfg(target_os = "linux")]
     watcher: Option<plain_rs::infrastructure::platform::linux::mounts::automount::Watcher>,
 }
@@ -42,7 +42,9 @@ impl Service {
                 .set_defaults(defaults)
                 .map_err(plain_libs::anyhow::Error::msg)?;
         }
-        let prefs = core.shared_preferences().map_err(plain_libs::anyhow::Error::msg)?;
+        let prefs = core
+            .shared_preferences()
+            .map_err(plain_libs::anyhow::Error::msg)?;
         plain_libs::anyhow::ensure!(
             plain_rs::features::prefs::security::password_credential(&prefs)?.is_some(),
             "Admin password is not configured. Run plainapp passwd before starting the service."
@@ -61,13 +63,14 @@ impl Service {
         let log_file =
             plain_rs::infrastructure::platform::system::log::default_log_file(&paths.data_dir);
         plain_rs::infrastructure::platform::system::log::set_file(&log_file)?;
-        core.set_log_file(&log_file).map_err(plain_libs::anyhow::Error::msg)?;
+        core.set_log_file(&log_file)
+            .map_err(plain_libs::anyhow::Error::msg)?;
         let runtime = Arc::new(Host::new(core.clone(), capabilities()));
         let host = tokio::spawn(runtime.run());
         let mut service = Self {
             core,
             host,
-            login: None,
+            management: None,
             #[cfg(target_os = "linux")]
             watcher: None,
         };
@@ -79,8 +82,8 @@ impl Service {
     }
 
     async fn start_services(&mut self, paths: &AppPaths, options: Options) -> Result<()> {
-        self.login = login::Service::start(&self.core).await?;
-        if self.login.is_some() {
+        self.management = management_socket::Service::start(&self.core).await?;
+        if self.management.is_some() {
             log::info!(
                 "Use plainapp login requests with the same data directory to approve Web access"
             );
@@ -136,7 +139,7 @@ impl Service {
         #[cfg(target_os = "linux")]
         if let Some(watcher) = &mut self.watcher {
             return tokio::select! {
-                result = login::wait(&mut self.login) => result,
+                result = management_socket::wait(&mut self.management) => result,
                 result = &mut self.host => {
                     result.map_err(plain_libs::anyhow::Error::from)?.map_err(plain_libs::anyhow::Error::msg)?;
                     Err(anyhow!("Headless host session stopped"))
@@ -148,7 +151,7 @@ impl Service {
             };
         }
         tokio::select! {
-            result = login::wait(&mut self.login) => result,
+            result = management_socket::wait(&mut self.management) => result,
             result = &mut self.host => {
                 result?.map_err(plain_libs::anyhow::Error::msg)?;
                 Err(anyhow!("Headless host session stopped"))
@@ -164,9 +167,9 @@ impl Service {
             }
         }
         self.core.stop_core().await;
-        if let Some(login) = self.login {
-            if let Err(error) = login.shutdown().await {
-                log::error!("Local approval service stopped: {error}");
+        if let Some(management) = self.management {
+            if let Err(error) = management.shutdown().await {
+                log::error!("Local management service stopped: {error}");
             }
         }
         if !self.host.is_finished() {
@@ -189,7 +192,7 @@ fn capabilities() -> Vec<String> {
             capabilities.push("DISK_MANAGER".into());
         }
     }
-    if login::available() {
+    if management_socket::available() {
         capabilities.push("LOCAL_LOGIN_APPROVAL".into());
     }
     capabilities

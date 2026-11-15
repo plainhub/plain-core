@@ -8,7 +8,8 @@ pub fn run() -> Result<()> {
         crate::version::COMMIT,
         crate::version::BUILD_TIME,
     );
-    plain_rs::infrastructure::platform::system::log::init("info").map_err(plain_libs::anyhow::Error::msg)?;
+    plain_rs::infrastructure::platform::system::log::init("info")
+        .map_err(plain_libs::anyhow::Error::msg)?;
 
     let cli = crate::cli::Cli::parse();
     let paths = cli.paths()?;
@@ -19,7 +20,14 @@ pub fn run() -> Result<()> {
             keep_config,
             keep_data,
         } => crate::cli::uninstall::run(&paths, keep_config, keep_data),
-        crate::cli::Cmd::Passwd { stdin } => crate::cli::passwd::run(&paths, stdin),
+        crate::cli::Cmd::Passwd { stdin } => tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()?
+            .block_on(crate::cli::passwd::run(&paths, stdin)),
+        crate::cli::Cmd::Status => tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()?
+            .block_on(crate::cli::status::run(&paths)),
         crate::cli::Cmd::Login { command } => tokio::runtime::Builder::new_multi_thread()
             .enable_all()
             .build()?

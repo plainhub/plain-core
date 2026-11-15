@@ -161,7 +161,7 @@ First installation requires an admin password entered through a terminal; reinst
 For unattended installation, provision it first with `plainapp passwd --stdin` using protected standard input.
 
 ```bash
-sudo plainapp passwd   # change the admin password while the service is stopped
+sudo plainapp passwd   # change the admin password without stopping the service
 ```
 
 - `http://<host>:8080` — HTTP
@@ -169,17 +169,30 @@ sudo plainapp passwd   # change the admin password while the service is stopped
 
 ### Preferences
 
-Stop the service, set preferences, then restart:
+Set preferences through the running service:
 
 ```sh
-sudo systemctl stop plainapp
 sudo plainapp prefs developer_mode true   # enable developerMode
 sudo plainapp prefs allow_any_host true   # allow cross-origin requests
-sudo systemctl start plainapp
 ```
 
-Use `false` to disable either setting; use the same `--data-dir` and `--cache-dir` as the service.
-`plainapp prefs <key> <value>` accepts existing preference keys and JSON values.
+Use `false` to disable either setting. `plainapp prefs <key> <value>` accepts existing preference keys and JSON values and requires a running service.
+The service validates, persists and applies each change; changing `http_port` or `https_port` restarts its listeners internally while the process stays running.
+
+```sh
+sudo plainapp status             # process status and actual HTTP/HTTPS ports
+sudo plainapp prefs http_port 8088
+sudo plainapp passwd             # hidden password entry with confirmation
+```
+
+Password input is used exactly as entered; `passwd --stdin` reads one line for automation.
+When no service is listening, `passwd` retains first-password initialization in the selected data directory under its exclusive lock.
+`prefs` never falls back to writing configuration files.
+
+Management uses the existing local Unix socket with a private directory, owner-only socket permissions and peer OS-account verification on both ends.
+The installed Linux service runs as root, so management commands require `sudo`; this does not protect against programs already able to execute arbitrary root commands.
+User-run instances trust that OS account, including other programs running as that account.
+No management TCP port or shared secret is added.
 
 ### Install manually
 
@@ -210,7 +223,7 @@ Linux root services automatically mount eligible unmounted filesystems at stable
 
 ### Data and cache directories
 
-Without path overrides, Linux CLI commands and the installed service use `/var/lib/plainapp`. Other operating systems use `~/.plainapp/data` for the user running the process. `run`, `prefs` and `passwd` share the same directory selection.
+Without path overrides, Linux CLI commands and the installed service use `/var/lib/plainapp`. Other operating systems use `~/.plainapp/data` for the user running the process. `run`, `prefs`, `passwd` and `status` share the same directory selection.
 
 App files: `<data-dir>/files/` (Linux default: `/var/lib/plainapp/files/`; other operating systems: `~/.plainapp/data/files/`).
 
@@ -258,7 +271,7 @@ Set custom directories with `--data-dir` and `--cache-dir`:
 plainapp --data-dir /var/lib/plainapp --cache-dir /var/cache/plainapp run
 ```
 
-Use the same directories for `run`, `passwd` and `prefs`.
+Use the service's exact `--data-dir` for `status`, `prefs` and `passwd` when overriding the default; commands do not search other directories. `--cache-dir` is used by `run` and offline password initialization.
 
 Check systemd service paths:
 

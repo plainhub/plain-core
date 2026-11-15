@@ -3,7 +3,7 @@ use super::parser::Scope;
 pub(super) fn render(scope: Scope) -> &'static str {
     match scope {
         Scope::Root => {
-            "PlainApp server and command-line tools\n\nUsage: plainapp [OPTIONS] <COMMAND>\n\nCommands:\n  install    \n  uninstall  \n  run        \n  passwd     \n  login      \n  update     \n  prefs      Set a preference\n  help       Print this message or the help of the given subcommand(s)\n\nOptions:\n      --data-dir <DATA_DIR>    \n      --cache-dir <CACHE_DIR>  \n  -h, --help                   Print help\n  -V, --version                Print version\n"
+            "PlainApp server and command-line tools\n\nUsage: plainapp [OPTIONS] <COMMAND>\n\nCommands:\n  install    \n  uninstall  \n  run        \n  passwd     \n  login      \n  update     \n  prefs      Set a preference\n  status     Show running service and actual ports\n  help       Print this message or the help of the given subcommand(s)\n\nOptions:\n      --data-dir <DATA_DIR>    \n      --cache-dir <CACHE_DIR>  \n  -h, --help                   Print help\n  -V, --version                Print version\n"
         }
         Scope::Install => {
             "Usage: plainapp install [OPTIONS]\n\nOptions:\n  -h, --help                   Print help\n"
@@ -32,8 +32,11 @@ pub(super) fn render(scope: Scope) -> &'static str {
         Scope::Update => {
             "Usage: plainapp update [OPTIONS]\n\nOptions:\n  -h, --help                   Print help\n"
         }
+        Scope::Status => {
+            "Usage: plainapp status [OPTIONS]\n\nOptions:\n      --data-dir <DATA_DIR>    \n  -h, --help                   Print help\n"
+        }
         Scope::Prefs => {
-            "Usage: plainapp prefs [OPTIONS] <KEY> <VALUE>\n\nArguments:\n  <KEY>    Preference key, such as developer_mode or allow_any_host\n  <VALUE>  JSON value, such as true or false\n\nOptions:\n      --data-dir <DATA_DIR>    \n      --cache-dir <CACHE_DIR>  \n  -h, --help                   Print help\n"
+            "Usage: plainapp prefs [OPTIONS] <KEY> <VALUE>\n\nArguments:\n  <KEY>    Preference key, such as developer_mode or allow_any_host\n  <VALUE>  JSON value, such as true or false\n\nOptions:\n      --data-dir <DATA_DIR>    \n  -h, --help                   Print help\n"
         }
         Scope::RootHelp => {
             "Print this message or the help of the given subcommand(s)\n\nUsage: plainapp help [COMMAND]...\n\nArguments:\n  [COMMAND]...  Print help for the subcommand(s)\n"

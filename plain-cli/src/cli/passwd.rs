@@ -1,7 +1,7 @@
 use plain_libs::anyhow::Result;
 use plain_rs::infrastructure::platform::system::consts::AppPaths;
 
-pub fn run(paths: &AppPaths, stdin: bool) -> Result<()> {
+pub async fn run(paths: &AppPaths, stdin: bool) -> Result<()> {
     let password = if stdin {
         let mut password = String::new();
         std::io::stdin().read_line(&mut password)?;
@@ -10,7 +10,7 @@ pub fn run(paths: &AppPaths, stdin: bool) -> Result<()> {
         prompt_password()?
     };
     plain_libs::anyhow::ensure!(!password.is_empty(), "Password cannot be empty");
-    set_password(&paths.data_dir, &paths.cache_dir, &password)?;
+    set_password(&paths.data_dir, &paths.cache_dir, &password).await?;
     println!("Admin password updated.");
     Ok(())
 }
@@ -25,14 +25,23 @@ pub(super) fn prompt_password() -> Result<String> {
 
 #[cfg(not(unix))]
 pub(super) fn prompt_password() -> Result<String> {
-    plain_libs::anyhow::bail!("Use passwd --stdin to read a password from standard input on this platform")
+    plain_libs::anyhow::bail!(
+        "Use passwd --stdin to read a password from standard input on this platform"
+    )
 }
 
-fn set_password(
+async fn set_password(
     directory: &std::path::Path,
     cache: &std::path::Path,
     password: &str,
 ) -> Result<()> {
+    if crate::management_socket::available() {
+        match crate::management_socket::set_password(directory, password.to_owned()).await {
+            Ok(()) => return Ok(()),
+            Err(error) if crate::management_socket::not_running(&error) => {}
+            Err(error) => return Err(error),
+        }
+    }
     let _data_directory =
         plain_rs::infrastructure::data_paths::directory::DataDirectory::open(directory, cache)
             .map_err(plain_libs::anyhow::Error::msg)?;

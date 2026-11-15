@@ -78,15 +78,24 @@ fn preferences_command_requires_key_and_value() {
         "true",
         "--data-dir",
         "data",
-        "--cache-dir",
-        "cache",
     ])
     .unwrap();
     assert!(
         matches!(cli.command, Cmd::Prefs { ref key, ref value } if key == "developer_mode" && value == "true")
     );
     assert_eq!(cli.data_dir, Some(PathBuf::from("data")));
-    assert_eq!(cli.cache_dir, Some(PathBuf::from("cache")));
+    assert_eq!(cli.cache_dir, None);
+    assert!(
+        Cli::try_parse_from([
+            "plainapp",
+            "prefs",
+            "developer_mode",
+            "true",
+            "--cache-dir",
+            "cache"
+        ])
+        .is_err()
+    );
     for arguments in [
         vec!["prefs"],
         vec!["prefs", "developer_mode"],
