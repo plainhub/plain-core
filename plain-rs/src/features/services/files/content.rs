@@ -1,3 +1,4 @@
+use super::docs_preview;
 use crate::features::services::files::links;
 use crate::features::services::files::previews;
 use crate::runtime::Runtime as CoreRuntime;
@@ -116,8 +117,11 @@ pub async fn read(
         } else {
             &name
         };
-        if preview && options.size.is_none() && super::docs_preview::supports_name(filename) {
-            return super::docs_preview::read(state, &cached.to_string_lossy())
+        if preview
+            && options.size.is_none()
+            && let Some(format) = docs_preview::Format::from_name(filename)
+        {
+            return docs_preview::read(state, &cached.to_string_lossy(), format)
                 .await
                 .map(|text| Content::Markdown {
                     text,
@@ -162,19 +166,15 @@ pub async fn read(
         }
 
         if preview && options.size.is_none() {
-            let document = if super::docs_preview::supports_name(filename) {
-                true
-            } else if path.starts_with("content://") {
+            let mut format = docs_preview::Format::from_name(filename);
+            if format.is_none() && path.starts_with("content://") {
                 let mime = super::resources::read(&state.host, "mime", &path, json!({}))
                     .await
                     .map_err(plain_libs::anyhow::Error::msg)?;
-                mime.as_str()
-                    .is_some_and(super::docs_preview::supports_mime)
-            } else {
-                false
-            };
-            if document {
-                return super::docs_preview::read(state, &path).await.map(|text| {
+                format = mime.as_str().and_then(docs_preview::Format::from_mime);
+            }
+            if let Some(format) = format {
+                return docs_preview::read(state, &path, format).await.map(|text| {
                     Content::Markdown {
                         text,
                         name: filename.to_owned(),
@@ -222,8 +222,11 @@ pub async fn read(
     if options.starts_view && options.size != Some(Size::Small) {
         state.file_platform.recent_files.add(&path);
     }
-    if preview && options.size.is_none() && super::docs_preview::supports_name(filename) {
-        return super::docs_preview::read(state, &path)
+    if preview
+        && options.size.is_none()
+        && let Some(format) = docs_preview::Format::from_name(filename)
+    {
+        return docs_preview::read(state, &path, format)
             .await
             .map(|text| Content::Markdown {
                 text,

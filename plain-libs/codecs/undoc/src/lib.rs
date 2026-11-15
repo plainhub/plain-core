@@ -140,6 +140,8 @@ pub fn parse_bytes(data: &[u8]) -> Result<Document> {
 
 #[cfg(test)]
 mod csv;
+mod csv_input;
+pub use csv_input::parse_csv;
 mod grid;
 mod markdown;
 

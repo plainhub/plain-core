@@ -3,24 +3,48 @@ use std::path::Path;
 
 static CONVERSIONS: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(2);
 
-pub fn supports_name(name: &str) -> bool {
-    Path::new(name)
-        .extension()
-        .and_then(|extension| extension.to_str())
-        .is_some_and(|extension| {
+#[derive(Clone, Copy)]
+pub(super) enum Format {
+    Office,
+    Csv,
+}
+
+impl Format {
+    pub(super) fn from_name(name: &str) -> Option<Self> {
+        let extension = Path::new(name).extension()?.to_str()?;
+        if extension.eq_ignore_ascii_case("csv") {
+            Some(Self::Csv)
+        } else {
             undoc::detect::FormatType::ALL
                 .iter()
                 .any(|format| format.extension().eq_ignore_ascii_case(extension))
-        })
+                .then_some(Self::Office)
+        }
+    }
+
+    pub(super) fn from_mime(mime: &str) -> Option<Self> {
+        let mime = mime.split(';').next()?.trim();
+        if mime.eq_ignore_ascii_case("text/csv") {
+            Some(Self::Csv)
+        } else {
+            undoc::detect::FormatType::ALL
+                .iter()
+                .any(|format| {
+                    plain_libs::utils::mime::mime_from_ext(&format!(
+                        "document.{}",
+                        format.extension()
+                    )) == mime
+                })
+                .then_some(Self::Office)
+        }
+    }
 }
 
-pub fn supports_mime(mime: &str) -> bool {
-    undoc::detect::FormatType::ALL.iter().any(|format| {
-        plain_libs::utils::mime::mime_from_ext(&format!("document.{}", format.extension())) == mime
-    })
-}
-
-pub async fn read(state: &Runtime, path: &str) -> plain_libs::anyhow::Result<String> {
+pub(super) async fn read(
+    state: &Runtime,
+    path: &str,
+    format: Format,
+) -> plain_libs::anyhow::Result<String> {
     let permit = CONVERSIONS.acquire().await?;
     if path.starts_with("content://") || path.starts_with("ph://") {
         let mut input = state
@@ -38,20 +62,33 @@ pub async fn read(state: &Runtime, path: &str) -> plain_libs::anyhow::Result<Str
         }
         return tokio::task::spawn_blocking(move || {
             let _permit = permit;
-            render(undoc::parse_bytes(&bytes)?)
+            render(match format {
+                Format::Csv => undoc::parse_csv(&bytes)?,
+                Format::Office => undoc::parse_bytes(&bytes)?,
+            })
         })
         .await?;
     }
     let path = path.to_owned();
     tokio::task::spawn_blocking(move || {
         let _permit = permit;
-        convert(Path::new(&path))
+        convert(Path::new(&path), format)
     })
     .await?
 }
 
-fn convert(path: &Path) -> plain_libs::anyhow::Result<String> {
-    render(undoc::parse_file(path)?)
+fn convert(path: &Path, format: Format) -> plain_libs::anyhow::Result<String> {
+    use std::io::Read;
+    render(match format {
+        Format::Office => undoc::parse_file(path)?,
+        Format::Csv => {
+            let mut bytes = Vec::new();
+            std::fs::File::open(path)?
+                .take(undoc::limits::MAX_INPUT_BYTES as u64 + 1)
+                .read_to_end(&mut bytes)?;
+            undoc::parse_csv(&bytes)?
+        }
+    })
 }
 
 fn render(document: undoc::Document) -> plain_libs::anyhow::Result<String> {

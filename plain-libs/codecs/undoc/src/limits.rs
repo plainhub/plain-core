@@ -70,6 +70,15 @@ pub(crate) fn check_document(document: &crate::Document) -> Result<()> {
     Ok(())
 }
 
+pub(crate) fn check_table_grid(columns: usize, rows: usize) -> Result<()> {
+    if columns.saturating_mul(rows) > 1_000_000 {
+        return Err(Error::InvalidData(
+            "Document table grid limit exceeded".into(),
+        ));
+    }
+    Ok(())
+}
+
 fn check_table(table: &crate::Table, depth: usize) -> Result<()> {
     if depth > MAX_XML_DEPTH {
         return Err(Error::InvalidData(
@@ -87,11 +96,7 @@ fn check_table(table: &crate::Table, depth: usize) -> Result<()> {
         })
         .max()
         .unwrap_or(0);
-    if columns.saturating_mul(table.rows.len()) > 1_000_000 {
-        return Err(Error::InvalidData(
-            "Document table grid limit exceeded".into(),
-        ));
-    }
+    check_table_grid(columns, table.rows.len())?;
     if table.column_count().saturating_mul(table.rows.len()) > 1_000_000 {
         return Err(Error::InvalidData(
             "Document merged table grid limit exceeded".into(),
