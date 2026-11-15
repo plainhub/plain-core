@@ -50,7 +50,6 @@ async fn encrypted_public_and_ble_rpc_share_auth_executor_and_receipts() {
         Arc::new(plain_rs::features::prefs::Prefs::load(&dir.path().join("system.json")).unwrap());
     prefs.set("background_service_enabled", true).unwrap();
     prefs.set("device_name", "fixture tablet").unwrap();
-    prefs.set("client_id", "local").unwrap();
     let (local_keypair, local_public_key) = plain_libs::crypto::ed25519_generate();
     prefs
         .set(
@@ -73,6 +72,8 @@ async fn encrypted_public_and_ble_rpc_share_auth_executor_and_receipts() {
     let mut host = crate::host::events::TestHost::new(&server);
     let (broadcast_done, broadcast_received) = tokio::sync::oneshot::channel();
     let ble = server.runtime_state().ble_transport.clone();
+    let client_id = server.runtime_state().native_client_id().unwrap();
+    let advertised_client_id = client_id.clone();
     let responder = tokio::spawn(async move {
         let mut broadcast_done = Some(broadcast_done);
         let mut count = 0;
@@ -132,8 +133,11 @@ async fn encrypted_public_and_ble_rpc_share_auth_executor_and_receipts() {
                         .as_array()
                         .unwrap()
                         .iter()
-                        .find(|p| p["id"] == "local")
+                        .find(|p| p["id"] == advertised_client_id)
                         .unwrap();
+                    assert!(
+                        plain_rs::features::client_identity::parse(local["id"].as_str().unwrap()).is_some()
+                    );
                     assert_eq!(local["name"], "fixture tablet");
                     assert_eq!(local["deviceType"], "COMPUTER");
                     if let Some(done) = broadcast_done.take() {
@@ -266,10 +270,10 @@ async fn encrypted_public_and_ble_rpc_share_auth_executor_and_receipts() {
         401
     );
     let channel =
-        plain_rs::features::chat::channels::state::create(&db, "local", "fixture").unwrap();
+        plain_rs::features::chat::channels::state::create(&db, &client_id, "fixture").unwrap();
     plain_rs::features::chat::channels::state::apply(
         &db,
-        "local",
+        &client_id,
         &channel.id,
         plain_rs::features::chat::channels::state::Action::Invite {
             peer: "peer".into(),

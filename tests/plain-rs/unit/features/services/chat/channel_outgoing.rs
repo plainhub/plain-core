@@ -14,8 +14,9 @@ fn private_prepare_uses_persisted_signing_identity_and_current_peer_keys() {
             .as_nanos()
     ));
     let prefs = Prefs::load(&dir.join("prefs.json")).unwrap();
+    let client_id = crate::features::client_identity::generate();
+    prefs.set("client_id", &client_id).unwrap();
     let (key, public) = ed25519_generate();
-    prefs.set("client_id", "actor").unwrap();
     prefs
         .set("signature_key_pair", base64_encode(&key))
         .unwrap();
@@ -25,10 +26,10 @@ fn private_prepare_uses_persisted_signing_identity_and_current_peer_keys() {
     paired.status = PeerStatus::Paired;
     let group = DPeer::new("group", "group", "127.0.0.1", Some(1), DeviceType::Phone);
     peers::save(&db, &[paired.clone(), group], SaveMode::Insert).unwrap();
-    let mut channel = DChannel::new("中文 group", "actor");
+    let mut channel = DChannel::new("中文 group", &client_id);
     channel.key = base64_encode(&[7; 32]);
     channel.members = plain_libs::serde_json::to_string(&vec![
-        ChannelMember::new("actor"),
+        ChannelMember::new(&client_id),
         ChannelMember::new("paired"),
         ChannelMember::pending("group"),
     ])
@@ -64,7 +65,7 @@ fn private_prepare_uses_persisted_signing_identity_and_current_peer_keys() {
     let payload: plain_libs::serde_json::Value =
         plain_libs::serde_json::from_str(wire["variables"]["payload"].as_str().unwrap()).unwrap();
     assert_eq!(payload["channelName"], channel.name);
-    assert_eq!(payload["memberPeers"][0]["id"], "actor");
+    assert_eq!(payload["memberPeers"][0]["id"], client_id);
     assert!(
         prepare(
             &db,

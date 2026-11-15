@@ -51,7 +51,6 @@ fn state() -> (
     let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs =
         Arc::new(crate::features::prefs::Prefs::load(&dir.path().join("system.json")).unwrap());
-    prefs.set("client_id", "actor").unwrap();
     let server = crate::test_runtime::Core::start(
         dir.path(),
         &plain_libs::utils::base64::base64_encode(&[1; 32]),
@@ -145,6 +144,7 @@ async fn rust_falls_back_from_unavailable_socket_and_authenticates_raw_ble_busin
     let host = state.host.clone();
     let (generation, mut receiver) = crate::test_support::HostRequests::connect(&host);
     let ble = state.ble_transport.clone();
+    let expected_client_id = state.native_client_id().unwrap();
     let responder = tokio::spawn(async move {
         while let Some(request) = receiver.recv().await {
             let response = match request["method"].as_str().unwrap() {
@@ -178,7 +178,7 @@ async fn rust_falls_back_from_unavailable_socket_and_authenticates_raw_ble_busin
                     else {
                         panic!("Expected peer request")
                     };
-                    assert_eq!(client_id, "actor");
+                    assert_eq!(client_id, expected_client_id);
                     assert_eq!(channel_id, "channel");
                     assert_eq!(
                         crate::infrastructure::transport::http_request::decrypt_raw(

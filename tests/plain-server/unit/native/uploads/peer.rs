@@ -22,7 +22,7 @@ async fn scoped_native_peer_uploads_preserve_empty_small_and_multiple_window_byt
             .open_peer(
                 &fixture.local.native_uploads().unwrap(),
                 &scope,
-                "remote",
+                &fixture.peer.id,
                 &id,
                 0,
                 size as u64,
@@ -47,7 +47,7 @@ async fn scoped_native_peer_uploads_preserve_empty_small_and_multiple_window_byt
             .native_graphql()
             .unwrap()
             .execute_peer_scoped(
-                "remote",
+                &fixture.peer.id,
                 query,
                 scope.clone(),
                 std::time::Duration::from_secs(30),
@@ -84,7 +84,7 @@ async fn peer_writer_bounds_requests_and_rechecks_pairing_and_session_before_wri
             .open_peer(
                 &fixture.local.native_uploads().unwrap(),
                 &scope,
-                "remote",
+                &fixture.peer.id,
                 id,
                 0,
                 1,
@@ -98,7 +98,7 @@ async fn peer_writer_bounds_requests_and_rechecks_pairing_and_session_before_wri
         .open_peer(
             &fixture.local.native_uploads().unwrap(),
             &scope,
-            "remote",
+            &fixture.peer.id,
             "first",
             0,
             1,
@@ -109,7 +109,7 @@ async fn peer_writer_bounds_requests_and_rechecks_pairing_and_session_before_wri
         .open_peer(
             &fixture.local.native_uploads().unwrap(),
             &scope,
-            "remote",
+            &fixture.peer.id,
             "second",
             0,
             1,
@@ -150,13 +150,13 @@ async fn peer_upload_finish_rejects_wrong_index_length_and_authorization_receipt
         (StatusCode::FORBIDDEN, "private", "remote_access_disabled"),
     ] {
         let mut chunk =
-            PeerUploadChunk::open(fixture.local.runtime_state(), "remote", "fixture", 0, 0)
+            PeerUploadChunk::open(fixture.local.runtime_state(), &fixture.peer.id, "fixture", 0, 0)
                 .await
                 .unwrap();
         chunk.request = Box::pin(async move { Ok((status, body.as_bytes().to_vec())) });
         assert_eq!(chunk.finish().await.unwrap_err(), expected);
     }
-    let mut chunk = PeerUploadChunk::open(fixture.local.runtime_state(), "remote", "fixture", 0, 1)
+    let mut chunk = PeerUploadChunk::open(fixture.local.runtime_state(), &fixture.peer.id, "fixture", 0, 1)
         .await
         .unwrap();
     chunk.request = Box::pin(async { Ok((StatusCode::UNAUTHORIZED, vec![])) });
@@ -170,7 +170,7 @@ async fn peer_upload_window_queue_is_bounded_and_does_not_allocate_a_whole_chunk
     let fixture = Fixture::new().await;
     let mut chunk = PeerUploadChunk::open(
         fixture.local.runtime_state(),
-        "remote",
+        &fixture.peer.id,
         "fixture",
         0,
         (MAX_UPLOAD_WRITE_BYTES * 3) as u64,
@@ -212,7 +212,7 @@ async fn native_peer_upload_rejects_remote_permission_and_session_revocation_ove
         .open_peer(
             &fixture.local.native_uploads().unwrap(),
             &scope,
-            "remote",
+            &fixture.peer.id,
             "denied",
             0,
             0,
@@ -243,14 +243,14 @@ async fn native_peer_upload_rejects_remote_permission_and_session_revocation_ove
         .open_peer(
             &fixture.local.native_uploads().unwrap(),
             &scope,
-            "remote",
+            &fixture.peer.id,
             "revoked",
             0,
             0,
         )
         .await
         .unwrap();
-    remote.db.session_delete("local").unwrap();
+    remote.db.session_delete(&fixture.local.runtime_state().native_client_id().unwrap()).unwrap();
     assert_eq!(
         writers.finish(&scope, &revoked).await.unwrap_err(),
         "unauthorized"
@@ -271,7 +271,7 @@ async fn native_peer_upload_rejects_remote_permission_and_session_revocation_ove
 async fn peer_upload_refuses_a_wrong_tls_pin_before_creating_remote_chunks() {
     let fixture = Fixture::new().await;
     let mut chunk =
-        PeerUploadChunk::open(fixture.local.runtime_state(), "remote", "wrong-pin", 0, 0)
+        PeerUploadChunk::open(fixture.local.runtime_state(), &fixture.peer.id, "wrong-pin", 0, 0)
             .await
             .unwrap();
     let route = &chunk.route;
@@ -321,7 +321,7 @@ async fn peer_upload_refuses_a_wrong_tls_pin_before_creating_remote_chunks() {
 #[tokio::test]
 async fn peer_upload_uses_progress_timeout_instead_of_inherited_header_deadline() {
     let fixture = Fixture::new().await;
-    let mut chunk = PeerUploadChunk::open(fixture.local.runtime_state(), "remote", "slow", 0, 0)
+    let mut chunk = PeerUploadChunk::open(fixture.local.runtime_state(), &fixture.peer.id, "slow", 0, 0)
         .await
         .unwrap();
     let route = &chunk.route;

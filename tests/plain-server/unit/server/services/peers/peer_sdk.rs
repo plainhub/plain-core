@@ -192,7 +192,7 @@ async fn aware_host_only_moves_raw_socket_bytes_rust_performs_tls_crypto_and_gra
 }
 #[tokio::test]
 async fn ble_incoming_file_uses_root_encrypted_fid_and_eof_without_native_http_bridge() {
-    let (dir, server, _, _token) = root("local");
+    let (dir, server, _, _token) = root(&plain_rs::features::client_identity::generate());
     let state = server.runtime_state();
     let imported = plain_rs::features::chat::attachments::app_file_store::import_bytes(
         &state.db,

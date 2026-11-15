@@ -9,7 +9,6 @@ fn fixture() -> (plain_libs::temporary::TempDir, crate::test_runtime::Core) {
         Arc::new(crate::features::prefs::Prefs::load(&dir.path().join("system.json")).unwrap());
     let (key, _public) = plain_libs::crypto::ed25519_generate();
     prefs.set("device_name", "Actual tablet").unwrap();
-    prefs.set("client_id", "actor").unwrap();
     prefs
         .set(
             "signature_key_pair",
@@ -40,7 +39,7 @@ async fn http_mutations_own_identity_pending_members_and_owner_policy() {
     .await
     .unwrap();
     let id = result["channel"]["id"].as_str().unwrap();
-    assert_eq!(result["channel"]["owner_id"], "actor");
+    assert_eq!(result["channel"]["owner_id"], state.native_client_id().unwrap());
     execute(
         &state,
         Request::Rename {

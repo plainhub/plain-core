@@ -4,7 +4,7 @@ use plain_libs::serde_json::json;
 #[test]
 fn ble_associations_match_signature_and_cleanup_without_consuming_replacements() {
     let runtime = Runtime::default();
-    let mut request:PairingRequest=plain_libs::serde_json::from_value(json!({"toId":"local","targetPublicKey":"key","fromId":"peer","fromName":"fixture","port":2443,"deviceType":"PHONE","ecdhPublicKey":"","signaturePublicKey":"","timestamp":1,"ips":[],"signature":"first","awareSupported":false})).unwrap();
+    let mut request:PairingRequest=plain_libs::serde_json::from_value(json!({"toId":"706c6169-0001-8000-8000-000000000001","targetPublicKey":"key","fromId":"peer","fromName":"fixture","port":2443,"deviceType":"PHONE","ecdhPublicKey":"","signaturePublicKey":"","timestamp":1,"ips":[],"signature":"first","awareSupported":false})).unwrap();
     runtime.remember(&request, "mac-first").unwrap();
     request.payload.signature = "second".into();
     runtime.remember(&request, "mac-second").unwrap();
@@ -48,12 +48,12 @@ fn device() -> Device {
 }
 #[tokio::test]
 async fn expired_incoming_request_rejects_both_decisions_without_pairing() {
-    let (_local_dir, local) = fixture("local");
-    let (_remote_dir, remote) = fixture("remote");
+    let (_local_dir, local) = fixture("706c6169-0001-8000-8000-000000000001");
+    let (_remote_dir, remote) = fixture("706c6169-0001-8000-8000-000000000002");
     let state = local.runtime_state();
     let remote_state = remote.runtime_state();
     let target = Target {
-        device_id: "local".into(),
+        device_id: "706c6169-0001-8000-8000-000000000001".into(),
         device_public_key: plain_libs::utils::base64::base64_encode(
             &crate::features::services::peers::peer_wire::signing_keypair(&state.prefs).unwrap()
                 [32..],
@@ -136,12 +136,12 @@ async fn expired_incoming_request_rejects_both_decisions_without_pairing() {
 }
 #[tokio::test]
 async fn incoming_ble_response_uses_matching_address_and_shared_handshake_exactly_once() {
-    let (_a, local) = fixture("local");
-    let (_b, remote) = fixture("remote");
+    let (_a, local) = fixture("706c6169-0001-8000-8000-000000000001");
+    let (_b, remote) = fixture("706c6169-0001-8000-8000-000000000002");
     let state = local.runtime_state();
     let remote_state = remote.runtime_state();
     let target = Target {
-        device_id: "local".into(),
+        device_id: "706c6169-0001-8000-8000-000000000001".into(),
         device_public_key: plain_libs::utils::base64::base64_encode(
             &crate::features::services::peers::peer_wire::signing_keypair(&state.prefs).unwrap()
                 [32..],
@@ -279,10 +279,10 @@ async fn incoming_ble_response_uses_matching_address_and_shared_handshake_exactl
         .confirmations
         .response(&remote_state, &PairingReply::Accept(response.clone()), "")
         .unwrap();
-    let a = crate::infrastructure::db::chat_store::peers::get(&state.db, "remote")
+    let a = crate::infrastructure::db::chat_store::peers::get(&state.db, "706c6169-0001-8000-8000-000000000002")
         .unwrap()
         .unwrap();
-    let b = crate::infrastructure::db::chat_store::peers::get(&remote_state.db, "local")
+    let b = crate::infrastructure::db::chat_store::peers::get(&remote_state.db, "706c6169-0001-8000-8000-000000000001")
         .unwrap()
         .unwrap();
     assert_eq!(a.key, b.key);
@@ -327,7 +327,7 @@ async fn incoming_ble_response_uses_matching_address_and_shared_handshake_exactl
     assert_eq!(
         state
             .pairing_runtime
-            .address("remote", &request.payload.signature)
+            .address("706c6169-0001-8000-8000-000000000002", &request.payload.signature)
             .as_deref(),
         Some("fixture-mac")
     );
@@ -337,7 +337,7 @@ async fn incoming_ble_response_uses_matching_address_and_shared_handshake_exactl
 
 #[tokio::test]
 async fn raw_ble_reports_are_validated_in_rust_before_platform_calls() {
-    let (_directory, server) = fixture("local");
+    let (_directory, server) = fixture("706c6169-0001-8000-8000-000000000001");
     let state = server.runtime_state();
     let (generation, mut calls) = state.host.connect();
     for (kind, payload) in [
@@ -366,7 +366,7 @@ async fn raw_ble_reports_are_validated_in_rust_before_platform_calls() {
 
 #[tokio::test]
 async fn pairing_key_goes_only_to_the_host_and_is_redelivered_after_disconnect() {
-    let (_directory, server) = fixture("local");
+    let (_directory, server) = fixture("706c6169-0001-8000-8000-000000000001");
     let state = server.runtime_state();
     // Repeat reconnections to cover both ready-branch orders in select!.
     for _ in 0..256 {
@@ -450,9 +450,9 @@ async fn pairing_key_goes_only_to_the_host_and_is_redelivered_after_disconnect()
 
 #[tokio::test]
 async fn incoming_ble_message_succeeds_when_lan_address_is_invalid() {
-    let (_directory, server) = fixture("local");
+    let (_directory, server) = fixture("706c6169-0001-8000-8000-000000000001");
     let state = server.runtime_state();
-    let request: PairingRequest = plain_libs::serde_json::from_value(json!({"toId":"local","targetPublicKey":"key","fromId":"peer","fromName":"Fixture","port":2443,"deviceType":"PHONE","ecdhPublicKey":"","signaturePublicKey":"","timestamp":1,"ips":[],"signature":"request","awareSupported":false})).unwrap();
+    let request: PairingRequest = plain_libs::serde_json::from_value(json!({"toId":"706c6169-0001-8000-8000-000000000001","targetPublicKey":"key","fromId":"peer","fromName":"Fixture","port":2443,"deviceType":"PHONE","ecdhPublicKey":"","signaturePublicKey":"","timestamp":1,"ips":[],"signature":"request","awareSupported":false})).unwrap();
     state
         .pairing_runtime
         .remember(&request, "fixture-ble")

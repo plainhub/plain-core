@@ -183,7 +183,6 @@ async fn retry_returns_pending_before_platform_transport_completes() {
     let server = server(dir.path());
     let (kp, pk) = plain_libs::crypto::ed25519_generate();
     let state = server.runtime_state();
-    state.prefs.set("client_id", "local").unwrap();
     state
         .prefs
         .set(

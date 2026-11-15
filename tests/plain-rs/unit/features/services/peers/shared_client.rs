@@ -189,7 +189,7 @@ async fn root_candidates_preserve_foreign_self_unbound_and_deduplicated_endpoint
     assert_eq!(foreign.len(), 1);
     assert_eq!(foreign[0].host, "10.0.0.9");
     assert_eq!(foreign[0].port, 8443);
-    expected.peer_info.id = "local".into();
+    expected.peer_info.id = state.native_client_id().unwrap();
     state.prefs.set("https_port", 9999).unwrap();
     let own = candidates(&state, &expected, false).unwrap();
     assert_eq!(own[0].host, "127.0.0.1");

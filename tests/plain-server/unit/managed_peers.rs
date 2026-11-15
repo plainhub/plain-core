@@ -34,7 +34,7 @@ fn peer(id: &str) -> DPeer {
 #[tokio::test]
 async fn native_peer_requests_reject_invalid_target_scope_and_size_before_creating_routes() {
     let dir = plain_libs::temporary::tempdir().unwrap();
-    let server = start(dir.path(), "local");
+    let server = start(dir.path(), "706c6169-0001-8000-8000-000000000001");
     let state = server.runtime_state();
     let executor = server.native_graphql().unwrap();
     for id in ["", "missing", "https://other.invalid"] {
@@ -57,7 +57,7 @@ async fn native_peer_requests_reject_invalid_target_scope_and_size_before_creati
         );
     }
     for mut peer in [
-        peer("local"),
+        peer("706c6169-0001-8000-8000-000000000001"),
         peer("unpaired"),
         peer("no-identity"),
         peer("no-token"),
@@ -121,7 +121,7 @@ async fn native_peer_requests_reject_invalid_target_scope_and_size_before_creati
 #[tokio::test]
 async fn canceling_an_owner_interrupts_pending_route_resolution() {
     let dir = plain_libs::temporary::tempdir().unwrap();
-    let server = start(dir.path(), "local");
+    let server = start(dir.path(), "706c6169-0001-8000-8000-000000000001");
     let state = server.runtime_state();
     peers::save(&state.db, &[peer("remote")], SaveMode::Insert).unwrap();
     let slot = Arc::new(tokio::sync::Mutex::new(None));
@@ -405,14 +405,14 @@ async fn native_queries_and_subscriptions_share_a_pinned_route_without_a_local_l
 #[tokio::test]
 async fn cached_route_rejects_identity_address_and_management_token_changes() {
     let dir = plain_libs::temporary::tempdir().unwrap();
-    let server = start(dir.path(), "local");
+    let server = start(dir.path(), "706c6169-0001-8000-8000-000000000001");
     let state = server.runtime_state();
     let original = peer("remote");
     peers::save(&state.db, &[original.clone()], SaveMode::Insert).unwrap();
     let route = PeerRoute {
         peer: original.clone(),
         base: http_client::Url::parse("https://127.0.0.1:9").unwrap(),
-        client_id: "local".into(),
+        client_id: "706c6169-0001-8000-8000-000000000001".into(),
         key: vec![8; 32],
         url_key: vec![9; 32],
         pin: [1; 32],
@@ -465,7 +465,7 @@ async fn native_request_budgets_outlive_shared_timeouts_and_cancel_without_retry
     use std::sync::atomic::{AtomicUsize, Ordering};
     use tokio::sync::{mpsc, oneshot};
     let dir = plain_libs::temporary::tempdir().unwrap();
-    let server = start(dir.path(), "local");
+    let server = start(dir.path(), "706c6169-0001-8000-8000-000000000001");
     let state = server.runtime_state();
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let address = listener.local_addr().unwrap();
@@ -512,7 +512,7 @@ async fn native_request_budgets_outlive_shared_timeouts_and_cancel_without_retry
     let route = Arc::new(PeerRoute {
         peer,
         base: http_client::Url::parse(&format!("http://{address}")).unwrap(),
-        client_id: "local".into(),
+        client_id: "706c6169-0001-8000-8000-000000000001".into(),
         key,
         url_key: vec![9; 32],
         pin: [1; 32],
@@ -613,7 +613,7 @@ async fn stale_bootstrap_unauthorized_cannot_revoke_a_replacement_management_ses
     use rustls::pki_types::{CertificateDer, PrivateKeyDer, pem::PemObject};
     use tokio::sync::{mpsc, oneshot, watch};
     let dir = plain_libs::temporary::tempdir().unwrap();
-    let local = start(dir.path(), "local");
+    let local = start(dir.path(), "706c6169-0001-8000-8000-000000000001");
     let state = local.runtime_state();
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     let mut peer = peer("remote");

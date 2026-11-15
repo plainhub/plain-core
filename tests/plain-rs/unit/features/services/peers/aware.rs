@@ -15,7 +15,6 @@ fn server() -> (plain_libs::temporary::TempDir, ContentServer, CoreRuntime) {
     let prefs = Arc::new(
         crate::features::prefs::Prefs::load(&directory.path().join("system.json")).unwrap(),
     );
-    prefs.set("client_id", "local").unwrap();
     let server = ContentServer::start(
         directory.path(),
         &plain_libs::utils::base64::base64_encode(&[5; 32]),

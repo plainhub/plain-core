@@ -281,7 +281,7 @@ async fn blocked_peer_write_and_finish_remain_owned_until_cancel_or_caller_drop(
                 .open_peer(
                     &fixture.local.native_uploads().unwrap(),
                     &scope,
-                    "remote",
+                    &fixture.peer.id,
                     "fixture",
                     0,
                     size,

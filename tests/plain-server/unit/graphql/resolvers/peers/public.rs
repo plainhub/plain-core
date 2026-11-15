@@ -31,7 +31,6 @@ fn fixture_with(
 ) -> (plain_libs::temporary::TempDir, PublicSchema) {
     let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs = Arc::new(Prefs::load(&dir.path().join("prefs.json")).unwrap());
-    prefs.set("client_id", "actor").unwrap();
     prefs.set("api_permissions", vec!["PHONE_NUMBER"]).unwrap();
     let server = crate::server::ContentServer::start(
         dir.path(),

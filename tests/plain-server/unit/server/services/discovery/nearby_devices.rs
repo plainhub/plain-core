@@ -9,7 +9,6 @@ async fn rust_sweep_keeps_lan_probes_independent_of_bluetooth_pause() {
     let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs =
         Arc::new(plain_rs::features::prefs::Prefs::load(&dir.path().join("prefs.json")).unwrap());
-    prefs.set("client_id", "local").unwrap();
     let server = crate::server::ContentServer::start(
         dir.path(),
         &plain_libs::utils::base64::base64_encode(&[3; 32]),
@@ -47,7 +46,7 @@ async fn rust_sweep_keeps_lan_probes_independent_of_bluetooth_pause() {
         Context::from(&state).seen(d, false, true).unwrap();
     }
     Context::from(&state)
-        .seen(fixture("local", 2443), true, true)
+        .seen(fixture(&state.native_client_id().unwrap(), 2443), true, true)
         .unwrap();
     assert_eq!(chat_store::nearby::all(&state.db).unwrap().len(), 2);
     state

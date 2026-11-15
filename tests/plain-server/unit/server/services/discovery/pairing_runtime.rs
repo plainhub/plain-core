@@ -40,7 +40,7 @@ fn device() -> Device {
 #[cfg(feature = "http_transport")]
 #[tokio::test]
 async fn public_nearby_endpoint_runs_pairing_parser_in_rust() {
-    let (_dir, server) = fixture("local");
+    let (_dir, server) = fixture("706c6169-0001-8000-8000-000000000001");
     let (cert_pem, cert_key) = plain_libs::tls::generate_pem(&["localhost".into()]).unwrap();
     let (_, https_port) = server
         .start_public(0, 0, cert_pem.clone(), cert_key.clone())
@@ -93,7 +93,7 @@ async fn public_nearby_endpoint_runs_pairing_parser_in_rust() {
     let encode = plain_libs::utils::base64::base64_encode;
     let mut request = plain_rs::features::peers::pairing::protocol::PairingRequest {
         from_id: "peer".into(),
-        to_id: "local".into(),
+        to_id: "706c6169-0001-8000-8000-000000000001".into(),
         target_public_key: encode(&recipient_key[32..]),
         from_ip: String::new(),
         payload: plain_rs::features::peers::pairing::protocol::PairingRequestPayload {
@@ -184,12 +184,12 @@ async fn lan_runtime_sends_signed_tls_requests_and_cancel_cannot_remove_replacem
     ) -> &'static str {
         let message = Message::parse(std::str::from_utf8(&body).unwrap()).unwrap();
         if matches!(&message, Message::PairRequest(_)) {
-            assert_eq!(headers["c-id"], "local");
+            assert_eq!(headers["c-id"], "706c6169-0001-8000-8000-000000000001");
         }
         sender.send(message).await.unwrap();
         "1"
     }
-    let (_dir, server) = fixture("local");
+    let (_dir, server) = fixture("706c6169-0001-8000-8000-000000000001");
     let state = server.runtime_state();
     let (send, mut received) = tokio::sync::mpsc::channel(8);
     let router = Router::new()
@@ -245,7 +245,7 @@ async fn lan_runtime_sends_signed_tls_requests_and_cancel_cannot_remove_replacem
     let request = plain_rs::features::peers::pairing::protocol::PairingRequest {
         to_id: target.device_id.clone(),
         target_public_key: target.device_public_key.clone(),
-        from_id: "local".into(),
+        from_id: "706c6169-0001-8000-8000-000000000001".into(),
         from_ip: String::new(),
         payload,
     };
@@ -311,7 +311,7 @@ async fn lan_runtime_sends_signed_tls_requests_and_cancel_cannot_remove_replacem
         panic!()
     };
     assert_eq!(cancel.to_id, "remote");
-    assert_eq!(cancel.from_id, "local");
+    assert_eq!(cancel.from_id, "706c6169-0001-8000-8000-000000000001");
     assert!(state.pairing.tickets().is_empty());
     listeners.shutdown().await;
     let failed = execute(

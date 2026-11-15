@@ -8,7 +8,6 @@ async fn nearby_rows_are_polled_without_discovery_events() {
     let prefs = std::sync::Arc::new(
         crate::features::prefs::Prefs::load(&dir.path().join("prefs.json")).unwrap(),
     );
-    prefs.set("client_id", "local").unwrap();
     let server = crate::test_runtime::Core::start(
         dir.path(),
         &plain_libs::utils::base64::base64_encode(&[3; 32]),

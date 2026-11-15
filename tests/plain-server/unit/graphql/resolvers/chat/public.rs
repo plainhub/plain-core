@@ -420,7 +420,6 @@ async fn retrying_an_unknown_id_is_an_error() {
 fn channel_fixture() -> (plain_libs::temporary::TempDir, crate::server::ContentServer) {
     let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs = Arc::new(Prefs::load(&dir.path().join("prefs.json")).unwrap());
-    prefs.set("client_id", "actor").unwrap();
     let server = crate::server::ContentServer::start(
         dir.path(),
         &plain_libs::utils::base64::base64_encode(&[3; 32]),
@@ -452,12 +451,12 @@ async fn channel_roots_read_current_store_and_share_runtime_mutations_without_ho
         "{created}"
     );
     let id = created["data"]["createChatChannel"]["id"].as_str().unwrap();
-    assert_eq!(created["data"]["createChatChannel"]["ownerId"], "actor");
+    assert_eq!(created["data"]["createChatChannel"]["ownerId"], state.native_client_id().unwrap());
     let event: Value = plain_libs::serde_json::from_str(&events.recv().await.unwrap().payload).unwrap();
     assert_eq!(event["channels"][0]["id"], id);
     assert!(event["channels"][0].get("key").is_none());
     assert_eq!(event["channels"][0].as_object().unwrap().len(), 9);
-    assert_eq!(event["channels"][0]["members"][0]["peerId"], "actor");
+    assert_eq!(event["channels"][0]["members"][0]["peerId"], state.native_client_id().unwrap());
     let renamed = channel_query(
         &state,
         &format!(
@@ -552,7 +551,7 @@ async fn channel_query_reads_all_statuses_sorted_by_name_without_native_cache() 
         ),
     ] {
         let mut row =
-            plain_rs::features::chat::channels::state::create(&state.db, "actor", name).unwrap();
+            plain_rs::features::chat::channels::state::create(&state.db, &state.native_client_id().unwrap(), name).unwrap();
         row.status = status;
         plain_rs::infrastructure::db::chat_store::channels::save(
             &state.db,
@@ -576,7 +575,7 @@ async fn channel_snapshot_recovers_current_public_list_without_emitting_another_
     let (_dir, server) = channel_fixture();
     let state = server.runtime_state();
     let channel =
-        plain_rs::features::chat::channels::state::create(&state.db, "actor", "before-reconnect")
+        plain_rs::features::chat::channels::state::create(&state.db, &state.native_client_id().unwrap(), "before-reconnect")
             .unwrap();
     let mut events = state.events.subscribe();
     let client = http_client::builder().build().unwrap();

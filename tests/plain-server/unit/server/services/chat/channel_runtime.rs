@@ -16,7 +16,6 @@ fn fixture() -> (plain_libs::temporary::TempDir, crate::server::ContentServer) {
         Arc::new(plain_rs::features::prefs::Prefs::load(&dir.path().join("system.json")).unwrap());
     let (key, _public) = plain_libs::crypto::ed25519_generate();
     prefs.set("device_name", "Actual tablet").unwrap();
-    prefs.set("client_id", "actor").unwrap();
     prefs
         .set(
             "signature_key_pair",
@@ -57,7 +56,7 @@ async fn signed_invites_ack_keys_and_deleted_broadcast_use_rust_snapshot() {
     let state = server.runtime_state();
     add_peer(&state, "paired", true);
     add_peer(&state, "group", false);
-    let channel = state::create(&state.db, "actor", "fixture").unwrap();
+    let channel = state::create(&state.db, &state.native_client_id().unwrap(), "fixture").unwrap();
     let (generation, mut rx) = crate::test_support::HostRequests::connect(&state.host);
     let host = state.host.clone();
     let prefs = state.prefs.clone();
@@ -184,7 +183,7 @@ async fn queued_send_and_decline_ack_cannot_act_on_replacement() {
     let mut channel = state::create(&state.db, "owner", "invitation").unwrap();
     channel.members = plain_libs::serde_json::to_string(&[
         plain_rs::features::chat::channels::messages::ChannelMember::new("owner"),
-        plain_rs::features::chat::channels::messages::ChannelMember::pending("actor"),
+        plain_rs::features::chat::channels::messages::ChannelMember::pending(&state.native_client_id().unwrap()),
     ])
     .unwrap();
     channels::save(
@@ -266,7 +265,7 @@ async fn peer_key_changes_before_physical_send_are_rejected_and_accept_leave_dec
     let mut channel = state::create(&state.db, "owner", "fixture").unwrap();
     channel.members = plain_libs::serde_json::to_string(&[
         plain_rs::features::chat::channels::messages::ChannelMember::new("owner"),
-        plain_rs::features::chat::channels::messages::ChannelMember::pending("actor"),
+        plain_rs::features::chat::channels::messages::ChannelMember::pending(&state.native_client_id().unwrap()),
     ])
     .unwrap();
     channels::save(

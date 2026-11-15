@@ -27,7 +27,6 @@ impl Fixture {
             let path = root.path().join(name);
             std::fs::create_dir_all(&path).unwrap();
             let prefs = Arc::new(Prefs::load(&path.join("prefs.json")).unwrap());
-            prefs.set("client_id", name).unwrap();
             prefs
                 .set(pref_keys::API_PERMISSIONS, [AccessFeature::Files])
                 .unwrap();
@@ -38,12 +37,12 @@ impl Fixture {
         let (cert, key) = plain_libs::tls::generate_pem(&["localhost".into()]).unwrap();
         let (_, port) = remote.start_public(0, 0, cert, key).await.unwrap();
         let remote_state = remote.runtime_state();
-        let mut session = sessions::create(&remote_state, "local".into()).unwrap();
-        session.client_id = "local".into();
+        let mut session = sessions::create(&remote_state, "Fixture".into()).unwrap();
+        session.client_id = local.runtime_state().native_client_id().unwrap();
         session.r#type = plain_rs::features::sessions::SessionType::Login;
         remote_state.db.session_save(&session).unwrap();
         let mut peer = DPeer::new(
-            "remote",
+            &remote_state.native_client_id().unwrap(),
             "Fixture",
             "127.0.0.1",
             Some(port),

@@ -10,7 +10,6 @@ fn fixture() -> (
     let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs =
         Arc::new(crate::features::prefs::Prefs::load(&dir.path().join("system.json")).unwrap());
-    prefs.set("client_id", "actor").unwrap();
     let server = crate::test_runtime::Core::start(
         dir.path(),
         &plain_libs::utils::base64::base64_encode(&[1; 32]),

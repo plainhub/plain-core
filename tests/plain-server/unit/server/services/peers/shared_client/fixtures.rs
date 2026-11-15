@@ -8,7 +8,6 @@ pub(super) fn root() -> (plain_libs::temporary::TempDir, ContentServer, String) 
     let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs =
         Arc::new(plain_rs::features::prefs::Prefs::load(&dir.path().join("system.json")).unwrap());
-    prefs.set("client_id", "local").unwrap();
     let token = plain_libs::utils::base64::base64_encode(&[4; 32]);
     let server = ContentServer::start(dir.path(), &token, prefs).unwrap();
     (dir, server, token)

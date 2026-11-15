@@ -11,7 +11,6 @@ fn fixture() -> (plain_libs::temporary::TempDir, crate::server::ContentServer) {
         plain_rs::features::prefs::Prefs::load(&dir.path().join("system.json")).unwrap(),
     );
     let (key, _public) = plain_libs::crypto::ed25519_generate();
-    prefs.set("client_id", "actor").unwrap();
     prefs
         .set(
             "signature_key_pair",

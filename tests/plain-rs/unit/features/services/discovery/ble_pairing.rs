@@ -54,8 +54,8 @@ async fn idle(state: &CoreRuntime) {
 }
 #[tokio::test]
 async fn ble_initiator_signs_filters_notifications_commits_shared_key_and_closes_once() {
-    let (_d, local) = fixture("local");
-    let (_r, remote) = fixture("remote");
+    let (_d, local) = fixture("706c6169-0001-8000-8000-000000000001");
+    let (_r, remote) = fixture("706c6169-0001-8000-8000-000000000002");
     let state = local.runtime_state();
     let other = remote.runtime_state();
     let mut events = state.events.subscribe();
@@ -70,7 +70,7 @@ async fn ble_initiator_signs_filters_notifications_commits_shared_key_and_closes
         while let Some(effect) = effects.recv().await {
             let result = match effect["method"].as_str().unwrap() {
                 "blePairConnect" => {
-                    assert_eq!(effect["params"]["clientId"], "remote");
+                    assert_eq!(effect["params"]["clientId"], "706c6169-0001-8000-8000-000000000002");
                     assert!(effect["params"].get("id").is_none());
                     assert_eq!(effect["params"].as_object().unwrap().len(), 2);
                     json!(true)
@@ -83,13 +83,13 @@ async fn ble_initiator_signs_filters_notifications_commits_shared_key_and_closes
                         crate::infrastructure::protocols::ble::parts(&packet).unwrap();
                     match Message::parse(std::str::from_utf8(body_bytes).unwrap()).unwrap() {
                         Message::PairRequest(payload) => {
-                            assert_eq!(metadata, b"local");
+                            assert_eq!(metadata, b"706c6169-0001-8000-8000-000000000001");
                             let request = crate::features::peers::pairing::protocol::PairingRequest {
-                                to_id: "remote".into(),
+                                to_id: "706c6169-0001-8000-8000-000000000002".into(),
                                 target_public_key: plain_libs::utils::base64::base64_encode(
                                     &crate::features::services::peers::peer_wire::signing_keypair(&remote_state.prefs).unwrap()[32..],
                                 ),
-                                from_id: "local".into(),
+                                from_id: "706c6169-0001-8000-8000-000000000001".into(),
                                 from_ip: String::new(),
                                 payload,
                             };
@@ -143,7 +143,7 @@ async fn ble_initiator_signs_filters_notifications_commits_shared_key_and_closes
                 .unwrap();
         }
     });
-    let mut remote_target = target("remote");
+    let mut remote_target = target("706c6169-0001-8000-8000-000000000002");
     remote_target.device_public_key = plain_libs::utils::base64::base64_encode(
         &crate::features::services::peers::peer_wire::signing_keypair(&other.prefs).unwrap()[32..],
     );
@@ -160,10 +160,10 @@ async fn ble_initiator_signs_filters_notifications_commits_shared_key_and_closes
         .unwrap()
         .unwrap();
     idle(&state).await;
-    let local_peer = crate::infrastructure::db::chat_store::peers::get(&state.db, "remote")
+    let local_peer = crate::infrastructure::db::chat_store::peers::get(&state.db, "706c6169-0001-8000-8000-000000000002")
         .unwrap()
         .unwrap();
-    let remote_peer = crate::infrastructure::db::chat_store::peers::get(&other.db, "local")
+    let remote_peer = crate::infrastructure::db::chat_store::peers::get(&other.db, "706c6169-0001-8000-8000-000000000001")
         .unwrap()
         .unwrap();
     assert_eq!(local_peer.key, remote_peer.key);
@@ -182,14 +182,14 @@ async fn ble_initiator_signs_filters_notifications_commits_shared_key_and_closes
 }
 #[tokio::test]
 async fn cancellation_interrupts_pending_connect_and_preserves_replacement_generation() {
-    let (_dir, server) = fixture("local");
+    let (_dir, server) = fixture("706c6169-0001-8000-8000-000000000001");
     let state = server.runtime_state();
     let (generation, mut effects) = state.host.connect();
-    let old = start(&state, target("remote"), device(), None).unwrap();
+    let old = start(&state, target("706c6169-0001-8000-8000-000000000002"), device(), None).unwrap();
     let connect = effects.recv().await.unwrap();
     assert_eq!(connect["method"], "blePairConnect");
     let replacement =
-        pairing::start(&state.prefs, &state.pairing, target("remote"), device()).unwrap();
+        pairing::start(&state.prefs, &state.pairing, target("706c6169-0001-8000-8000-000000000002"), device()).unwrap();
     let close = tokio::time::timeout(Duration::from_secs(2), effects.recv())
         .await
         .unwrap()
@@ -210,7 +210,7 @@ async fn cancellation_interrupts_pending_connect_and_preserves_replacement_gener
         replacement["ticket"]["generation"].as_str().unwrap()
     );
     assert!(
-        crate::infrastructure::db::chat_store::peers::get(&state.db, "remote")
+        crate::infrastructure::db::chat_store::peers::get(&state.db, "706c6169-0001-8000-8000-000000000002")
             .unwrap()
             .is_none()
     );
@@ -222,7 +222,7 @@ async fn cancellation_interrupts_pending_connect_and_preserves_replacement_gener
 }
 #[tokio::test]
 async fn capacity_and_actual_connect_refusal_release_only_their_ticket() {
-    let (_dir, server) = fixture("local");
+    let (_dir, server) = fixture("706c6169-0001-8000-8000-000000000001");
     let state = server.runtime_state();
     let (generation, mut effects) = state.host.connect();
     start(&state, target("first"), device(), None).unwrap();

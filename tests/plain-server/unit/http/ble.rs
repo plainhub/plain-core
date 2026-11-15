@@ -5,7 +5,6 @@ fn fixture() -> (plain_libs::temporary::TempDir, crate::server::ContentServer) {
     let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs =
         Arc::new(plain_rs::features::prefs::Prefs::load(&dir.path().join("system.json")).unwrap());
-    prefs.set("client_id", "actor").unwrap();
     prefs.set("background_service_enabled", true).unwrap();
     let server = crate::server::ContentServer::start(
         dir.path(),
@@ -60,7 +59,7 @@ async fn outgoing_completes_in_one_host_call() {
                 &task_state,
                 &peer,
                 Request::PeerGraphql {
-                    client_id: "actor".into(),
+                    client_id: task_state.native_client_id().unwrap(),
                     channel_id: "频道".into(),
                     body: vec![0, 255],
                 }
@@ -80,7 +79,7 @@ async fn outgoing_completes_in_one_host_call() {
     assert_eq!(
         Request::decode(&request).unwrap(),
         Request::PeerGraphql {
-            client_id: "actor".into(),
+            client_id: state.native_client_id().unwrap(),
             channel_id: "频道".into(),
             body: vec![0, 255]
         }
@@ -125,7 +124,7 @@ async fn incoming_preserves_file_bytes_without_host_bridge() {
         ble::HTTP_CHAR_UUID,
         "actual MAC",
         Request::FileChunk {
-            client_id: "actor".into(),
+            client_id: state.native_client_id().unwrap(),
             file_id: id,
             offset: 0,
             length: 8192,
@@ -169,7 +168,11 @@ async fn nearby_discovery_uses_the_existing_raw_channel_and_shared_identity() {
     let (metadata, body) = ble::parts(&bytes).unwrap();
     assert!(metadata.is_empty());
     let value: plain_libs::serde_json::Value = plain_libs::serde_json::from_slice(body).unwrap();
-    assert_eq!(value["id"], "actor");
+    assert!(
+        plain_rs::features::client_identity::parse(value["id"].as_str().unwrap()).is_some(),
+        "{value}"
+    );
+    assert_eq!(value["id"], state.native_client_id().unwrap());
     assert_eq!(value["name"], "BLE fixture");
     assert_eq!(value["deviceType"], "COMPUTER");
     assert_eq!(value["port"], 0);
@@ -197,7 +200,7 @@ async fn incoming_characteristics_are_allowlisted_and_cannot_cross_protocols() {
             .is_none()
     );
     let request = Request::FileChunk {
-        client_id: "actor".into(),
+        client_id: server.runtime_state().native_client_id().unwrap(),
         file_id: "fixture".into(),
         offset: 0,
         length: 1,
@@ -423,7 +426,7 @@ async fn nearby_cancel_requires_the_matching_signed_request() {
     assert_eq!(ble::nearby_body(&ack).unwrap(), b"1");
     let mut cancel = PairingCancel {
         from_id: request.from_id.clone(),
-        to_id: "actor".into(),
+        to_id: state.native_client_id().unwrap(),
         request_signature: "another-request".into(),
         signature_public_key: request.payload.signature_public_key.clone(),
         timestamp: plain_rs::features::peers::pairing::now_ms(),
