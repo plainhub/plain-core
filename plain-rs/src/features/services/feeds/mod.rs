@@ -300,7 +300,7 @@ pub async fn sync_entry_content_with_assets(
         return Ok(entry);
     }
     if let Some(assets) = assets {
-        if !entry.image.starts_with('/') {
+        if !entry.image.starts_with("fid:") {
             if let Some(url) = if entry.image.is_empty() {
                 assets::main_image(&article, &entry.url)
             } else {

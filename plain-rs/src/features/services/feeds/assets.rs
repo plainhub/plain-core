@@ -107,16 +107,12 @@ impl FeedAssets {
     }
 
     pub async fn cache(&self, url: &str) -> DomainResult<String> {
-        self.cache_formats(url, false)
-            .await
-            .map(|file| file.real_path.to_string_lossy().into_owned())
+        self.cache_formats(url, false).await
     }
     pub async fn cache_bookmark_icon(&self, url: &str) -> DomainResult<String> {
-        self.cache_formats(url, true)
-            .await
-            .map(|file| format!("fid:{}", file.fid_suffix))
+        self.cache_formats(url, true).await
     }
-    async fn cache_formats(&self, url: &str, bookmark: bool) -> DomainResult<ImportResult> {
+    async fn cache_formats(&self, url: &str, bookmark: bool) -> DomainResult<String> {
         let response = http_client::builder()
             .timeout(std::time::Duration::from_secs(15))
             .build()
@@ -158,6 +154,7 @@ impl FeedAssets {
             )
         })
         .await
+        .map(|file| format!("fid:{}", file.fid_suffix))
     }
 
     pub fn release(&self, uri: &str) {

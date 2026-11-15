@@ -576,3 +576,97 @@ async fn feed_error_code_is_a_non_null_named_enum_and_keeps_storage_values() {
         "{response}"
     );
 }
+
+#[tokio::test]
+async fn synchronized_entry_images_use_fid_in_mutation_and_queries() {
+    use plain_libs::axum::{Router, routing::get};
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let server = tokio::spawn(async move {
+        plain_libs::axum::serve(
+            listener,
+            Router::new()
+                .route(
+                    "/article",
+                    get(|| async {
+                        "<article><p>Generated full article.</p><img src='/image'></article>"
+                    }),
+                )
+                .route(
+                    "/image",
+                    get(|| async {
+                        (
+                            [("content-type", "image/png")],
+                            b"generated article image".as_slice(),
+                        )
+                    }),
+                ),
+        )
+        .await
+        .unwrap();
+    });
+    let (directory, schema) = fixture();
+    let db = database(&schema);
+    seed_feed(db, "images", "Images");
+    db.feed_entries_insert(&[FeedEntryRow {
+        id: "generated-entry".into(),
+        is_read: false,
+        feed_id: "images".into(),
+        title: "Generated entry".into(),
+        url: format!("http://{address}/article"),
+        image: String::new(),
+        description: String::new(),
+        author: String::new(),
+        content: String::new(),
+        source_entry_id: "generated-entry".into(),
+        published_at: NOW.into(),
+        created_at: NOW.into(),
+        updated_at: NOW.into(),
+    }])
+    .unwrap();
+    let synchronized = query(
+        &schema,
+        r#"mutation { syncFeedEntryContent(id: "generated-entry") { id image } }"#,
+    )
+    .await;
+    assert!(synchronized["errors"].is_null(), "{synchronized}");
+    let reference = synchronized["data"]["syncFeedEntryContent"]["image"]
+        .as_str()
+        .unwrap();
+    assert!(reference.starts_with("fid:"), "{synchronized}");
+    assert_eq!(
+        db.feed_entry_get("generated-entry").unwrap().unwrap().image,
+        reference
+    );
+    let path =
+        plain_rs::features::files::app_files::FileStore::new(db.clone(), directory.path().into())
+            .resolve(reference.strip_prefix("fid:").unwrap())
+            .unwrap();
+    assert_eq!(std::fs::read(&path).unwrap(), b"generated article image");
+    let listed = query(&schema, r#"{ feedEntry(id: "generated-entry") { image } feedEntries(query: "", offset: 0, limit: 10) { image } }"#).await;
+    assert!(listed["errors"].is_null(), "{listed}");
+    assert_eq!(listed["data"]["feedEntry"]["image"], reference);
+    assert_eq!(listed["data"]["feedEntries"][0]["image"], reference);
+    let removed = query(
+        &schema,
+        r#"mutation { deleteFeedEntries(query: "ids:generated-entry") { affectedCount } }"#,
+    )
+    .await;
+    assert!(removed["errors"].is_null(), "{removed}");
+    assert_eq!(removed["data"]["deleteFeedEntries"]["affectedCount"], 1);
+    assert!(!path.exists());
+    assert!(
+        db.app_file_get(
+            reference
+                .strip_prefix("fid:")
+                .unwrap()
+                .split('.')
+                .next()
+                .unwrap()
+        )
+        .unwrap()
+        .is_none()
+    );
+    server.abort();
+    assert!(server.await.unwrap_err().is_cancelled());
+}
