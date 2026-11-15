@@ -1,8 +1,9 @@
-use plain_libs::protocols::http_client;
+use crate::features::chat::attachments::app_file_store::ImportResult;
 use crate::infrastructure::db::Db;
 use crate::infrastructure::error::DomainError;
 use crate::infrastructure::error::DomainResult;
 use futures_util::StreamExt;
+use plain_libs::protocols::http_client;
 use plain_libs::utils::html_to_markdown::dom::Dom;
 use plain_libs::utils::http_url::join;
 use plain_libs::utils::http_url::parse_http_url;
@@ -31,14 +32,14 @@ impl Drop for Write {
 struct ImportedAsset {
     db: Arc<Db>,
     directory: PathBuf,
-    file: crate::features::chat::attachments::app_file_store::ImportResult,
+    file: ImportResult,
     retained: bool,
     _write: Write,
 }
 impl ImportedAsset {
-    fn retain(mut self) -> String {
+    fn retain(mut self) -> ImportResult {
         self.retained = true;
-        self.file.real_path.to_string_lossy().into_owned()
+        self.file.clone()
     }
 }
 impl Drop for ImportedAsset {
@@ -83,14 +84,8 @@ impl FeedAssets {
     }
     async fn import(
         &self,
-        operation: impl FnOnce(
-            &Db,
-            &Path,
-        ) -> std::io::Result<
-            crate::features::chat::attachments::app_file_store::ImportResult,
-        > + Send
-        + 'static,
-    ) -> DomainResult<String> {
+        operation: impl FnOnce(&Db, &Path) -> std::io::Result<ImportResult> + Send + 'static,
+    ) -> DomainResult<ImportResult> {
         self.writes.pending.fetch_add(1, Ordering::AcqRel);
         let write = Write(self.writes.clone());
         let db = self.db.clone();
@@ -112,12 +107,16 @@ impl FeedAssets {
     }
 
     pub async fn cache(&self, url: &str) -> DomainResult<String> {
-        self.cache_formats(url, false).await
+        self.cache_formats(url, false)
+            .await
+            .map(|file| file.real_path.to_string_lossy().into_owned())
     }
     pub async fn cache_bookmark_icon(&self, url: &str) -> DomainResult<String> {
-        self.cache_formats(url, true).await
+        self.cache_formats(url, true)
+            .await
+            .map(|file| format!("fid:{}", file.fid_suffix))
     }
-    async fn cache_formats(&self, url: &str, bookmark: bool) -> DomainResult<String> {
+    async fn cache_formats(&self, url: &str, bookmark: bool) -> DomainResult<ImportResult> {
         let response = http_client::builder()
             .timeout(std::time::Duration::from_secs(15))
             .build()
@@ -162,7 +161,18 @@ impl FeedAssets {
     }
 
     pub fn release(&self, uri: &str) {
-        let path = std::path::Path::new(uri);
+        let resolved = match crate::features::services::files::references::resolve(
+            self.db.clone(),
+            self.directory.clone(),
+            uri,
+        ) {
+            Ok(path) => path,
+            Err(error) => {
+                log::warn!("Feed asset reference resolution failed: {error}");
+                return;
+            }
+        };
+        let path = std::path::Path::new(&resolved);
         let Some(id) = path.file_stem().and_then(|v| v.to_str()) else {
             return;
         };

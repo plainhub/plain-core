@@ -266,6 +266,32 @@ pub fn update_fields(
     })
 }
 
+pub fn update_metadata(
+    db: &Db,
+    original: &DBookmark,
+    title: Option<&str>,
+    favicon_path: Option<&str>,
+) -> plain_libs::rusqlite::Result<Option<(DBookmark, String)>> {
+    db.with_conn(|conn| {
+        let tx = conn.unchecked_transaction()?;
+        let previous_favicon = tx.query_row(
+            "SELECT favicon_path FROM bookmarks WHERE id=?1 AND url=?2",
+            params![original.id, original.url],
+            |row| row.get::<_, String>(0),
+        ).optional()?;
+        let Some(previous_favicon) = previous_favicon else {
+            return Ok(None);
+        };
+        tx.execute(
+            "UPDATE bookmarks SET title=CASE WHEN title=?1 THEN COALESCE(?2,title) ELSE title END,favicon_path=CASE WHEN favicon_path=?3 THEN COALESCE(?4,favicon_path) ELSE favicon_path END,updated_at=?5 WHERE id=?6 AND url=?7",
+            params![original.title, title, original.favicon_path, favicon_path, now_iso(), original.id, original.url],
+        )?;
+        let row = tx.query_row(&format!("SELECT {BOOKMARK_COLUMNS} FROM bookmarks WHERE id=?1"), [&original.id], row_to_bookmark)?;
+        tx.commit()?;
+        Ok(Some((row, previous_favicon)))
+    })
+}
+
 #[cfg(test)]
 #[path = "../../../../../tests/plain-rs/unit/infrastructure/db/repositories/bookmark.rs"]
 mod tests;

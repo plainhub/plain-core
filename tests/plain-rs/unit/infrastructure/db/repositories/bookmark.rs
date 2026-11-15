@@ -115,3 +115,55 @@ fn bookmark_lookup_distinguishes_missing_rows_from_decode_failures() {
     .unwrap();
     assert!(get_bookmark_by_id(&db, &bookmark.id).is_err());
 }
+
+#[test]
+fn metadata_updates_only_matching_created_fields_and_preserves_other_changes() {
+    let directory = plain_libs::temporary::tempdir().unwrap();
+    let db = Db::open(&directory.path().join("plain.db")).unwrap();
+    let original = DBookmark::new("https://example.com/page", "");
+    insert_bookmark(&db, &original).unwrap();
+    record_click(&db, &original.id).unwrap();
+    let mut edited = original.clone();
+    edited.title = "Chosen title".into();
+    edited.pinned = true;
+    edited.sort_order = 8;
+    update_fields(&db, &edited, None).unwrap();
+    let (updated, _) = update_metadata(
+        &db,
+        &original,
+        Some("Fetched title"),
+        Some("fid:fixture.ico"),
+    )
+    .unwrap()
+    .unwrap();
+    assert_eq!(updated.title, "Chosen title");
+    assert_eq!(updated.favicon_path, "fid:fixture.ico");
+    assert_eq!(updated.click_count, 1);
+    assert!(updated.pinned);
+    assert_eq!(updated.sort_order, 8);
+    update_fields(&db, &updated, Some("fid:chosen.ico")).unwrap();
+    let (updated, _) = update_metadata(&db, &original, None, Some("fid:unused.ico"))
+        .unwrap()
+        .unwrap();
+    assert_eq!(updated.favicon_path, "fid:chosen.ico");
+    let mut moved = updated;
+    moved.url = "https://example.com/changed".into();
+    update_fields(&db, &moved, None).unwrap();
+    assert!(
+        update_metadata(&db, &original, Some("Stale title"), Some("fid:unused.ico"))
+            .unwrap()
+            .is_none()
+    );
+    delete_bookmarks(&db, std::slice::from_ref(&original.id)).unwrap();
+    assert!(
+        update_metadata(
+            &db,
+            &original,
+            Some("Deleted title"),
+            Some("fid:unused.ico")
+        )
+        .unwrap()
+        .is_none()
+    );
+    assert!(get_bookmarks(&db).is_empty());
+}

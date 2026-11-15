@@ -1,6 +1,9 @@
-use plain_libs::protocols::http_client;
+mod metadata;
+pub use metadata::{emit_updated, start_metadata_update};
+
 use crate::infrastructure::db::{Db, bookmark};
 use plain_libs::anyhow::{Result, ensure};
+use plain_libs::protocols::http_client;
 use std::collections::{HashMap, HashSet};
 
 pub fn parse_bookmark_url(url: &str) -> Result<http_client::Url> {

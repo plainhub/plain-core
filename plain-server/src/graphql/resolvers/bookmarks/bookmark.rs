@@ -1,6 +1,5 @@
 use plain_graphql::{Context, ID, Object};
 
-use plain_libs::serde_json::json;
 use std::sync::Arc;
 
 use plain_rs::infrastructure::db::Db;
@@ -13,37 +12,14 @@ use crate::graphql::resolvers::bookmarks::bookmark_types::Bookmark;
 use crate::graphql::resolvers::bookmarks::bookmark_types::BookmarkGroup;
 use crate::graphql::resolvers::bookmarks::bookmark_types::BookmarkInput;
 use crate::graphql::types::ActionResult;
-use plain_rs::infrastructure::events::WS_BOOKMARK_UPDATED;
 use plain_rs::infrastructure::events::WsEvent;
 use tokio::sync::broadcast;
 
-fn bookmark_to_json(b: &DBookmark) -> plain_libs::serde_json::Value {
-    json!({
-        "id": b.id,
-        "url": b.url,
-        "title": b.title,
-        "faviconPath": b.favicon_path,
-        "groupId": b.group_id.as_deref().unwrap_or_default(),
-        "pinned": b.pinned,
-        "clickCount": b.click_count,
-        "lastClickedAt": b.last_clicked_at,
-        "sortOrder": b.sort_order,
-        "createdAt": b.created_at,
-        "updatedAt": b.updated_at,
-    })
-}
-
 pub(crate) fn emit_bookmark_updated(ctx: &Context<'_>, items: &[DBookmark]) {
-    if items.is_empty() {
-        return;
-    }
-    let payload = items.iter().map(bookmark_to_json).collect::<Vec<_>>();
-    let _ = ctx
-        .data_unchecked::<broadcast::Sender<WsEvent>>()
-        .send(WsEvent::broadcast(
-            WS_BOOKMARK_UPDATED,
-            json!(payload).to_string(),
-        ));
+    plain_rs::features::services::bookmarks::emit_updated(
+        ctx.data_unchecked::<broadcast::Sender<WsEvent>>(),
+        items,
+    );
 }
 
 #[derive(Default)]
@@ -112,6 +88,12 @@ impl BookmarkMutation {
         let db = ctx.data_unchecked::<Arc<Db>>();
         let created =
             plain_rs::features::services::bookmarks::add_bookmarks(db, urls, group_id.as_str())?;
+        plain_rs::features::services::bookmarks::start_metadata_update(
+            ctx.data_unchecked::<crate::server::ServerState>()
+                .core
+                .clone(),
+            created.clone(),
+        );
         Ok(created.into_iter().map(Bookmark::from).collect())
     }
 

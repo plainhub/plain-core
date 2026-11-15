@@ -66,7 +66,7 @@ async fn accepted_imports_retain_their_file_and_failed_imports_release_the_write
     let directory = plain_libs::temporary::tempdir().unwrap();
     let db = Arc::new(Db::open(&directory.path().join("feeds.db")).unwrap());
     let assets = FeedAssets::new(db.clone(), directory.path().to_owned());
-    let path = assets
+    let file = assets
         .import(|db, directory| {
             crate::features::chat::attachments::app_file_store::import_bytes(
                 db,
@@ -78,9 +78,8 @@ async fn accepted_imports_retain_their_file_and_failed_imports_release_the_write
         .await
         .unwrap();
     assets.wait_writes().await;
-    assert!(Path::new(&path).exists());
-    let id = Path::new(&path).file_stem().unwrap().to_str().unwrap();
-    assert_eq!(db.get_app_file(id).unwrap().ref_count, 1);
+    assert!(file.real_path.exists());
+    assert_eq!(db.get_app_file(&file.id).unwrap().ref_count, 1);
     assert!(
         assets
             .import(|_, _| Err(std::io::Error::other("import failed")))

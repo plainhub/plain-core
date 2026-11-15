@@ -6,6 +6,27 @@ use std::sync::{
     atomic::{AtomicUsize, Ordering},
 };
 
+async fn metadata_updated(
+    events: &mut tokio::sync::broadcast::Receiver<plain_rs::infrastructure::events::WsEvent>,
+    id: &str,
+) -> plain_libs::serde_json::Value {
+    tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        for _ in 0..64 {
+            let event = events.recv().await.unwrap();
+            if event.event_type == plain_rs::infrastructure::events::WS_BOOKMARK_UPDATED {
+                let rows: plain_libs::serde_json::Value =
+                    plain_libs::serde_json::from_str(&event.payload).unwrap();
+                if rows[0]["id"] == id {
+                    return rows[0].clone();
+                }
+            }
+        }
+        panic!("Bookmark metadata update missing");
+    })
+    .await
+    .unwrap()
+}
+
 #[tokio::test]
 async fn bookmark_http_lifecycle_metadata_and_reference_counts() {
     let dir = plain_libs::temporary::tempdir().unwrap();
@@ -17,8 +38,19 @@ async fn bookmark_http_lifecycle_metadata_and_reference_counts() {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let origin = format!("http://{}", listener.local_addr().unwrap());
     let icon_requests = Arc::new(AtomicUsize::new(0));
+    let pages = Arc::new(tokio::sync::Semaphore::new(0));
+    let mut events = server.runtime_state().events.subscribe();
     let router = plain_libs::axum::Router::new()
-        .route("/page", plain_libs::axum::routing::get(|| async { plain_libs::axum::response::Html("<title>fallback</title><meta content='Hello &amp; 🌍' property='og:title'><link href='icon' rel='shortcut icon'>") }))
+        .route("/page", plain_libs::axum::routing::get({
+            let pages = pages.clone();
+            move || {
+                let pages = pages.clone();
+                async move {
+                    pages.acquire().await.unwrap().forget();
+                    plain_libs::axum::response::Html("<title>fallback</title><meta content='Hello &amp; 🌍' property='og:title'><link href='icon' rel='shortcut icon'>")
+                }
+            }
+        }))
         .route("/icon", plain_libs::axum::routing::get({
             let requests = icon_requests.clone();
             move || {
@@ -39,11 +71,22 @@ async fn bookmark_http_lifecycle_metadata_and_reference_counts() {
     )
     .await;
     let gid = group["data"]["createBookmarkGroup"]["id"].as_str().unwrap();
-    let created = call(server.port, &token, &format!("mutation {{addBookmarks(urls:[\"{origin}/page\",\" \"],groupId:\"{gid}\") {{id title}}}}")).await;
+    let created = tokio::time::timeout(std::time::Duration::from_secs(2), call(server.port, &token, &format!("mutation {{addBookmarks(urls:[\"{origin}/page\",\" \"],groupId:\"{gid}\") {{id title faviconPath}}}}"))).await.expect("Creation must return while metadata is blocked");
     assert!(created.get("errors").is_none(), "{created}");
     assert_eq!(created["data"]["addBookmarks"].as_array().unwrap().len(), 1);
     let id = created["data"]["addBookmarks"][0]["id"].as_str().unwrap();
     let db = Arc::new(Db::open(&path).unwrap());
+    let initial = plain_rs::infrastructure::db::bookmark::get_bookmark_by_id(&db, id)
+        .unwrap()
+        .unwrap();
+    assert_eq!(initial.title, format!("{origin}/page"));
+    assert_eq!(initial.favicon_path, "");
+    assert_eq!(created["data"]["addBookmarks"][0]["title"], initial.title);
+    assert_eq!(created["data"]["addBookmarks"][0]["faviconPath"], "");
+    assert_eq!(icon_requests.load(Ordering::SeqCst), 0);
+    pages.add_permits(64);
+    let updated = metadata_updated(&mut events, id).await;
+    assert_eq!(updated["title"], "Hello & 🌍");
     let before = plain_rs::infrastructure::db::bookmark::get_bookmark_by_id(&db, id)
         .unwrap()
         .unwrap();
@@ -55,6 +98,21 @@ async fn bookmark_http_lifecycle_metadata_and_reference_counts() {
         })
         .unwrap()
     };
+    assert_eq!(before.title, "Hello & 🌍");
+    assert!(before.favicon_path.starts_with("fid:"));
+    let created_icon = before.favicon_path.clone();
+    let file_id = created_icon
+        .strip_prefix("fid:")
+        .unwrap()
+        .split('.')
+        .next()
+        .unwrap();
+    let icon_path = dir
+        .path()
+        .join(&db.get_app_file(file_id).unwrap().real_path);
+    assert_eq!(std::fs::read(&icon_path).unwrap(), vec![1u8, 2, 3, 4]);
+    assert_eq!(db.get_app_file(file_id).unwrap().ref_count, 1);
+    assert_eq!(updated["faviconPath"], created_icon);
     let files_before = count_files();
     let metadata_query = "query($url: String!) {pageMetadata(url:$url) {title faviconUrl}}";
     let metadata_variables = plain_libs::serde_json::json!({"url": format!("{origin}/page")});
@@ -79,7 +137,7 @@ async fn bookmark_http_lifecycle_metadata_and_reference_counts() {
     )
     .await;
     assert_eq!(repeated["data"], meta["data"]);
-    assert_eq!(icon_requests.load(Ordering::SeqCst), 0);
+    assert_eq!(icon_requests.load(Ordering::SeqCst), 1);
     let unchanged = plain_rs::infrastructure::db::bookmark::get_bookmark_by_id(&db, id)
         .unwrap()
         .unwrap();
@@ -95,7 +153,7 @@ async fn bookmark_http_lifecycle_metadata_and_reference_counts() {
     )
     .await;
     assert_eq!(read["data"]["bookmark"]["title"], before.title);
-    assert_eq!(read["data"]["bookmark"]["faviconPath"], "");
+    assert_eq!(read["data"]["bookmark"]["faviconPath"], created_icon);
     let missing = call_variables(
         server.port,
         &token,
@@ -103,7 +161,10 @@ async fn bookmark_http_lifecycle_metadata_and_reference_counts() {
         plain_libs::serde_json::json!({"id": "missing"}),
     )
     .await;
-    assert_eq!(missing["data"]["bookmark"], plain_libs::serde_json::Value::Null);
+    assert_eq!(
+        missing["data"]["bookmark"],
+        plain_libs::serde_json::Value::Null
+    );
     let invalid_page = call_variables(
         server.port,
         &token,
@@ -134,12 +195,8 @@ async fn bookmark_http_lifecycle_metadata_and_reference_counts() {
     let icon = saved["data"]["updateBookmark"]["faviconPath"]
         .as_str()
         .unwrap();
-    assert!(std::path::Path::new(icon).exists());
-    let file_id = std::path::Path::new(icon)
-        .file_stem()
-        .unwrap()
-        .to_str()
-        .unwrap();
+    assert_eq!(icon, created_icon);
+    assert!(icon_path.exists());
     assert_eq!(db.get_app_file(file_id).unwrap().ref_count, 1);
     let second = call_variables(
         server.port,
@@ -149,6 +206,8 @@ async fn bookmark_http_lifecycle_metadata_and_reference_counts() {
     )
     .await;
     let second_id = second["data"]["addBookmarks"][0]["id"].as_str().unwrap();
+    metadata_updated(&mut events, second_id).await;
+    assert_eq!(db.get_app_file(file_id).unwrap().ref_count, 2);
     let saved_second = call_variables(
         server.port,
         &token,
@@ -269,7 +328,7 @@ async fn bookmark_http_lifecycle_metadata_and_reference_counts() {
         .await["data"]["deleteBookmarks"]["affectedCount"],
         1
     );
-    assert!(std::path::Path::new(icon).exists());
+    assert!(icon_path.exists());
     assert_eq!(db.get_app_file(file_id).unwrap().ref_count, 1);
     call(
         server.port,
@@ -277,7 +336,7 @@ async fn bookmark_http_lifecycle_metadata_and_reference_counts() {
         &format!("mutation {{deleteBookmarks(ids:[\"{second_id}\"]) {{affectedCount}}}}"),
     )
     .await;
-    assert!(!std::path::Path::new(icon).exists());
+    assert!(!icon_path.exists());
     assert!(db.get_app_file(file_id).is_none());
     server.shutdown().await;
     web.abort();
@@ -320,7 +379,8 @@ async fn delete_bookmark_group_emits_stored_rows_after_database_changes() {
     })
     .await
     .unwrap();
-    let emitted: plain_libs::serde_json::Value = plain_libs::serde_json::from_str(&event.payload).unwrap();
+    let emitted: plain_libs::serde_json::Value =
+        plain_libs::serde_json::from_str(&event.payload).unwrap();
     let stored = store::get_bookmark_by_id(&db, &selected.id)
         .unwrap()
         .unwrap();
@@ -340,4 +400,114 @@ async fn delete_bookmark_group_emits_stored_rows_after_database_changes() {
         plain_libs::serde_json::to_value(neighbor).unwrap()
     );
     server.shutdown().await;
+}
+
+#[tokio::test]
+async fn background_metadata_keeps_created_rows_and_successful_title_on_fetch_failure() {
+    let directory = plain_libs::temporary::tempdir().unwrap();
+    let token = plain_libs::utils::base64::base64_encode(&[21; 32]);
+    let prefs = Arc::new(
+        plain_rs::features::prefs::Prefs::load(&directory.path().join("prefs.json")).unwrap(),
+    );
+    let server = ContentServer::start(directory.path(), &token, prefs).unwrap();
+    let state = server.runtime_state();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let origin = format!("http://{}", listener.local_addr().unwrap());
+    let router = plain_libs::axum::Router::new().route(
+        "/no-icon",
+        plain_libs::axum::routing::get(|| async {
+            plain_libs::axum::response::Html(
+                "<title>Keep fetched title</title><link rel='icon' href='/missing.ico'>",
+            )
+        }),
+    );
+    let router = router
+        .route(
+            "/with-icon",
+            plain_libs::axum::routing::get(|| async {
+                plain_libs::axum::response::Html(
+                    "<title>Fetched title</title><link rel='icon' href='/icon'>",
+                )
+            }),
+        )
+        .route(
+            "/icon",
+            plain_libs::axum::routing::get(|| async {
+                (
+                    [("content-type", "image/x-icon")],
+                    b"independent icon fixture".to_vec(),
+                )
+            }),
+        );
+    let web = tokio::spawn(async move {
+        plain_libs::axum::serve(listener, router).await.unwrap();
+    });
+    let rows = plain_rs::features::services::bookmarks::add_bookmarks(
+        &state.db,
+        vec![format!("{origin}/missing"), format!("{origin}/no-icon")],
+        "",
+    )
+    .unwrap();
+    plain_rs::features::services::bookmarks::start_metadata_update(
+        state.core.clone(),
+        rows.clone(),
+    )
+    .await
+    .unwrap();
+    let missing =
+        plain_rs::infrastructure::db::bookmark::get_bookmark_by_id(&state.db, &rows[0].id)
+            .unwrap()
+            .unwrap();
+    assert_eq!(missing.title, rows[0].url);
+    assert_eq!(missing.favicon_path, "");
+    let title = plain_rs::infrastructure::db::bookmark::get_bookmark_by_id(&state.db, &rows[1].id)
+        .unwrap()
+        .unwrap();
+    assert_eq!(title.title, "Keep fetched title");
+    assert_eq!(title.favicon_path, "");
+    assert_eq!(
+        plain_rs::infrastructure::db::bookmark::get_bookmarks(&state.db).len(),
+        2
+    );
+    assert_eq!(
+        state
+            .db
+            .with_conn(
+                |conn| conn.query_row("SELECT COUNT(*) FROM app_files", [], |row| row
+                    .get::<_, i64>(0))
+            )
+            .unwrap(),
+        0
+    );
+    let failed_save = plain_rs::features::services::bookmarks::add_bookmarks(
+        &state.db,
+        vec![format!("{origin}/with-icon")],
+        "",
+    )
+    .unwrap();
+    state.db.with_conn(|conn| conn.execute_batch("CREATE TRIGGER reject_metadata BEFORE UPDATE OF title ON bookmarks BEGIN SELECT RAISE(ABORT,'expected metadata storage failure'); END;")).unwrap();
+    plain_rs::features::services::bookmarks::start_metadata_update(
+        state.core.clone(),
+        failed_save.clone(),
+    )
+    .await
+    .unwrap();
+    let unchanged =
+        plain_rs::infrastructure::db::bookmark::get_bookmark_by_id(&state.db, &failed_save[0].id)
+            .unwrap()
+            .unwrap();
+    assert_eq!(unchanged.title, failed_save[0].url);
+    assert_eq!(unchanged.favicon_path, "");
+    assert_eq!(
+        state
+            .db
+            .with_conn(
+                |conn| conn.query_row("SELECT COUNT(*) FROM app_files", [], |row| row
+                    .get::<_, i64>(0))
+            )
+            .unwrap(),
+        0
+    );
+    server.shutdown().await;
+    web.abort();
 }
