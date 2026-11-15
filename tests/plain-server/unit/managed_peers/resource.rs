@@ -21,8 +21,37 @@ async fn native_peer_resources_use_pinned_head_and_exact_bounded_ranges_without_
     let registry = NativeResourceRegistry::default();
     let scope = NativeRequestScope::default();
     let resources = fixture.local.native_resources().unwrap();
-    let info = resources
+    let remote_id = fixture.remote.runtime_state().native_client_id().unwrap();
+    let local_id = fixture.local.runtime_state().native_client_id().unwrap();
+    assert_eq!(fixture.peer.id, remote_id);
+    assert!(
+        peers::get(&fixture.local.runtime_state().db, "remote")
+            .unwrap()
+            .is_none()
+    );
+    assert_eq!(
+        fixture
+            .remote
+            .runtime_state()
+            .db
+            .session_get(&local_id)
+            .unwrap()
+            .unwrap()
+            .client_id,
+        local_id,
+    );
+    let unknown = resources
         .open_peer(&registry, &scope, "remote", path.to_str().unwrap(), None)
+        .await;
+    assert!(matches!(unknown, Err(error) if error == "Managed device unavailable"));
+    let info = resources
+        .open_peer(
+            &registry,
+            &scope,
+            &fixture.peer.id,
+            path.to_str().unwrap(),
+            None,
+        )
         .await
         .unwrap();
     assert_eq!(info.size, bytes.len() as u64);
@@ -67,7 +96,13 @@ async fn native_peer_resources_reject_permission_loss_and_paired_identity_revoca
     let scope = NativeRequestScope::default();
     let resources = fixture.local.native_resources().unwrap();
     let info = resources
-        .open_peer(&registry, &scope, "remote", path.to_str().unwrap(), None)
+        .open_peer(
+            &registry,
+            &scope,
+            &fixture.peer.id,
+            path.to_str().unwrap(),
+            None,
+        )
         .await
         .unwrap();
     let resource = registry.get(&scope, &info.id).unwrap();
@@ -104,7 +139,13 @@ async fn native_peer_resources_reject_changed_file_length_without_exposing_parti
         .local
         .native_resources()
         .unwrap()
-        .open_peer(&registry, &scope, "remote", path.to_str().unwrap(), None)
+        .open_peer(
+            &registry,
+            &scope,
+            &fixture.peer.id,
+            path.to_str().unwrap(),
+            None,
+        )
         .await
         .unwrap();
     std::fs::write(&path, b"replaced-content").unwrap();
@@ -143,7 +184,7 @@ async fn peer_exports_stream_large_files_to_local_collision_safe_destinations() 
         .unwrap()
         .export(
             &scope,
-            Some("remote"),
+            Some(fixture.peer.id.as_str()),
             source.to_str().unwrap(),
             ResourceDestination::Directory {
                 directory: destination.to_string_lossy().into_owned(),
@@ -178,7 +219,7 @@ async fn peer_exports_stream_large_files_to_local_collision_safe_destinations() 
             .unwrap()
             .export(
                 &scope,
-                Some("remote"),
+                Some(fixture.peer.id.as_str()),
                 source.to_str().unwrap(),
                 ResourceDestination::File(destination.join("canceled.bin"))
             )
@@ -195,7 +236,7 @@ async fn peer_resources_reject_a_wrong_tls_pin_without_switching_transport() {
     let state = fixture.local.runtime_state();
     let route = state
         .managed_resources
-        .route(&state, "remote")
+        .route(&state, &fixture.peer.id)
         .await
         .unwrap();
     let bad = Arc::new(PeerRoute {
@@ -219,14 +260,14 @@ async fn peer_resources_reject_a_wrong_tls_pin_without_switching_transport() {
         .routes
         .lock()
         .unwrap()
-        .get("remote")
+        .get(&fixture.peer.id)
         .unwrap()
         .clone();
     *slot.lock().await = Some(bad);
     let path = fixture.root.path().join("resource.bin");
     std::fs::write(&path, b"bytes").unwrap();
     assert!(
-        PeerResource::open(state, "remote", path.to_str().unwrap(), None)
+        PeerResource::open(state, &fixture.peer.id, path.to_str().unwrap(), None)
             .await
             .is_err()
     );
@@ -251,7 +292,7 @@ async fn peer_generated_thumbnails_preserve_seekable_bytes_when_http_uses_a_full
         .open_peer(
             &registry,
             &scope,
-            "remote",
+            &fixture.peer.id,
             path.to_str().unwrap(),
             Some(Size::Small),
         )
@@ -313,7 +354,7 @@ async fn generic_downloads_use_remote_file_urls_and_preserve_pinning_and_managem
     std::fs::create_dir(&directory).unwrap();
     let bytes: Vec<u8> = (0..128 * 1024).map(|index| (index % 251) as u8).collect();
     std::fs::write(directory.join("source.bin"), &bytes).unwrap();
-    let response = fixture.local.native_graphql().unwrap().execute_peer_scoped("remote", plain_graphql::Request::new("query($root:String!){files(root:$root,query:\"\",offset:0,limit:10,sortBy:NAME_ASC){name url}}").variables(plain_graphql::Variables::from_json(plain_libs::serde_json::json!({"root":directory.to_str().unwrap()}))), Default::default(), std::time::Duration::from_secs(30)).await.unwrap();
+    let response = fixture.local.native_graphql().unwrap().execute_peer_scoped(&fixture.peer.id, plain_graphql::Request::new("query($root:String!){files(root:$root,query:\"\",offset:0,limit:10,sortBy:NAME_ASC){name url}}").variables(plain_graphql::Variables::from_json(plain_libs::serde_json::json!({"root":directory.to_str().unwrap()}))), Default::default(), std::time::Duration::from_secs(30)).await.unwrap();
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     let data = response.data.into_json().unwrap();
     let reference = data["files"][0]["url"].as_str().unwrap();
@@ -321,7 +362,7 @@ async fn generic_downloads_use_remote_file_urls_and_preserve_pinning_and_managem
     let state = fixture.local.runtime_state();
     let route = state
         .managed_resources
-        .route(&state, "remote")
+        .route(&state, &fixture.peer.id)
         .await
         .unwrap();
     let url = route.base.join(reference).unwrap().to_string();
@@ -336,7 +377,7 @@ async fn generic_downloads_use_remote_file_urls_and_preserve_pinning_and_managem
         .routes
         .lock()
         .unwrap()
-        .get("remote")
+        .get(&fixture.peer.id)
         .unwrap()
         .clone();
     let wrong = Arc::new(PeerRoute {
@@ -364,12 +405,16 @@ async fn generic_downloads_use_remote_file_urls_and_preserve_pinning_and_managem
     );
     assert!(!denied.exists());
     *slot.lock().await = Some(route);
-    fixture
-        .remote
-        .runtime_state()
-        .db
-        .session_delete("local")
-        .unwrap();
+    let local_id = fixture.local.runtime_state().native_client_id().unwrap();
+    assert_eq!(
+        fixture
+            .remote
+            .runtime_state()
+            .db
+            .session_delete(&local_id)
+            .unwrap(),
+        1,
+    );
     let revoked = fixture.root.path().join("revoked");
     let id = resource_download(&fixture, &url, &revoked).await;
     assert_eq!(
