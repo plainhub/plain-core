@@ -1,23 +1,6 @@
 use crate::features::files::resource_link::{self, ResourcePurpose, ResourceType, Scope};
-use crate::features::media::catalog_paths::requires_foreground_scan;
 use crate::runtime::Runtime as CoreRuntime;
 use std::path::Path;
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub enum ReadKind {
-    Original,
-    Thumbnail,
-}
-
-impl ReadKind {
-    fn check(self, path: &Path) -> plain_libs::anyhow::Result<()> {
-        plain_libs::anyhow::ensure!(
-            self != Self::Thumbnail || !requires_foreground_scan(path),
-            "Thumbnail requires explicit file access"
-        );
-        Ok(())
-    }
-}
 
 pub struct File {
     pub path: String,
@@ -67,7 +50,6 @@ pub fn decrypt(
 pub async fn resolve_native_reference(
     state: &CoreRuntime,
     reference: &str,
-    kind: ReadKind,
 ) -> plain_libs::anyhow::Result<File> {
     let client_id = state
         .native_client_id()
@@ -77,7 +59,6 @@ pub async fn resolve_native_reference(
         state,
         Scope::Session(client_id),
         resource_link::Resource::reference(reference),
-        kind,
     )
     .await?;
     let physical_path = file
@@ -91,47 +72,24 @@ pub async fn resolve_native_reference(
     Ok(file)
 }
 
-pub async fn resolve(
-    state: &CoreRuntime,
-    id: &str,
-    kind: ReadKind,
-) -> plain_libs::anyhow::Result<File> {
+pub async fn resolve(state: &CoreRuntime, id: &str) -> plain_libs::anyhow::Result<File> {
     let owner = state.clone();
     let id = id.to_owned();
     let (scope, resource) = tokio::task::spawn_blocking(move || -> plain_libs::anyhow::Result<_> {
         let (scope, payload) = resource_link::parse(&id)?;
         let resource = resource_link::open(&scope, &key(&owner, &scope)?, payload)?;
-        if resource.r#type == ResourceType::ForegroundMediaThumbnail {
-            plain_libs::anyhow::ensure!(
-                matches!(&scope, Scope::Session(id) if owner.native_client_id().is_ok_and(|native| native == *id)),
-                "Foreground thumbnails require native session"
-            );
-        }
         Ok((scope, resource))
     })
     .await??;
-    resolve_resource(state, scope, resource, kind).await
+    resolve_resource(state, scope, resource).await
 }
 
 async fn resolve_resource(
     state: &CoreRuntime,
     scope: Scope,
     resource: resource_link::Resource,
-    kind: ReadKind,
 ) -> plain_libs::anyhow::Result<File> {
-    let kind = if resource.r#type == ResourceType::ForegroundMediaThumbnail {
-        plain_libs::anyhow::ensure!(
-            kind == ReadKind::Thumbnail,
-            "Foreground resource requires thumbnail size"
-        );
-        ReadKind::Original
-    } else {
-        kind
-    };
-    let media = if matches!(
-        resource.r#type,
-        ResourceType::Media | ResourceType::ForegroundMediaThumbnail
-    ) {
+    let media = if resource.r#type == ResourceType::Media {
         state
             .file_platform
             .resource_media_file(&resource.id)
@@ -150,7 +108,6 @@ async fn resolve_resource(
             resource.r#type,
             ResourceType::SharedFile
                 | ResourceType::Media
-                | ResourceType::ForegroundMediaThumbnail
                 | ResourceType::File
         );
         match resource.r#type {
@@ -195,7 +152,7 @@ async fn resolve_resource(
                 file.name =
                     crate::features::chat::attachments::app_file_store::display_name(&row, &names);
             }
-            ResourceType::Media | ResourceType::ForegroundMediaThumbnail => {
+            ResourceType::Media => {
                 file.media_id = resource.id;
             }
             ResourceType::File => {
@@ -207,9 +164,7 @@ async fn resolve_resource(
             }
         }
         if authorize {
-            authorize_path_for_read(&state, &file.path, kind)?;
-        } else {
-            kind.check(Path::new(&file.path))?;
+            authorize_path(&state, &file.path)?;
         }
         Ok(file)
     })
@@ -217,14 +172,6 @@ async fn resolve_resource(
 }
 
 pub fn authorize_path(state: &CoreRuntime, reference: &str) -> plain_libs::anyhow::Result<()> {
-    authorize_path_for_read(state, reference, ReadKind::Original)
-}
-
-fn authorize_path_for_read(
-    state: &CoreRuntime,
-    reference: &str,
-    kind: ReadKind,
-) -> plain_libs::anyhow::Result<()> {
     if reference.starts_with("content://") || reference.starts_with("ph://") {
         return Ok(());
     }
@@ -232,9 +179,7 @@ fn authorize_path_for_read(
         .split_once("!zip!/")
         .map_or(reference, |(archive, _)| archive);
     let path = Path::new(path);
-    kind.check(path)?;
     let candidate = super::platform::paths::canonical(path)?;
-    kind.check(&candidate)?;
     let [directory, cache] = state
         .file_platform
         .private_roots

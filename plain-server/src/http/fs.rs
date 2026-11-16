@@ -127,12 +127,7 @@ async fn serve(state: ServerState, parameters: Parameters, mut headers: HeaderMa
                 )),
     };
     let result = async {
-        let kind = if options.size.is_some() {
-            links::ReadKind::Thumbnail
-        } else {
-            links::ReadKind::Original
-        };
-        let file = links::resolve(&state, &parameters.id, kind).await?;
+        let file = links::resolve(&state, &parameters.id).await?;
         let content = content::read(&state, file, options).await?;
         let response = match content {
             Content::File {

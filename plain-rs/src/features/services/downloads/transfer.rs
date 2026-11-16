@@ -37,7 +37,6 @@ async fn input(
         let file = crate::features::services::files::links::resolve(
             state,
             &id,
-            crate::features::services::files::links::ReadKind::Original,
         )
         .await?;
         if file.path.starts_with("content://") || file.path.starts_with("ph://") {

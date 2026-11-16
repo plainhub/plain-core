@@ -37,8 +37,7 @@ impl NativeResources {
             _ = stop.wait_for(|stopped| *stopped) => Err("Rust core stopped".into()),
             result = async {
                 let _permit = registry.prepare().await?;
-                let kind = if thumbnail.is_some() { links::ReadKind::Thumbnail } else { links::ReadKind::Original };
-                let file = links::resolve_native_reference(&self.state, reference, kind).await.map_err(|error| error.to_string())?;
+                let file = links::resolve_native_reference(&self.state, reference).await.map_err(|error| error.to_string())?;
                 let content = content::read(&self.state, file, Options {
                     access_order: self.state.thumbnails.next_access_order(),
                     action: if thumbnail.is_some() { content::Action::Preview } else { content::Action::Download },

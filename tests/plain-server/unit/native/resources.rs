@@ -51,7 +51,9 @@ async fn thumbnails_use_shared_content_output_and_not_original_file_bytes() {
     let registry = NativeResourceRegistry::default();
     let scope = NativeRequestScope::default();
     let files = plain_libs::temporary::tempdir().unwrap();
-    let path = files.path().join("fixture.png");
+    let library = files.path().join("Fixture.imovielibrary");
+    std::fs::create_dir(&library).unwrap();
+    let path = library.join("fixture.png");
     plain_libs::image::RgbImage::from_fn(1600, 1200, |x, y| {
         plain_libs::image::Rgb([(x % 251) as u8, (y % 251) as u8, 97])
     })

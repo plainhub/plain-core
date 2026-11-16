@@ -207,8 +207,8 @@ pub async fn directory(state: &CoreRuntime, id: &str) -> Result<Download, Error>
     if !remote_access_allowed(state) {
         return Err(Error::Denied("".into()));
     }
-    use crate::features::services::files::links::{self, ReadKind};
-    let file = match links::resolve(state, id, ReadKind::Original).await {
+    use crate::features::services::files::links;
+    let file = match links::resolve(state, id).await {
         Ok(file) => file,
         Err(error) => return Err(Error::Denied(error.to_string())),
     };

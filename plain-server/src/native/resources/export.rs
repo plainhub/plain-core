@@ -70,7 +70,7 @@ impl NativeResources {
                 return Ok((Some(file), Some(peer)));
             }
             let source =
-                links::resolve_native_reference(&self.state, reference, links::ReadKind::Original)
+                links::resolve_native_reference(&self.state, reference)
                     .await
                     .map_err(|error| error.to_string())?;
             let content = content::read(

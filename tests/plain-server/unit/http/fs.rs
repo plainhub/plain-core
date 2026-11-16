@@ -449,93 +449,97 @@ async fn fs_typed_image_reference_returns_decodable_thumbnail() {
     assert_eq!(body, body_bytes(full_size).await);
 }
 
-#[cfg(target_os = "macos")]
 #[tokio::test]
-async fn fs_foreground_thumbnail_is_local_and_does_not_enable_passive_reads() {
+async fn fs_readable_images_share_authorization_for_paths_media_and_preview_sizes() {
     use plain_rs::features::files::resource_link::{self, Resource, ResourceType, Scope};
     let (_root, core, state, key) = test_state();
     let files = plain_libs::temporary::tempdir().unwrap();
     let library = files.path().join("Fixture.imovielibrary");
     std::fs::create_dir(&library).unwrap();
-    let path = library.join("video.mp4");
-    std::fs::write(
-        &path,
-        include_bytes!("../../../../plain-rs/testdata/video-h264-high.mp4"),
-    )
-    .unwrap();
-    let row = state
-        .db
-        .record_file_paths(
-            &[path.to_string_lossy().into_owned()],
-            Some(plain_rs::infrastructure::db::FileKind::Video),
-        )
-        .unwrap()
-        .remove(0);
-    let passive = resource_link::seal(
-        &Scope::Session(state.native_client_id().unwrap()),
-        &key,
-        &Resource {
-            r#type: ResourceType::Media,
-            id: row.id.clone(),
-        },
-    )
-    .unwrap();
-    let foreground = Resource {
-        r#type: ResourceType::ForegroundMediaThumbnail,
-        id: row.id,
-    };
-    let explicit = resource_link::seal(
-        &Scope::Session(state.native_client_id().unwrap()),
-        &key,
-        &foreground,
-    )
-    .unwrap();
-    let response = call_fs(
-        &state,
-        &format!("id={explicit}&action=preview&size=sm"),
-        &[],
-    )
-    .await;
-    assert_eq!(response.status(), StatusCode::OK);
-    assert_eq!(response.headers()[header::CONTENT_TYPE], "image/jpeg");
-    assert!(plain_libs::image::load_from_memory(&body_bytes(response).await).is_ok());
-    for query in [
-        format!("id={passive}&action=preview&size=sm"),
-        format!("id={explicit}&action=preview"),
-    ] {
-        assert_eq!(
-            call_fs(&state, &query, &[]).await.status(),
-            StatusCode::FORBIDDEN
-        );
-    }
     let session = plain_rs::features::services::sessions::create(&state, "reader".into()).unwrap();
-    let remote = resource_link::encrypt(
-        &Scope::Session(session.client_id),
-        plain_libs::aad::ResourcePurpose::Fs,
-        &plain_libs::utils::base64::base64_decode(&session.url_token),
-        &plain_libs::serde_json::to_vec(&foreground).unwrap(),
-    )
-    .unwrap();
-    let response = call_fs(&state, &format!("id={remote}&action=preview&size=sm"), &[]).await;
-    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    let remote_key = plain_libs::utils::base64::base64_decode(&session.url_token);
+    for extension in ["webp", "png", "svg"] {
+        let path = library.join(format!("sample.{extension}"));
+        if extension == "svg" {
+            std::fs::write(&path, br##"<svg xmlns="http://www.w3.org/2000/svg" width="64" height="48"><rect width="64" height="48" fill="#123456"/></svg>"##).unwrap();
+        } else {
+            plain_libs::image::RgbImage::from_fn(64, 48, |x, y| {
+                plain_libs::image::Rgb([x as u8, y as u8, 97])
+            }).save(&path).unwrap();
+        }
+        let original = std::fs::read(&path).unwrap();
+        let row = state.db.record_file_paths(
+            &[path.to_string_lossy().into_owned()],
+            Some(plain_rs::infrastructure::db::FileKind::Image),
+        ).unwrap().remove(0);
+        for resource in [Resource::reference(path.to_str().unwrap()), Resource { r#type: ResourceType::Media, id: row.id }] {
+            for (scope, key) in [
+                (Scope::Session(state.native_client_id().unwrap()), &key),
+                (Scope::Session(session.client_id.clone()), &remote_key),
+            ] {
+                let id = resource_link::seal(&scope, key, &resource).unwrap();
+                for size in ["", "&size=sm", "&size=lg"] {
+                    let response = call_fs(&state, &format!("id={id}&action=preview{size}"), &[]).await;
+                    assert_eq!(response.status(), StatusCode::OK, "{extension}{size} {resource:?} {scope:?}");
+                    if extension == "svg" {
+                        assert_eq!(response.headers()[header::CONTENT_TYPE], "image/svg+xml");
+                        assert!(response.headers()[header::CONTENT_SECURITY_POLICY].to_str().unwrap().contains("sandbox"));
+                        assert_eq!(body_bytes(response).await, original);
+                    } else {
+                        let image = plain_libs::image::load_from_memory(&body_bytes(response).await).unwrap();
+                        assert!(image.width() > 0 && image.height() > 0);
+                    }
+                }
+                let response = call_fs(&state, &format!("id={id}&action=download"), &[]).await;
+                assert_eq!(response.status(), StatusCode::OK);
+                assert_eq!(body_bytes(response).await, original);
+            }
+        }
+    }
     core.stop_core().await;
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(unix)]
 #[tokio::test]
-async fn fs_protected_thumbnail_is_rejected_before_probing_the_source() {
+async fn fs_cached_thumbnails_still_require_os_read_access() {
+    use std::os::unix::fs::PermissionsExt;
     let (_root, _core, state, _key) = test_state();
-    let id = file_id(&state, "/Users/example/Documents/thumbnail-fixture.jpg");
+    let files = plain_libs::temporary::tempdir().unwrap();
+    let path = files.path().join("sample.png");
+    plain_libs::image::RgbImage::from_fn(512, 384, |x, y| {
+        plain_libs::image::Rgb([(x % 251) as u8, (y % 251) as u8, 97])
+    }).save(&path).unwrap();
+    let id = file_id(&state, path.to_str().unwrap());
+    let query = format!("id={id}&action=preview&size=sm");
+    assert_eq!(call_fs(&state, &query, &[]).await.status(), StatusCode::OK);
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0)).unwrap();
+    let response = call_fs(&state, &query, &[]).await;
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).unwrap();
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    assert!(String::from_utf8_lossy(&body_bytes(response).await).contains("Permission denied"));
+    assert_eq!(call_fs(&state, &query, &[]).await.status(), StatusCode::OK);
+}
 
-    let response = call_fs(&state, &format!("id={id}&action=preview&size=sm"), &[]).await;
-    assert_eq!(response.status(), StatusCode::FORBIDDEN);
-    assert!(
-        String::from_utf8_lossy(&body_bytes(response).await)
-            .contains("Thumbnail requires explicit file access")
-    );
+#[tokio::test]
+async fn fs_private_application_paths_remain_forbidden_for_all_preview_sizes() {
+    let (root, _core, state, _key) = test_state();
+    let path = root.path().join("private.png");
+    std::fs::write(&path, b"private fixture").unwrap();
+    let id = file_id(&state, path.to_str().unwrap());
+    for size in ["", "&size=sm", "&size=lg"] {
+        assert_eq!(call_fs(&state, &format!("id={id}&action=preview{size}"), &[]).await.status(), StatusCode::FORBIDDEN);
+    }
+}
 
-    let original = call_fs(&state, &format!("id={id}&action=preview"), &[]).await;
-    assert_eq!(original.status(), StatusCode::NOT_FOUND);
+#[tokio::test]
+async fn fs_missing_images_report_missing_regardless_of_preview_size() {
+    let (_root, _core, state, _key) = test_state();
+    let files = plain_libs::temporary::tempdir().unwrap();
+    let path = files.path().join("Fixture.imovielibrary/missing.png");
+    let id = file_id(&state, path.to_str().unwrap());
+    for size in ["", "&size=sm", "&size=lg"] {
+        assert_eq!(call_fs(&state, &format!("id={id}&action=preview{size}"), &[]).await.status(), StatusCode::NOT_FOUND);
+    }
 }
 
 #[tokio::test]
