@@ -272,6 +272,42 @@ async fn managed_proxy_keeps_the_browser_session_and_streams_a_peer_range() {
     std::io::Read::read_to_end(&mut archive.by_name("entry.txt").unwrap(), &mut entry).unwrap();
     assert_eq!(entry, b"archive fixture");
 
+    b_state.temp_values.set(
+        "selected-files".into(),
+        json!([{"path":file,"name":"selected.bin"}]).to_string(),
+    );
+    let selection = json!({"id":"selected-files","type":"FILE","name":"fixture"});
+    let id = resource_link::encrypt(
+        &Scope::Session(browser.client_id.clone()),
+        ResourcePurpose::ZipFiles,
+        &decode_key(&browser.url_token).unwrap(),
+        selection.to_string().as_bytes(),
+    ).unwrap();
+    let response = http.get(format!("{proxy}/zip/files"))
+        .query(&[("id", id.as_str()), ("action", "download")])
+        .send().await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let mut archive =
+        plain_libs::zip::ZipArchive::new(std::io::Cursor::new(response.bytes().await.unwrap()))
+            .unwrap();
+    assert_eq!(archive.len(), 1);
+    let mut entry = Vec::new();
+    std::io::Read::read_to_end(&mut archive.by_name("selected.bin").unwrap(), &mut entry).unwrap();
+    assert_eq!(entry, b"0123456789");
+
+    let app_file = plain_rs::features::files::app_files::FileStore::new(
+        b_state.db.clone(), b_state.directory.clone(),
+    ).import_file(&file, "range.bin", "application/octet-stream", false).unwrap();
+    let id = resource_link::seal(
+        &Scope::Session(browser.client_id.clone()),
+        &decode_key(&browser.url_token).unwrap(),
+        &Resource::reference(&format!("fid:{}", app_file.id)),
+    ).unwrap();
+    let response = http.get(format!("{proxy}/fs"))
+        .query(&[("id", id.as_str()), ("action", "download")]).send().await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(&response.bytes().await.unwrap()[..], b"0123456789");
+
     let data = b"managed upload fixture";
     let upload = |path, metadata: String| {
         let metadata = http_request::encrypt(&key, &format!("/{path}"), &metadata).unwrap();
@@ -432,6 +468,81 @@ async fn managed_proxy_keeps_the_browser_session_and_streams_a_peer_range() {
             [0]["message"],
         "no_permission"
     );
+    a.stop_core().await;
+    b.stop_core().await;
+}
+
+#[tokio::test]
+async fn managed_browser_relays_media_sockets_through_pinned_peer() {
+    let dir = plain_libs::temporary::tempdir().unwrap();
+    let a = start(&dir.path().join("a"), "706c6169-7efd-857c-91a3-7471150200cd");
+    let b = start(&dir.path().join("b"), "706c6169-02de-8bc5-8fe4-50bb3e139c1b");
+    let (a_cert, a_key) = plain_libs::tls::generate_pem(&["localhost".into()]).unwrap();
+    let (_, a_port) = a.start_public(0, 0, a_cert, a_key).await.unwrap();
+    let (b_cert, b_key) = plain_libs::tls::generate_pem(&["localhost".into()]).unwrap();
+    let (_, b_port) = b.start_public(0, 0, b_cert, b_key).await.unwrap();
+    let a_state = a.runtime_state();
+    let b_state = b.runtime_state();
+    let a_id = a_state.native_client_id().unwrap();
+    let b_id = b_state.native_client_id().unwrap();
+    let browser = login(&a_state, "browser");
+    let mut peer = DPeer::new(&b_id, "Desktop", "127.0.0.1", Some(b_port), DeviceType::Computer);
+    peer.status = PeerStatus::Paired;
+    peer.public_key = plain_libs::utils::base64::base64_encode(&[7; 32]);
+    peer.token = login(&b_state, &a_id).token;
+    peers::save(&a_state.db, &[peer], SaveMode::Insert).unwrap();
+    let pin = decode_pin(
+        &a_state.public_server.lock().await.as_ref().unwrap().tls_certificate_sha256,
+    ).unwrap();
+    let bridge = Arc::new(b.host_events().unwrap());
+    let host = bridge.clone();
+    let (controls_sent, mut controls) = tokio::sync::mpsc::channel(1);
+    let responding = tokio::spawn(async move {
+        while let Some(request) = host.next_request().await {
+            let result = match request["method"].as_str().unwrap() {
+                "systemCapabilities" => json!(["SCREEN_MIRROR"]),
+                "systemScreenMirrorControls" => {
+                    controls_sent.send(request["params"].clone()).await.unwrap();
+                    json!(true)
+                }
+                "systemScreenMirrorResetTouch" => json!(true),
+                _ => json!(null),
+            };
+            let _ = host.reply(json!({"id":request["id"],"result":result}));
+        }
+    });
+    let key = decode_key(&browser.token).unwrap();
+    for (path, event, payload) in [
+        ("/image_editor", "IMAGE_EDITOR_READY", &[][..]),
+        ("/screen", "SCREEN_MIRROR_VIDEO", &[0, 255, 1][..]),
+    ] {
+        let address = format!("wss://localhost:{a_port}/proxy/{b_id}{path}?cid={}", browser.client_id);
+        let config = http_client::pinned_tls_config(pin).unwrap();
+        let (mut socket, _) = plain_libs::tokio_tungstenite::connect_async_tls_with_config(
+            address, None, false,
+            Some(plain_libs::tokio_tungstenite::Connector::Rustls(Arc::new(config))),
+        ).await.unwrap();
+        let init = graphql::registration(&key, &browser.client_id, path).unwrap();
+        socket.send(Message::Binary(init.clone().into())).await.unwrap();
+        let Message::Binary(ack) = socket.next().await.unwrap().unwrap() else {
+            panic!("missing managed socket acknowledgment");
+        };
+        let mut stream = graphql::acknowledge(&key, &browser.client_id, path, &init, &ack).unwrap();
+        socket.send(Message::Binary(stream.encode(&[], &key).unwrap().into())).await.unwrap();
+        if path == "/screen" {
+            let control = br#"{ "type":"screenMirrorControl","input":{"action":"BACK"} }"#;
+            socket.send(Message::Binary(stream.encode(control, &key).unwrap().into())).await.unwrap();
+            tokio::time::timeout(Duration::from_secs(5), controls.recv()).await.unwrap().unwrap();
+            bridge.publish_binary(event, payload.into()).unwrap();
+        }
+        let Message::Binary(frame) = tokio::time::timeout(Duration::from_secs(5), socket.next()).await.unwrap().unwrap().unwrap() else {
+            panic!("missing managed media event");
+        };
+        let plain = stream.decode(&frame, &key).unwrap();
+        assert_eq!(graphql::decode_raw(&plain), Some((event, payload)));
+        socket.close(None).await.unwrap();
+    }
+    responding.abort();
     a.stop_core().await;
     b.stop_core().await;
 }

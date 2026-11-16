@@ -34,20 +34,30 @@ impl SocketKind {
             Self::ImageEditor => runtime::Channel::ImageEditor,
         }
     }
-    fn path(self) -> &'static str {
+    pub(crate) fn path(self) -> &'static str {
         match self {
             Self::Screen => "/screen",
             Self::ImageEditor => "/image_editor",
         }
     }
+    fn events(self) -> &'static [(u8, &'static str)] {
+        match self {
+            Self::Screen => &[(1, "SCREEN_MIRROR_VIDEO"), (2, "SCREEN_MIRROR_AUDIO")],
+            Self::ImageEditor => &[(3, "IMAGE_EDITOR_READY"), (4, "IMAGE_EDITOR_UPDATE")],
+        }
+    }
+    pub(crate) fn browser_event(self, frame: &[u8]) -> Option<Vec<u8>> {
+        let (&kind, payload) = frame.split_first()?;
+        let (_, name) = self.events().iter().find(|(code, _)| *code == kind)?;
+        websocket::encode_raw(name, payload)
+    }
     fn frame(self, event: &str, payload: &[u8]) -> Result<Vec<u8>> {
-        let kind = match (self, event) {
-            (Self::Screen, "SCREEN_MIRROR_VIDEO") => 1,
-            (Self::Screen, "SCREEN_MIRROR_AUDIO") => 2,
-            (Self::ImageEditor, "IMAGE_EDITOR_READY") if payload.is_empty() => 3,
-            (Self::ImageEditor, "IMAGE_EDITOR_UPDATE") => 4,
-            _ => return Err(anyhow!("Invalid socket event")),
-        };
+        let &(kind, _) = self
+            .events()
+            .iter()
+            .find(|(_, name)| *name == event)
+            .ok_or_else(|| anyhow!("Invalid socket event"))?;
+        ensure!(kind != 3 || payload.is_empty(), "Invalid socket event");
         ensure!(
             payload.len() < MAX_SOCKET_FRAME_BYTES,
             "Socket frame too large"

@@ -58,8 +58,19 @@ pub(crate) async fn call(
     if path == "auth" && request.method() == Method::GET {
         return raw::auth(state, target, request).await;
     }
-    if path == "graphql" && request.method() == Method::GET {
-        return socket::upgrade(state, target, request).await;
+    if request.method() == Method::GET {
+        use crate::native::sockets::SocketKind;
+        match path.as_str() {
+            "graphql" => return socket::upgrade(state, target, request, None).await,
+            "screen" => {
+                return socket::upgrade(state, target, request, Some(SocketKind::Screen)).await;
+            }
+            "image_editor" => {
+                return socket::upgrade(state, target, request, Some(SocketKind::ImageEditor))
+                    .await;
+            }
+            _ => {}
+        }
     }
     match (request.method().clone(), path.as_str()) {
         (Method::POST, "graphql") => graphql(state, &target, request).await,
@@ -368,7 +379,12 @@ async fn resource(state: ServerState, target: &str, path: &str, request: Request
     };
     let scope = Scope::Session(id);
     let browser_session = browser_session.as_ref();
-    let Ok(plain) = resource_link::decrypt(&scope, ResourcePurpose::Fs, &url_key, payload) else {
+    let purpose = if path == "zip/files" {
+        ResourcePurpose::ZipFiles
+    } else {
+        ResourcePurpose::Fs
+    };
+    let Ok(plain) = resource_link::decrypt(&scope, purpose, &url_key, payload) else {
         return StatusCode::UNAUTHORIZED.into_response();
     };
     if path == "fs" && plain.starts_with(b"fsid:") {
@@ -404,7 +420,13 @@ async fn resource(state: ServerState, target: &str, path: &str, request: Request
                 ensure!(
                     matches!(
                         selection.r#type,
-                        DataType::Audio | DataType::Video | DataType::Image | DataType::Doc
+                        DataType::Audio
+                            | DataType::Video
+                            | DataType::Image
+                            | DataType::Doc
+                            | DataType::File
+                            | DataType::AppFile
+                            | DataType::Package
                     ),
                     "Invalid managed archive selection"
                 );
@@ -416,7 +438,12 @@ async fn resource(state: ServerState, target: &str, path: &str, request: Request
             .and_then(|resource| {
                 use plain_rs::features::files::resource_link::ResourceType;
                 ensure!(
-                    matches!(resource.r#type, ResourceType::File | ResourceType::Media),
+                    matches!(resource.r#type, ResourceType::File | ResourceType::Media)
+                        || (path == "fs"
+                            && matches!(
+                                resource.r#type,
+                                ResourceType::AppFile | ResourceType::PackageIcon
+                            )),
                     "Invalid managed resource"
                 );
                 resource_link::seal(&scope, &route.url_key, &resource)

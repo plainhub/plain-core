@@ -1,4 +1,5 @@
 use super::{PeerRoute, authorize_graphql, caller, current, decode_key};
+use crate::native::sockets::{MAX_SOCKET_CONTROL_BYTES, NativeSockets, SocketKind};
 use crate::server::ServerState;
 use futures_util::{SinkExt, StreamExt};
 use plain_libs::axum::{
@@ -16,7 +17,7 @@ use plain_rs::{
             PeerSubscriptionTarget,
             messages::{ClientMessage, ServerMessage},
         },
-        protocols::websocket::Stream,
+        protocols::websocket::{Role, Stream},
     },
 };
 use std::{collections::HashSet, time::Duration};
@@ -26,7 +27,12 @@ struct Parameters {
     cid: String,
 }
 
-pub(super) async fn upgrade(state: ServerState, target: String, request: Request) -> Response {
+pub(super) async fn upgrade(
+    state: ServerState,
+    target: String,
+    request: Request,
+    kind: Option<SocketKind>,
+) -> Response {
     let Ok(Query(parameters)) = Query::<Parameters>::try_from_uri(request.uri()) else {
         return StatusCode::BAD_REQUEST.into_response();
     };
@@ -40,10 +46,15 @@ pub(super) async fn upgrade(state: ServerState, target: String, request: Request
     let Ok(socket) = WebSocketUpgrade::from_request_parts(&mut parts, &state).await else {
         return StatusCode::BAD_REQUEST.into_response();
     };
+    let incoming_limit = if kind.is_some() {
+        MAX_SOCKET_CONTROL_BYTES + 48
+    } else {
+        1024 * 1024
+    };
     socket
-        .max_message_size(1024 * 1024)
-        .max_frame_size(1024 * 1024)
-        .on_upgrade(move |socket| run(socket, state, target, session, key))
+        .max_message_size(incoming_limit)
+        .max_frame_size(incoming_limit)
+        .on_upgrade(move |socket| run(socket, state, target, session, key, kind))
         .into_response()
 }
 
@@ -53,26 +64,13 @@ async fn run(
     target: String,
     session: SessionRow,
     key: Vec<u8>,
+    kind: Option<SocketKind>,
 ) {
     let result = async {
-        let (mut stream, acknowledgement) =
-            crate::http::websocket::graphql::handshake(&mut socket, &session.client_id, &key)
-                .await?;
-        send(&mut socket, Message::Binary(acknowledgement.into())).await?;
-        let first = tokio::time::timeout(Duration::from_secs(10), socket.next())
-            .await
-            .map_err(|_| "Subscription handshake timeout")?
-            .ok_or("Subscription closed")?
-            .map_err(|error| error.to_string())?;
-        let Message::Binary(first) = first else {
-            return Err("Encrypted subscription frame required".into());
-        };
-        let first = stream
-            .decode(&first, &key)
-            .ok_or("Invalid encrypted frame")?;
-        if !first.is_empty() {
-            return Err("Empty encrypted confirmation required".into());
+        if let Some(kind) = kind {
+            return run_media(&mut socket, &state, target, session, key, kind).await;
         }
+        let stream = confirmed_stream(&mut socket, &session, &key, "/graphql").await?;
         let route = state
             .managed_resources
             .route(&state, &target)
@@ -118,6 +116,8 @@ async fn run(
             code: (if result.is_ok() { 1000u16 } else { 1008u16 }).into(),
             reason: (if result.is_ok() {
                 ""
+            } else if kind.is_some() {
+                "managed_socket_closed"
             } else {
                 "managed_subscription_closed"
             })
@@ -125,6 +125,86 @@ async fn run(
         })),
     )
     .await;
+}
+
+async fn confirmed_stream(
+    socket: &mut WebSocket,
+    session: &SessionRow,
+    key: &[u8],
+    path: &str,
+) -> Result<Stream, String> {
+    let (init, acknowledgement) = crate::http::websocket::graphql::acknowledge(
+        socket,
+        &session.client_id,
+        key,
+        path,
+    )
+    .await?;
+    let mut stream = Stream::new(path, &session.client_id, &init, &acknowledgement, Role::Server)
+        .ok_or("Invalid binding")?;
+    send(socket, Message::Binary(acknowledgement.into())).await?;
+    let first = tokio::time::timeout(Duration::from_secs(10), socket.next())
+        .await
+        .map_err(|_| "Subscription handshake timeout")?
+        .ok_or("Subscription closed")?
+        .map_err(|error| error.to_string())?;
+    let Message::Binary(first) = first else {
+        return Err("Encrypted subscription frame required".into());
+    };
+    let first = stream.decode(&first, key).ok_or("Invalid encrypted frame")?;
+    if !first.is_empty() {
+        return Err("Empty encrypted confirmation required".into());
+    }
+    Ok(stream)
+}
+
+async fn run_media(
+    socket: &mut WebSocket,
+    state: &ServerState,
+    target: String,
+    session: SessionRow,
+    key: Vec<u8>,
+    kind: SocketKind,
+) -> Result<(), String> {
+    let mut stream = confirmed_stream(socket, &session, &key, kind.path()).await?;
+    current(state, &session).map_err(|_| "Session revoked")?;
+    let sockets = NativeSockets::new(state.clone());
+    let scope = NativeRequestScope::default();
+    let handle = sockets.open(kind, Some(target), scope.clone())?;
+    let upstream = sockets.session(&handle)?;
+    let mut recheck = tokio::time::interval(Duration::from_secs(1));
+    recheck.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    let result = async {
+        loop {
+            current(state, &session).map_err(|_| "Session revoked")?;
+            tokio::select! {
+                _ = recheck.tick() => {}
+                incoming = socket.next() => match incoming {
+                    Some(Ok(Message::Binary(frame))) => {
+                        let plain = stream.decode(&frame, &key).ok_or("Invalid encrypted frame")?;
+                        current(state, &session).map_err(|_| "Session revoked")?;
+                        upstream.send(plain).await?;
+                    }
+                    Some(Ok(Message::Ping(bytes))) => send(socket, Message::Pong(bytes)).await?,
+                    Some(Ok(Message::Pong(_))) => {}
+                    Some(Ok(Message::Close(_))) | None => return Ok(()),
+                    _ => return Err("Invalid managed socket frame".into()),
+                },
+                message = upstream.read() => {
+                    let message = message?;
+                    if message == [0] {
+                        continue;
+                    }
+                    current(state, &session).map_err(|_| "Session revoked")?;
+                    let event = kind.browser_event(&message).ok_or("Invalid managed socket event")?;
+                    let frame = stream.encode(&event, &key).ok_or("Sequence exhausted")?;
+                    send(socket, Message::Binary(frame.into())).await?;
+                }
+            }
+        }
+    }.await;
+    scope.close();
+    result
 }
 
 async fn relay(
