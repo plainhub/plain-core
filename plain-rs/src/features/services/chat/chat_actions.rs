@@ -1,5 +1,4 @@
 use crate::features::chat::events;
-use crate::features::chat::messages::share_send;
 use crate::features::chat::messages::target as message_target;
 use crate::infrastructure::db::DChat;
 use crate::infrastructure::events::WsEvent;
@@ -40,8 +39,7 @@ pub(super) fn prepare_send_many(
     if targets.is_empty() {
         return Ok(vec![]);
     }
-    let (content, _imports) = prepare_content(state, content)?;
-    crate::features::chat::messages::message_lifecycle::create_many(&state.db, &targets, &content)
+    crate::features::chat::messages::message_lifecycle::create_many(&state.db, &targets, content)
 }
 
 pub async fn forward_many(
@@ -73,25 +71,6 @@ pub fn validate_targets(targets: &[String]) -> Result<Vec<(String, String)>> {
         .collect()
 }
 
-fn prepare_content(state: &CoreRuntime, content: &str) -> Result<(String, Option<Imported>)> {
-    let value: plain_libs::serde_json::Value = plain_libs::serde_json::from_str(content)?;
-    if value["type"] != "TEXT" {
-        return Ok((content.to_owned(), None));
-    }
-    let text = value["value"]["text"]
-        .as_str()
-        .ok_or_else(|| plain_libs::anyhow::anyhow!("Text required"))?;
-    if text.encode_utf16().count() <= 2048 {
-        return Ok((content.to_owned(), None));
-    }
-    let content = share_send::text(&state.db, &state.directory, text)?;
-    let imports = Imported {
-        db: state.db.clone(),
-        directory: state.directory.clone(),
-        ids: crate::features::chat::attachments::app_file_store::content_reference_ids(&content),
-    };
-    Ok((content.to_string(), Some(imports)))
-}
 pub fn delete_query(state: &CoreRuntime, query: &str) -> Result<usize> {
     let ids = if query.trim().is_empty() {
         vec![]
@@ -114,22 +93,6 @@ pub fn delete(state: &CoreRuntime, ids: Vec<String>) -> Result<usize> {
     Ok(count)
 }
 
-struct Imported {
-    db: std::sync::Arc<crate::infrastructure::db::Db>,
-    directory: std::path::PathBuf,
-    ids: std::collections::BTreeMap<String, i64>,
-}
-impl Drop for Imported {
-    fn drop(&mut self) {
-        if let Err(error) = crate::features::chat::attachments::app_file_store::release_unbound(
-            &self.db,
-            &self.directory,
-            std::mem::take(&mut self.ids),
-        ) {
-            log::warn!("Unable to release unused chat imports: {error}");
-        }
-    }
-}
 pub async fn retry(
     state: &CoreRuntime,
     id: String,

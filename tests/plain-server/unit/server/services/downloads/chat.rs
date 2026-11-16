@@ -35,7 +35,7 @@ fn fixture() -> (
     (dir, server, state)
 }
 fn seed_chat(state: &ServerState, id: &str, size: usize) {
-    let row=plain_rs::infrastructure::db::DChat::new("peer","me","",&json!({"type":"FILES","value":{"items":[{"id":id,"uri":format!("fsid:{id}"),"fileName":"fixture.bin","size":size}]}}).to_string());
+    let row=plain_rs::infrastructure::db::DChat::new("peer","me","",&json!({"type":"MESSAGE","value":{"format":"PLAIN","items":[{"type":"FILE","attachment":{"id":id,"uri":format!("fsid:{id}"),"fileName":"fixture.bin","size":size}}]}}).to_string());
     let mut row = row;
     row.id = id.into();
     state.db.insert_chat(&row).unwrap();
@@ -141,7 +141,7 @@ async fn root_ble_chunks_commit_exact_bytes_and_reject_short_and_overlong_reads(
                     plain_libs::serde_json::from_str(payload[0]["content"].as_str().unwrap())
                         .unwrap();
                 assert!(
-                    content["value"]["items"][0]["uri"]
+                    content["value"]["items"][0]["attachment"]["uri"]
                         .as_str()
                         .unwrap()
                         .starts_with("fid:")
@@ -173,7 +173,7 @@ async fn root_ble_chunks_commit_exact_bytes_and_reject_short_and_overlong_reads(
         .unwrap()
         .unwrap();
     let content: Value = plain_libs::serde_json::from_str(&chat.content).unwrap();
-    let uri = content["value"]["items"][0]["uri"].as_str().unwrap();
+    let uri = content["value"]["items"][0]["attachment"]["uri"].as_str().unwrap();
     assert!(uri.starts_with("fid:"));
     let hash = uri[4..].split('.').next().unwrap();
     let record = state.db.app_file_get(hash).unwrap().unwrap();
@@ -227,8 +227,8 @@ async fn root_ble_chunks_commit_exact_bytes_and_reject_short_and_overlong_reads(
 async fn explicit_download_retry_roots_probe_open_transport_and_commit_exact_bytes() {
     use plain_rs::infrastructure::transport::router::{Outcome, TransportType};
     use std::sync::atomic::{AtomicUsize, Ordering};
-    for kind in ["FILES", "IMAGES"] {
-        let payload = if kind == "IMAGES" {
+    for kind in ["FILE", "IMAGE"] {
+        let payload = if kind == "IMAGE" {
             plain_libs::utils::base64::base64_decode_checked("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a7X8AAAAASUVORK5CYII=").unwrap()
         } else {
             b"abc".to_vec()
@@ -293,14 +293,14 @@ async fn explicit_download_retry_roots_probe_open_transport_and_commit_exact_byt
             }
         });
         seed_chat(&state, "retry", payload.len());
-        if kind == "IMAGES" {
+        if kind == "IMAGE" {
             let mut row =
                 plain_rs::infrastructure::db::chat_store::messages::get(&state.db, "retry")
                     .unwrap()
                     .unwrap();
             let mut content: Value = plain_libs::serde_json::from_str(&row.content).unwrap();
-            content["type"] = json!("IMAGES");
-            content["value"]["items"][0]["fileName"] = json!("fixture.png");
+            content["value"]["items"][0]["type"] = json!("IMAGE");
+            content["value"]["items"][0]["attachment"]["fileName"] = json!("fixture.png");
             row.content = content.to_string();
             plain_rs::infrastructure::db::chat_store::messages::save(
                 &state.db,
@@ -330,7 +330,7 @@ async fn explicit_download_retry_roots_probe_open_transport_and_commit_exact_byt
             .unwrap()
             .unwrap();
         let content: Value = plain_libs::serde_json::from_str(&chat.content).unwrap();
-        let uri = content["value"]["items"][0]["uri"].as_str().unwrap();
+        let uri = content["value"]["items"][0]["attachment"]["uri"].as_str().unwrap();
         let hash = uri.strip_prefix("fid:").unwrap().split('.').next().unwrap();
         let record = state.db.app_file_get(hash).unwrap().unwrap();
         assert_eq!(
@@ -345,15 +345,15 @@ async fn explicit_download_retry_roots_probe_open_transport_and_commit_exact_byt
 
 #[tokio::test]
 async fn grouped_files_and_images_retry_only_failed_attachments_and_preserve_completed_imports() {
-    for kind in ["FILES", "IMAGES"] {
+    for kind in ["FILE", "IMAGE"] {
         let (directory, server, state) = fixture();
         let row = plain_rs::infrastructure::db::DChat::new(
             "peer",
             "me",
             "",
-            &json!({"type":kind,"value":{"items":[
-                {"id":"first","uri":"fsid:first","fileName":"first.bin","size":3},
-                {"id":"second","uri":"fsid:second","fileName":"second.bin","size":3}
+            &json!({"type":"MESSAGE","value":{"format":"PLAIN","items":[
+                {"type":kind,"attachment":{"id":"first","uri":"fsid:first","fileName":"first.bin","size":3}},
+                {"type":kind,"attachment":{"id":"second","uri":"fsid:second","fileName":"second.bin","size":3}}
             ]}})
             .to_string(),
         );
@@ -409,12 +409,12 @@ async fn grouped_files_and_images_retry_only_failed_attachments_and_preserve_com
             .unwrap()
             .unwrap();
         let content: Value = plain_libs::serde_json::from_str(&imported.content).unwrap();
-        let first_uri = content["value"]["items"][0]["uri"]
+        let first_uri = content["value"]["items"][0]["attachment"]["uri"]
             .as_str()
             .unwrap()
             .to_owned();
         assert!(first_uri.starts_with("fid:"));
-        assert_eq!(content["value"]["items"][1]["uri"], "fsid:second");
+        assert_eq!(content["value"]["items"][1]["attachment"]["uri"], "fsid:second");
         let response = server
             .native_graphql()
             .unwrap()
@@ -431,9 +431,9 @@ async fn grouped_files_and_images_retry_only_failed_attachments_and_preserve_com
             .unwrap()
             .unwrap();
         let content: Value = plain_libs::serde_json::from_str(&imported.content).unwrap();
-        assert_eq!(content["value"]["items"][0]["uri"], first_uri);
+        assert_eq!(content["value"]["items"][0]["attachment"]["uri"], first_uri);
         for (index, bytes) in [b"one", b"two"].iter().enumerate() {
-            let uri = content["value"]["items"][index]["uri"].as_str().unwrap();
+            let uri = content["value"]["items"][index]["attachment"]["uri"].as_str().unwrap();
             let hash = uri.strip_prefix("fid:").unwrap().split('.').next().unwrap();
             let file = state.db.app_file_get(hash).unwrap().unwrap();
             assert_eq!(

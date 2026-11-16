@@ -252,16 +252,88 @@ async fn native_password_and_approval_pairing_enables_actual_chat_and_preserves_
             .is_err()
     );
     first.native.close_subscriptions(remote_handle);
-    let content = json!({"text":{"text":"accepted native pairing message"}});
+    let png = plain_libs::utils::base64::base64_decode(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGNgcGgAAAEEAMGam+LMAAAAAElFTkSuQmCC",
+    );
+    let first_runtime = first.core.runtime();
+    let second_runtime = second.core.runtime();
+    let sender_files = plain_rs::features::files::app_files::FileStore::new(
+        first_runtime.db.clone(),
+        first_runtime.directory.clone(),
+    );
+    let mut items = Vec::new();
+    let files = [
+        ("IMAGE", "fixture.png", "image/png", png.as_slice()),
+        (
+            "FILE",
+            "fixture.txt",
+            "text/plain",
+            b"Mixed fixture file".as_slice(),
+        ),
+    ];
+    for (kind, name, mime, bytes) in files {
+        let source = first._directory.path().join(name);
+        std::fs::write(&source, bytes).unwrap();
+        let file = sender_files
+            .import(source, name.into(), mime.into(), false)
+            .await
+            .unwrap();
+        let suffix = file.real_path.rsplit('/').next().unwrap();
+        items.push(json!({"type":kind,"attachment":{
+            "id":name,"uri":format!("fid:{suffix}"),"fileName":name,"size":bytes.len()
+        }}));
+    }
+    let content = json!({"message":{"text":"**Mixed message**","format":"MARKDOWN","items":items}});
     let sent = query(&first.native, "mutation($targets:[String!]!,$content:ChatContentInput!){sendChatItems(targets:$targets,content:$content){id status}}",
         json!({"targets":[format!("peer:{second_id}")],"content":content})).await;
     assert_eq!(sent["sendChatItems"][0]["status"], "SENT");
-    let received = query(&second.native, "query($target:String!){chatItems(target:$target,query:\"\",offset:0,limit:10){fromId toId content{... on ChatTextContent{__typename text}}}}",
+    let received = query(&second.native, "query($target:String!){chatItems(target:$target,query:\"\",offset:0,limit:10){id fromId toId content{... on ChatMessageContent{__typename text format items{type attachment{id uri}}}}}}",
         json!({"target":format!("peer:{first_id}")})).await;
-    assert_eq!(
-        received["chatItems"],
-        json!([{"fromId":first_id,"toId":"me","content":{"__typename":"ChatTextContent","text":"accepted native pairing message"}}])
-    );
+    let message = &received["chatItems"][0];
+    assert_eq!(message["fromId"], first_id);
+    assert_eq!(message["toId"], "me");
+    assert_eq!(message["content"]["__typename"], "ChatMessageContent");
+    assert_eq!(message["content"]["text"], "**Mixed message**");
+    assert_eq!(message["content"]["format"], "MARKDOWN");
+    let items = message["content"]["items"].as_array().unwrap();
+    assert_eq!(items.len(), 2);
+    for (item, (kind, name, _, _)) in items.iter().zip(files) {
+        assert_eq!(item["type"], kind);
+        assert_eq!(item["attachment"]["id"], name);
+    }
+    let message_id = message["id"].as_str().unwrap();
+    let imported = tokio::time::timeout(Duration::from_secs(15), async {
+        loop {
+            let row = second_runtime.db.get_chat_by_id(message_id).unwrap();
+            let content: Value = plain_libs::serde_json::from_str(&row.content).unwrap();
+            let imported = content["value"]["items"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|item| {
+                    item["attachment"]["uri"]
+                        .as_str()
+                        .unwrap()
+                        .strip_prefix("fid:")
+                        .map(ToOwned::to_owned)
+                })
+                .collect::<Option<Vec<_>>>();
+            if let Some(imported) = imported {
+                break imported;
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    })
+    .await
+    .expect("both attachments must download from the paired sender");
+    for (suffix, (_, _, _, bytes)) in imported.iter().zip(files) {
+        let hash = suffix.split('.').next().unwrap();
+        let row = second_runtime.db.app_file_get(hash).unwrap().unwrap();
+        assert_eq!(
+            std::fs::read(second_runtime.directory.join(row.real_path)).unwrap(),
+            bytes
+        );
+    }
     assert_eq!(
         query(
             &third.native,

@@ -28,7 +28,7 @@ async fn local_messages_edit_forward_and_clear_through_native_executor() {
     let mut events = state.events.subscribe();
     let result = execute(
         &server,
-        r#"mutation { sendChatItems(targets:["peer:local"], content:{text:{text:"original"}}) {id status content { ... on ChatTextContent { __typename text } ... on ChatImagesContent { __typename items { id uri fileName size width height durationMs summary } } ... on ChatFilesContent { __typename items { id uri fileName size width height durationMs summary } } ... on ChatShareContent { __typename shareId urlToken peerInfo { id ip port } name itemCount totalSize expiresAt } }} }"#
+        r#"mutation { sendChatItems(targets:["peer:local"], content:{message:{text:"original"}}) {id status content { ... on ChatMessageContent { __typename text format items { type attachment { id uri fileName size width height durationMs summary } } } ... on ChatShareContent { __typename shareId urlToken peerInfo { id ip port } name itemCount totalSize expiresAt } }} }"#
             .into(),
     )
     .await;
@@ -41,7 +41,7 @@ async fn local_messages_edit_forward_and_clear_through_native_executor() {
     let edited = execute(
         &server,
         format!(
-            r#"mutation {{ editChatText(id:{}, text:"edited") {{changed chat {{content {{ ... on ChatTextContent {{ __typename text }} ... on ChatImagesContent {{ __typename items {{ id uri fileName size width height durationMs summary }} }} ... on ChatFilesContent {{ __typename items {{ id uri fileName size width height durationMs summary }} }} ... on ChatShareContent {{ __typename shareId urlToken peerInfo {{ id ip port }} name itemCount totalSize expiresAt }} }}}}}} }}"#,
+            r#"mutation {{ editChatText(id:{}, text:"edited") {{changed chat {{content {{ ... on ChatMessageContent {{ __typename text format items {{ type attachment {{ id uri fileName size width height durationMs summary }} }} }} ... on ChatShareContent {{ __typename shareId urlToken peerInfo {{ id ip port }} name itemCount totalSize expiresAt }} }}}}}} }}"#,
             json!(id)
         ),
     )
@@ -67,7 +67,7 @@ async fn local_messages_edit_forward_and_clear_through_native_executor() {
         &state.db,
         "unrelated-peer",
         "",
-        r#"{"type":"TEXT","value":{"text":"keep"}}"#,
+        r#"{"type":"MESSAGE","value":{"format":"PLAIN","items":[],"text":"keep"}}"#,
     )
     .unwrap();
     for query in ["", "  ", "unknown:value", "text:edited"] {
@@ -107,11 +107,11 @@ async fn prepared_files_retain_metadata_and_message_owners_after_import_cleanup(
         .await
         .unwrap();
     let suffix = file.real_path.rsplit('/').next().unwrap();
-    let content = json!({"type":"FILES","value":{"items":[{"id":"attachment","uri":format!("fid:{suffix}"),"size":3,"fileName":"fixture.txt","width":12,"height":34,"durationMs":56,"summary":""}]}}).to_string();
+    let content = json!({"type":"MESSAGE","value":{"format":"PLAIN","items":[{"type":"FILE","attachment":{"id":"attachment","uri":format!("fid:{suffix}"),"size":3,"fileName":"fixture.txt","width":12,"height":34,"durationMs":56,"summary":""}}]}}).to_string();
     let first = execute(
         &server,
         format!(
-            r#"mutation {{ sendChatItems(targets:["peer:local"], content:{}) {{id content {{ ... on ChatTextContent {{ __typename text }} ... on ChatImagesContent {{ __typename items {{ id uri fileName size width height durationMs summary }} }} ... on ChatFilesContent {{ __typename items {{ id uri fileName size width height durationMs summary }} }} ... on ChatShareContent {{ __typename shareId urlToken peerInfo {{ id ip port }} name itemCount totalSize expiresAt }} }} status}} }}"#,
+            r#"mutation {{ sendChatItems(targets:["peer:local"], content:{}) {{id content {{ ... on ChatMessageContent {{ __typename text format items {{ type attachment {{ id uri fileName size width height durationMs summary }} }} }} ... on ChatShareContent {{ __typename shareId urlToken peerInfo {{ id ip port }} name itemCount totalSize expiresAt }} }} status}} }}"#,
             content_input(&content)
         ),
     )
@@ -127,7 +127,7 @@ async fn prepared_files_retain_metadata_and_message_owners_after_import_cleanup(
     .await;
     let forwarded = execute(
         &server,
-        format!(r#"mutation {{ forwardChatItems(id:{}, targets:["peer:local","peer:local"]) {{id content {{ ... on ChatTextContent {{ __typename text }} ... on ChatImagesContent {{ __typename items {{ id uri fileName size width height durationMs summary }} }} ... on ChatFilesContent {{ __typename items {{ id uri fileName size width height durationMs summary }} }} ... on ChatShareContent {{ __typename shareId urlToken peerInfo {{ id ip port }} name itemCount totalSize expiresAt }} }}}} }}"#, json!(id)),
+        format!(r#"mutation {{ forwardChatItems(id:{}, targets:["peer:local","peer:local"]) {{id content {{ ... on ChatMessageContent {{ __typename text format items {{ type attachment {{ id uri fileName size width height durationMs summary }} }} }} ... on ChatShareContent {{ __typename shareId urlToken peerInfo {{ id ip port }} name itemCount totalSize expiresAt }} }}}} }}"#, json!(id)),
     ).await;
     for row in forwarded["forwardChatItems"].as_array().unwrap() {
         assert_eq!(row["content"], first["sendChatItems"][0]["content"]);
@@ -139,8 +139,8 @@ async fn prepared_files_retain_metadata_and_message_owners_after_import_cleanup(
     );
     let saved: Value =
         first["sendChatItems"][0]["content"].clone();
-    assert_eq!(saved["items"][0]["width"], 12);
-    assert_eq!(saved["items"][0]["durationMs"], 56);
+    assert_eq!(saved["items"][0]["attachment"]["width"], 12);
+    assert_eq!(saved["items"][0]["attachment"]["durationMs"], 56);
     execute(
         &server,
         r#"mutation { deleteChatItems(query:"peer:=local") {affectedCount} }"#.into(),
@@ -150,26 +150,27 @@ async fn prepared_files_retain_metadata_and_message_owners_after_import_cleanup(
     server.shutdown().await;
 }
 #[tokio::test]
-async fn long_text_files_and_invalid_targets_use_the_same_message_lifecycle() {
+async fn long_text_remains_text_and_invalid_targets_are_rejected() {
     let dir = plain_libs::temporary::tempdir().unwrap();
     let server = server(dir.path());
     let text = "😀".repeat(1100);
     let result = execute(
         &server,
         format!(
-            r#"mutation {{sendChatItems(targets:["peer:local"], content:{}) {{content {{ ... on ChatTextContent {{ __typename text }} ... on ChatImagesContent {{ __typename items {{ id uri fileName size width height durationMs summary }} }} ... on ChatFilesContent {{ __typename items {{ id uri fileName size width height durationMs summary }} }} ... on ChatShareContent {{ __typename shareId urlToken peerInfo {{ id ip port }} name itemCount totalSize expiresAt }} }}}}}}"#,
-            content_input(&json!({"type":"TEXT","value":{"text":text}}).to_string())
+            r#"mutation {{sendChatItems(targets:["peer:local"], content:{}) {{content {{ ... on ChatMessageContent {{ __typename text format items {{ type attachment {{ id uri fileName size width height durationMs summary }} }} }} ... on ChatShareContent {{ __typename shareId urlToken peerInfo {{ id ip port }} name itemCount totalSize expiresAt }} }}}}}}"#,
+            content_input(&json!({"type":"MESSAGE","value":{"format":"PLAIN","items":[],"text":text}}).to_string())
         ),
     )
     .await;
     let content: Value =
         result["sendChatItems"][0]["content"].clone();
-    assert_eq!(content["__typename"], "ChatFilesContent");
-    assert_eq!(content["items"][0]["size"], text.len());
+    assert_eq!(content["__typename"], "ChatMessageContent");
+    assert_eq!(content["text"], text);
+    assert_eq!(content["items"], json!([]));
     let rejected = server
         .graphql_executor()
         .execute(Request::new(
-            r#"mutation { sendChatItems(targets:["channel:"], content:{text:{text:"bad"}}) {id} }"#,
+            r#"mutation { sendChatItems(targets:["channel:"], content:{message:{text:"bad"}}) {id} }"#,
         ))
         .await;
     assert!(!rejected.errors.is_empty());
@@ -210,7 +211,7 @@ async fn retry_returns_pending_before_platform_transport_completes() {
         &state.db,
         "remote",
         "",
-        r#"{"type":"TEXT","value":{"text":"retry"}}"#,
+        r#"{"type":"MESSAGE","value":{"format":"PLAIN","items":[],"text":"retry"}}"#,
     )
     .unwrap();
     let (generation, mut requests) = crate::test_support::HostRequests::connect(&state.host);
@@ -265,7 +266,7 @@ async fn batch_forward_uses_current_content_and_owns_each_creation_event() {
     let state = server.runtime_state();
     let source = execute(
         &server,
-        r#"mutation { sendChatItems(targets:["peer:local"], content:{text:{text:"old"}}) {id} }"#.into(),
+        r#"mutation { sendChatItems(targets:["peer:local"], content:{message:{text:"old"}}) {id} }"#.into(),
     )
     .await;
     let id = source["sendChatItems"][0]["id"].as_str().unwrap();
@@ -279,7 +280,7 @@ async fn batch_forward_uses_current_content_and_owns_each_creation_event() {
     .await;
     let mut events = state.events.subscribe();
     let (_generation, mut host_requests) = crate::test_support::HostRequests::connect(&state.host);
-    let result = execute(&server, format!(r#"mutation {{ forwardChatItems(id:{}, targets:["peer:local","peer:local"]) {{id content {{ ... on ChatTextContent {{ __typename text }} ... on ChatImagesContent {{ __typename items {{ id uri fileName size width height durationMs summary }} }} ... on ChatFilesContent {{ __typename items {{ id uri fileName size width height durationMs summary }} }} ... on ChatShareContent {{ __typename shareId urlToken peerInfo {{ id ip port }} name itemCount totalSize expiresAt }} }} status}} }}"#, json!(id))).await;
+    let result = execute(&server, format!(r#"mutation {{ forwardChatItems(id:{}, targets:["peer:local","peer:local"]) {{id content {{ ... on ChatMessageContent {{ __typename text format items {{ type attachment {{ id uri fileName size width height durationMs summary }} }} }} ... on ChatShareContent {{ __typename shareId urlToken peerInfo {{ id ip port }} name itemCount totalSize expiresAt }} }} status}} }}"#, json!(id))).await;
     let rows = result["forwardChatItems"].as_array().unwrap();
     assert_eq!(rows.len(), 2);
     assert_ne!(rows[0]["id"], rows[1]["id"]);
@@ -330,11 +331,11 @@ mod target_tests;
 fn content_input(content: &str) -> String {
     let value: Value = plain_libs::serde_json::from_str(content).unwrap();
     let field = match value["type"].as_str().unwrap() {
-        "TEXT" => "text", "IMAGES" => "images", "FILES" => "files", "SHARE" => "share", _ => panic!("Unknown fixture content"),
+        "MESSAGE" => "message", "SHARE" => "share", _ => panic!("Unknown fixture content"),
     };
     fn literal(value: &Value) -> String {
         match value {
-            Value::Object(fields) => format!("{{{}}}", fields.iter().map(|(key, value)| format!("{key}:{}", literal(value))).collect::<Vec<_>>().join(",")),
+            Value::Object(fields) => format!("{{{}}}", fields.iter().map(|(key, value)| format!("{key}:{}", if matches!(key.as_str(), "format" | "type") { value.as_str().unwrap().to_owned() } else { literal(value) })).collect::<Vec<_>>().join(",")),
             Value::Array(values) => format!("[{}]", values.iter().map(literal).collect::<Vec<_>>().join(",")),
             value => value.to_string(),
         }

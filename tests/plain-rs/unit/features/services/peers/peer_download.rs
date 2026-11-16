@@ -26,7 +26,7 @@ fn fixture() -> (
     )
     .unwrap();
     let mut chat = crate::infrastructure::db::DChat::new("peer", "me", "", &json!({
-        "type":"FILES", "value":{"items":[{"id":"file","uri":"fsid:remote-file","fileName":"fixture.bin","size":7}]}
+        "type":"MESSAGE","value":{"format":"PLAIN","items":[{"type":"FILE","attachment":{"id":"file","uri":"fsid:remote-file","fileName":"fixture.bin","size":7}}]}
     }).to_string());
     chat.id = "message".into();
     db.insert_chat(&chat).unwrap();
@@ -100,7 +100,7 @@ async fn existing_ticket_is_truncated_and_exact_download_bytes_commit_normally()
         .unwrap()
         .unwrap();
     let content: Value = plain_libs::serde_json::from_str(&chat.content).unwrap();
-    let uri = content["value"]["items"][0]["uri"].as_str().unwrap();
+    let uri = content["value"]["items"][0]["attachment"]["uri"].as_str().unwrap();
     let hash = uri.strip_prefix("fid:").unwrap().split('.').next().unwrap();
     let stored = db.app_file_get(hash).unwrap().unwrap();
     assert_eq!(
@@ -128,5 +128,5 @@ fn terminal_failure_aborts_its_ticket_but_an_active_import_legitimately_has_a_fi
         .unwrap()
         .unwrap();
     let content: Value = plain_libs::serde_json::from_str(&chat.content).unwrap();
-    assert_eq!(content["value"]["items"][0]["uri"], "fsid:remote-file");
+    assert_eq!(content["value"]["items"][0]["attachment"]["uri"], "fsid:remote-file");
 }

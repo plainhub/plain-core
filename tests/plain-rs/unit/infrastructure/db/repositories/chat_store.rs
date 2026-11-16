@@ -50,7 +50,7 @@ fn checked_chat_storage_is_atomic_literal_and_preserves_unrelated_conversations_
         "me",
         "peer",
         "",
-        r#"{"type":"TEXT","value":{"text":"literal %_\\' 中文"}}"#,
+        r#"{"type":"MESSAGE","value":{"format":"PLAIN","items":[],"text":"literal %_\\' 中文"}}"#,
     );
     one.id = "one".into();
     one.created_at = "2026-10-04T00:00:00.000Z".into();
@@ -58,7 +58,7 @@ fn checked_chat_storage_is_atomic_literal_and_preserves_unrelated_conversations_
         "peer",
         "me",
         "",
-        r#"{"type":"TEXT","value":{"text":"second"}}"#,
+        r#"{"type":"MESSAGE","value":{"format":"PLAIN","items":[],"text":"second"}}"#,
     );
     two.id = "two".into();
     two.created_at = "2026-10-04T00:00:01.000Z".into();
@@ -66,7 +66,7 @@ fn checked_chat_storage_is_atomic_literal_and_preserves_unrelated_conversations_
         "peer",
         "me",
         "channel",
-        r#"{"type":"TEXT","value":{"text":"group"}}"#,
+        r#"{"type":"MESSAGE","value":{"format":"PLAIN","items":[],"text":"group"}}"#,
     );
     group.id = "group".into();
     messages::save(&db, &[one.clone(), two.clone(), group], SaveMode::Insert).unwrap();

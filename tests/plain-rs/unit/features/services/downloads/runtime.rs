@@ -33,7 +33,7 @@ fn fixture() -> (
     (dir, server, state)
 }
 fn seed_chat(state: &CoreRuntime, id: &str, size: usize) {
-    let row=crate::infrastructure::db::DChat::new("peer","me","",&json!({"type":"FILES","value":{"items":[{"id":id,"uri":format!("fsid:{id}"),"fileName":"fixture.bin","size":size}]}}).to_string());
+    let row=crate::infrastructure::db::DChat::new("peer","me","",&json!({"type":"MESSAGE","value":{"format":"PLAIN","items":[{"type":"FILE","attachment":{"id":id,"uri":format!("fsid:{id}"),"fileName":"fixture.bin","size":size}}]}}).to_string());
     let mut row = row;
     row.id = id.into();
     state.db.insert_chat(&row).unwrap();

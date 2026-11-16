@@ -48,31 +48,44 @@ pub fn delete(db: &Db, ids: &[String]) -> Result<usize> {
         Ok(n)
     })
 }
-pub(crate) fn validate_content(content: &str) -> Result<()> {
+pub(crate) fn validate_content(content: &str) -> Result<plain_libs::serde_json::Value> {
     let value: plain_libs::serde_json::Value = plain_libs::serde_json::from_str(content)?;
-    if !matches!(
-        value.get("type").and_then(|v| v.as_str()),
-        Some("TEXT" | "IMAGES" | "FILES" | "SHARE")
-    ) || !value.get("value").is_some_and(|v| v.is_object())
-    {
-        bail!("invalid chat content envelope");
-    }
+    let message = &value["value"];
     match value["type"].as_str() {
-        Some("TEXT") if !value["value"]["text"].is_string() => bail!("invalid text content"),
         Some("SHARE") => {
-            plain_libs::serde_json::from_value::<crate::features::chat::messages::share_card::Card>(value["value"].clone())?;
+            plain_libs::serde_json::from_value::<crate::features::chat::messages::share_card::Card>(message.clone())?;
+            return Ok(value);
         }
-        _ => {}
+        Some("MESSAGE") => {}
+        _ => bail!("invalid chat content envelope"),
     }
-    if matches!(value["type"].as_str(), Some("FILES" | "IMAGES")) {
-        let items = value["value"]["items"]
-            .as_array()
-            .ok_or_else(|| plain_libs::anyhow::anyhow!("invalid attachment items"))?;
-        for item in items {
-            validate_attachment(item)?;
+    if !matches!(message["format"].as_str(), Some("PLAIN" | "MARKDOWN")) {
+        bail!("invalid chat text format");
+    }
+    let items = message["items"].as_array()
+        .ok_or_else(|| plain_libs::anyhow::anyhow!("invalid attachment items"))?;
+    let has_text = match &message["text"] {
+        plain_libs::serde_json::Value::String(text) => !text.trim().is_empty(),
+        plain_libs::serde_json::Value::Null => false,
+        _ => bail!("invalid chat text"),
+    };
+    if !has_text && items.is_empty() {
+        bail!("Chat message requires text or an attachment");
+    }
+    let mut ids = std::collections::HashSet::new();
+    for item in items {
+        if !matches!(item["type"].as_str(), Some("IMAGE" | "FILE")) {
+            bail!("invalid attachment type");
+        }
+        let attachment = &item["attachment"];
+        validate_attachment(attachment)?;
+        let id = attachment["id"].as_str().filter(|id| !id.is_empty())
+            .ok_or_else(|| plain_libs::anyhow::anyhow!("Chat attachment ID must not be empty"))?;
+        if !ids.insert(id) {
+            bail!("Chat attachment IDs must be unique");
         }
     }
-    Ok(())
+    Ok(value)
 }
 fn validate_attachment(item: &plain_libs::serde_json::Value) -> Result<()> {
     if !item.is_object()
@@ -101,7 +114,9 @@ fn validate_attachment(item: &plain_libs::serde_json::Value) -> Result<()> {
             bail!("invalid attachment {field}");
         }
     }
-    crate::features::chat::messages::content::attachment_duration_ms(item)?;
+    if item.get("durationMs").is_some_and(|value| !value.as_i64().is_some_and(|n| n >= 0)) {
+        bail!("invalid attachment duration");
+    }
 
     Ok(())
 }

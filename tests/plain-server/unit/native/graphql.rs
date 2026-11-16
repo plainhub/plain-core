@@ -147,7 +147,7 @@ async fn chat_subscriptions_deliver_messages_without_status_details_and_remain_a
         ("messagesUpdated", "MESSAGE_UPDATED"),
     ] {
         session.send(&plain_libs::serde_json::json!({"type": "subscribe", "id": field, "payload": {
-            "query": format!("subscription {{ {field} {{ id status deliveryResults {{peerId peerName error}} channelId }} }}")
+            "query": format!("subscription {{ {field} {{ id status deliveryResults {{peerId peerName error}} channelId content {{ ... on ChatMessageContent {{ format items {{type}} linkPreviews {{url title image}} }} }} }} }}")
         }}).to_string()).unwrap();
         let ready: plain_libs::serde_json::Value = plain_libs::serde_json::from_str(
             &tokio::time::timeout(std::time::Duration::from_secs(5), session.read())
@@ -157,25 +157,45 @@ async fn chat_subscriptions_deliver_messages_without_status_details_and_remain_a
         )
         .unwrap();
         assert_eq!(ready["payload"]["extensions"]["subscriptionReady"], true);
-        for details in [None, Some(r#"{"results":[]}"#.to_string()), None] {
+        for (index, details) in [None, Some(r#"{"results":[]}"#.to_string()), None]
+            .into_iter()
+            .enumerate()
+        {
             let row = plain_rs::infrastructure::db::DChat {
                 id: "message".into(),
                 from_id: "me".into(),
                 to_id: "peer".into(),
                 channel_id: None,
-                content: r#"{"type":"TEXT","value":{"text":"hello"}}"#.into(),
+                content: json!({"type":"MESSAGE","value":{
+                    "format":"PLAIN","text":"https://fixture.example/",
+                    "items":[{"type":"FILE","attachment":{"id":"attachment","uri":"fixture.txt","size":1}}],
+                    "linkPreviews":[{"url":"https://fixture.example/","title":"Fixture card","image":"fid:fixture","createdAt":"2026-01-01T00:00:00Z"}]
+                }}).to_string(),
                 created_at: "2026-01-01T00:00:00Z".into(),
                 updated_at: "2026-01-01T00:00:00Z".into(),
                 status: plain_rs::features::chat::enums::ChatStatus::Sent,
                 status_data: details.clone(),
             };
+            if field == "messagesCreated" && index == 0 {
+                server.runtime_state().db.insert_chat(&row).unwrap();
+                let response = executor.execute(plain_graphql::Request::new(
+                    r#"{ chatItem(id:"message") { content { ... on ChatMessageContent { linkPreviews { title image } } } } }"#
+                )).await;
+                assert!(response.errors.is_empty(), "{:?}", response.errors);
+                assert_eq!(
+                    response.data.into_json().unwrap()["chatItem"]["content"]["linkPreviews"],
+                    json!([{"title":"Fixture card","image":"fid:fixture"}])
+                );
+            }
             server
                 .runtime_state()
                 .events
                 .send(plain_rs::infrastructure::events::WsEvent::broadcast(
                     event,
-                    plain_libs::serde_json::json!([plain_rs::features::chat::service::chat_to_json(&row)])
-                        .to_string(),
+                    plain_libs::serde_json::json!([
+                        plain_rs::features::chat::service::chat_to_json(&row)
+                    ])
+                    .to_string(),
                 ))
                 .unwrap();
             let next: plain_libs::serde_json::Value = plain_libs::serde_json::from_str(
@@ -190,6 +210,13 @@ async fn chat_subscriptions_deliver_messages_without_status_details_and_remain_a
             assert_eq!(
                 next["payload"]["data"][field][0]["deliveryResults"],
                 json!([])
+            );
+            let content = &next["payload"]["data"][field][0]["content"];
+            assert_eq!(content["format"], "PLAIN");
+            assert_eq!(content["items"], json!([{"type":"FILE"}]));
+            assert_eq!(
+                content["linkPreviews"],
+                json!([{"url":"https://fixture.example/","title":"Fixture card","image":"fid:fixture"}])
             );
             assert!(next["payload"]["data"][field][0]["channelId"].is_null());
         }

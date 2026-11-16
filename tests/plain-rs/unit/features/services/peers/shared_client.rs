@@ -164,7 +164,7 @@ async fn discovery_retry_rereads_peer_address_and_late_response_cannot_replace_c
     messages::content(
         &state.db,
         &row.id,
-        "{\"type\":\"TEXT\",\"value\":{\"text\":\"replacement\"}}",
+        "{\"type\":\"MESSAGE\",\"value\":{\"format\":\"PLAIN\",\"items\":[],\"text\":\"replacement\"}}",
     )
     .unwrap();
     release.notify_one();

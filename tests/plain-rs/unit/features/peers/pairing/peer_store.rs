@@ -67,7 +67,7 @@ fn unpair_removes_management_access_before_chat_only_repairing_and_preserves_his
         "me",
         "peer",
         "",
-        r#"{"type":"TEXT","value":{"text":"saved message"}}"#,
+        r#"{"type":"MESSAGE","value":{"format":"PLAIN","items":[],"text":"saved message"}}"#,
     );
     crate::infrastructure::db::chat_store::messages::save(
         &db,

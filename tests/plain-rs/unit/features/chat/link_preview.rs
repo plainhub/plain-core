@@ -5,7 +5,7 @@ use plain_libs::serde_json::json;
 fn fixture() -> (plain_libs::temporary::TempDir, Db) {
     let dir = plain_libs::temporary::tempdir().unwrap();
     let db = Db::open(&dir.path().join("plain.db")).unwrap();
-    let mut row=DChat::new("me","local","",&json!({"type":"TEXT","metadata":"preserve","value":{"text":"https://a.example https://b.example","linkPreviews":[]}}).to_string());
+    let mut row=DChat::new("me","local","",&json!({"type":"MESSAGE","metadata":"preserve","value":{"format":"PLAIN","items":[],"text":"https://a.example https://b.example","linkPreviews":[]}}).to_string());
     row.id = "message".into();
     db.insert_chat(&row);
     (dir, db)

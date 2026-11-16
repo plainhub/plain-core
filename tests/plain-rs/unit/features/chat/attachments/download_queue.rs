@@ -20,7 +20,7 @@ fn fixture(count: usize) -> (plain_libs::temporary::TempDir, Db, Queue) {
         "me",
         "peer",
         "",
-        &json!({"type":"FILES","value":{"items":items}}).to_string(),
+        &json!({"type":"MESSAGE","value":{"format":"PLAIN","items":items.into_iter().map(|item| json!({"type":"FILE","attachment":item})).collect::<Vec<_>>()}}).to_string(),
     );
     chat.id = "message".into();
     db.insert_chat(&chat);
@@ -135,7 +135,7 @@ fn changed_or_deleted_message_and_short_file_fail_without_import() {
                 .unwrap();
         }
         if mode == "changed" {
-            db.with_conn(|c|c.execute("UPDATE chats SET content=json_set(content,'$.value.items[0].uri','fsid:changed') WHERE id='message'",[])).unwrap();
+            db.with_conn(|c|c.execute("UPDATE chats SET content=json_set(content,'$.value.items[0].attachment.uri','fsid:changed') WHERE id='message'",[])).unwrap();
         }
         q.finish("0", &task.generation, None).unwrap();
         assert_eq!(status(&q, "0"), "FAILED");
@@ -284,7 +284,7 @@ fn committed_downloads_release_all_queue_capacity_without_client_remove_requests
     let items = content["value"]["items"].as_array().unwrap();
     assert_eq!(items.len(), 129);
     for item in items {
-        let uri = item["uri"].as_str().unwrap();
+        let uri = item["attachment"]["uri"].as_str().unwrap();
         assert!(uri.starts_with("fid:"));
         let id = uri[4..].split('.').next().unwrap();
         let file = db.app_file_get(id).unwrap().unwrap();

@@ -9,10 +9,7 @@ fn fixture() -> (PathBuf, Db, Imports) {
         "me",
         "peer",
         "",
-        &plain_libs::serde_json::json!({"type":"FILES","extra":"preserved","value":{"items":[
-            {"id":"a","uri":"fsid:remote-a","fileName":"../../a.txt","size":3},
-            {"id":"b","uri":"fsid:remote-b","fileName":"b.txt","size":3}
-        ]}})
+        &plain_libs::serde_json::json!({"type":"MESSAGE","extra":"preserved","value":{"format":"PLAIN","items":[{"type":"FILE","attachment":{"id":"a","uri":"fsid:remote-a","fileName":"../../a.txt","size":3}},{"type":"FILE","attachment":{"id":"b","uri":"fsid:remote-b","fileName":"b.txt","size":3}}]}})
         .to_string(),
     );
     chat.id = "message".into();
@@ -53,7 +50,7 @@ fn concurrent_attachments_preserve_current_content_and_count_references() {
             .as_array()
             .unwrap()
             .iter()
-            .all(|v| v["uri"] == format!("fid:{}", first.fid_suffix))
+            .all(|v| v["attachment"]["uri"] == format!("fid:{}", first.fid_suffix))
     );
     assert!(imports.finish(&db, &dir, &a.token).is_err());
     assert!(!Path::new(&a.path).exists());
@@ -96,7 +93,7 @@ fn changed_deleted_and_incomplete_attachments_cannot_commit() {
         )
         .unwrap();
         if mode == "changed" {
-            db.with_conn(|c|c.execute("UPDATE chats SET content=json_set(content,'$.value.items[0].uri','fsid:new') WHERE id='message'",[])).unwrap();
+            db.with_conn(|c|c.execute("UPDATE chats SET content=json_set(content,'$.value.items[0].attachment.uri','fsid:new') WHERE id='message'",[])).unwrap();
         }
         if mode == "deleted" {
             db.with_conn(|c| c.execute("DELETE FROM chats WHERE id='message'", []))

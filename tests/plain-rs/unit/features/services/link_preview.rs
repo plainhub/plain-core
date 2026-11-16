@@ -9,6 +9,7 @@ use plain_libs::axum::{
 };
 async fn fixture_server() -> (std::net::SocketAddr, tokio::task::JoinHandle<()>) {
     let server=Router::new().route("/",get(||async{Html("<meta property='og:title' content='Fixture title'><meta property='og:description' content='Fixture description'><meta property='og:image' content='/favicon.png'>")}))
+        .route("/missing-image",get(||async{Html("<title>Missing image</title><meta property='og:image' content='/missing.png'>")}))
         .route("/favicon.png",get(||async{Response::builder().header(header::CONTENT_TYPE,"image/png").body(Body::from(plain_libs::utils::base64::base64_decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lYUAAAAASUVORK5CYII="))).unwrap()}))
         .route("/chunked",get(||async{Response::builder().header(header::CONTENT_TYPE,"text/html").body(Body::from_stream(futures_util::stream::iter((0..4).map(|_|Ok::<_,std::io::Error>(vec![b'x';16]))))).unwrap()}));
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -29,11 +30,12 @@ async fn html_image_fetch_and_atomic_message_commit_use_same_rust_pipeline() {
     let url = format!("http://fixture.example:{}/", addr.port());
     let dir = plain_libs::temporary::tempdir().unwrap();
     let db = Db::open(&dir.path().join("plain.db")).unwrap();
+    let attachment = json!({"type":"FILE","attachment":{"id":"attachment","uri":"fsid:fixture","size":1}});
     let mut row = crate::infrastructure::db::DChat::new(
         "me",
         "local",
         "",
-        &json!({"type":"TEXT","value":{"text":url}}).to_string(),
+        &json!({"type":"MESSAGE","value":{"format":"PLAIN","items":[attachment.clone()],"text":url}}).to_string(),
     );
     row.id = "message".into();
     db.insert_chat(&row);
@@ -42,11 +44,22 @@ async fn html_image_fetch_and_atomic_message_commit_use_same_rust_pipeline() {
         .unwrap()
         .unwrap();
     let content: Value = plain_libs::serde_json::from_str(&row.content).unwrap();
+    assert_eq!(content["value"]["items"], json!([attachment]));
+    let mut markdown = row.clone();
+    markdown.id = "markdown".into();
+    let mut markdown_content = content.clone();
+    markdown_content["value"]["format"] = json!("MARKDOWN");
+    markdown_content["value"].as_object_mut().unwrap().remove("linkPreviews");
+    markdown.content = markdown_content.to_string();
+    db.insert_chat(&markdown).unwrap();
+    assert!(refresh_with(&db, dir.path(), &markdown.id, &client).await.unwrap().is_none());
     let preview = &content["value"]["linkPreviews"][0];
     assert_eq!(preview["title"], "Fixture title");
     assert_eq!(preview["description"], "Fixture description");
+    assert!(preview.get("imageUrl").is_none());
+    assert!(preview.get("imageLocalPath").is_none());
     assert_eq!(preview["imageWidth"], 1);
-    let hash = preview["imageLocalPath"]
+    let hash = preview["image"]
         .as_str()
         .unwrap()
         .strip_prefix("fid:")
@@ -68,6 +81,18 @@ async fn html_image_fetch_and_atomic_message_commit_use_same_rust_pipeline() {
             .unwrap()
             .is_none()
     );
+    let missing_url = format!("http://fixture.example:{}/missing-image", addr.port());
+    let missing = crate::infrastructure::db::DChat::new("me", "local", "", &json!({
+        "type":"MESSAGE","value":{"format":"PLAIN","items":[],"text":missing_url}
+    }).to_string());
+    db.insert_chat(&missing).unwrap();
+    let missing = refresh_with(&db, dir.path(), &missing.id, &client).await.unwrap().unwrap();
+    let missing: Value = plain_libs::serde_json::from_str(&missing.content).unwrap();
+    let no_image = &missing["value"]["linkPreviews"][0];
+    assert_eq!(no_image["title"], "Missing image");
+    assert_eq!(no_image["image"], Value::Null);
+    assert!(no_image.get("imageUrl").is_none());
+    assert!(no_image.get("imageLocalPath").is_none());
     edit(&db, dir.path(), "message", "plain text").unwrap();
     assert!(db.app_file_get(hash).unwrap().is_none());
     server.abort();

@@ -34,22 +34,22 @@ pub(crate) fn commit(
             let mut content:Value=plain_libs::serde_json::from_str(&row.content)?;
             match selection {
                 Selection::Attachment{id,original_uri,..}=>{
-                    if !matches!(content["type"].as_str(),Some("IMAGES"|"FILES")) {bail!("Message has no attachments");}
+                    if content["type"]!="MESSAGE" {bail!("Message has no attachments");}
                     let items=content["value"]["items"].as_array_mut().ok_or_else(||plain_libs::anyhow::anyhow!("Invalid attachment items"))?;
                     references=0;
-                    for item in items.iter_mut().filter(|item|item["id"].as_str()==Some(id) && item["uri"].as_str()==Some(original_uri)) {
+                    for item in items.iter_mut().map(|item| &mut item["attachment"]).filter(|item|item["id"].as_str()==Some(id) && item["uri"].as_str()==Some(original_uri)) {
                         if item["size"].as_i64()!=Some(file.size_bytes) {bail!("Incomplete attachment download");}
                         item["uri"]=Value::String(format!("fid:{suffix}"));references+=1;
                     }
                     if references==0 {bail!("Attachment changed or unavailable");}
                 },
                 Selection::LinkPreview{text,preview,..}=>{
-                    if content["type"]!="TEXT" || content["value"]["text"].as_str()!=Some(text) {bail!("Preview message changed");}
+                    if crate::features::chat::messages::content::plain_text(&content)!=Some(text) {bail!("Preview message changed");}
                     let mut preview=preview.clone();
                     let url=preview["url"].as_str().ok_or_else(||plain_libs::anyhow::anyhow!("Preview URL unavailable"))?;
                     let mut previews=content["value"]["linkPreviews"].as_array().cloned().unwrap_or_default();
                     if previews.iter().any(|value|value["url"].as_str()==Some(url)){bail!("Preview already committed");}
-                    preview["imageLocalPath"]=Value::String(format!("fid:{suffix}"));
+                    preview["image"]=Value::String(format!("fid:{suffix}"));
                     previews.push(preview);content["value"]["linkPreviews"]=Value::Array(previews);
                 },
             }

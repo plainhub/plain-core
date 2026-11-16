@@ -19,8 +19,8 @@ async fn both_attachment_kinds_recheck_message_peer_and_uri_before_execution() {
         crate::features::chat::enums::DeviceType::Phone,
     );
     chat_store::peers::save(&state.db, &[peer], SaveMode::Insert).unwrap();
-    for kind in ["FILES", "IMAGES"] {
-        let row = DChat::new("peer", "me", "", &json!({"type": kind, "value": {"items": [{"id": "file", "uri": "fsid:remote", "fileName": "fixture.bin", "size": 3}]}}).to_string());
+    for kind in ["FILE", "IMAGE"] {
+        let row = DChat::new("peer", "me", "", &json!({"type":"MESSAGE","value":{"format":"PLAIN","items":[{"type":kind,"attachment":{"id": "file", "uri": "fsid:remote", "fileName": "fixture.bin", "size": 3}}]}}).to_string());
         state.db.insert_chat(&row).unwrap();
         assert_eq!(
             files(&state, &row.id, "peer", &["file".into()], &HashMap::new())
@@ -54,7 +54,7 @@ async fn both_attachment_kinds_recheck_message_peer_and_uri_before_execution() {
                 .is_err()
             );
         }
-        let changed = DChat { content: json!({"type":kind,"value":{"items":[{"id":"file","uri":"fid:local","fileName":"fixture.bin","size":3}]}}).to_string(), ..row.clone() };
+        let changed = DChat { content: json!({"type":"MESSAGE","value":{"format":"PLAIN","items":[{"type":kind,"attachment":{"id":"file","uri":"fid:local","fileName":"fixture.bin","size":3}}]}}).to_string(), ..row.clone() };
         chat_store::messages::save(&state.db, &[changed], SaveMode::Update).unwrap();
         assert!(files(&state, &row.id, "peer", &["file".into()], &HashMap::new()).is_err());
     }
@@ -75,8 +75,8 @@ async fn incoming_files_and_images_preserve_independent_attachment_tasks() {
         crate::features::chat::enums::DeviceType::Phone,
     );
     chat_store::peers::save(&state.db, &[peer], SaveMode::Insert).unwrap();
-    for kind in ["FILES", "IMAGES"] {
-        let row = DChat::new("peer", "me", "", &json!({"type":kind,"value":{"items":[{"id":"first","uri":"fsid:one","fileName":"one.bin","size":1},{"id":"second","uri":"fsid:two","fileName":"two.bin","size":2}]}}).to_string());
+    for kind in ["FILE", "IMAGE"] {
+        let row = DChat::new("peer", "me", "", &json!({"type":"MESSAGE","value":{"format":"PLAIN","items":[{"type":kind,"attachment":{"id":"first","uri":"fsid:one","fileName":"one.bin","size":1}},{"type":kind,"attachment":{"id":"second","uri":"fsid:two","fileName":"two.bin","size":2}}]}}).to_string());
         state.db.insert_chat(&row).unwrap();
         received(&state, &row, "peer").await.unwrap();
         received(&state, &row, "peer").await.unwrap();
@@ -114,7 +114,7 @@ async fn incoming_files_and_images_preserve_independent_attachment_tasks() {
 
 #[tokio::test]
 async fn queued_chat_sources_cannot_be_replaced_before_execution() {
-    for kind in ["FILES", "IMAGES"] {
+    for kind in ["FILE", "IMAGE"] {
         for changed in ["uri", "size", "peer"] {
             let directory = plain_libs::temporary::tempdir().unwrap();
             let core = crate::test_runtime::Core::open(directory.path()).unwrap();
@@ -128,7 +128,7 @@ async fn queued_chat_sources_cannot_be_replaced_before_execution() {
             );
             peer.public_key = "original".into();
             chat_store::peers::save(&state.db, &[peer.clone()], SaveMode::Insert).unwrap();
-            let mut content = json!({"type":kind,"value":{"items":[{"id":"file","uri":"fsid:original","fileName":"fixture.bin","size":3}]}});
+            let mut content = json!({"type":"MESSAGE","value":{"format":"PLAIN","items":[{"type":kind,"attachment":{"id":"file","uri":"fsid:original","fileName":"fixture.bin","size":3}}]}});
             let mut row = DChat::new("peer", "me", "", &content.to_string());
             state.db.insert_chat(&row).unwrap();
             let mut creation = Box::pin(super::super::create(
@@ -151,7 +151,7 @@ async fn queued_chat_sources_cannot_be_replaced_before_execution() {
                     chat_store::peers::save(&state.db, &[peer], SaveMode::Update).unwrap();
                 }
                 field => {
-                    content["value"]["items"][0][field] = if field == "uri" {
+                    content["value"]["items"][0]["attachment"][field] = if field == "uri" {
                         json!("fsid:replacement")
                     } else {
                         json!(4)

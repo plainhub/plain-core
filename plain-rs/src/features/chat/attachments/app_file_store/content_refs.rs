@@ -6,24 +6,18 @@ use std::{
     fs,
     path::{Path, PathBuf},
 };
+const USED_REFS: &str = "SELECT count(*) FROM chats c,json_tree(c.content) j WHERE j.type='text' AND json_extract(c.content,'$.type')='MESSAGE' AND ((j.key='uri' AND j.path GLOB '$.value.items[[]*].attachment') OR (j.key='image' AND j.path GLOB '$.value.linkPreviews[[]*]')) AND substr(j.atom,1,4)='fid:' AND (CASE WHEN instr(substr(j.atom,5),'.')=0 THEN substr(j.atom,5) ELSE substr(j.atom,5,instr(substr(j.atom,5),'.')-1) END)=?1";
 pub fn collect(content: &Value) -> BTreeMap<String, i64> {
     let mut refs = BTreeMap::new();
-    let uris: Vec<&str> = match content["type"].as_str() {
-        Some("FILES" | "IMAGES") => content["value"]["items"]
-            .as_array()
-            .into_iter()
-            .flatten()
-            .filter_map(|v| v["uri"].as_str())
-            .collect(),
-        Some("TEXT") => content["value"]["linkPreviews"]
-            .as_array()
-            .into_iter()
-            .flatten()
-            .filter_map(|v| v["imageLocalPath"].as_str())
-            .collect(),
-        _ => Vec::new(),
-    };
-    for uri in uris {
+    if content["type"] != "MESSAGE" {
+        return refs;
+    }
+    let value = &content["value"];
+    let attachments = value["items"].as_array().into_iter().flatten()
+        .filter_map(|item| item["attachment"]["uri"].as_str());
+    let previews = value["linkPreviews"].as_array().into_iter().flatten()
+        .filter_map(|preview| preview["image"].as_str());
+    for uri in attachments.chain(previews) {
         if let Some(suffix) = uri.strip_prefix("fid:") {
             let id = suffix.split('.').next().unwrap_or_default();
             if !id.is_empty() {
@@ -41,7 +35,7 @@ pub fn claim(tx: &Transaction<'_>, additions: BTreeMap<String, i64>) -> Result<(
             })
             .optional()?
             .ok_or_else(|| plain_libs::anyhow::anyhow!("Unknown app file reference"))?;
-        let used: i64 = tx.query_row("SELECT count(*) FROM chats c,json_tree(c.content) j WHERE j.type='text' AND ((json_extract(c.content,'$.type') IN ('FILES','IMAGES') AND j.key='uri' AND j.path LIKE '$.value.items[%]') OR (json_extract(c.content,'$.type')='TEXT' AND j.key='imageLocalPath' AND j.path LIKE '$.value.linkPreviews[%]')) AND substr(j.atom,1,4)='fid:' AND (CASE WHEN instr(substr(j.atom,5),'.')=0 THEN substr(j.atom,5) ELSE substr(j.atom,5,instr(substr(j.atom,5),'.')-1) END)=?1",[&id],|r|r.get(0))?;
+        let used: i64 = tx.query_row(USED_REFS,[&id],|r|r.get(0))?;
         let reserved = refs
             .checked_sub(used)
             .filter(|n| *n >= 0)
@@ -149,7 +143,7 @@ pub fn release_unbound(
         for (id,count) in imports {
             let refs: Option<i64>=tx.query_row("SELECT ref_count FROM app_files WHERE id=?1",[&id],|r|r.get(0)).optional()?;
             let Some(refs)=refs else { continue };
-            let used:i64=tx.query_row("SELECT count(*) FROM chats c,json_tree(c.content) j WHERE j.type='text' AND ((json_extract(c.content,'$.type') IN ('FILES','IMAGES') AND j.key='uri' AND j.path LIKE '$.value.items[%]') OR (json_extract(c.content,'$.type')='TEXT' AND j.key='imageLocalPath' AND j.path LIKE '$.value.linkPreviews[%]')) AND substr(j.atom,1,4)='fid:' AND (CASE WHEN instr(substr(j.atom,5),'.')=0 THEN substr(j.atom,5) ELSE substr(j.atom,5,instr(substr(j.atom,5),'.')-1) END)=?1",[&id],|r|r.get(0))?;
+            let used:i64=tx.query_row(USED_REFS,[&id],|r|r.get(0))?;
             let count=count.min(refs.saturating_sub(used)).max(0);
             if count>0 { releases.insert(id,count); }
         }

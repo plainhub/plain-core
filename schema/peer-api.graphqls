@@ -18,20 +18,17 @@ type ChatAttachment {
 	fileName: String!
 }
 
-union ChatContent = ChatTextContent | ChatImagesContent | ChatFilesContent | ChatShareContent
+enum ChatAttachmentType {
+	IMAGE
+	FILE
+}
+
+union ChatContent = ChatMessageContent | ChatShareContent
 
 type ChatDeliveryResult {
 	peerId: ID!
 	peerName: String!
 	error: String
-}
-
-type ChatFilesContent {
-	items: [ChatAttachment!]!
-}
-
-type ChatImagesContent {
-	items: [ChatAttachment!]!
 }
 
 type ChatItem {
@@ -62,13 +59,24 @@ type ChatLinkPreview {
 	url: String!
 	title: String
 	description: String
-	imageUrl: String
-	imageLocalPath: String
+	image: String
 	imageWidth: Int!
 	imageHeight: Int!
 	siteName: String
 	domain: String
 	createdAt: Instant!
+}
+
+type ChatMessageAttachment {
+	type: ChatAttachmentType!
+	attachment: ChatAttachment!
+}
+
+type ChatMessageContent {
+	text: String
+	format: ChatTextFormat!
+	items: [ChatMessageAttachment!]!
+	linkPreviews: [ChatLinkPreview!]!
 }
 
 type ChatShareContent {
@@ -94,9 +102,9 @@ enum ChatStatus {
 	PENDING
 }
 
-type ChatTextContent {
-	text: String!
-	linkPreviews: [ChatLinkPreview!]!
+enum ChatTextFormat {
+	PLAIN
+	MARKDOWN
 }
 
 scalar Instant

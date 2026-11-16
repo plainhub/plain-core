@@ -79,6 +79,9 @@ pub struct Edit {
 pub fn edit(db: &Db, directory: &Path, id: &str, text: &str) -> Result<Edit> {
     let _files = db.app_files_lock()?;
     let mut staged = Vec::new();
+    if text.trim().is_empty() {
+        bail!("Chat text must not be blank");
+    }
     let result = db.with_conn(|conn| -> Result<Edit> {
         let tx = conn.unchecked_transaction()?;
         let mut row = tx
@@ -90,10 +93,10 @@ pub fn edit(db: &Db, directory: &Path, id: &str, text: &str) -> Result<Edit> {
             .optional()?
             .ok_or_else(|| plain_libs::anyhow::anyhow!("Message unavailable"))?;
         let old: Value = plain_libs::serde_json::from_str(&row.content)?;
-        if old["type"] != "TEXT" {
+        if old["type"] != "MESSAGE" || !old["value"]["text"].is_string() {
             bail!("Message is not text");
         }
-        let urls = extract_urls(text);
+        let urls = if old["value"]["format"] == "PLAIN" { extract_urls(text) } else { Vec::new() };
         let mut content = old.clone();
         content["value"]["text"] = Value::String(text.into());
         let previews = old["value"]["linkPreviews"]
@@ -156,7 +159,7 @@ pub fn append(db: &Db, id: &str, text: &str, preview: &Value) -> Result<Option<D
             return Ok(None);
         };
         let mut content: Value = plain_libs::serde_json::from_str(&row.content)?;
-        if content["type"] != "TEXT" || content["value"]["text"].as_str() != Some(text) {
+        if crate::features::chat::messages::content::plain_text(&content) != Some(text) {
             return Ok(None);
         }
         let mut previews = content["value"]["linkPreviews"]

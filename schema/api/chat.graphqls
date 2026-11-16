@@ -20,12 +20,15 @@ input ChatAttachmentInput {
 	fileName: String! = ""
 }
 
-union ChatContent = ChatTextContent | ChatImagesContent | ChatFilesContent | ChatShareContent
+enum ChatAttachmentType {
+	IMAGE
+	FILE
+}
+
+union ChatContent = ChatMessageContent | ChatShareContent
 
 input ChatContentInput @oneOf {
-	text: ChatTextInput
-	images: ChatImagesInput
-	files: ChatFilesInput
+	message: ChatMessageInput
 	share: ChatShareInput
 }
 
@@ -38,22 +41,6 @@ type ChatDeliveryResult {
 	peerId: ID!
 	peerName: String!
 	error: String
-}
-
-type ChatFilesContent {
-	items: [ChatAttachment!]!
-}
-
-input ChatFilesInput {
-	items: [ChatAttachmentInput!]!
-}
-
-type ChatImagesContent {
-	items: [ChatAttachment!]!
-}
-
-input ChatImagesInput {
-	items: [ChatAttachmentInput!]!
 }
 
 type ChatItem {
@@ -84,8 +71,7 @@ type ChatLinkPreview {
 	url: String!
 	title: String
 	description: String
-	imageUrl: String
-	imageLocalPath: String
+	image: String
 	imageWidth: Int!
 	imageHeight: Int!
 	siteName: String
@@ -93,17 +79,27 @@ type ChatLinkPreview {
 	createdAt: Instant!
 }
 
-input ChatLinkPreviewInput {
-	url: String!
-	title: String
-	description: String
-	imageUrl: String
-	imageLocalPath: String
-	imageWidth: Int! = 0
-	imageHeight: Int! = 0
-	siteName: String
-	domain: String
-	createdAt: Instant!
+type ChatMessageAttachment {
+	type: ChatAttachmentType!
+	attachment: ChatAttachment!
+}
+
+input ChatMessageAttachmentInput {
+	type: ChatAttachmentType!
+	attachment: ChatAttachmentInput!
+}
+
+type ChatMessageContent {
+	text: String
+	format: ChatTextFormat!
+	items: [ChatMessageAttachment!]!
+	linkPreviews: [ChatLinkPreview!]!
+}
+
+input ChatMessageInput {
+	text: String
+	format: ChatTextFormat! = PLAIN
+	items: [ChatMessageAttachmentInput!]! = []
 }
 
 type ChatShareContent {
@@ -145,19 +141,14 @@ enum ChatStatus {
 	PENDING
 }
 
-type ChatTextContent {
-	text: String!
-	linkPreviews: [ChatLinkPreview!]!
-}
-
 type ChatTextEdit {
 	changed: Boolean!
 	chat: ChatItem!
 }
 
-input ChatTextInput {
-	text: String!
-	linkPreviews: [ChatLinkPreviewInput!]! = []
+enum ChatTextFormat {
+	PLAIN
+	MARKDOWN
 }
 
 extend type Mutation {

@@ -5,7 +5,7 @@ async fn peer_targets_require_prefix_before_effects() {
     let dir = plain_libs::temporary::tempdir().unwrap();
     let server = server(dir.path());
     let state = server.runtime_state();
-    let content = json!({"type":"TEXT","value":{"text":"fixture"}}).to_string();
+    let content = json!({"type":"MESSAGE","value":{"format":"PLAIN","items":[],"text":"fixture"}}).to_string();
     let source = execute(&server, format!(
         "mutation {{ sendChatItems(targets:[\"peer:local\"],content:{}) {{id}} }}", content_input(&content)
     )).await;

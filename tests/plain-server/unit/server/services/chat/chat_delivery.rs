@@ -39,7 +39,7 @@ async fn explicit_message_retry_root_probes_open_transport_and_sends_original_ro
         plain_rs::infrastructure::db::chat_store::SaveMode::Insert,
     )
     .unwrap();
-    let content = json!({"type":"TEXT","value":{"text":"explicit retry fixture"}}).to_string();
+    let content = json!({"type":"MESSAGE","value":{"format":"PLAIN","items":[],"text":"explicit retry fixture"}}).to_string();
     let mut original = plain_rs::infrastructure::db::DChat::new("me", "fixture", "", &content);
     original.id = "retry-native".into();
     original.status = ChatStatus::Failed;

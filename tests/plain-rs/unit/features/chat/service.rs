@@ -52,14 +52,14 @@ async fn send_chat_item_requires_prefixed_peer_and_local_targets() {
 
     for target in ["peer-id", "local", "unknown:id", "peer:", "channel:"] {
         assert!(service
-            .send_chat_item(target.into(), r#"{"type":"TEXT","value":{"text":"fixture"}}"#.into())
+            .send_chat_item(target.into(), r#"{"type":"MESSAGE","value":{"format":"PLAIN","items":[],"text":"fixture"}}"#.into())
             .is_err());
         assert!(service.db.get_all_chats().is_empty());
     }
     let peer = service
         .send_chat_item(
             "peer:peer-id".to_string(),
-            r#"{"type":"TEXT","value":{"text":"fixture"}}"#.to_string(),
+            r#"{"type":"MESSAGE","value":{"format":"PLAIN","items":[],"text":"fixture"}}"#.to_string(),
         )
         .unwrap();
     assert_eq!(peer[0].to_id, "peer-id");
@@ -68,7 +68,7 @@ async fn send_chat_item_requires_prefixed_peer_and_local_targets() {
     let local = service
         .send_chat_item(
             "peer:local".to_string(),
-            r#"{"type":"TEXT","value":{"text":"fixture"}}"#.to_string(),
+            r#"{"type":"MESSAGE","value":{"format":"PLAIN","items":[],"text":"fixture"}}"#.to_string(),
         )
         .unwrap();
     assert_eq!(local[0].to_id, "local");
@@ -217,7 +217,7 @@ async fn unpaired_peer_send_fails_and_local_cache_tracks_deletion() {
     let sent = service
         .send_chat_item(
             "peer:peer".to_string(),
-            r#"{"type":"TEXT","value":{"text":"fixture"}}"#.to_string(),
+            r#"{"type":"MESSAGE","value":{"format":"PLAIN","items":[],"text":"fixture"}}"#.to_string(),
         )
         .unwrap();
     let created = tokio::time::timeout(std::time::Duration::from_secs(2), events.recv())
@@ -244,7 +244,7 @@ async fn unpaired_peer_send_fails_and_local_cache_tracks_deletion() {
     let local = service
         .send_chat_item(
             "peer:local".to_string(),
-            r#"{"type":"TEXT","value":{"text":"fixture"}}"#.to_string(),
+            r#"{"type":"MESSAGE","value":{"format":"PLAIN","items":[],"text":"fixture"}}"#.to_string(),
         )
         .unwrap();
     assert_eq!(

@@ -172,45 +172,29 @@ async fn fetch_link_preview(client: &http_client::Client, url: &str) -> (Value, 
         &html,
         "<meta[^>]+property=[\"']og:image[\"'][^>]+content=[\"']([^\"']+)[\"']",
     );
-    let mut image_url = og_image.as_deref().map(|u| resolve_url(url, u.trim()));
-    if image_url.is_none() {
-        image_url = extract_favicon(&html, url);
-    }
-    if image_url.is_none() {
-        image_url = http_client::Url::parse(url)
-            .ok()
-            .filter(|u| !u.host_str().unwrap_or("").is_empty())
-            .map(|u| {
-                format!(
-                    "{}://{}/favicon.ico",
-                    u.scheme(),
-                    u.host_str().unwrap_or("")
-                )
-            });
-    }
-
-    let mut image: Option<Image> = None;
-    let mut image_width = 0;
-    let mut image_height = 0;
-    if let Some(active_url) = image_url.as_deref()
-        && is_valid_url(active_url)
-    {
-        let (downloaded, w, h) = download_image_with_size(client, active_url).await;
-        image = downloaded;
-        image_width = w;
-        image_height = h;
-        if image.is_none() && active_url.ends_with("/favicon.ico") {
-            image_url = None;
-        }
-    }
+    let image_url = og_image
+        .as_deref()
+        .map(|u| resolve_url(url, u.trim()))
+        .or_else(|| extract_favicon(&html, url))
+        .or_else(|| {
+            http_client::Url::parse(url)
+                .ok()
+                .filter(|u| !u.host_str().unwrap_or("").is_empty())
+                .map(|u| format!("{}://{}/favicon.ico", u.scheme(), u.host_str().unwrap_or("")))
+        });
+    let (image, image_width, image_height) =
+        if let Some(active_url) = image_url.as_deref().filter(|u| is_valid_url(u)) {
+            download_image_with_size(client, active_url).await
+        } else {
+            (None, 0, 0)
+        };
 
     (
         json!({
             "url": url,
             "title": title.and_then(|t| optional(&t).map(|s| s.chars().take(200).collect::<String>())),
             "description": description.and_then(|d| optional(&d).map(|s| s.chars().take(300).collect::<String>())),
-            "imageUrl": image_url.and_then(|u| optional(&u)),
-            "imageLocalPath": Value::Null,
+            "image": Value::Null,
             "imageWidth": image_width,
             "imageHeight": image_height,
             "siteName": site_name.and_then(|s| optional(&s).map(|v| v.chars().take(100).collect::<String>())),
@@ -281,7 +265,7 @@ async fn download_image_with_size(
         || image_url.contains("icon")
         || (w < 200 && h < 200 && w > 16 && h > 16);
     if (w < 100 || h < 100) && !is_favicon {
-        return (None, w, h);
+        return (None, 0, 0);
     }
     (
         Some(Image {
@@ -327,12 +311,9 @@ async fn refresh_with(
         return Ok(None);
     };
     let content: Value = plain_libs::serde_json::from_str(&row.content)?;
-    if content["type"] != "TEXT" {
+    let Some(text) = crate::features::chat::messages::content::plain_text(&content) else {
         return Ok(None);
     };
-    let text = content["value"]["text"]
-        .as_str()
-        .ok_or_else(|| plain_libs::anyhow::anyhow!("Invalid text message"))?;
     let existing = content["value"]["linkPreviews"]
         .as_array()
         .into_iter()

@@ -12,7 +12,33 @@ fn server(path: &std::path::Path) -> ContentServer {
     )
     .unwrap()
 }
-const SEND: &str = "mutation($content:ChatContentInput!){sendChatItems(targets:[\"peer:local\"],content:$content){id status content{... on ChatTextContent{__typename text} ... on ChatImagesContent{__typename items{id size durationMs}} ... on ChatFilesContent{__typename items{id size durationMs}} ... on ChatShareContent{__typename shareId}} deliveryResults{peerId peerName error}}}";
+const SEND: &str = "mutation($content:ChatContentInput!){sendChatItems(targets:[\"peer:local\"],content:$content){id status content{... on ChatMessageContent{__typename text format items{type attachment{id size durationMs}}} ... on ChatShareContent{__typename shareId}} deliveryResults{peerId peerName error}}}";
+
+#[tokio::test]
+async fn mixed_message_accepts_markdown_and_preserves_attachment_order() {
+    let dir = plain_libs::temporary::tempdir().unwrap();
+    let server = server(dir.path());
+    let response = server.graphql_executor().execute(Request::new(
+        r#"mutation { sendChatItems(targets:["peer:local"], content:{message:{
+            text:"**caption**", format:MARKDOWN, items:[
+                {type:IMAGE, attachment:{id:"image",uri:"image.png",size:2}},
+                {type:FILE, attachment:{id:"file",uri:"file.txt",size:3}}
+            ]
+        }}) { id content { ... on ChatMessageContent { text format items { type attachment { id } } } } } }"#
+    )).await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    let data = response.data.into_json().unwrap();
+    let item = &data["sendChatItems"][0];
+    assert_eq!(item["content"], json!({"text":"**caption**","format":"MARKDOWN","items":[
+        {"type":"IMAGE","attachment":{"id":"image"}},
+        {"type":"FILE","attachment":{"id":"file"}}
+    ]}));
+    let row = server.runtime_state().db.get_chat_by_id(item["id"].as_str().unwrap()).unwrap();
+    let saved: Value = plain_libs::serde_json::from_str(&row.content).unwrap();
+    assert_eq!(saved["type"], "MESSAGE");
+    assert_eq!(saved["value"]["text"], "**caption**");
+    server.shutdown().await;
+}
 
 #[tokio::test]
 async fn typed_content_roundtrips_all_kinds_without_changing_stored_envelopes() {
@@ -31,13 +57,8 @@ async fn typed_content_roundtrips_all_kinds_without_changing_stored_envelopes() 
     assert!(item.contains("deliveryResults: [ChatDeliveryResult!]!"));
     assert!(!item.contains("statusData"));
     for (input, kind, typename) in [
-        (json!({"text":{"text":"Hello"}}), "TEXT", "ChatTextContent"),
-        (
-            json!({"images":{"items":[]}}),
-            "IMAGES",
-            "ChatImagesContent",
-        ),
-        (json!({"files":{"items":[]}}), "FILES", "ChatFilesContent"),
+        (json!({"message":{"text":"Hello"}}), "MESSAGE", "ChatMessageContent"),
+        (json!({"message":{"items":[{"type":"FILE","attachment":{"id":"doc","uri":"doc.txt","size":3}}]}}), "MESSAGE", "ChatMessageContent"),
         (
             json!({"share":{"shareId":"share","urlToken":"token","peerInfo":{"id":"peer","ip":"example.org","port":443},"name":"Share","itemCount":0,"totalSize":0}}),
             "SHARE",
@@ -71,17 +92,18 @@ async fn invalid_oneof_and_legacy_string_inputs_are_rejected_before_effects() {
     let server = server(dir.path());
     for input in [
         json!({}),
-        json!({"text":null}),
+        json!({"message":null}),
         json!({"unknown":{"text":"invalid"}}),
-        json!({"text":{"text":"ok"},"files":{"items":[]}}),
-        json!({"text":{"text":42}}),
+        json!({"message":{"text":"ok"},"share":{}}),
+        json!({"message":{"text":42}}),
+        json!({"message":{"text":"  "}}),
+        json!({"message":{"format":"MARKDOWN"}}),
+        json!({"files":{"items":[]}}),
+        json!({"text":{"text":"old"}}),
         json!("{\"type\":\"TEXT\",\"value\":{\"text\":\"legacy\"}}"),
-        json!({"files":{"items":[{"uri":"fixture","size":-1}]}}),
-        json!({"files":{"items":[{"uri":"fixture","size":0}]}}),
-        json!({"files":{"items":[{"id":null,"uri":"fixture","size":0}]}}),
-        json!({"files":{"items":[{"id":false,"uri":"fixture","size":0}]}}),
-        json!({"files":{"items":[{"id":"","uri":"fixture","size":0}]}}),
-        json!({"images":{"items":[{"id":"","uri":"fixture","size":0}]}}),
+        json!({"message":{"items":[{"type":"FILE","attachment":{"id":"","uri":"fixture","size":0}}]}}),
+        json!({"message":{"items":[{"type":"IMAGE","attachment":{"id":"f","uri":"fixture","size":-1}}]}}),
+        json!({"message":{"items":[{"type":"IMAGE","attachment":{"id":"f","uri":"fixture","size":0}},{"type":"FILE","attachment":{"id":"f","uri":"fixture","size":0}}]}}),
     ] {
         let response = server
             .graphql_executor()
@@ -102,7 +124,7 @@ async fn delivery_results_preserve_success_failure_and_empty_information() {
         &db,
         "local",
         "",
-        r#"{"type":"TEXT","value":{"text":"Hello"}}"#,
+        r#"{"type":"MESSAGE","value":{"format":"PLAIN","items":[],"text":"Hello"}}"#,
     )
     .unwrap();
     let results = vec![

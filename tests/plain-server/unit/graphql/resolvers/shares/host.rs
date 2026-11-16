@@ -26,7 +26,7 @@ async fn main_share_content_uses_saved_roots_identity_and_live_port() {
     let id = data["createShare"]["id"].as_str().unwrap();
     let result = executor
         .execute(Request::new(format!(
-            r#"mutation {{ sendShare(shareId:{}, targets:["peer:local"]) {{content {{ ... on ChatTextContent {{ __typename text }} ... on ChatImagesContent {{ __typename items {{ id uri fileName size width height durationMs summary }} }} ... on ChatFilesContent {{ __typename items {{ id uri fileName size width height durationMs summary }} }} ... on ChatShareContent {{ __typename shareId urlToken peerInfo {{ id ip port }} name itemCount totalSize expiresAt }} }}}} }}"#,
+            r#"mutation {{ sendShare(shareId:{}, targets:["peer:local"]) {{content {{ ... on ChatMessageContent {{ __typename text format items {{ type attachment {{ id uri fileName size width height durationMs summary }} }} }} ... on ChatShareContent {{ __typename shareId urlToken peerInfo {{ id ip port }} name itemCount totalSize expiresAt }} }}}} }}"#,
             json!(id)
         )))
         .await;
@@ -77,13 +77,13 @@ async fn main_folder_share_and_batch_chat_use_shared_services_without_host_calls
     std::fs::write(shared.join("file.txt"), b"abc").unwrap();
     let state = server.runtime_state();
     let (_generation, mut requests) = state.host.connect();
-    let result = server.graphql_executor().execute(Request::new(r#"mutation($path:String!){sendFolderShare(targets:["peer:local"],path:$path,name:"Folder"){id content { ... on ChatTextContent { __typename text } ... on ChatImagesContent { __typename items { id uri fileName size width height durationMs summary } } ... on ChatFilesContent { __typename items { id uri fileName size width height durationMs summary } } ... on ChatShareContent { __typename shareId urlToken peerInfo { id ip port } name itemCount totalSize expiresAt } } status}}"#)
+    let result = server.graphql_executor().execute(Request::new(r#"mutation($path:String!){sendFolderShare(targets:["peer:local"],path:$path,name:"Folder"){id content { ... on ChatMessageContent { __typename text format items { type attachment { id uri fileName size width height durationMs summary } } } ... on ChatShareContent { __typename shareId urlToken peerInfo { id ip port } name itemCount totalSize expiresAt } } status}}"#)
         .variables(plain_graphql::Variables::from_json(json!({"path":shared})))).await;
     assert!(result.errors.is_empty(), "{:?}", result.errors);
     let data = result.data.into_json().unwrap();
     assert_eq!(data["sendFolderShare"][0]["status"], "SENT");
     let share = state.db.share_list().unwrap().pop().unwrap();
-    let result = server.graphql_executor().execute(Request::new(r#"mutation($id:ID!){sendShare(targets:["peer:local","peer:local"],shareId:$id){id content { ... on ChatTextContent { __typename text } ... on ChatImagesContent { __typename items { id uri fileName size width height durationMs summary } } ... on ChatFilesContent { __typename items { id uri fileName size width height durationMs summary } } ... on ChatShareContent { __typename shareId urlToken peerInfo { id ip port } name itemCount totalSize expiresAt } } status}}"#)
+    let result = server.graphql_executor().execute(Request::new(r#"mutation($id:ID!){sendShare(targets:["peer:local","peer:local"],shareId:$id){id content { ... on ChatMessageContent { __typename text format items { type attachment { id uri fileName size width height durationMs summary } } } ... on ChatShareContent { __typename shareId urlToken peerInfo { id ip port } name itemCount totalSize expiresAt } } status}}"#)
         .variables(plain_graphql::Variables::from_json(json!({"id":share.id})))).await;
     assert!(result.errors.is_empty(), "{:?}", result.errors);
     assert_eq!(
@@ -94,7 +94,7 @@ async fn main_folder_share_and_batch_chat_use_shared_services_without_host_calls
         2
     );
     let result = server.graphql_executor().execute(Request::new(r#"mutation($content:ChatContentInput!){sendChatItems(targets:["peer:local","peer:local"],content:$content){id status}}"#)
-        .variables(plain_graphql::Variables::from_json(json!({"content":{"text":{"text":"Hello"}}})))).await;
+        .variables(plain_graphql::Variables::from_json(json!({"content":{"message":{"text":"Hello"}}})))).await;
     assert!(result.errors.is_empty(), "{:?}", result.errors);
     assert_eq!(
         result.data.into_json().unwrap()["sendChatItems"]

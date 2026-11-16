@@ -245,8 +245,7 @@ fn seed_named_chat(db: &Db, at: &str, uri: &str, name: &str) {
         "peer1",
         "",
         &plain_libs::serde_json::json!({
-            "type": "FILES",
-            "value": { "items": [ {"uri": uri, "fileName": name, "size": 0} ] }
+            "type":"MESSAGE","value":{"format":"PLAIN","items":[{"type":"FILE","attachment":{"uri": uri, "fileName": name, "size": 0}}] }
         })
         .to_string(),
     );

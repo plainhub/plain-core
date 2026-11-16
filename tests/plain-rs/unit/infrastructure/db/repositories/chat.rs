@@ -72,7 +72,7 @@ fn get_chats_page_resolves_peer_and_channel_targets() {
         "me",
         "peer1",
         "",
-        r#"{"type":"TEXT","value":{"text":"hello world"}}"#,
+        r#"{"type":"MESSAGE","value":{"format":"PLAIN","items":[],"text":"hello world"}}"#,
     );
     chat.id = "x".to_string();
     db2.insert_chat(&chat);

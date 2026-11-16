@@ -25,7 +25,7 @@
 mod attachment_commit;
 pub mod chat_deletion;
 pub(crate) mod content_refs;
-pub use content_refs::{collect as content_reference_ids, release_unbound};
+pub use content_refs::release_unbound;
 
 use std::fs;
 use std::io::{Read, Seek};
@@ -436,7 +436,8 @@ pub fn file_name_map(chats: &[DChat]) -> HashMap<String, String> {
         else {
             continue;
         };
-        for item in items {
+        for entry in items {
+            let item = &entry["attachment"];
             let (Some(uri), Some(name)) = (
                 item.get("uri").and_then(|u| u.as_str()),
                 item.get("fileName").and_then(|n| n.as_str()),

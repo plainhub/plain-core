@@ -21,7 +21,7 @@ pub(crate) fn files(
     );
     let content: Value = plain_libs::serde_json::from_str(&row.content)?;
     ensure!(
-        matches!(content["type"].as_str(), Some("FILES" | "IMAGES")),
+        content["type"] == "MESSAGE",
         "Message has no attachments"
     );
     let entries = content["value"]["items"]
@@ -31,6 +31,7 @@ pub(crate) fn files(
         .map(|id| {
             let mut matches = entries
                 .iter()
+                .map(|item| &item["attachment"])
                 .filter(|file| file["id"].as_str() == Some(id));
             let value = matches
                 .next()
@@ -60,14 +61,14 @@ pub async fn received(
     peer_id: &str,
 ) -> Result<()> {
     let content: Value = plain_libs::serde_json::from_str(&row.content)?;
-    if !matches!(content["type"].as_str(), Some("FILES" | "IMAGES")) {
+    if content["type"] != "MESSAGE" {
         return Ok(());
     }
     let files = content["value"]["items"]
         .as_array()
         .ok_or_else(|| plain_libs::anyhow::anyhow!("Invalid message attachments"))?;
     for file in files {
-        let Some(id) = file["id"].as_str() else {
+        let Some(id) = file["attachment"]["id"].as_str() else {
             continue;
         };
         if let Err(error) = super::super::create(

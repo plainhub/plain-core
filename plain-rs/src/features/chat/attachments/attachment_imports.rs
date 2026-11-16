@@ -47,7 +47,7 @@ impl Imports {
         let chat =
             chats::get(db, message_id)?.ok_or_else(|| plain_libs::anyhow::anyhow!("Message unavailable"))?;
         let content: Value = plain_libs::serde_json::from_str(&chat.content)?;
-        if !matches!(content["type"].as_str(), Some("FILES" | "IMAGES"))
+        if content["type"] != "MESSAGE"
             || !uri.starts_with("fsid:")
         {
             bail!("Message has no remote attachment");
@@ -55,7 +55,7 @@ impl Imports {
         let item = content["value"]["items"]
             .as_array()
             .and_then(|items| {
-                items.iter().find(|item| {
+                items.iter().map(|item| &item["attachment"]).find(|item| {
                     item["id"].as_str() == Some(id) && item["uri"].as_str() == Some(uri)
                 })
             })

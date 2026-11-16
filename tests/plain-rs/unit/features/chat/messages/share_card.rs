@@ -96,7 +96,7 @@ fn replaced_deleted_and_failed_updates_never_overwrite_or_publish() {
     messages::content(
         &db,
         &row.id,
-        "{\"type\":\"TEXT\",\"value\":{\"text\":\"replacement\"}}",
+        "{\"type\":\"MESSAGE\",\"value\":{\"format\":\"PLAIN\",\"items\":[],\"text\":\"replacement\"}}",
     )
     .unwrap();
     assert!(

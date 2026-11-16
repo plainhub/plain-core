@@ -115,7 +115,10 @@ pub fn receive(
             }
             Some(channel)
         };
-        messages::validate_content(content)?;
+        let parsed = messages::validate_content(content)?;
+        if parsed["type"] == "MESSAGE" && parsed["value"].get("linkPreviews").is_some() {
+            bail!("Peer messages cannot include local link previews");
+        }
         tx.execute("DELETE FROM chat_receipts WHERE sent_at<?1",[crate::infrastructure::db::iso_from_unix_millis(now.saturating_sub(crate::infrastructure::transport::auth::TIMESTAMP_WINDOW_MS as i64))])?;
         if tx.execute("INSERT INTO chat_receipts(receipt_id,peer_id,sent_at) VALUES(?1,?2,?3) ON CONFLICT(receipt_id) DO NOTHING",params![receipt,from_id,crate::infrastructure::db::iso_from_unix_millis(timestamp)])?==0 {tx.commit()?;
             return Ok(None);}

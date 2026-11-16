@@ -3,38 +3,6 @@ use plain_graphql::{ID, InputObject};
 use plain_rs::infrastructure::types::{Instant, Long};
 
 #[derive(InputObject)]
-pub struct ChatLinkPreviewInput {
-    pub url: String,
-    pub title: Option<String>,
-    pub description: Option<String>,
-    pub image_url: Option<String>,
-    pub image_local_path: Option<String>,
-    #[graphql(default)]
-    pub image_width: i32,
-    #[graphql(default)]
-    pub image_height: i32,
-    pub site_name: Option<String>,
-    pub domain: Option<String>,
-    pub created_at: Instant,
-}
-impl From<ChatLinkPreviewInput> for ChatLinkPreview {
-    fn from(value: ChatLinkPreviewInput) -> Self {
-        Self {
-            url: value.url,
-            title: value.title,
-            description: value.description,
-            image_url: value.image_url,
-            image_local_path: value.image_local_path,
-            image_width: value.image_width,
-            image_height: value.image_height,
-            site_name: value.site_name,
-            domain: value.domain,
-            created_at: value.created_at,
-        }
-    }
-}
-
-#[derive(InputObject)]
 pub struct ChatAttachmentInput {
     pub id: ID,
     pub uri: String,
@@ -82,40 +50,35 @@ impl From<ChatSharePeerInput> for ChatSharePeer {
 }
 
 #[derive(InputObject)]
-pub struct ChatTextInput {
-    pub text: String,
-    #[graphql(default)]
-    pub link_previews: Vec<ChatLinkPreviewInput>,
+pub struct ChatMessageAttachmentInput {
+    #[graphql(name = "type")]
+    pub kind: ChatAttachmentType,
+    pub attachment: ChatAttachmentInput,
 }
-impl From<ChatTextInput> for ChatTextContent {
-    fn from(value: ChatTextInput) -> Self {
+
+#[derive(InputObject)]
+pub struct ChatMessageInput {
+    pub text: Option<String>,
+    #[graphql(default)]
+    pub format: ChatTextFormat,
+    #[graphql(default)]
+    pub items: Vec<ChatMessageAttachmentInput>,
+}
+
+impl From<ChatMessageInput> for ChatMessageContent {
+    fn from(value: ChatMessageInput) -> Self {
         Self {
             text: value.text,
-            link_previews: value.link_previews.into_iter().map(Into::into).collect(),
-        }
-    }
-}
-
-#[derive(InputObject)]
-pub struct ChatImagesInput {
-    pub items: Vec<ChatAttachmentInput>,
-}
-impl From<ChatImagesInput> for ChatImagesContent {
-    fn from(value: ChatImagesInput) -> Self {
-        Self {
-            items: value.items.into_iter().map(Into::into).collect(),
-        }
-    }
-}
-
-#[derive(InputObject)]
-pub struct ChatFilesInput {
-    pub items: Vec<ChatAttachmentInput>,
-}
-impl From<ChatFilesInput> for ChatFilesContent {
-    fn from(value: ChatFilesInput) -> Self {
-        Self {
-            items: value.items.into_iter().map(Into::into).collect(),
+            format: value.format,
+            items: value
+                .items
+                .into_iter()
+                .map(|item| ChatMessageAttachment {
+                    kind: item.kind,
+                    attachment: item.attachment.into(),
+                })
+                .collect(),
+            link_previews: Vec::new(),
         }
     }
 }
@@ -149,26 +112,15 @@ impl From<ChatShareInput> for ChatShareContent {
 #[derive(InputObject)]
 #[graphql(oneof)]
 pub struct ChatContentInput {
-    pub text: Option<ChatTextInput>,
-    pub images: Option<ChatImagesInput>,
-    pub files: Option<ChatFilesInput>,
+    pub message: Option<ChatMessageInput>,
     pub share: Option<ChatShareInput>,
 }
+
 impl ChatContentInput {
     pub fn content(self) -> plain_graphql::Result<ChatContent> {
-        let attachments = self
-            .images
-            .as_ref()
-            .map(|value| &value.items)
-            .or_else(|| self.files.as_ref().map(|value| &value.items));
-        if attachments.is_some_and(|items| items.iter().any(|item| item.id.is_empty())) {
-            return Err("Chat attachment id must be a non-empty string".into());
-        }
-        match (self.text, self.images, self.files, self.share) {
-            (Some(value), None, None, None) => Ok(ChatContent::Text(value.into())),
-            (None, Some(value), None, None) => Ok(ChatContent::Images(value.into())),
-            (None, None, Some(value), None) => Ok(ChatContent::Files(value.into())),
-            (None, None, None, Some(value)) => Ok(ChatContent::Share(value.into())),
+        match (self.message, self.share) {
+            (Some(value), None) => Ok(ChatContent::Message(value.into())),
+            (None, Some(value)) => Ok(ChatContent::Share(value.into())),
             _ => Err("Exactly one chat content field required".into()),
         }
     }

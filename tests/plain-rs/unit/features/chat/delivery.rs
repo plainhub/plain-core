@@ -36,13 +36,13 @@ impl PeerTransport for Transport {
         let graphql: Value = plain_libs::serde_json::from_str(&body).unwrap();
         let content: Value =
             plain_libs::serde_json::from_str(graphql["variables"]["content"].as_str().unwrap()).unwrap();
-        assert_eq!(content["type"], "TEXT");
+        assert_eq!(content["type"], "MESSAGE");
         if self.change_content {
             self.db
                 .with_conn(|c| {
                     c.execute(
                         "UPDATE chats SET content=?1 WHERE to_id=?2",
-                        plain_libs::rusqlite::params![r#"{"type":"TEXT","value":{"text":"newer"}}"#, peer.id],
+                        plain_libs::rusqlite::params![r#"{"type":"MESSAGE","value":{"format":"PLAIN","items":[],"text":"newer"}}"#, peer.id],
                     )
                 })
                 .unwrap();
@@ -69,7 +69,7 @@ fn setup() -> (Db, Vec<u8>) {
     }
     (db, plain_libs::crypto::ed25519_generate().0.to_vec())
 }
-const TEXT: &str = r#"{"type":"TEXT","value":{"text":"fixture"}}"#;
+const TEXT: &str = r#"{"type":"MESSAGE","value":{"format":"PLAIN","items":[],"text":"fixture"}}"#;
 
 #[tokio::test]
 async fn attachment_delivery_uses_runtime_credentials_without_a_session_row() {
@@ -86,7 +86,7 @@ async fn attachment_delivery_uses_runtime_credentials_without_a_session_row() {
             self.calls.fetch_add(1, Ordering::SeqCst);
             let wire: Value = plain_libs::serde_json::from_str(body).unwrap();
             let content: Value = plain_libs::serde_json::from_str(wire["variables"]["content"].as_str().unwrap()).unwrap();
-            let id = content["value"]["items"][0]["uri"].as_str().unwrap().strip_prefix("fsid:").unwrap();
+            let id = content["value"]["items"][0]["attachment"]["uri"].as_str().unwrap().strip_prefix("fsid:").unwrap();
             let (scope, payload) = crate::features::files::resource_link::parse(id).unwrap();
             assert_eq!(scope, crate::features::files::resource_link::Scope::Session("706c6169-1ac2-825a-8c79-0951ec181d4a".into()));
             assert_eq!(crate::features::files::resource_link::open(&scope, &self.key, payload).unwrap(), crate::features::files::resource_link::Resource::reference(&self.reference));
@@ -100,7 +100,7 @@ async fn attachment_delivery_uses_runtime_credentials_without_a_session_row() {
     let token = plain_libs::crypto::gen_token();
     let transport = Attachments { key: plain_libs::utils::base64::base64_decode(&token), reference: reference.clone(), calls: AtomicUsize::new(0) };
     let delivery = Delivery::new(db.clone(), Arc::from(token));
-    let content = json!({"type":"FILES","value":{"items":[{"uri":reference,"fileName":"fixture.txt","size":7}]}}).to_string();
+    let content = json!({"type":"MESSAGE","value":{"format":"PLAIN","items":[{"type":"FILE","attachment":{"id":"attachment","uri":reference,"fileName":"fixture.txt","size":7}}]}}).to_string();
     let chat = message_lifecycle::create(&db, "peer", "", &content).unwrap();
     let receipt = delivery.send(&transport, "706c6169-1ac2-825a-8c79-0951ec181d4a", &signing_key, &chat.id, None).await.unwrap();
     assert_eq!(receipt.chat.unwrap().status, ChatStatus::Sent);
@@ -243,11 +243,11 @@ fn attachment_uris_and_response_receipts_match_mobile_contract() {
         "fsid:remote",
     ] {
         let content =
-            json!({"type":"FILES","value":{"items":[{"uri":uri,"name":"x"}]}}).to_string();
+            json!({"type":"MESSAGE","value":{"format":"PLAIN","items":[{"type":"FILE","attachment":{"uri":uri,"name":"x"}}]}}).to_string();
         let wire = crate::features::chat::messages::content::peer_content(&content, "706c6169-2f9c-8c04-9f46-531986c5d258", &token)
             .unwrap();
         let wire: Value = plain_libs::serde_json::from_str(&wire).unwrap();
-        let uri_wire = wire["value"]["items"][0]["uri"].as_str().unwrap();
+        let uri_wire = wire["value"]["items"][0]["attachment"]["uri"].as_str().unwrap();
         let (scope, payload) =
             crate::features::files::resource_link::parse(uri_wire.strip_prefix("fsid:").unwrap())
                 .unwrap();
@@ -344,7 +344,7 @@ async fn concurrent_sends_serialize_and_reload_content_after_old_attempt_finishe
         tokio::spawn(async move { d.send(&t, "706c6169-1ac2-825a-8c79-0951ec181d4a", &k, &id, None).await })
     };
     transport.entered.notified().await;
-    messages::content(&db, &chat.id, r#"{"type":"TEXT","value":{"text":"newer"}}"#).unwrap();
+    messages::content(&db, &chat.id, r#"{"type":"MESSAGE","value":{"format":"PLAIN","items":[],"text":"newer"}}"#).unwrap();
     let two = {
         let d = delivery.clone();
         let t = transport.clone();
