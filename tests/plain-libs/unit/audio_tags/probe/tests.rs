@@ -1,5 +1,5 @@
 use crate::audio_tags::config::{GlobalOptions, ParseOptions};
-use crate::audio_tags::file::FileType;
+use crate::audio_tags::file::{FileType, TaggedFileExt};
 use crate::audio_tags::probe::Probe;
 
 use std::fs::File;
@@ -280,5 +280,54 @@ fn probe_wav() {
             "/../plain-rs/testdata/upstream/lofty/assets/minimal/wav_format_pcm.wav"
         ),
         FileType::Wav,
+    );
+}
+
+#[test]
+fn supported_audio_metadata_variants_do_not_warn() {
+    use std::cell::RefCell;
+    use std::path::Path;
+
+    thread_local! {
+        static WARNINGS: RefCell<Vec<String>> = const { RefCell::new(Vec::new()) };
+    }
+    struct Logger;
+    impl log::Log for Logger {
+        fn enabled(&self, metadata: &log::Metadata<'_>) -> bool {
+            metadata.level() == log::Level::Warn
+                && metadata.target().starts_with("plain_libs::audio_tags")
+        }
+        fn log(&self, record: &log::Record<'_>) {
+            if self.enabled(record.metadata()) {
+                WARNINGS.with(|warnings| warnings.borrow_mut().push(record.args().to_string()));
+            }
+        }
+        fn flush(&self) {}
+    }
+    log::set_logger(&Logger).unwrap();
+    log::set_max_level(log::LevelFilter::Warn);
+    let assets =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../plain-rs/testdata/upstream/lofty/assets");
+    for (fixture, format) in [
+        ("non_full_meta_atom.m4a", FileType::Mp4),
+        ("flac_with_id3v2.flac", FileType::Flac),
+        ("minimal/full_test.ape", FileType::Ape),
+    ] {
+        let file = Probe::open(assets.join(fixture)).unwrap().read().unwrap();
+        assert_eq!(file.file_type(), format);
+    }
+    let mut mp3 = std::fs::read(assets.join("minimal/full_test.mp3")).unwrap();
+    let xing = mp3.windows(4).position(|bytes| bytes == b"Xing").unwrap();
+    mp3[xing..xing + 4].copy_from_slice(b"----");
+    let file = Probe::new(std::io::Cursor::new(mp3))
+        .guess_file_type()
+        .unwrap()
+        .read()
+        .unwrap();
+    assert_eq!(file.file_type(), FileType::Mpeg);
+    let warnings = WARNINGS.with(|warnings| warnings.take());
+    assert!(
+        warnings.is_empty(),
+        "unexpected audio warnings: {warnings:?}"
     );
 }

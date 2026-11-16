@@ -193,8 +193,6 @@ where
 
     match &possible_ident {
         b"hdlr" | b"ilst" | b"mhdr" | b"ctry" | b"lang" => {
-            log::warn!("File contains a non-full 'meta' atom");
-
             reader.seek(SeekFrom::Current(-8))?;
             Ok(false)
         }

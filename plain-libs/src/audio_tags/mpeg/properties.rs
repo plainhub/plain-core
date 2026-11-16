@@ -159,8 +159,6 @@ where
         return Ok(());
     }
 
-    log::warn!("MPEG: Using bitrate to estimate duration");
-
     // http://gabriel.mp3-tech.org/mp3infotag.html:
     //
     // "In the Info Tag, the "Xing" identification string (mostly at 0x24) of the header is replaced by "Info" in case of a CBR file."

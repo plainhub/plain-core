@@ -437,10 +437,6 @@ fn broadcast_service() {
     let hostname = INNER.hostname.read().unwrap().clone();
 
     let target = SocketAddrV4::new(MDNS_GROUP, MDNS_PORT);
-    log::info!(
-        "mDNS announce -> {MDNS_GROUP}:{MDNS_PORT} on {} iface(s)",
-        candidates.len()
-    );
     for iface in &candidates {
         let ip = iface.ip.to_string();
         let bytes: Option<Vec<u8>> = match service.clone() {

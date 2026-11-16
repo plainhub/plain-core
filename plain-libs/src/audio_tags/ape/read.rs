@@ -37,8 +37,6 @@ where
 
     // ID3v2 tags are unsupported in APE files, but still possible
     if let ID3FindResults(Some(header), content) = find_id3v2(data, find_id3v2_config)? {
-        log::warn!("Encountered an ID3v2 tag. This tag cannot be rewritten to the APE file!");
-
         let Some(new_stream_length) = stream_len.checked_sub(u64::from(header.full_tag_size()))
         else {
             err!(SizeMismatch);
