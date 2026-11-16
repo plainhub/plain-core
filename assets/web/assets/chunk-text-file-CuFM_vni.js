@@ -1,0 +1,1 @@
+import{a as e}from"./chunk-client-id-CR6HxfRu.js";import{p as t}from"./chunk-login-peers-DyqWFQb7.js";import{u as n}from"./chunk-http-6IKeMxes.js";import{v as r,w as i}from"./chunk-gql-client-BFXjyTJr.js";function a(a,o,s=t()){return s?r(i(n()),o,``,{mode:`c`,id:e()}):r(a,o)}export{a as t};
