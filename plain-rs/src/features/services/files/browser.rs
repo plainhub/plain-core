@@ -1,4 +1,3 @@
-use crate::features::capability::Capability;
 use sha2::{Digest, Sha256};
 use std::{
     path::{Path, PathBuf},
@@ -12,12 +11,6 @@ pub enum Operation {
     Transcode,
 }
 impl Operation {
-    fn capability(self) -> Capability {
-        match self {
-            Self::Remux => Capability::VideoRemux,
-            Self::Transcode => Capability::VideoTranscode,
-        }
-    }
     fn key(self) -> &'static str {
         match self {
             Self::Remux => "remux",
@@ -70,7 +63,7 @@ impl Runtime {
         self.convert_with(
             path,
             operation,
-            || async { Ok(capabilities()) },
+            || operation == Operation::Remux || transcode_available(),
             |input, output| async move {
                 if operation == Operation::Remux {
                     return media_task(move |canceled| {
@@ -138,16 +131,15 @@ impl Runtime {
         )
         .await
     }
-    async fn convert_with<C, CF, E, EF>(
+    async fn convert_with<S, E, EF>(
         &self,
         path: &str,
         operation: Operation,
-        capabilities: C,
+        supported: S,
         encode: E,
     ) -> Result<Option<PathBuf>, String>
     where
-        C: FnOnce() -> CF,
-        CF: std::future::Future<Output = Result<Vec<Capability>, String>>,
+        S: FnOnce() -> bool,
         E: FnOnce(PathBuf, Arc<Output>) -> EF,
         EF: std::future::Future<Output = Result<bool, String>>,
     {
@@ -176,11 +168,7 @@ impl Runtime {
         if !decision {
             return Ok(None);
         }
-        let capabilities = capabilities().await?;
-        if !capabilities
-            .iter()
-            .any(|name| *name == operation.capability())
-        {
+        if !supported() {
             return Ok(None);
         }
         let destination = cache_path(&self.cache, path, &before, operation);
@@ -241,17 +229,7 @@ fn cache_path(root: &Path, path: &str, source: &Source, operation: Operation) ->
         .join(&key[..2])
         .join(format!("{key}.mp4"))
 }
-const VIDEO_BASE: &[Capability] = &[Capability::VideoRemux];
-
-fn declared_capabilities(transcode: bool) -> Vec<Capability> {
-    VIDEO_BASE
-        .iter()
-        .copied()
-        .chain(transcode.then_some(Capability::VideoTranscode))
-        .collect()
-}
-
-pub fn capabilities() -> Vec<Capability> {
+fn transcode_available() -> bool {
     #[cfg(target_os = "android")]
     let transcode = crate::infrastructure::platform::android::media::can_transcode();
     #[cfg(any(target_os = "macos", target_os = "ios", target_os = "windows"))]
@@ -263,7 +241,7 @@ pub fn capabilities() -> Vec<Capability> {
         target_os = "windows"
     )))]
     let transcode = ffmpeg_available();
-    declared_capabilities(transcode)
+    transcode
 }
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]

@@ -101,13 +101,7 @@ impl App {
         ))
     }
     async fn capabilities(&self, ctx: &Context<'_>) -> plain_graphql::Result<Vec<Capability>> {
-        let mut capabilities = self.capability_sample(ctx).await?.clone();
-        for capability in plain_rs::features::services::files::browser::capabilities() {
-            if !capabilities.contains(&capability) {
-                capabilities.push(capability);
-            }
-        }
-        Ok(capabilities)
+        Ok(self.capability_sample(ctx).await?.clone())
     }
     fn build_channel(&self, ctx: &Context<'_>) -> plain_graphql::Result<AppChannelType> {
         Ok(app_channel(

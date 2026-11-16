@@ -40,8 +40,8 @@ fn movie(codec: &[u8; 4], duration: u32, metadata: bool) -> Vec<u8> {
     }
     atom(b"moov", &tracks.concat())
 }
-async fn supported() -> Result<Vec<Capability>, String> {
-    Ok(vec![Capability::VideoRemux, Capability::VideoTranscode])
+fn supported() -> bool {
+    true
 }
 #[test]
 fn cache_identity_includes_operation_size_and_full_modification_time() {
@@ -70,7 +70,7 @@ fn cache_identity_includes_operation_size_and_full_modification_time() {
     );
 }
 #[tokio::test]
-async fn ordinary_files_and_long_videos_do_not_probe_capabilities_or_encode() {
+async fn ordinary_files_and_long_videos_do_not_probe_support_or_encode() {
     let dir = plain_libs::temporary::tempdir().unwrap();
     let runtime = Runtime::new(dir.path().join("core/cache"));
     let file = dir.path().join("source.mp4");
@@ -85,7 +85,7 @@ async fn ordinary_files_and_long_videos_do_not_probe_capabilities_or_encode() {
                 .convert_with(
                     file.to_str().unwrap(),
                     operation,
-                    || async { panic!("unexpected capability lookup") },
+                    || panic!("unexpected support check"),
                     |_, _| async { panic!("unexpected encoder") }
                 )
                 .await
@@ -95,7 +95,7 @@ async fn ordinary_files_and_long_videos_do_not_probe_capabilities_or_encode() {
     }
 }
 #[tokio::test]
-async fn missing_capability_never_enters_the_encoder() {
+async fn unsupported_transcode_never_enters_the_encoder() {
     let dir = plain_libs::temporary::tempdir().unwrap();
     let file = dir.path().join("source.mp4");
     std::fs::write(&file, movie(b"hvc1", 3000, false)).unwrap();
@@ -105,7 +105,7 @@ async fn missing_capability_never_enters_the_encoder() {
             .convert_with(
                 file.to_str().unwrap(),
                 Operation::Transcode,
-                || async { Ok(Vec::new()) },
+                || false,
                 |_, _| async { panic!("unsupported encoder") }
             )
             .await
@@ -192,16 +192,6 @@ async fn metadata_removal_uses_shared_rust_without_a_platform_encoder() {
     assert_eq!(
         std::fs::metadata(&output).unwrap().len(),
         source.len() as u64
-    );
-}
-
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
-#[test]
-fn remux_support_does_not_depend_on_an_installed_encoder() {
-    assert_eq!(declared_capabilities(false), vec![Capability::VideoRemux]);
-    assert_eq!(
-        declared_capabilities(true),
-        vec![Capability::VideoRemux, Capability::VideoTranscode]
     );
 }
 

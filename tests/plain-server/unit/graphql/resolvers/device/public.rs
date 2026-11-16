@@ -206,18 +206,7 @@ async fn the_app_root_exposes_the_identity_and_the_capability_lists() {
     assert_eq!(app["deviceType"], "PHONE");
     assert_eq!(app["buildChannel"], "GITHUB");
     assert_eq!(app["developerMode"], true);
-    assert!(
-        app["capabilities"]
-            .as_array()
-            .unwrap()
-            .contains(&json!("TELEPHONY"))
-    );
-    assert!(
-        !app["capabilities"]
-            .as_array()
-            .unwrap()
-            .contains(&json!("WAT"))
-    );
+    assert_eq!(app["capabilities"], json!(["TELEPHONY"]));
     assert_eq!(app["repeatedCapabilities"], app["capabilities"]);
     assert_eq!(app["repeatedAccess"], app["access"]);
     assert_eq!(app["access"], json!(["SMS"]));
