@@ -188,7 +188,7 @@ impl PeerSubscription {
             tokio::time::Instant::now() + Duration::from_secs(20),
             Duration::from_secs(20),
         );
-        let mut pong_deadline = Some(tokio::time::Instant::now() + Duration::from_secs(10));
+        let mut pong_deadline = None;
         loop {
             self.current()?;
             tokio::select! {

@@ -259,20 +259,6 @@ async fn native_queries_and_subscriptions_share_a_pinned_route_without_a_local_l
             .await
             .unwrap()
     ));
-    remote_state
-        .events
-        .send(plain_rs::infrastructure::events::WsEvent::broadcast(
-            "CONTENT_CHANGED",
-            "{}".into(),
-        ))
-        .unwrap();
-    let event = tokio::time::timeout(Duration::from_secs(5), subscription.read())
-        .await
-        .unwrap()
-        .unwrap();
-    let event: plain_libs::serde_json::Value = plain_libs::serde_json::from_str(&event).unwrap();
-    assert_eq!(event["id"], "content");
-    assert_eq!(event["payload"]["data"]["contentChanged"], true);
     let sockets = local.native_sockets().unwrap();
     let socket_handle = sockets
         .open(
@@ -371,6 +357,22 @@ async fn native_queries_and_subscriptions_share_a_pinned_route_without_a_local_l
     );
     executor.close_subscriptions(rejected_handle);
     *slot.lock().await = Some(route.clone());
+    let idle = tokio::time::timeout(Duration::from_secs(31), subscription.read()).await;
+    assert!(idle.is_err(), "subscription ended during idle heartbeat: {idle:?}");
+    remote_state
+        .events
+        .send(plain_rs::infrastructure::events::WsEvent::broadcast(
+            "CONTENT_CHANGED",
+            "{}".into(),
+        ))
+        .unwrap();
+    let event = tokio::time::timeout(Duration::from_secs(5), subscription.read())
+        .await
+        .unwrap()
+        .unwrap();
+    let event: plain_libs::serde_json::Value = plain_libs::serde_json::from_str(&event).unwrap();
+    assert_eq!(event["id"], "content");
+    assert_eq!(event["payload"]["data"]["contentChanged"], true);
     peers::unpair(&state.db, REMOTE_ID).unwrap();
     assert!(route.check_current(&state).is_err());
     assert!(
