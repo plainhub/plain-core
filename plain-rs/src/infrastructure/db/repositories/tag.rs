@@ -1,3 +1,4 @@
+use crate::features::enums::DataType;
 use crate::infrastructure::db::Db;
 pub use crate::infrastructure::db::models::tag::TagRelationRow;
 pub use crate::infrastructure::db::models::tag::TagRow;
@@ -68,7 +69,7 @@ pub(crate) mod io {
         Ok(())
     }
 }
-pub fn tags_by_type(db: &Db, kind: i32) -> plain_libs::rusqlite::Result<Vec<TagRow>> {
+pub fn tags_by_type(db: &Db, kind: DataType) -> plain_libs::rusqlite::Result<Vec<TagRow>> {
     db.with_conn(|c| {
         c.prepare(&format!(
             "SELECT {TAG_COLUMNS} FROM tags WHERE type=? ORDER BY rowid ASC"
@@ -130,7 +131,7 @@ pub fn relations_for_key(db: &Db, key: &str) -> plain_libs::rusqlite::Result<Vec
 pub fn relations_for_keys_of_kind(
     db: &Db,
     keys: &[String],
-    kind: i32,
+    kind: DataType,
 ) -> plain_libs::rusqlite::Result<Vec<TagRelationRow>> {
     db.with_conn(|c| {
         let mut statement=c.prepare("SELECT r.tag_id,r.target_key FROM tag_relations r JOIN tags t ON t.id=r.tag_id AND t.type=r.type WHERE r.target_key=? AND t.type=? ORDER BY r.tag_id")?;
@@ -139,7 +140,7 @@ pub fn relations_for_keys_of_kind(
         Ok(out)
     })
 }
-pub fn tags_for_key_of_kind(db: &Db, key: &str, kind: i32) -> plain_libs::rusqlite::Result<Vec<TagRow>> {
+pub fn tags_for_key_of_kind(db: &Db, key: &str, kind: DataType) -> plain_libs::rusqlite::Result<Vec<TagRow>> {
     db.with_conn(|c|c.prepare(&format!("SELECT {TAG_COLUMNS} FROM tags WHERE type=?1 AND id IN (SELECT tag_id FROM tag_relations WHERE target_key=?2 AND type=?1) ORDER BY id"))?.query_map(params![kind,key],row_to_tag)?.collect())
 }
 pub fn keys_for_tag(db: &Db, id: &str) -> plain_libs::rusqlite::Result<Vec<String>> {
@@ -174,7 +175,7 @@ pub(crate) fn move_file_path(
     if source == destination {
         return Ok(());
     }
-    let kind = crate::features::enums::DataType::File.kind();
+    let kind = DataType::File;
     conn.execute("INSERT INTO tag_relations(tag_id,target_key,type,created_at) SELECT tag_id,?1,type,created_at FROM tag_relations WHERE type=?2 AND target_key=?3 ON CONFLICT(tag_id,target_key,type) DO UPDATE SET created_at=min(tag_relations.created_at,excluded.created_at)",params![destination,kind,source])?;
     conn.execute(
         "DELETE FROM tag_relations WHERE type=?1 AND target_key=?2",

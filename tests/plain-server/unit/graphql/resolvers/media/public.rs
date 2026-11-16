@@ -173,7 +173,7 @@ async fn images_carry_their_row_and_their_tags() {
         },
         |method, _| panic!("unexpected host call {method}"),
     );
-    let kind = plain_rs::features::enums::DataType::Image.kind();
+    let kind = plain_rs::features::enums::DataType::Image;
     let tag = plain_rs::features::tags::create_tag(&db, kind, "holiday").unwrap();
     let rows = db.media_file_list(DataType::Image, 10, 0).unwrap();
     db.with_conn(|conn| {
@@ -587,7 +587,7 @@ async fn media_tags_are_loaded_only_when_selected_and_batch_all_rows() {
         |method, _| panic!("unexpected host call {method}"),
     );
     let rows = db.media_file_list(DataType::Image, 10, 0).unwrap();
-    let tag = plain_rs::features::tags::create_tag(&db, DataType::Image.kind(), "work").unwrap();
+    let tag = plain_rs::features::tags::create_tag(&db, DataType::Image, "work").unwrap();
     plain_rs::features::tags::add_relations(
         &db,
         &rows
@@ -744,9 +744,9 @@ async fn loaded_image_search_preserves_filters_counts_and_semantic_order() {
     })
     .unwrap();
     let tag =
-        plain_rs::features::tags::create_tag(&db, DataType::Image.kind(), "selected").unwrap();
+        plain_rs::features::tags::create_tag(&db, DataType::Image, "selected").unwrap();
     let empty_tag =
-        plain_rs::features::tags::create_tag(&db, DataType::Image.kind(), "empty").unwrap();
+        plain_rs::features::tags::create_tag(&db, DataType::Image, "empty").unwrap();
     plain_rs::features::tags::add_relations(
         &db,
         &[0, 1, 2, 3, 5, 6].map(|i| (tag.id.clone(), stored[i].id.clone())),

@@ -4,7 +4,7 @@
 mod fixtures;
 use fixtures::*;
 
-fn tag(id: &str, kind: i32, name: &str) -> crate::infrastructure::db::TagRow {
+fn tag(id: &str, kind: DataType, name: &str) -> crate::infrastructure::db::TagRow {
     crate::infrastructure::db::TagRow {
         id: id.into(),
         name: name.into(),
@@ -16,7 +16,7 @@ fn tag(id: &str, kind: i32, name: &str) -> crate::infrastructure::db::TagRow {
 #[test]
 fn count_is_computed_live_on_every_read() {
     let db = test_db("tag_count_live");
-    crate::infrastructure::db::tag::insert_tag(&db, &tag("t1", 1, "music")).unwrap();
+    crate::infrastructure::db::tag::insert_tag(&db, &tag("t1", DataType::Audio, "music")).unwrap();
     let before = crate::infrastructure::db::tag::tag_by_id(&db, "t1")
         .unwrap()
         .unwrap();
@@ -45,8 +45,8 @@ fn count_is_computed_live_on_every_read() {
 #[test]
 fn remove_relations_cross_product() {
     let db = test_db("tag_cross");
-    crate::infrastructure::db::tag::insert_tag(&db, &tag("t1", 1, "a")).unwrap();
-    crate::infrastructure::db::tag::insert_tag(&db, &tag("t2", 1, "b")).unwrap();
+    crate::infrastructure::db::tag::insert_tag(&db, &tag("t1", DataType::Audio, "a")).unwrap();
+    crate::infrastructure::db::tag::insert_tag(&db, &tag("t2", DataType::Audio, "b")).unwrap();
     crate::infrastructure::db::tag::insert_relations(
         &db,
         &[
@@ -63,4 +63,59 @@ fn remove_relations_cross_product() {
     assert_eq!(t1_keys, vec!["k2".to_string()]);
     let t2_keys = crate::infrastructure::db::tag::keys_for_tag(&db, "t2").unwrap();
     assert_eq!(t2_keys, vec!["k1".to_string()]);
+}
+
+use crate::features::enums::DataType;
+
+#[test]
+fn tag_type_round_trips_all_enum_names_and_rejects_old_codes() {
+    let db = test_db("tag_type_text");
+    for kind in [
+        DataType::Default,
+        DataType::Audio,
+        DataType::Video,
+        DataType::Image,
+        DataType::Sms,
+        DataType::Contact,
+        DataType::Note,
+        DataType::FeedEntry,
+        DataType::Call,
+        DataType::Package,
+        DataType::File,
+        DataType::AppFile,
+        DataType::Doc,
+    ] {
+        let row = crate::features::tags::create_tag(&db, kind, "example").unwrap();
+        assert_eq!(
+            crate::features::tags::tag_by_id(&db, &row.id).unwrap(),
+            Some(row.clone())
+        );
+        let raw: String = db
+            .with_conn(|conn| {
+                conn.query_row("SELECT type FROM tags WHERE id=?", [&row.id], |row| {
+                    row.get(0)
+                })
+            })
+            .unwrap();
+        assert_eq!(plain_libs::serde_json::to_value(kind).unwrap(), raw);
+    }
+
+    db.with_conn(|conn| {
+        for invalid in ["1", "audio", "UNKNOWN"] {
+            assert!(
+                conn.execute(
+                    "INSERT INTO tags VALUES('invalid','example',?,'now','now')",
+                    [invalid],
+                )
+                .is_err()
+            );
+            assert!(
+                conn.execute(
+                    "INSERT INTO tag_relations VALUES('invalid','example',?,'now')",
+                    [invalid],
+                )
+                .is_err()
+            );
+        }
+    });
 }

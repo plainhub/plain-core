@@ -94,7 +94,7 @@ pub fn cleanup(
         }
         for item in successful { update_catalog(&tx, kind, action, item)?; }
         if action==Action::Delete {
-            tx.execute("DELETE FROM tag_relations WHERE type=?1 AND target_key IN (SELECT value FROM json_each(?2))",params![kind.kind(),ids])?;
+            tx.execute("DELETE FROM tag_relations WHERE type=?1 AND target_key IN (SELECT value FROM json_each(?2))",params![kind,ids])?;
             if matches!(kind,DataType::Audio|DataType::Video) {
                 tx.execute("DELETE FROM media_play_history WHERE media_type=?2 AND file_id IN (SELECT value FROM json_each(?1))",params![ids,kind.kind()])?;
             }

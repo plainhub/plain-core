@@ -60,8 +60,8 @@ fn rows_count_and_id_key_use_shared_database() {
     });
     db.with_conn(|conn| {
         conn.execute_batch(
-            "INSERT INTO tags(id, type, name, created_at, updated_at) VALUES('t1', 1, 'rock', '2026', '2026');
-                 INSERT INTO tags(id, type, name, created_at, updated_at) VALUES('t2', 2, 'jazz', '2026', '2026');",
+            "INSERT INTO tags(id, type, name, created_at, updated_at) VALUES('t1','AUDIO', 'rock', '2026', '2026');
+                 INSERT INTO tags(id, type, name, created_at, updated_at) VALUES('t2','VIDEO', 'jazz', '2026', '2026');",
         )
         .unwrap();
     });
@@ -125,9 +125,9 @@ fn delete_removes_only_named_rows() {
     let db = dbs("delete");
     db.with_conn(|conn| {
         conn.execute_batch(
-            "INSERT INTO tags(id, type, name, created_at, updated_at) VALUES('t1', 1, 'a', '2026', '2026');
-                 INSERT INTO tags(id, type, name, created_at, updated_at) VALUES('t2', 2, 'b', '2026', '2026');
-                 INSERT INTO tags(id, type, name, created_at, updated_at) VALUES('t3', 3, 'c', '2026', '2026');",
+            "INSERT INTO tags(id, type, name, created_at, updated_at) VALUES('t1','AUDIO', 'a', '2026', '2026');
+                 INSERT INTO tags(id, type, name, created_at, updated_at) VALUES('t2','VIDEO', 'b', '2026', '2026');
+                 INSERT INTO tags(id, type, name, created_at, updated_at) VALUES('t3','IMAGE', 'c', '2026', '2026');",
         )
         .unwrap();
     });

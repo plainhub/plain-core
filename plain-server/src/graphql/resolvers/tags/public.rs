@@ -18,11 +18,11 @@ pub struct TagsQuery;
 impl TagsQuery {
     fn tags(&self, ctx: &Context<'_>, r#type: DataType) -> plain_graphql::Result<Vec<Tag>> {
         let db = db(ctx);
-        tags::tags_by_type(db, r#type.kind())
+        Ok(tags::tags_by_type(db, r#type)
             .map_err(failed)?
             .iter()
             .map(Tag::from_row)
-            .collect()
+            .collect())
     }
 
     fn tag_relations(
@@ -32,7 +32,7 @@ impl TagsQuery {
         keys: Vec<String>,
     ) -> plain_graphql::Result<Vec<TagRelation>> {
         let db = db(ctx);
-        Ok(tags::relations_for_keys_of_kind(db, &keys, r#type.kind())
+        Ok(tags::relations_for_keys_of_kind(db, &keys, r#type)
             .map_err(failed)?
             .iter()
             .map(|row| TagRelation {
@@ -63,8 +63,8 @@ impl TagsMutation {
         r#type: DataType,
         name: String,
     ) -> plain_graphql::Result<Tag> {
-        let row = tags::create_tag(db(ctx), r#type.kind(), &name).map_err(failed)?;
-        Tag::from_row(&row)
+        let row = tags::create_tag(db(ctx), r#type, &name).map_err(failed)?;
+        Ok(Tag::from_row(&row))
     }
 
     fn update_tag(
@@ -76,7 +76,7 @@ impl TagsMutation {
         let row = tags::update_tag(db(ctx), id.as_str(), &name).map_err(failed)?;
         let row =
             row.ok_or_else(|| plain_graphql::Error::new(format!("Tag {} not found", id.as_str())))?;
-        Tag::from_row(&row)
+        Ok(Tag::from_row(&row))
     }
 
     fn delete_tag(&self, ctx: &Context<'_>, id: plain_graphql::ID) -> plain_graphql::Result<bool> {
@@ -96,7 +96,7 @@ impl TagsMutation {
             .into_iter()
             .map(|id| id.to_string())
             .collect::<Vec<_>>();
-        tags::update_relations(db(ctx), r#type.kind(), &keys, &ids, &[]).map_err(failed)?;
+        tags::update_relations(db(ctx), r#type, &keys, &ids, &[]).map_err(failed)?;
         Ok(true)
     }
 
@@ -112,7 +112,7 @@ impl TagsMutation {
             .into_iter()
             .map(|id| id.to_string())
             .collect::<Vec<_>>();
-        tags::update_relations(db(ctx), r#type.kind(), &keys, &[], &ids).map_err(failed)?;
+        tags::update_relations(db(ctx), r#type, &keys, &[], &ids).map_err(failed)?;
         Ok(true)
     }
 
@@ -132,7 +132,7 @@ impl TagsMutation {
             .into_iter()
             .map(|id| id.to_string())
             .collect::<Vec<_>>();
-        tags::update_relations(db(ctx), r#type.kind(), &keys, &add, &remove).map_err(failed)?;
+        tags::update_relations(db(ctx), r#type, &keys, &add, &remove).map_err(failed)?;
         Ok(true)
     }
 }

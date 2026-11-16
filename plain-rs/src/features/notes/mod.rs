@@ -86,7 +86,7 @@ pub fn export(db: &Db, query: &str) -> DomainResult<String> {
             let tag_values: Vec<_> = tags::tags_for_key_of_kind(
                 db,
                 &note.id,
-                DataType::Note.kind(),
+                DataType::Note,
             )?
             .into_iter()
             .map(|tag| plain_libs::serde_json::json!({ "id": tag.id, "name": tag.name, "count": tag.count }))

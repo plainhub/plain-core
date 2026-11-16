@@ -39,7 +39,7 @@ impl Note {
             )
             .await;
         }
-        content_common::tags(ctx, self.id.as_str(), DataType::Note.kind())
+        content_common::tags(ctx, self.id.as_str(), DataType::Note)
     }
 }
 

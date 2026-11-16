@@ -49,7 +49,7 @@ async fn strict_native_rename_and_delete_rebind_and_clean_generic_file_reference
     std::fs::write(&source, b"source").unwrap();
     std::fs::write(&collision, b"existing").unwrap();
     state.db.with_conn(|connection| connection.execute(
-        "INSERT INTO tag_relations(tag_id,target_key,type,created_at) VALUES('file',?1,22,'first')", [source.to_str().unwrap()]
+        "INSERT INTO tag_relations(tag_id,target_key,type,created_at) VALUES('file',?1,'FILE','first')", [source.to_str().unwrap()]
     )).unwrap();
     for name in ["existing.txt", "..", "../escape", ""] {
         let response = rename(&core, &source, name).await;
@@ -111,7 +111,7 @@ async fn rename_postprocessing_failure_preserves_physical_receipt_and_does_not_r
     let destination = directory.path().join("renamed.txt");
     std::fs::write(&source, b"fixture").unwrap();
     state.db.with_conn(|connection| connection.execute(
-        "INSERT INTO tag_relations(tag_id,target_key,type,created_at) VALUES('file',?1,22,'first')", [source.to_str().unwrap()]
+        "INSERT INTO tag_relations(tag_id,target_key,type,created_at) VALUES('file',?1,'FILE','first')", [source.to_str().unwrap()]
     )).unwrap();
     state.media_scans.close().unwrap();
     let response = rename(&first, &source, "renamed.txt").await;
@@ -186,7 +186,7 @@ async fn native_rename_and_delete_follow_actual_catalog_identities() {
         .record_files(&[read.metadata])
         .unwrap();
     state.db.with_conn(|connection| connection.execute(
-        "INSERT INTO tag_relations(tag_id,target_key,type,created_at) VALUES('image',?1,3,'first')", [&rows[0].id]
+        "INSERT INTO tag_relations(tag_id,target_key,type,created_at) VALUES('image',?1,'IMAGE','first')", [&rows[0].id]
     )).unwrap();
     let (_generation, mut requests) = state.host.connect();
     let response = rename(&core, &source, "renamed.png").await;

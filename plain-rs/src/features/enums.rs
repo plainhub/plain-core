@@ -5,9 +5,8 @@
 
 /// Taggable data domains — the plain-app `DataType` wire enum
 /// (`shared/src/commonMain/kotlin/com/ismartcoding/plain/enums/DataType.kt`).
-/// GraphQL-arg and tag-column domain; `kind()` is the ordinal stored in
-/// the shared library db `type` column.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+/// Tags store the enum name, not its numeric code.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[cfg_attr(feature = "graphql", derive(plain_graphql::Enum))]
 #[cfg_attr(
@@ -31,8 +30,25 @@ pub enum DataType {
 }
 
 impl DataType {
-    /// Numeric plain-app `DataType` ordinal — the tag's stored `type`
-    /// column.
+    pub(crate) fn storage_name(self) -> &'static str {
+        match self {
+            Self::Default => "DEFAULT",
+            Self::Audio => "AUDIO",
+            Self::Video => "VIDEO",
+            Self::Image => "IMAGE",
+            Self::Sms => "SMS",
+            Self::Contact => "CONTACT",
+            Self::Note => "NOTE",
+            Self::FeedEntry => "FEED_ENTRY",
+            Self::Call => "CALL",
+            Self::Package => "PACKAGE",
+            Self::File => "FILE",
+            Self::AppFile => "APP_FILE",
+            Self::Doc => "DOC",
+        }
+    }
+
+    /// Numeric code still used by the media catalog and platform host.
     pub fn kind(self) -> i32 {
         match self {
             Self::Default => 0,

@@ -62,7 +62,7 @@ impl FeedEntry {
             )
             .await;
         }
-        content_common::tags(ctx, self.id.as_str(), DataType::FeedEntry.kind())
+        content_common::tags(ctx, self.id.as_str(), DataType::FeedEntry)
     }
 
     fn feed(&self, ctx: &Context<'_>) -> GqlResult<Option<Feed>> {

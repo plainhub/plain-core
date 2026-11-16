@@ -1,3 +1,4 @@
+use crate::features::enums::DataType;
 use plain_libs::rusqlite::{OptionalExtension, params, params_from_iter, types::Value};
 
 use crate::infrastructure::db::Db;
@@ -10,8 +11,6 @@ const NOTE_COLUMNS: &str = "id,title,content,deleted_at,created_at,updated_at";
 const FEED_COLUMNS: &str =
     "id,name,url,logo,fetch_full_content,last_sync_at,last_error,created_at,updated_at";
 const ENTRY_COLUMNS: &str = "id,title,url,image,description,author,content,feed_id,source_entry_id,published_at,is_read,created_at,updated_at";
-const NOTE_TAG_KIND: i32 = 6;
-const FEED_ENTRY_TAG_KIND: i32 = 7;
 
 fn note_from_row(row: &plain_libs::rusqlite::Row<'_>) -> plain_libs::rusqlite::Result<NoteRow> {
     Ok(NoteRow {
@@ -295,7 +294,7 @@ impl Db {
             for id in ids {
                 count += tx.execute("UPDATE notes SET deleted_at=?2,updated_at=?3 WHERE id=?1 AND ((?4=1 AND deleted_at IS NULL) OR (?4=0 AND deleted_at IS NOT NULL))", params![id, if deleted { Some(now) } else { None }, now, deleted])?;
                 if deleted {
-                    tx.execute("DELETE FROM tag_relations WHERE target_key=?1 AND tag_id IN (SELECT id FROM tags WHERE type=?2)", params![id, NOTE_TAG_KIND])?;
+                    tx.execute("DELETE FROM tag_relations WHERE target_key=?1 AND tag_id IN (SELECT id FROM tags WHERE type=?2)", params![id, DataType::Note])?;
                 }
             }
             tx.commit()?;
@@ -312,7 +311,7 @@ impl Db {
                     "DELETE FROM notes WHERE id=? AND deleted_at IS NOT NULL",
                     [id],
                 )?;
-                tx.execute("DELETE FROM tag_relations WHERE target_key=?1 AND tag_id IN (SELECT id FROM tags WHERE type=?2)", params![id, NOTE_TAG_KIND])?;
+                tx.execute("DELETE FROM tag_relations WHERE target_key=?1 AND tag_id IN (SELECT id FROM tags WHERE type=?2)", params![id, DataType::Note])?;
             }
             tx.commit()?;
             Ok(count)
@@ -387,7 +386,7 @@ impl Db {
     pub fn feed_delete(&self, id: &str) -> plain_libs::rusqlite::Result<bool> {
         self.with_conn(|c| {
             let tx = c.unchecked_transaction()?;
-            tx.execute("DELETE FROM tag_relations WHERE target_key IN (SELECT id FROM feed_entries WHERE feed_id=?1) AND tag_id IN (SELECT id FROM tags WHERE type=?2)", params![id, FEED_ENTRY_TAG_KIND])?;
+            tx.execute("DELETE FROM tag_relations WHERE target_key IN (SELECT id FROM feed_entries WHERE feed_id=?1) AND tag_id IN (SELECT id FROM tags WHERE type=?2)", params![id, DataType::FeedEntry])?;
             tx.execute("DELETE FROM feed_entries WHERE feed_id=?", [id])?;
             let count = tx.execute("DELETE FROM feeds WHERE id=?", [id])?;
             tx.commit()?;
@@ -491,7 +490,7 @@ impl Db {
                 .collect::<plain_libs::rusqlite::Result<_>>()?;
             drop(stmt);
             for id in &ids {
-                tx.execute("DELETE FROM tag_relations WHERE target_key=?1 AND tag_id IN (SELECT id FROM tags WHERE type=?2)", params![id, FEED_ENTRY_TAG_KIND])?;
+                tx.execute("DELETE FROM tag_relations WHERE target_key=?1 AND tag_id IN (SELECT id FROM tags WHERE type=?2)", params![id, DataType::FeedEntry])?;
                 tx.execute("DELETE FROM feed_entries WHERE id=?", [id])?;
             }
             tx.commit()?;

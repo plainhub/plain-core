@@ -150,7 +150,7 @@ fn sampled_media_revisions_are_canonical_and_reject_malformed_volumes() {
 async fn semantic_image_candidates_intersect_platform_ids_and_keep_non_text_filters() {
     let dir = plain_libs::temporary::tempdir().unwrap();
     let db = Arc::new(Db::open(&dir.path().join("data.db")).unwrap());
-    let tag = crate::features::tags::create_tag(&db, DataType::Image.kind(), "selected").unwrap();
+    let tag = crate::features::tags::create_tag(&db, DataType::Image, "selected").unwrap();
     crate::features::tags::add_relations(&db, &[(tag.id.clone(), "2".into())]).unwrap();
     let host = Arc::new(Host::default());
     let (generation, mut requests) = host.connect();

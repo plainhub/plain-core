@@ -17,13 +17,13 @@ fn note_search_bulk_lifecycle_and_tags() {
         search(&db, &format!("ids:{}", a.id), 10, 0).unwrap().len(),
         1
     );
-    let tag = tags::create_tag(&db, DataType::Note.kind(), "work").unwrap();
+    let tag = tags::create_tag(&db, DataType::Note, "work").unwrap();
     tags::add_relations(&db, &[(tag.id, a.id.clone())]).unwrap();
     assert_eq!(trash(&db, &format!("ids:{}", a.id)).unwrap(), 1);
     assert_eq!(count(&db, "").unwrap(), 1);
     assert_eq!(count(&db, "trash:true").unwrap(), 1);
     assert!(
-        tags::tags_for_key_of_kind(&db, &a.id, DataType::Note.kind())
+        tags::tags_for_key_of_kind(&db, &a.id, DataType::Note)
             .unwrap()
             .is_empty()
     );
@@ -69,8 +69,8 @@ fn export_and_save_feed_entries() {
     let exported: plain_libs::serde_json::Value = plain_libs::serde_json::from_str(&export(&db, "").unwrap()).unwrap();
     assert_eq!(exported[0]["id"], "entry");
     assert_eq!(exported[0]["tags"], plain_libs::serde_json::json!([]));
-    let note_tag = tags::create_tag(&db, DataType::Note.kind(), "note").unwrap();
-    let feed_tag = tags::create_tag(&db, DataType::FeedEntry.kind(), "feed").unwrap();
+    let note_tag = tags::create_tag(&db, DataType::Note, "note").unwrap();
+    let feed_tag = tags::create_tag(&db, DataType::FeedEntry, "feed").unwrap();
     tags::add_relations(
         &db,
         &[
@@ -81,7 +81,7 @@ fn export_and_save_feed_entries() {
     .unwrap();
     assert_eq!(trash(&db, "ids:entry").unwrap(), 1);
     assert_eq!(
-        tags::tags_for_key_of_kind(&db, "entry", DataType::FeedEntry.kind())
+        tags::tags_for_key_of_kind(&db, "entry", DataType::FeedEntry)
             .unwrap()
             .len(),
         1
@@ -95,7 +95,7 @@ fn export_and_save_feed_entries() {
             1
         );
         assert_eq!(
-            tags::tags_for_key_of_kind(&db, "entry", DataType::Note.kind())
+            tags::tags_for_key_of_kind(&db, "entry", DataType::Note)
                 .unwrap()
                 .len(),
             1

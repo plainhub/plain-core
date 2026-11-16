@@ -43,7 +43,7 @@ fn database_record_creators_use_uuid_v7_and_updates_preserve_identity() {
     let note = crate::features::notes::create(&db, "Note", "Content").unwrap();
     let updated = crate::features::notes::update(&db, &note.id, "Updated", "Content").unwrap();
     assert_eq!(note.id, updated.id);
-    let tag = crate::features::tags::create_tag(&db, 0, "Tag").unwrap();
+    let tag = crate::features::tags::create_tag(&db, crate::features::enums::DataType::Default, "Tag").unwrap();
     let (clipboard, _) =
         crate::features::clipboard::record(&db, "Text", "test", "", false).unwrap();
     let ids = [

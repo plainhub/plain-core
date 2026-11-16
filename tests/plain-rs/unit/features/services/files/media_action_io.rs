@@ -185,10 +185,10 @@ fn physical_failure_preserves_queue_and_tag_references_for_only_the_failed_row()
     std::fs::remove_dir(&blocked).unwrap();
     std::fs::write(&blocked, b"not a directory").unwrap();
     db.with_conn(|connection| -> plain_libs::rusqlite::Result<()> {
-        connection.execute_batch("INSERT INTO tags(id,name,type,created_at,updated_at) VALUES('audio','audio',1,'now','now'),('video','video',2,'now','now');")?;
+        connection.execute_batch("INSERT INTO tags(id,name,type,created_at,updated_at) VALUES('audio','audio','AUDIO','now','now'),('video','video','VIDEO','now','now');")?;
         for (index, id) in [&good, &bad].into_iter().enumerate() {
             connection.execute("INSERT INTO audio_queue_items(file_id,sort_order) VALUES(?1,?2)", plain_libs::rusqlite::params![id,index as i64])?;
-            connection.execute("INSERT INTO tag_relations(tag_id,target_key,type,created_at) VALUES('audio',?1,1,'now'),('video',?1,2,'now')", [id])?;
+            connection.execute("INSERT INTO tag_relations(tag_id,target_key,type,created_at) VALUES('audio',?1,'AUDIO','now'),('video',?1,'VIDEO','now')", [id])?;
         }
         Ok(())
     }).unwrap();
@@ -225,7 +225,7 @@ fn physical_failure_preserves_queue_and_tag_references_for_only_the_failed_row()
         );
         assert_eq!(
             connection.query_row(
-                "SELECT count(*) FROM tag_relations WHERE type=1",
+                "SELECT count(*) FROM tag_relations WHERE type='AUDIO'",
                 [],
                 |row| row.get::<_, i64>(0)
             )?,
@@ -233,7 +233,7 @@ fn physical_failure_preserves_queue_and_tag_references_for_only_the_failed_row()
         );
         assert_eq!(
             connection.query_row(
-                "SELECT count(*) FROM tag_relations WHERE type=2",
+                "SELECT count(*) FROM tag_relations WHERE type='VIDEO'",
                 [],
                 |row| row.get::<_, i64>(0)
             )?,

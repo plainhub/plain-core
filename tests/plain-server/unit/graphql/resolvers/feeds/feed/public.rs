@@ -392,7 +392,7 @@ async fn deleting_entries_in_one_main_mutation_cleans_only_the_selected_feed_rel
     seed_feed(db, "other", "Other");
     seed_entry(db, "selected", "remove", "");
     seed_entry(db, "other", "keep", "");
-    db.with_conn(|connection| connection.execute_batch("INSERT INTO tags VALUES ('feed-tag','Feed',7,'2026-01-01','2026-01-01'),('note-tag','Note',6,'2026-01-01','2026-01-01'); INSERT INTO tag_relations VALUES ('feed-tag','entry-remove',7,'2026-01-01'),('feed-tag','entry-keep',7,'2026-01-01'),('note-tag','entry-remove',6,'2026-01-01');")).unwrap();
+    db.with_conn(|connection| connection.execute_batch("INSERT INTO tags VALUES ('feed-tag','Feed','FEED_ENTRY','2026-01-01','2026-01-01'),('note-tag','Note','NOTE','2026-01-01','2026-01-01'); INSERT INTO tag_relations VALUES ('feed-tag','entry-remove','FEED_ENTRY','2026-01-01'),('feed-tag','entry-keep','FEED_ENTRY','2026-01-01'),('note-tag','entry-remove','NOTE','2026-01-01');")).unwrap();
     let response = query(
         &schema,
         r#"mutation { deleteFeedEntries(query: "feed_id:selected") { affectedCount } }"#,

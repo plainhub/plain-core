@@ -1,3 +1,4 @@
+use crate::features::enums::DataType;
 use crate::infrastructure::db::Db;
 use crate::infrastructure::db::tag;
 use crate::infrastructure::error::DomainError;
@@ -5,7 +6,7 @@ use crate::infrastructure::error::DomainResult;
 
 pub fn update_relations(
     db: &Db,
-    kind: i32,
+    kind: DataType,
     keys: &[String],
     add: &[String],
     remove: &[String],

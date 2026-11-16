@@ -584,7 +584,7 @@ async fn media_batches_commit_successes_and_notify_only_confirmed_ids() {
     let db = schema.data::<Arc<Db>>().unwrap();
     let tag = plain_rs::features::tags::create_tag(
         db,
-        plain_rs::features::enums::DataType::Video.kind(),
+        plain_rs::features::enums::DataType::Video,
         "keep failed",
     )
     .unwrap();

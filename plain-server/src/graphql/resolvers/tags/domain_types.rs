@@ -10,15 +10,13 @@ pub struct Tag {
 }
 
 impl Tag {
-    pub(crate) fn from_row(row: &TagRow) -> plain_graphql::Result<Self> {
-        let kind = DataType::from_kind(row.kind)
-            .ok_or_else(|| plain_graphql::Error::new(format!("invalid tag type: {}", row.kind)))?;
-        Ok(Self {
+    pub(crate) fn from_row(row: &TagRow) -> Self {
+        Self {
             id: row.id.clone().into(),
             name: row.name.clone(),
-            r#type: kind,
+            r#type: row.kind,
             count: row.count,
-        })
+        }
     }
 }
 

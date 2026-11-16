@@ -35,13 +35,13 @@ pub fn cleanup(db: &Db, items: &[Item], paths: &[String], roots: &[String]) -> D
         remove_identities(tx, &media)?;
         audio_queue::remove_paths_conn(&tx,paths, state)?;
         tx.execute("DELETE FROM files WHERE id IN (SELECT file_id FROM file_catalog WHERE path IN (SELECT value FROM json_each(?1)))",[&encoded])?;
-        tx.execute("DELETE FROM tag_relations WHERE type=?1 AND target_key IN (SELECT value FROM json_each(?2))",params![DataType::File.kind(),encoded])?;
+        tx.execute("DELETE FROM tag_relations WHERE type=?1 AND target_key IN (SELECT value FROM json_each(?2))",params![DataType::File,encoded])?;
         tx.execute("DELETE FROM image_embeddings WHERE path IN (SELECT value FROM json_each(?1))",[&encoded])?;
         for root in roots {
             let prefix=directory_prefix(root);
             audio_queue::remove_root_paths_conn(&tx,root, state)?;
             tx.execute("DELETE FROM files WHERE id IN (SELECT file_id FROM file_catalog WHERE path=?1 OR substr(path,1,length(?2))=?2)",params![root,prefix])?;
-            tx.execute("DELETE FROM tag_relations WHERE type=?1 AND (target_key=?2 OR substr(target_key,1,length(?3))=?3)",params![DataType::File.kind(),root,prefix])?;
+            tx.execute("DELETE FROM tag_relations WHERE type=?1 AND (target_key=?2 OR substr(target_key,1,length(?3))=?3)",params![DataType::File,root,prefix])?;
             tx.execute("DELETE FROM image_embeddings WHERE path=?1 OR substr(path,1,length(?2))=?2",params![root,prefix])?;
         }
         Ok(())
@@ -105,7 +105,7 @@ ORDER BY f.id LIMIT ?5")?.query_map(params![scan_id, root, format!("{}/",root.tr
         remove_identities(tx, &rows)?;
         let encoded = plain_libs::serde_json::to_string(&rows).map_err(|error| DomainError::Other(error.to_string()))?;
         tx.execute("DELETE FROM files WHERE id IN (SELECT value->>'id' FROM json_each(?1))", [&encoded])?;
-        tx.execute("DELETE FROM tag_relations WHERE type=22 AND target_key IN (SELECT value->>'path' FROM json_each(?1)) AND NOT EXISTS(SELECT 1 FROM file_catalog WHERE path=target_key)", [&encoded])?;
+        tx.execute("DELETE FROM tag_relations WHERE type=?2 AND target_key IN (SELECT value->>'path' FROM json_each(?1)) AND NOT EXISTS(SELECT 1 FROM file_catalog WHERE path=target_key)", params![&encoded, DataType::File])?;
         Ok(rows)
     })
 }
@@ -113,7 +113,20 @@ ORDER BY f.id LIMIT ?5")?.query_map(params![scan_id, root, format!("{}/",root.tr
 fn remove_identities(tx: &plain_libs::rusqlite::Connection, items: &[Item]) -> DomainResult<()> {
     let encoded = plain_libs::serde_json::to_string(items)
         .map_err(|error| DomainError::Other(error.to_string()))?;
-    tx.execute("DELETE FROM tag_relations WHERE target_key IN (SELECT value->>'id' FROM json_each(?1)) AND EXISTS(SELECT 1 FROM json_each(?1) i WHERE i.value->>'media_type'=tag_relations.type AND i.value->>'id'=tag_relations.target_key)", [&encoded])?;
+    let tag_keys = items
+        .iter()
+        .map(|item| {
+            let kind = DataType::from_kind(item.media_type)
+                .ok_or_else(|| DomainError::Other("invalid media type in catalog".into()))?;
+            Ok((&item.id, kind))
+        })
+        .collect::<DomainResult<Vec<_>>>()?;
+    let tag_keys = plain_libs::serde_json::to_string(&tag_keys)
+        .map_err(|error| DomainError::Other(error.to_string()))?;
+    tx.execute(
+        "DELETE FROM tag_relations WHERE (target_key,type) IN (SELECT value->>0,value->>1 FROM json_each(?1))",
+        [&tag_keys],
+    )?;
     for table in ["audio_queue_items", "audio_playlist_items"] {
         tx.execute(&format!("DELETE FROM {table} WHERE file_id IN (SELECT value->>'id' FROM json_each(?1) WHERE value->>'media_type'=1)"), [&encoded])?;
     }

@@ -7,11 +7,11 @@ fn db() -> Db {
 #[test]
 fn edits_use_only_typed_keys_and_preserve_existing_relation_dates() {
     let db = db();
-    let audio = crate::features::tags::create_tag(&db, 1, "Audio").unwrap();
-    let image = crate::features::tags::create_tag(&db, 3, "Image").unwrap();
+    let audio = crate::features::tags::create_tag(&db, DataType::Audio, "Audio").unwrap();
+    let image = crate::features::tags::create_tag(&db, DataType::Image, "Image").unwrap();
     let key = "/a, 'b' 文件".to_string();
-    update_relations(&db, 1, &[key.clone()], &[audio.id.clone()], &[]).unwrap();
-    update_relations(&db, 3, &[key.clone()], &[image.id.clone()], &[]).unwrap();
+    update_relations(&db, DataType::Audio, &[key.clone()], &[audio.id.clone()], &[]).unwrap();
+    update_relations(&db, DataType::Image, &[key.clone()], &[image.id.clone()], &[]).unwrap();
     db.with_conn(|conn| {
         conn.execute(
             "UPDATE tag_relations SET created_at='2026-01-01T00:00:00Z' WHERE tag_id=?1",
@@ -21,7 +21,7 @@ fn edits_use_only_typed_keys_and_preserve_existing_relation_dates() {
     .unwrap();
     update_relations(
         &db,
-        1,
+        DataType::Audio,
         &[key.clone(), key.clone()],
         &[audio.id.clone(), audio.id.clone()],
         &[],
@@ -37,7 +37,7 @@ fn edits_use_only_typed_keys_and_preserve_existing_relation_dates() {
             .unwrap();
         assert_eq!(rows, ["2026-01-01T00:00:00Z"]);
     });
-    update_relations(&db, 1, &[key.clone()], &[], &[audio.id.clone()]).unwrap();
+    update_relations(&db, DataType::Audio, &[key.clone()], &[], &[audio.id.clone()]).unwrap();
     assert!(
         crate::features::tags::keys_for_tag(&db, &audio.id)
             .unwrap()
@@ -52,10 +52,10 @@ fn edits_use_only_typed_keys_and_preserve_existing_relation_dates() {
 #[test]
 fn invalid_batch_has_no_partial_additions_or_removals() {
     let db = db();
-    let first = crate::features::tags::create_tag(&db, 1, "First").unwrap();
-    let second = crate::features::tags::create_tag(&db, 1, "Second").unwrap();
-    let other = crate::features::tags::create_tag(&db, 3, "Other").unwrap();
-    update_relations(&db, 1, &["kept".into()], &[first.id.clone()], &[]).unwrap();
+    let first = crate::features::tags::create_tag(&db, DataType::Audio, "First").unwrap();
+    let second = crate::features::tags::create_tag(&db, DataType::Audio, "Second").unwrap();
+    let other = crate::features::tags::create_tag(&db, DataType::Image, "Other").unwrap();
+    update_relations(&db, DataType::Audio, &["kept".into()], &[first.id.clone()], &[]).unwrap();
     for ids in [
         vec![second.id.clone(), other.id],
         vec![second.id.clone(), "missing".into()],
@@ -63,7 +63,7 @@ fn invalid_batch_has_no_partial_additions_or_removals() {
         assert!(
             update_relations(
                 &db,
-                1,
+                DataType::Audio,
                 &["kept".into(), "new".into()],
                 &ids,
                 &[first.id.clone()]
@@ -83,7 +83,7 @@ fn invalid_batch_has_no_partial_additions_or_removals() {
     assert!(
         update_relations(
             &db,
-            1,
+            DataType::Audio,
             &["valid".into(), " ".into()],
             &[second.id.clone()],
             &[]
@@ -100,12 +100,12 @@ fn invalid_batch_has_no_partial_additions_or_removals() {
 #[test]
 fn database_failure_rolls_back_the_whole_batch() {
     let db = db();
-    let tag = crate::features::tags::create_tag(&db, 1, "Tag").unwrap();
+    let tag = crate::features::tags::create_tag(&db, DataType::Audio, "Tag").unwrap();
     db.with_conn(|conn| conn.execute_batch("CREATE TRIGGER reject_relation BEFORE INSERT ON tag_relations WHEN NEW.target_key='fail' BEGIN SELECT RAISE(ABORT,'fixture failure'); END")).unwrap();
     assert!(
         update_relations(
             &db,
-            1,
+            DataType::Audio,
             &["first".into(), "fail".into()],
             &[tag.id.clone()],
             &[]

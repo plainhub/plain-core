@@ -12,7 +12,7 @@ fn item(id: &str, path: &str) -> Item {
 #[test]
 fn only_acknowledged_successes_are_cleaned_and_type_isolated() {
     let db = test_db("media_action_success");
-    db.with_conn(|c|c.execute_batch("INSERT INTO tags(id,name,type,created_at,updated_at) VALUES('audio','audio',1,'now','now'),('video','video',2,'now','now'); INSERT INTO tag_relations(tag_id,target_key,type,created_at) VALUES('audio','one',1,'now'),('audio','failed',1,'now'),('video','one',2,'now'); INSERT INTO platform_audio_media(file_id,path,title,artist,duration_ms,album_id) VALUES('test:/one','/one','one','',123,''),('test:/failed','/failed','failed','',123,''); INSERT INTO audio_queue_items(file_id,sort_order) VALUES('test:/one',0),('test:/failed',1);")).unwrap();
+    db.with_conn(|c|c.execute_batch("INSERT INTO tags(id,name,type,created_at,updated_at) VALUES('audio','audio','AUDIO','now','now'),('video','video','VIDEO','now','now'); INSERT INTO tag_relations(tag_id,target_key,type,created_at) VALUES('audio','one','AUDIO','now'),('audio','failed','AUDIO','now'),('video','one','VIDEO','now'); INSERT INTO platform_audio_media(file_id,path,title,artist,duration_ms,album_id) VALUES('test:/one','/one','one','',123,''),('test:/failed','/failed','failed','',123,''); INSERT INTO audio_queue_items(file_id,sort_order) VALUES('test:/one',0),('test:/failed',1);")).unwrap();
     let outcome = Outcome {
         successful: vec![item("one", "/one")],
         failed_ids: vec!["failed".into()],
@@ -63,7 +63,7 @@ fn malformed_or_incomplete_receipts_are_rejected() {
 #[test]
 fn cleanup_transaction_failure_preserves_all_references() {
     let db = test_db("media_action_rollback");
-    db.with_conn(|c|c.execute_batch("INSERT INTO tags(id,name,type,created_at,updated_at) VALUES('audio','audio',1,'now','now'); INSERT INTO tag_relations(tag_id,target_key,type,created_at) VALUES('audio','one',1,'now'); INSERT INTO platform_audio_media(file_id,path,title,artist,duration_ms,album_id) VALUES('test:/one','/one','one','',123,''); INSERT INTO audio_queue_items(file_id,sort_order) VALUES('test:/one',0); CREATE TRIGGER reject_queue BEFORE DELETE ON audio_queue_items BEGIN SELECT RAISE(ABORT,'synthetic failure'); END;")).unwrap();
+    db.with_conn(|c|c.execute_batch("INSERT INTO tags(id,name,type,created_at,updated_at) VALUES('audio','audio','AUDIO','now','now'); INSERT INTO tag_relations(tag_id,target_key,type,created_at) VALUES('audio','one','AUDIO','now'); INSERT INTO platform_audio_media(file_id,path,title,artist,duration_ms,album_id) VALUES('test:/one','/one','one','',123,''); INSERT INTO audio_queue_items(file_id,sort_order) VALUES('test:/one',0); CREATE TRIGGER reject_queue BEFORE DELETE ON audio_queue_items BEGIN SELECT RAISE(ABORT,'synthetic failure'); END;")).unwrap();
     assert!(cleanup(&db, DataType::Audio, Action::Delete, &[item("one", "/one")]).is_err());
     db.with_conn(|c| {
         assert_eq!(
@@ -84,7 +84,7 @@ fn cleanup_transaction_failure_preserves_all_references() {
 #[test]
 fn video_cleanup_keeps_other_types_and_move_keeps_user_tags() {
     let db = test_db("media_action_video_image");
-    db.with_conn(|c|c.execute_batch("INSERT INTO tags(id,name,type,created_at,updated_at) VALUES('image','image',3,'now','now'); INSERT INTO tag_relations(tag_id,target_key,type,created_at) VALUES('image','one',3,'now'); INSERT INTO media_play_history(media_type,file_id,position_ms,played_at,play_count) VALUES(2,'one',456,'now',0); INSERT INTO image_embeddings(file_id,path,embedding,created_at,updated_at) VALUES('one','/one',X'3f800000','now','now');")).unwrap();
+    db.with_conn(|c|c.execute_batch("INSERT INTO tags(id,name,type,created_at,updated_at) VALUES('image','image','IMAGE','now','now'); INSERT INTO tag_relations(tag_id,target_key,type,created_at) VALUES('image','one','IMAGE','now'); INSERT INTO media_play_history(media_type,file_id,position_ms,played_at,play_count) VALUES(2,'one',456,'now',0); INSERT INTO image_embeddings(file_id,path,embedding,created_at,updated_at) VALUES('one','/one',X'3f800000','now','now');")).unwrap();
     let item = Item {
         id: "one".into(),
         path: "/one".into(),

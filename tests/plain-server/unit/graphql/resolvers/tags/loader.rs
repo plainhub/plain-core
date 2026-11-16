@@ -9,7 +9,7 @@ fn fixture() -> (plain_libs::temporary::TempDir, Arc<TagsLoader>) {
 
 fn key(kind: DataType, id: &str) -> TagKey {
     TagKey {
-        kind: kind.kind(),
+        kind,
         id: id.to_owned(),
     }
 }
@@ -18,7 +18,7 @@ fn key(kind: DataType, id: &str) -> TagKey {
 async fn batches_duplicate_keys_and_separates_kinds() {
     let (_dir, loader) = fixture();
     for (kind, name) in [(DataType::Note, "note"), (DataType::FeedEntry, "entry")] {
-        let tag = plain_rs::features::tags::create_tag(&loader.db, kind.kind(), name).unwrap();
+        let tag = plain_rs::features::tags::create_tag(&loader.db, kind, name).unwrap();
         plain_rs::features::tags::add_relations(&loader.db, &[(tag.id, "shared".into())]).unwrap();
     }
     let (note, duplicate, entry, missing) = tokio::join!(

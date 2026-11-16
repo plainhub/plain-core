@@ -11,7 +11,7 @@ use tokio::sync::oneshot;
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 struct TagKey {
-    kind: i32,
+    kind: DataType,
     id: String,
 }
 
@@ -70,7 +70,7 @@ impl TagsLoader {
         #[cfg(test)]
         self.loads
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let mut groups: HashMap<i32, Vec<String>> = HashMap::new();
+        let mut groups: HashMap<DataType, Vec<String>> = HashMap::new();
         for key in keys {
             groups.entry(key.kind).or_default().push(key.id.clone());
         }
@@ -90,7 +90,7 @@ impl TagsLoader {
                             id: relation.target_key,
                         })
                         .or_default()
-                        .push(Tag::from_row(tag)?);
+                        .push(Tag::from_row(tag));
                 }
             }
         }
@@ -101,7 +101,7 @@ impl TagsLoader {
 pub(crate) async fn load(ctx: &Context<'_>, kind: DataType, id: &str) -> TagResult {
     ctx.data::<Arc<TagsLoader>>()?
         .load_one(TagKey {
-            kind: kind.kind(),
+            kind,
             id: id.to_owned(),
         })
         .await

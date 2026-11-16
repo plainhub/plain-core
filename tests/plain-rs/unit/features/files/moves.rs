@@ -14,7 +14,7 @@ fn binding(kind: i32, old: &str, new: &str) -> Binding {
 #[test]
 fn typed_bindings_preserve_tags_video_progress_and_remove_old_audio_paths() {
     let db = db();
-    db.with_conn(|c|c.execute_batch("INSERT INTO tag_relations(tag_id,target_key,type,created_at) VALUES('audio','old',1,'first'),('video','old',2,'first'),('foreign','old',6,'first'),('file','/source/nested/file.txt',22,'first'); INSERT INTO media_play_history(media_type,file_id,position_ms,played_at,play_count) VALUES(2,'old',4000000001,'first',0); INSERT INTO platform_audio_media(file_id,path,title,artist,duration_ms,album_id) VALUES('test:/source/old','/source/old','audio','',5000000001,''),('test:/unrelated','/unrelated','unrelated','',1,''); INSERT INTO audio_queue_items(file_id,sort_order) VALUES('test:/source/old',0),('test:/unrelated',1);")).unwrap();
+    db.with_conn(|c|c.execute_batch("INSERT INTO tag_relations(tag_id,target_key,type,created_at) VALUES('audio','old','AUDIO','first'),('video','old','VIDEO','first'),('foreign','old','NOTE','first'),('file','/source/nested/file.txt','FILE','first'); INSERT INTO media_play_history(media_type,file_id,position_ms,played_at,play_count) VALUES(2,'old',4000000001,'first',0); INSERT INTO platform_audio_media(file_id,path,title,artist,duration_ms,album_id) VALUES('test:/source/old','/source/old','audio','',5000000001,''),('test:/unrelated','/unrelated','unrelated','',1,''); INSERT INTO audio_queue_items(file_id,sort_order) VALUES('test:/source/old',0),('test:/unrelated',1);")).unwrap();
     assert_eq!(
         rebind(
             &db,
@@ -79,7 +79,7 @@ fn typed_bindings_preserve_tags_video_progress_and_remove_old_audio_paths() {
 #[test]
 fn source_snapshots_handle_permuted_provider_ids_without_overwriting_the_other_source() {
     let db = db();
-    db.with_conn(|c|c.execute_batch("INSERT INTO tag_relations(tag_id,target_key,type,created_at) VALUES('one','a',2,'first'),('two','b',2,'second'); INSERT INTO media_play_history(media_type,file_id,position_ms,played_at,play_count) VALUES(2,'a',1,'first',0),(2,'b',2,'second',0);")).unwrap();
+    db.with_conn(|c|c.execute_batch("INSERT INTO tag_relations(tag_id,target_key,type,created_at) VALUES('one','a','VIDEO','first'),('two','b','VIDEO','second'); INSERT INTO media_play_history(media_type,file_id,position_ms,played_at,play_count) VALUES(2,'a',1,'first',0),(2,'b',2,'second',0);")).unwrap();
     rebind(
         &db,
         &[binding(2, "a", "b"), binding(2, "b", "a")],
@@ -111,7 +111,7 @@ fn source_snapshots_handle_permuted_provider_ids_without_overwriting_the_other_s
 #[test]
 fn database_failure_rolls_back_typed_and_path_bindings() {
     let db = db();
-    db.with_conn(|c|c.execute_batch("INSERT INTO tag_relations(tag_id,target_key,type,created_at) VALUES('audio','old',1,'first'),('file','/source/file',22,'first'); INSERT INTO platform_audio_media(file_id,path,title,artist,duration_ms,album_id) VALUES('test:/source/old','/source/old','audio','',1,''); INSERT INTO audio_queue_items(file_id,sort_order) VALUES('test:/source/old',0); CREATE TRIGGER fail_queue BEFORE DELETE ON audio_queue_items BEGIN SELECT RAISE(ABORT,'synthetic failure'); END;")).unwrap();
+    db.with_conn(|c|c.execute_batch("INSERT INTO tag_relations(tag_id,target_key,type,created_at) VALUES('audio','old','AUDIO','first'),('file','/source/file','FILE','first'); INSERT INTO platform_audio_media(file_id,path,title,artist,duration_ms,album_id) VALUES('test:/source/old','/source/old','audio','',1,''); INSERT INTO audio_queue_items(file_id,sort_order) VALUES('test:/source/old',0); CREATE TRIGGER fail_queue BEFORE DELETE ON audio_queue_items BEGIN SELECT RAISE(ABORT,'synthetic failure'); END;")).unwrap();
     assert!(rebind(&db, &[binding(1, "old", "new")], "/source", "/target").is_err());
     db.with_conn(|c| {
         assert_eq!(
@@ -128,7 +128,7 @@ fn database_failure_rolls_back_typed_and_path_bindings() {
 #[test]
 fn invalid_bindings_are_rejected_before_any_write_and_path_prefixes_are_exact() {
     let db = db();
-    db.with_conn(|c|c.execute_batch("INSERT INTO tag_relations(tag_id,target_key,type,created_at) VALUES('file','/source-other/file',22,'first');")).unwrap();
+    db.with_conn(|c|c.execute_batch("INSERT INTO tag_relations(tag_id,target_key,type,created_at) VALUES('file','/source-other/file','FILE','first');")).unwrap();
     assert!(rebind(&db, &[binding(6, "a", "b")], "/source", "/target").is_err());
     assert!(
         rebind(
@@ -176,7 +176,7 @@ fn private_files_without_provider_ids_clear_only_audio_paths_inside_the_moved_ro
 #[test]
 fn raw_alias_and_canonical_roots_rebind_file_tags_and_remove_stale_path_caches() {
     let db = db();
-    db.with_conn(|c|c.execute_batch("INSERT INTO tag_relations(tag_id,target_key,type,created_at) VALUES('raw','/view/old/file',22,'first'),('canonical','/physical/old/file',22,'first'),('sibling','/view/old_sibling/file',22,'first'); INSERT INTO image_embeddings(file_id,path,embedding,created_at,updated_at) VALUES('raw','/view/old/file',x'3f800000','first','first'); INSERT INTO platform_audio_media(file_id,path,title,artist,duration_ms,album_id) VALUES('test:/view/old/audio','/view/old/audio','raw','',1,''),('test:/physical/old/audio','/physical/old/audio','canonical','',1,''),('test:/view/old_sibling/audio','/view/old_sibling/audio','keep','',1,''); INSERT INTO audio_queue_items(file_id,sort_order) VALUES('test:/view/old/audio',0),('test:/physical/old/audio',1),('test:/view/old_sibling/audio',2);")).unwrap();
+    db.with_conn(|c|c.execute_batch("INSERT INTO tag_relations(tag_id,target_key,type,created_at) VALUES('raw','/view/old/file','FILE','first'),('canonical','/physical/old/file','FILE','first'),('sibling','/view/old_sibling/file','FILE','first'); INSERT INTO image_embeddings(file_id,path,embedding,created_at,updated_at) VALUES('raw','/view/old/file',x'3f800000','first','first'); INSERT INTO platform_audio_media(file_id,path,title,artist,duration_ms,album_id) VALUES('test:/view/old/audio','/view/old/audio','raw','',1,''),('test:/physical/old/audio','/physical/old/audio','canonical','',1,''),('test:/view/old_sibling/audio','/view/old_sibling/audio','keep','',1,''); INSERT INTO audio_queue_items(file_id,sort_order) VALUES('test:/view/old/audio',0),('test:/physical/old/audio',1),('test:/view/old_sibling/audio',2);")).unwrap();
     rebind_with_aliases(
         &db,
         &[],

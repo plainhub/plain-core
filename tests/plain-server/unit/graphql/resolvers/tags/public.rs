@@ -1,8 +1,8 @@
 use super::*;
 use crate::test_support::schema::SchemaFixture as PublicSchema;
+use plain_libs::serde_json::{Value, json};
 use plain_rs::features::prefs::Prefs;
 use plain_rs::infrastructure::db::Db;
-use plain_libs::serde_json::{Value, json};
 use std::sync::Arc;
 
 fn stub(host: Arc<Host>, handler: impl Fn(&str, Value) -> Value + Send + 'static) {
@@ -74,28 +74,8 @@ fn doc(path: &str) -> plain_rs::infrastructure::db::MediaFileMetadata {
     }
 }
 
-/// The ordinals are plain-app's `DataType.value`, stored in the tag tables.
-/// They are not a free ordering — changing one would re-file every existing
-/// tag, so the contract enum and this mapping are pinned.
-#[test]
-fn content_kinds_keep_plain_apps_ordinals() {
-    assert_eq!(DataType::Default.kind(), 0);
-    assert_eq!(DataType::Audio.kind(), 1);
-    assert_eq!(DataType::Video.kind(), 2);
-    assert_eq!(DataType::Image.kind(), 3);
-    assert_eq!(DataType::Sms.kind(), 4);
-    assert_eq!(DataType::Contact.kind(), 5);
-    assert_eq!(DataType::Note.kind(), 6);
-    assert_eq!(DataType::FeedEntry.kind(), 7);
-    assert_eq!(DataType::Call.kind(), 8);
-    assert_eq!(DataType::Package.kind(), 21);
-    assert_eq!(DataType::File.kind(), 22);
-    assert_eq!(DataType::AppFile.kind(), 23);
-    assert_eq!(DataType::Doc.kind(), 24);
-}
-
 #[tokio::test]
-async fn a_created_tag_reads_back_with_its_kind_implied_not_stored() {
+async fn tag_and_relation_store_the_graphql_enum_name() {
     let (_dir, schema) = fixture();
     let response = schema
         .execute(r#"mutation { createTag(type:IMAGE, name:"holiday") { id name type count } }"#)
@@ -106,6 +86,35 @@ async fn a_created_tag_reads_back_with_its_kind_implied_not_stored() {
     assert_eq!(created["createTag"]["name"], "holiday");
     assert_eq!(created["createTag"]["count"], 0);
     assert_eq!(created["createTag"]["type"], "IMAGE");
+
+    let response = schema
+        .execute(format!(
+            r#"mutation {{ updateTagRelations(type:IMAGE, keys:["photo"],
+                              addTagIds:["{id}"], removeTagIds:[]) }}"#
+        ))
+        .await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    let stored = database(&schema)
+        .with_conn(|conn| {
+            conn.query_row(
+                "SELECT typeof(t.type), t.type, typeof(r.type), r.type
+             FROM tags t JOIN tag_relations r ON r.tag_id=t.id WHERE t.id=?",
+                [&id],
+                |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, String>(2)?,
+                        row.get::<_, String>(3)?,
+                    ))
+                },
+            )
+        })
+        .unwrap();
+    assert_eq!(
+        stored,
+        ("text".into(), "IMAGE".into(), "text".into(), "IMAGE".into())
+    );
 
     let response = schema
         .execute(&format!(
@@ -378,7 +387,7 @@ async fn notes_and_feed_entries_tag_selected_ids_without_host_or_body_reads() {
         (DataType::Note, "NOTE", "note-selected"),
         (DataType::FeedEntry, "FEED_ENTRY", "feed-selected"),
     ] {
-        let tag = tags::create_tag(&db, kind.kind(), name).unwrap();
+        let tag = tags::create_tag(&db, kind, name).unwrap();
         for action in ["addToTags", "removeFromTags"] {
             if action == "removeFromTags" {
                 assert_eq!(tags::keys_for_tag(&db, &tag.id).unwrap(), [selected]);

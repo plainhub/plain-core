@@ -27,8 +27,7 @@ type ClipboardChange {
 """
 Taggable data domains — the plain-app `DataType` wire enum
 (`shared/src/commonMain/kotlin/com/ismartcoding/plain/enums/DataType.kt`).
-GraphQL-arg and tag-column domain; `kind()` is the ordinal stored in
-the shared library db `type` column.
+Tags store the enum name, not its numeric code.
 """
 enum DataType {
 	DEFAULT
