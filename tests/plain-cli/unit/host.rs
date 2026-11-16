@@ -44,13 +44,15 @@ async fn access_primitives_report_capabilities_and_grants_without_an_app_busines
     let permissions = runtime
         .dispatch(
             "systemAccessFacts",
-            plain_libs::serde_json::json!({"features":["FILES","SMS"]}),
+            plain_libs::serde_json::json!({"features":["IMAGES","VIDEOS","AUDIO","DOCS","FILES","SMS"]}),
         )
         .await
         .unwrap();
     assert_eq!(
         permissions,
-        plain_libs::serde_json::json!({"granted":{"FILES":true,"SMS":false}})
+        plain_libs::serde_json::json!({
+            "granted": {"IMAGES":true,"VIDEOS":true,"AUDIO":true,"DOCS":true,"FILES":true,"SMS":false}
+        })
     );
     assert!(
         runtime
@@ -91,11 +93,9 @@ async fn native_app_query_uses_startup_data_and_live_capabilities_without_public
         directory.0.to_string_lossy().as_ref()
     );
     assert_eq!(data["app"]["deviceType"], "COMPUTER");
-    let mut capabilities = vec![Capability::MediaScan];
-    capabilities.extend(plain_rs::features::services::files::browser::capabilities());
     assert_eq!(
         data["app"]["capabilities"],
-        plain_libs::serde_json::json!(capabilities)
+        plain_libs::serde_json::json!(["MEDIA_SCAN"])
     );
     assert_eq!(data["app"]["httpPort"], 0);
     assert_eq!(data["app"]["httpsPort"], 0);
