@@ -5,6 +5,7 @@ use crate::runtime::Runtime as CoreRuntime;
 use plain_libs::serde_json::{Value, json};
 use serde::Deserialize;
 use std::{
+    collections::{HashMap, HashSet},
     io::{Read, Write},
     path::{Path, PathBuf},
 };
@@ -303,20 +304,11 @@ fn app_file_entries(
         .collect())
 }
 
-/// Media rows have no separate archive name, so each entry keeps its own file
-/// name and the archive builder resolves it from the path.
 async fn media_entries(
     state: &CoreRuntime,
-    data_type: &str,
+    kind: DataType,
     query: &str,
 ) -> plain_libs::anyhow::Result<Vec<(PathBuf, String)>> {
-    let kind = match data_type {
-        "AUDIO" => DataType::Audio,
-        "VIDEO" => DataType::Video,
-        "IMAGE" => DataType::Image,
-        "DOC" => DataType::Doc,
-        other => plain_libs::anyhow::bail!("unsupported media catalog type: {other}"),
-    };
     let rows = crate::features::services::files::catalog::MediaCatalog::new(
         state.db.clone(),
         state.host.clone(),
@@ -335,6 +327,40 @@ async fn media_entries(
         .iter()
         .filter_map(|row| Some((PathBuf::from(row["path"].as_str()?), String::new())))
         .collect())
+}
+
+/// Media archives are flat. Reserve original names up front so a generated
+/// suffix cannot take the name of a later photo.
+fn assign_media_entry_names(items: &mut [(PathBuf, String)]) -> plain_libs::anyhow::Result<()> {
+    for (path, name) in items.iter_mut() {
+        *name = path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .ok_or_else(|| plain_libs::anyhow::anyhow!("Invalid archive entry name"))?
+            .to_owned();
+    }
+    let mut occupied: HashSet<_> = items.iter().map(|(_, name)| name.clone()).collect();
+    let mut next_suffix = HashMap::<String, usize>::new();
+    for (_, name) in items {
+        let next = next_suffix.entry(name.clone()).or_default();
+        if *next == 0 {
+            *next = 1;
+            continue;
+        }
+        let (stem, extension) = match name.rfind('.') {
+            Some(index) if index > 0 => name.split_at(index),
+            _ => (name.as_str(), ""),
+        };
+        loop {
+            let candidate = format!("{stem} ({next}){extension}");
+            *next += 1;
+            if occupied.insert(candidate.clone()) {
+                *name = candidate;
+                break;
+            }
+        }
+    }
+    Ok(())
 }
 
 async fn package_entries(
@@ -391,21 +417,19 @@ async fn zip_items(
 ) -> plain_libs::anyhow::Result<Vec<(PathBuf, String)>> {
     let data_type: DataType =
         plain_libs::serde_json::from_value(Value::String(request.r#type.clone()))?;
-    match data_type {
+    let is_media = data_type.media_type_str().is_some();
+    let mut items = match data_type {
+        kind if is_media => media_entries(state, kind, &request.query).await,
         DataType::AppFile => app_file_entries(state, &request.query),
-        DataType::Audio | DataType::Video | DataType::Image | DataType::Doc => {
-            let name = match data_type {
-                DataType::Audio => "AUDIO",
-                DataType::Video => "VIDEO",
-                DataType::Doc => "DOC",
-                _ => "IMAGE",
-            };
-            media_entries(state, name, &request.query).await
-        }
         DataType::Package => package_entries(state, &request.query).await,
         DataType::File => Ok(temp_file_entries(state, &request.id)),
         _ => plain_libs::anyhow::bail!("unsupported archive type"),
+    }?;
+    items.retain(|(path, _)| path.is_file());
+    if is_media {
+        assign_media_entry_names(&mut items)?;
     }
+    Ok(items)
 }
 
 pub async fn files(state: &CoreRuntime, id: &str) -> Result<Download, Error> {
@@ -428,10 +452,7 @@ pub async fn files(state: &CoreRuntime, id: &str) -> Result<Download, Error> {
     let items: Vec<(PathBuf, String)> = match zip_items(state, &request).await {
         Ok(items) => items,
         Err(error) => return Err(Error::Invalid(error.to_string())),
-    }
-    .into_iter()
-    .filter(|(path, _)| path.is_file())
-    .collect();
+    };
     if items.is_empty() {
         return Err(Error::Missing);
     }

@@ -15,17 +15,28 @@ fn download_names_are_percent_encoded() {
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 #[tokio::test]
-async fn encrypted_media_download_resolves_selection_and_preserves_each_basename_and_byte() {
+async fn encrypted_media_download_preserves_all_selected_bytes_and_disambiguates_names() {
     let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::server::ContentServer::open(&directory.path().join("core")).unwrap();
     let state = core.runtime_state();
     let (_generation, mut requests) = state.host.connect();
-    let rows = (0..3)
-        .map(|index| {
-            let path = directory.path().join(format!("source-{index}.txt"));
+    let names = [
+        "album-a/image.jpg",
+        "album-b/image.jpg",
+        "album-c/image (1).jpg",
+        "album-a/README",
+        "album-b/README",
+        "album-a/not-selected.jpg",
+    ];
+    let rows = names
+        .iter()
+        .enumerate()
+        .map(|(index, name)| {
+            let path = directory.path().join(name);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
             std::fs::write(&path, format!("bytes-{index}")).unwrap();
             plain_rs::infrastructure::db::MediaFileMetadata {
-                data_type: DataType::Doc,
+                data_type: DataType::Image,
                 path: path.to_string_lossy().into_owned(),
                 title: format!("display title {index}"),
                 artist: String::new(),
@@ -40,12 +51,18 @@ async fn encrypted_media_download_resolves_selection_and_preserves_each_basename
                 rotation: 0,
                 taken_at: None,
                 created_at: "2026-01-01T00:00:00.000Z".into(),
-                updated_at: "2026-01-01T00:00:00.000Z".into(),
+                updated_at: format!("2026-01-01T00:00:0{}.000Z", names.len() - index),
             }
         })
         .collect::<Vec<_>>();
     let recorded = state.db.record_media_files(&rows).unwrap();
-    let payload = json!({"type":"DOC","query":format!("ids:{},{}",recorded[0].id,recorded[2].id),"name":"selected.zip"}).to_string();
+    let ids = recorded[..5]
+        .iter()
+        .map(|row| row.id.as_str())
+        .collect::<Vec<_>>()
+        .join(",");
+    let payload =
+        json!({"type":"IMAGE","query":format!("ids:{ids}"),"name":"selected.zip"}).to_string();
     let token = plain_libs::utils::base64::base64_encode(
         &plain_rs::features::sessions::token_key(&state.native_url_token().unwrap()).unwrap(),
     );
@@ -64,22 +81,40 @@ async fn encrypted_media_download_resolves_selection_and_preserves_each_basename
         Request::new(Body::empty()),
     )
     .await;
-    assert_eq!(response.status(), StatusCode::OK);
+    let status = response.status();
     let bytes = plain_libs::axum::body::to_bytes(response.into_body(), 1024 * 1024)
         .await
         .unwrap();
+    assert_eq!(
+        status,
+        StatusCode::OK,
+        "{}",
+        String::from_utf8_lossy(&bytes)
+    );
     let mut archive = plain_libs::zip::ZipArchive::new(std::io::Cursor::new(bytes)).unwrap();
-    assert_eq!(archive.len(), 2);
-    for index in [0, 2] {
+    assert_eq!(archive.len(), 5);
+    let entry_names = [
+        "image.jpg",
+        "image (2).jpg",
+        "image (1).jpg",
+        "README",
+        "README (1)",
+    ];
+    for (index, name) in entry_names.into_iter().enumerate() {
+        let expected = format!("bytes-{index}");
         let mut bytes = String::new();
         archive
-            .by_name(&format!("source-{index}.txt"))
+            .by_name(name)
             .unwrap()
             .read_to_string(&mut bytes)
             .unwrap();
-        assert_eq!(bytes, format!("bytes-{index}"));
+        assert_eq!(bytes, expected);
+        assert_eq!(
+            std::fs::read_to_string(directory.path().join(names[index])).unwrap(),
+            expected
+        );
     }
-    assert!(archive.by_name("source-1.txt").is_err());
+    assert!(archive.by_name("not-selected.jpg").is_err());
     assert!(requests.try_recv().is_err());
     core.stop_core().await;
 }
