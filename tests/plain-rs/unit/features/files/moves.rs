@@ -14,7 +14,7 @@ fn binding(kind: i32, old: &str, new: &str) -> Binding {
 #[test]
 fn typed_bindings_preserve_tags_video_progress_and_remove_old_audio_paths() {
     let db = db();
-    db.with_conn(|c|c.execute_batch("INSERT INTO tag_relations(tag_id,target_key,type,created_at) VALUES('audio','old','AUDIO','first'),('video','old','VIDEO','first'),('foreign','old','NOTE','first'),('file','/source/nested/file.txt','FILE','first'); INSERT INTO media_play_history(media_type,file_id,position_ms,played_at,play_count) VALUES(2,'old',4000000001,'first',0); INSERT INTO platform_audio_media(file_id,path,title,artist,duration_ms,album_id) VALUES('test:/source/old','/source/old','audio','',5000000001,''),('test:/unrelated','/unrelated','unrelated','',1,''); INSERT INTO audio_queue_items(file_id,sort_order) VALUES('test:/source/old',0),('test:/unrelated',1);")).unwrap();
+    db.with_conn(|c|c.execute_batch("INSERT INTO tag_relations(tag_id,target_key,type,created_at) VALUES('audio','old','AUDIO','first'),('video','old','VIDEO','first'),('foreign','old','NOTE','first'),('file','/source/nested/file.txt','FILE','first'); INSERT INTO media_play_history(media_type,file_id,position_ms,played_at,play_count) VALUES('VIDEO','old',4000000001,'first',0); INSERT INTO platform_audio_media(file_id,path,title,artist,duration_ms,album_id) VALUES('test:/source/old','/source/old','audio','',5000000001,''),('test:/unrelated','/unrelated','unrelated','',1,''); INSERT INTO audio_queue_items(file_id,sort_order) VALUES('test:/source/old',0),('test:/unrelated',1);")).unwrap();
     assert_eq!(
         rebind(
             &db,
@@ -79,7 +79,7 @@ fn typed_bindings_preserve_tags_video_progress_and_remove_old_audio_paths() {
 #[test]
 fn source_snapshots_handle_permuted_provider_ids_without_overwriting_the_other_source() {
     let db = db();
-    db.with_conn(|c|c.execute_batch("INSERT INTO tag_relations(tag_id,target_key,type,created_at) VALUES('one','a','VIDEO','first'),('two','b','VIDEO','second'); INSERT INTO media_play_history(media_type,file_id,position_ms,played_at,play_count) VALUES(2,'a',1,'first',0),(2,'b',2,'second',0);")).unwrap();
+    db.with_conn(|c|c.execute_batch("INSERT INTO tag_relations(tag_id,target_key,type,created_at) VALUES('one','a','VIDEO','first'),('two','b','VIDEO','second'); INSERT INTO media_play_history(media_type,file_id,position_ms,played_at,play_count) VALUES('VIDEO','a',1,'first',0),('VIDEO','b',2,'second',0);")).unwrap();
     rebind(
         &db,
         &[binding(2, "a", "b"), binding(2, "b", "a")],
@@ -219,7 +219,7 @@ fn raw_alias_and_canonical_roots_rebind_file_tags_and_remove_stale_path_caches()
 #[test]
 fn rebinding_swaps_provider_ids_atomically_and_rolls_back_on_failure() {
     let db = db();
-    db.with_conn(|c|c.execute_batch("INSERT INTO media_play_history(media_type,file_id,position_ms,played_at,play_count) VALUES(2,'a',1,'first',0),(2,'b',2,'second',0);")).unwrap();
+    db.with_conn(|c|c.execute_batch("INSERT INTO media_play_history(media_type,file_id,position_ms,played_at,play_count) VALUES('VIDEO','a',1,'first',0),('VIDEO','b',2,'second',0);")).unwrap();
     let bindings = [binding(2, "a", "b"), binding(2, "b", "a")];
     assert_eq!(rebind(&db, &bindings, "/source", "/target").unwrap(), 2);
     assert_eq!(

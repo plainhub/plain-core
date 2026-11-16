@@ -87,7 +87,7 @@ impl MediaPlayHistoryQuery {
             for kind in allowed.iter().copied() {
                 let ids: Vec<_> = batch
                     .iter()
-                    .filter(|row| row.media_type == kind.data_type().kind())
+                    .filter(|row| row.media_type == kind.data_type())
                     .map(|row| row.file_id.as_str())
                     .collect();
                 if ids.is_empty() {

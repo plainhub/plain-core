@@ -76,7 +76,7 @@ async fn native_summary_streams_the_full_database() {
         "INSERT INTO volumes(id,identity,path,is_available) VALUES(1,'TEST','/music',1); WITH RECURSIVE entries(n) AS (VALUES(0) UNION ALL SELECT n+1 FROM entries WHERE n<1099)
          INSERT INTO files(id,volume_id,path,file_name,kind,title,artist,size_bytes,duration_ms,width,height,rotation,created_at,updated_at,album_id,favorited)
          SELECT n+1,1,printf('%d.mp3',n),printf('%d.mp3',n),'AUDIO',printf('Song %d',n),'Artist',123,456,0,0,0,'2026-01-01T00:00:00Z','2026-01-01T00:00:00Z','album',1 FROM entries;
-         INSERT INTO media_play_history(media_type,file_id,position_ms,play_count,played_at) VALUES(1,'1100',0,7,'2026-01-02T00:00:00Z');"
+         INSERT INTO media_play_history(media_type,file_id,position_ms,play_count,played_at) VALUES('AUDIO','1100',0,7,'2026-01-02T00:00:00Z');"
     )).unwrap();
     let summary = read(db.clone(), MediaCatalog::Native(db, Arc::new(crate::features::prefs::Prefs::in_memory()))).await.unwrap();
     assert_eq!(summary[0].item_count, 1100);

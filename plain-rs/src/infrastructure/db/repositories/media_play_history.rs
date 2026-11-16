@@ -32,11 +32,11 @@ pub(crate) fn record_play(
         .query_row(
             "SELECT media_type,play_count FROM media_play_history WHERE file_id=?1",
             [file_id],
-            |row| Ok((row.get::<_, i32>(0)?, row.get::<_, i64>(1)?)),
+            |row| Ok((row.get::<_, DataType>(0)?, row.get::<_, i64>(1)?)),
         )
         .optional()?
         .map(|(kind, count)| {
-            if kind != media_type.kind() {
+            if kind != media_type {
                 Err(type_mismatch())
             } else {
                 Ok(count)
@@ -49,19 +49,19 @@ pub(crate) fn record_play(
             "play count overflow",
         )))
     })?;
-    let changed = conn.execute("INSERT INTO media_play_history(file_id,position_ms,play_count,played_at,media_type) VALUES(?1,?2,?3,?4,?5) ON CONFLICT(file_id) DO UPDATE SET position_ms=excluded.position_ms,play_count=excluded.play_count,played_at=excluded.played_at WHERE media_play_history.media_type=excluded.media_type", params![file_id,position_ms,count,plain_libs::utils::dbtime::now_iso_millis(),media_type.kind()])?;
+    let changed = conn.execute("INSERT INTO media_play_history(file_id,position_ms,play_count,played_at,media_type) VALUES(?1,?2,?3,?4,?5) ON CONFLICT(file_id) DO UPDATE SET position_ms=excluded.position_ms,play_count=excluded.play_count,played_at=excluded.played_at WHERE media_play_history.media_type=excluded.media_type", params![file_id,position_ms,count,plain_libs::utils::dbtime::now_iso_millis(),media_type])?;
     if changed == 0 {
         return Err(type_mismatch());
     }
     if media_type == DataType::Audio {
         let count: i64 = conn.query_row(
-            "SELECT COUNT(*) FROM media_play_history WHERE media_type=1",
+            "SELECT COUNT(*) FROM media_play_history WHERE media_type='AUDIO'",
             [],
             |row| row.get(0),
         )?;
         if count > (HISTORY_KEEP * 5 / 4) as i64 {
             conn.execute(
-                "DELETE FROM media_play_history WHERE media_type=1 AND file_id NOT IN (SELECT file_id FROM media_play_history WHERE media_type=1 ORDER BY played_at DESC,rowid DESC LIMIT ?1)",
+                "DELETE FROM media_play_history WHERE media_type='AUDIO' AND file_id NOT IN (SELECT file_id FROM media_play_history WHERE media_type='AUDIO' ORDER BY played_at DESC,rowid DESC LIMIT ?1)",
                 [HISTORY_KEEP as i64],
             )?;
         }
@@ -79,13 +79,13 @@ pub(crate) fn update_progress(
         .query_row(
             "SELECT media_type,position_ms FROM media_play_history WHERE file_id=?1",
             [file_id],
-            |row| Ok((row.get::<_, i32>(0)?, row.get::<_, i64>(1)?)),
+            |row| Ok((row.get::<_, DataType>(0)?, row.get::<_, i64>(1)?)),
         )
         .optional()?;
     let Some((kind, previous)) = current else {
         return Ok(());
     };
-    if kind != media_type.kind() {
+    if kind != media_type {
         return Err(type_mismatch());
     }
     if position_ms != previous {
@@ -105,7 +105,7 @@ pub(crate) fn save_progress(
 ) -> plain_libs::rusqlite::Result<()> {
     conn.execute(
         "INSERT INTO media_play_history(file_id,position_ms,play_count,played_at,media_type) VALUES(?1,?2,0,?3,?4) ON CONFLICT(file_id) DO NOTHING",
-        params![file_id, position_ms, plain_libs::utils::dbtime::now_iso_millis(), media_type.kind()],
+        params![file_id, position_ms, plain_libs::utils::dbtime::now_iso_millis(), media_type],
     )?;
     update_progress(conn, media_type, file_id, position_ms)
 }

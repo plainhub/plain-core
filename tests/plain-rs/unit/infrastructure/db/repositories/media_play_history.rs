@@ -324,7 +324,7 @@ fn overflowing_play_counts_leave_the_existing_record_unchanged() {
         .unwrap();
     db.with_conn(|conn| {
         conn.execute(
-            "UPDATE media_play_history SET play_count=?1 WHERE media_type=2 AND file_id='video'",
+            "UPDATE media_play_history SET play_count=?1 WHERE media_type='VIDEO' AND file_id='video'",
             [i64::MAX],
         )
     })
@@ -352,15 +352,24 @@ fn explicit_media_type_classifies_history_without_a_loaded_audio_catalog() {
         333,
     )
     .unwrap();
+    let stored = db.with_conn(|conn| {
+        conn.prepare("SELECT file_id,media_type,typeof(media_type) FROM media_play_history ORDER BY file_id")?
+            .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, String>(2)?)))?
+            .collect::<plain_libs::rusqlite::Result<Vec<_>>>()
+    }).unwrap();
+    assert_eq!(stored, [
+        ("audio".into(), "AUDIO".into(), "text".into()),
+        ("video".into(), "VIDEO".into(), "text".into()),
+    ]);
     let audio = fixtures::history_row(&db, "audio").unwrap();
     let video = fixtures::history_row(&db, "video").unwrap();
     assert_eq!(
         (audio.media_type, audio.position_ms, audio.play_count),
-        (1, 111, 1)
+        (DataType::Audio, 111, 1)
     );
     assert_eq!(
         (video.media_type, video.position_ms, video.play_count),
-        (2, 333, 1)
+        (DataType::Video, 333, 1)
     );
     assert!(
         crate::features::media::play_history::matching(
@@ -407,9 +416,10 @@ fn history_requires_explicit_types_and_globally_unique_file_ids() {
     let audio = fixtures::history_row(&db, "audio");
     db.with_conn(|conn| {
         for sql in [
+            "INSERT INTO media_play_history(file_id,media_type,position_ms,play_count,played_at) VALUES('numeric',1,0,0,'now')",
             "INSERT INTO media_play_history(file_id,position_ms,play_count,played_at) VALUES('missing',0,0,'now')",
-            "INSERT INTO media_play_history(file_id,media_type,position_ms,play_count,played_at) VALUES('invalid',3,0,0,'now')",
-            "INSERT INTO media_play_history(file_id,media_type,position_ms,play_count,played_at) VALUES('audio',2,0,0,'now')",
+            "INSERT INTO media_play_history(file_id,media_type,position_ms,play_count,played_at) VALUES('invalid','IMAGE',0,0,'now')",
+            "INSERT INTO media_play_history(file_id,media_type,position_ms,play_count,played_at) VALUES('audio','VIDEO',0,0,'now')",
         ] {
             assert!(conn.execute(sql, []).is_err());
         }

@@ -19,27 +19,16 @@ pub fn matching(db: &Db, fields: &[FilterField]) -> DomainResult<Vec<MediaPlayHi
                     _ => return Err(invalid("Invalid media history filter operator")),
                 };
                 let entries = field.value.split(',').collect::<Vec<_>>();
-                let (column, value) = if field.name == "type" {
-                    let kinds = entries
-                        .iter()
-                        .map(|value| match *value {
-                            "AUDIO" => Ok(DataType::Audio.kind()),
-                            "VIDEO" => Ok(DataType::Video.kind()),
-                            _ => Err(invalid("Media history type must be AUDIO or VIDEO")),
-                        })
-                        .collect::<DomainResult<Vec<_>>>()?;
-                    (
-                        "media_type",
-                        plain_libs::serde_json::to_string(&kinds)
-                            .map_err(|error| invalid(&error.to_string()))?,
-                    )
+                let column = if field.name == "type" {
+                    if entries.iter().any(|entry| !matches!(*entry, "AUDIO" | "VIDEO")) {
+                        return Err(invalid("Media history type must be AUDIO or VIDEO"));
+                    }
+                    "media_type"
                 } else {
-                    (
-                        "file_id",
-                        plain_libs::serde_json::to_string(&entries)
-                            .map_err(|error| invalid(&error.to_string()))?,
-                    )
+                    "file_id"
                 };
+                let value = plain_libs::serde_json::to_string(&entries)
+                    .map_err(|error| invalid(&error.to_string()))?;
                 conditions.push(format!(
                     "{column} {operator} (SELECT value FROM json_each(?))"
                 ));

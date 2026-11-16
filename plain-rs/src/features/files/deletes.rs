@@ -113,7 +113,7 @@ ORDER BY f.id LIMIT ?5")?.query_map(params![scan_id, root, format!("{}/",root.tr
 fn remove_identities(tx: &plain_libs::rusqlite::Connection, items: &[Item]) -> DomainResult<()> {
     let encoded = plain_libs::serde_json::to_string(items)
         .map_err(|error| DomainError::Other(error.to_string()))?;
-    let tag_keys = items
+    let typed_ids = items
         .iter()
         .map(|item| {
             let kind = DataType::from_kind(item.media_type)
@@ -121,16 +121,16 @@ fn remove_identities(tx: &plain_libs::rusqlite::Connection, items: &[Item]) -> D
             Ok((&item.id, kind))
         })
         .collect::<DomainResult<Vec<_>>>()?;
-    let tag_keys = plain_libs::serde_json::to_string(&tag_keys)
+    let typed_ids = plain_libs::serde_json::to_string(&typed_ids)
         .map_err(|error| DomainError::Other(error.to_string()))?;
     tx.execute(
         "DELETE FROM tag_relations WHERE (target_key,type) IN (SELECT value->>0,value->>1 FROM json_each(?1))",
-        [&tag_keys],
+        [&typed_ids],
     )?;
     for table in ["audio_queue_items", "audio_playlist_items"] {
         tx.execute(&format!("DELETE FROM {table} WHERE file_id IN (SELECT value->>'id' FROM json_each(?1) WHERE value->>'media_type'=1)"), [&encoded])?;
     }
-    tx.execute("DELETE FROM media_play_history WHERE media_type IN (1,2) AND file_id IN (SELECT value->>'id' FROM json_each(?1)) AND EXISTS(SELECT 1 FROM json_each(?1) i WHERE i.value->>'media_type'=media_type AND i.value->>'id'=file_id)", [&encoded])?;
+    tx.execute("DELETE FROM media_play_history WHERE (file_id,media_type) IN (SELECT value->>0,value->>1 FROM json_each(?1))", [&typed_ids])?;
     tx.execute("DELETE FROM image_embeddings WHERE file_id IN (SELECT value->>'id' FROM json_each(?1) WHERE value->>'media_type'=3)", [&encoded])?;
     Ok(())
 }

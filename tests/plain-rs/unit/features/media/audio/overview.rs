@@ -104,7 +104,7 @@ fn native_database(path: &std::path::Path) -> Db {
     db.with_conn(|connection| -> plain_libs::rusqlite::Result<()> {
         insert_native_audio(connection, "one", "Old Artist", "2026-01-01T00:00:00Z")?;
         insert_native_audio(connection, "two", "Old Artist", "2026-01-02T00:00:00Z")?;
-        connection.execute("INSERT INTO media_play_history(media_type,file_id,position_ms,play_count,played_at) VALUES(1,'1',0,5,'2026-01-02T00:00:00Z')", [])?;
+        connection.execute("INSERT INTO media_play_history(media_type,file_id,position_ms,play_count,played_at) VALUES('AUDIO','1',0,5,'2026-01-02T00:00:00Z')", [])?;
         Ok(())
     }).unwrap();
     db

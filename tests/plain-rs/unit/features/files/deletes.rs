@@ -2,7 +2,7 @@ use super::*;
 #[test]
 fn deleted_receipts_cascade_atomically_and_preserve_failed_and_foreign_records() {
     let db = Db::open(std::path::Path::new(":memory:")).unwrap();
-    db.with_conn(|c|c.execute_batch("INSERT INTO tag_relations(tag_id,target_key,type,created_at) VALUES('video','old','VIDEO','first'),('foreign','old','NOTE','first'),('file','/root/deleted','FILE','first'),('failed','/root/failed','FILE','first'),('sibling','/root_sibling/file','FILE','first'); INSERT INTO media_play_history(media_type,file_id,position_ms,played_at,play_count) VALUES(2,'old',4000000001,'first',0),(2,'keep',4000000002,'first',0); INSERT INTO platform_audio_media(file_id,path,title,artist,duration_ms,album_id) VALUES('test:/root/deleted','/root/deleted','gone','',1,''),('test:/root/failed','/root/failed','keep','',1,''),('test:/root_sibling/file','/root_sibling/file','keep','',1,''); INSERT INTO audio_queue_items(file_id,sort_order) VALUES('test:/root/deleted',0),('test:/root/failed',1),('test:/root_sibling/file',2);")).unwrap();
+    db.with_conn(|c|c.execute_batch("INSERT INTO tag_relations(tag_id,target_key,type,created_at) VALUES('video','old','VIDEO','first'),('foreign','old','NOTE','first'),('file','/root/deleted','FILE','first'),('failed','/root/failed','FILE','first'),('sibling','/root_sibling/file','FILE','first'); INSERT INTO media_play_history(media_type,file_id,position_ms,played_at,play_count) VALUES('VIDEO','old',4000000001,'first',0),('VIDEO','keep',4000000002,'first',0); INSERT INTO platform_audio_media(file_id,path,title,artist,duration_ms,album_id) VALUES('test:/root/deleted','/root/deleted','gone','',1,''),('test:/root/failed','/root/failed','keep','',1,''),('test:/root_sibling/file','/root_sibling/file','keep','',1,''); INSERT INTO audio_queue_items(file_id,sort_order) VALUES('test:/root/deleted',0),('test:/root/failed',1),('test:/root_sibling/file',2);")).unwrap();
     db.with_conn(|c|c.execute_batch("INSERT INTO image_embeddings(file_id,path,embedding,created_at,updated_at) VALUES('private','/root/deleted',x'3f800000','first','first'),('pending','/root/failed',x'3f800000','first','first'),('sibling','/root_sibling/file',x'3f800000','first','first');")).unwrap();
     cleanup(
         &db,
@@ -108,7 +108,7 @@ fn deletion_uses_current_catalog_identities_and_preserves_partial_failures_and_f
     let video = &created[0].id;
     db.with_conn(|c| -> plain_libs::rusqlite::Result<()> {
         c.execute("INSERT INTO tag_relations(tag_id,target_key,type,created_at) VALUES('media',?1,'VIDEO','first'),('foreign',?1,'NOTE','first')",[video])?;
-        c.execute("INSERT INTO media_play_history(media_type,file_id,position_ms,played_at,play_count) VALUES(2,?1,123,'first',0)",[video])?;
+        c.execute("INSERT INTO media_play_history(media_type,file_id,position_ms,played_at,play_count) VALUES('VIDEO',?1,123,'first',0)",[video])?;
         Ok(())
     }).unwrap();
     cleanup(&db, &[], &[path("root/deleted.mp4")], &[]).unwrap();
@@ -202,7 +202,7 @@ fn catalog_deletion_failure_rolls_back_all_associated_state_cleanup() {
         .remove(0);
     db.with_conn(|c| -> plain_libs::rusqlite::Result<()> {
         c.execute("INSERT INTO tag_relations(tag_id,target_key,type,created_at) VALUES('media',?1,'VIDEO','first')",[&created.id])?;
-        c.execute("INSERT INTO media_play_history(media_type,file_id,position_ms,played_at,play_count) VALUES(2,?1,123,'first',0)",[&created.id])?;
+        c.execute("INSERT INTO media_play_history(media_type,file_id,position_ms,played_at,play_count) VALUES('VIDEO',?1,123,'first',0)",[&created.id])?;
         c.execute_batch("CREATE TRIGGER reject_catalog_delete BEFORE DELETE ON files BEGIN SELECT RAISE(ABORT,'catalog delete rejected'); END;")?;
         Ok(())
     }).unwrap();
@@ -254,7 +254,7 @@ fn missing_paths_keep_user_state_until_confirmed_permanent_deletion() {
             [&gone.id],
         )?;
         c.execute(
-            "INSERT INTO media_play_history(media_type,file_id,position_ms,played_at,play_count) VALUES(2,?1,123,'first',0)",
+            "INSERT INTO media_play_history(media_type,file_id,position_ms,played_at,play_count) VALUES('VIDEO',?1,123,'first',0)",
             [&gone.id],
         )?;
         c.execute(
@@ -323,7 +323,7 @@ fn retired_identity_preserves_replacement_and_file_tags_at_the_same_path() {
         .remove(0);
     db.with_conn(|connection| {
         connection.execute("INSERT INTO tag_relations(tag_id,target_key,type,created_at) VALUES('old',?1,'VIDEO','first'),('replacement',?2,'IMAGE','first'),('file',?3,'FILE','first'),('neighbor',?4,'FILE','first')", params![old.id,new.id,path("root/replaced.mp4"),path("root/neighbor")])?;
-        connection.execute("INSERT INTO media_play_history(file_id,media_type,position_ms,played_at,play_count) VALUES(?1,2,123,'first',0)", [&old.id])?;
+        connection.execute("INSERT INTO media_play_history(file_id,media_type,position_ms,played_at,play_count) VALUES(?1,'VIDEO',123,'first',0)", [&old.id])?;
         Ok::<_,plain_libs::rusqlite::Error>(())
     }).unwrap();
     retire_identity(
@@ -379,7 +379,7 @@ INSERT INTO tag_relations(tag_id,target_key,type,created_at) VALUES('audio','aud
 INSERT INTO audio_queue_items(file_id,sort_order) VALUES('audio',0);
 INSERT INTO audio_playlists(id,name,created_at,updated_at) VALUES('playlist','Playlist','now','now');
 INSERT INTO audio_playlist_items(id,playlist_id,file_id,sort_order,added_at) VALUES('item','playlist','audio',0,'now');
-INSERT INTO media_play_history(media_type,file_id,position_ms,played_at,play_count) VALUES(1,'audio',123,'now',1);
+INSERT INTO media_play_history(media_type,file_id,position_ms,played_at,play_count) VALUES('AUDIO','audio',123,'now',1);
 INSERT INTO image_embeddings(file_id,path,embedding,created_at,updated_at) VALUES('image','/scan/root_%/old.jpg',x'3f800000','now','now');
 CREATE TRIGGER reject_scan_delete BEFORE DELETE ON files BEGIN SELECT RAISE(ABORT,'rejected'); END;" )).unwrap();
     let root = std::path::Path::new("/scan/root_%");

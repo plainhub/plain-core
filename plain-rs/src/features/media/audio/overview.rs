@@ -15,7 +15,7 @@ pub fn history(db: &Db) -> DomainResult<Vec<History>> {
 fn history_from_connection(conn: &plain_libs::rusqlite::Connection) -> DomainResult<Vec<History>> {
     Ok(conn
         .prepare(
-            "SELECT file_id,play_count FROM media_play_history WHERE media_type=1 ORDER BY played_at DESC,rowid DESC",
+            "SELECT file_id,play_count FROM media_play_history WHERE media_type='AUDIO' ORDER BY played_at DESC,rowid DESC",
         )?
         .query_map([], |row| {
             Ok(History {

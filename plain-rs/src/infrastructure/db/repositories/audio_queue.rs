@@ -166,7 +166,7 @@ pub(crate) mod io {
     }
     pub fn remove_history(c: &Connection, paths: &[String]) -> plain_libs::rusqlite::Result<()> {
         c.execute(
-            "DELETE FROM media_play_history WHERE media_type=1 AND file_id IN (SELECT file_id FROM audio_media WHERE path IN (SELECT value FROM json_each(?1)))",
+            "DELETE FROM media_play_history WHERE media_type='AUDIO' AND file_id IN (SELECT file_id FROM audio_media WHERE path IN (SELECT value FROM json_each(?1)))",
             [plain_libs::serde_json::to_string(paths).unwrap()],
         )?;
         Ok(())

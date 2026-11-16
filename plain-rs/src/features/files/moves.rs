@@ -66,7 +66,7 @@ pub fn rebind_with_aliases(
             let mut statement = tx.prepare("SELECT tag_id,created_at FROM tag_relations WHERE type=?1 AND target_key=?2")?;
             let tags = statement.query_map(params![media_type,binding.source_id],|row|Ok((row.get::<_,String>(0)?,row.get::<_,String>(1)?)))?.collect::<plain_libs::rusqlite::Result<Vec<_>>>()?;
             let progress = if matches!(media_type,DataType::Audio|DataType::Video) {
-                tx.query_row("SELECT position_ms,played_at,play_count FROM media_play_history WHERE file_id=?1 AND media_type=?2",params![binding.source_id,binding.media_type],|row|Ok((row.get::<_,i64>(0)?,row.get::<_,String>(1)?,row.get::<_,i64>(2)?))).optional()?
+                tx.query_row("SELECT position_ms,played_at,play_count FROM media_play_history WHERE file_id=?1 AND media_type=?2",params![binding.source_id,media_type],|row|Ok((row.get::<_,i64>(0)?,row.get::<_,String>(1)?,row.get::<_,i64>(2)?))).optional()?
             } else { None };
             let references = if media_type==DataType::Audio { Some(audio_moves::snapshot(tx,&binding.source_id)?) } else { None };
             snapshots.push((binding,media_type,tags,progress,references));
@@ -75,7 +75,7 @@ pub fn rebind_with_aliases(
             if binding.source_id==binding.destination_id { continue; }
             if *media_type==DataType::Audio { audio_moves::remove_source(tx,&binding.source_id)?; }
             tx.execute("DELETE FROM tag_relations WHERE type=?1 AND target_key=?2",params![media_type,binding.source_id])?;
-            if matches!(media_type,DataType::Audio|DataType::Video) { tx.execute("DELETE FROM media_play_history WHERE file_id=?1 AND media_type=?2",params![binding.source_id,binding.media_type])?; }
+            if matches!(media_type,DataType::Audio|DataType::Video) { tx.execute("DELETE FROM media_play_history WHERE file_id=?1 AND media_type=?2",params![binding.source_id,media_type])?; }
         }
         for (binding,media_type,tags,progress,references) in snapshots {
             if binding.source_id!=binding.destination_id {
@@ -83,9 +83,9 @@ pub fn rebind_with_aliases(
                     tx.execute("INSERT INTO tag_relations(tag_id,target_key,type,created_at) VALUES(?1,?2,?3,?4) ON CONFLICT(tag_id,target_key,type) DO UPDATE SET created_at=min(tag_relations.created_at,excluded.created_at)",params![tag,binding.destination_id,media_type,created])?;
                 }
                 if matches!(media_type,DataType::Audio|DataType::Video) {
-                    tx.execute("DELETE FROM media_play_history WHERE file_id=?1 AND media_type=?2",params![binding.destination_id,binding.media_type])?;
+                    tx.execute("DELETE FROM media_play_history WHERE file_id=?1 AND media_type=?2",params![binding.destination_id,media_type])?;
                     if let Some((position,played,count)) = progress {
-                        tx.execute("INSERT INTO media_play_history(file_id,position_ms,play_count,played_at,media_type) VALUES(?1,?2,?3,?4,?5)",params![binding.destination_id,position,count,played,binding.media_type])?;
+                        tx.execute("INSERT INTO media_play_history(file_id,position_ms,play_count,played_at,media_type) VALUES(?1,?2,?3,?4,?5)",params![binding.destination_id,position,count,played,media_type])?;
                     }
                 }
             }

@@ -279,7 +279,7 @@ pub(crate) fn remove_root_paths_except_conn(
     retained_ids: &[String],
 ) -> DomainResult<()> {
     let prefix = format!("{}/", root.trim_end_matches('/'));
-    let mut statement = c.prepare("SELECT path FROM audio_media WHERE file_id IN (SELECT file_id FROM audio_queue_items UNION SELECT file_id FROM audio_playlist_items UNION SELECT file_id FROM media_play_history WHERE media_type=1) AND file_id NOT IN (SELECT value FROM json_each(?3)) AND (path=?1 OR substr(path,1,length(?2))=?2)")?;
+    let mut statement = c.prepare("SELECT path FROM audio_media WHERE file_id IN (SELECT file_id FROM audio_queue_items UNION SELECT file_id FROM audio_playlist_items UNION SELECT file_id FROM media_play_history WHERE media_type='AUDIO') AND file_id NOT IN (SELECT value FROM json_each(?3)) AND (path=?1 OR substr(path,1,length(?2))=?2)")?;
     let mut paths = statement
         .query_map(
             plain_libs::rusqlite::params![
