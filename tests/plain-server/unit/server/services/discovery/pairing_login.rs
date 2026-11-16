@@ -102,17 +102,15 @@ async fn notice(
     .await
     .unwrap()
 }
-async fn code(
+async fn completed_without_another_wait(
     events: &mut tokio::sync::broadcast::Receiver<plain_rs::infrastructure::events::WsEvent>,
 ) -> Notice {
     tokio::time::timeout(Duration::from_secs(15), async {
         while let Ok(event) = events.recv().await {
-            if event.event_type == "PAIRING_STARTED" {
-                let notice: Notice = plain_libs::serde_json::from_str(&event.payload).unwrap();
-                if notice.verification_code.is_some() {
-                    return notice;
-                }
+            if event.event_type == "PAIRING_COMPLETED" {
+                return plain_libs::serde_json::from_str(&event.payload).unwrap();
             }
+            assert_ne!(event.event_type, "PAIRING_STARTED", "{}", event.payload);
             assert_ne!(event.event_type, "PAIRING_FAILED", "{}", event.payload);
         }
         panic!("pairing notifications closed")
@@ -214,7 +212,7 @@ async fn passwordless_native_management_displays_the_same_code_and_commits_only_
     assert_eq!(request["request"]["osVersion"], client.os_version);
     assert_eq!(request["request"]["appVersion"], client.app_version);
 
-    let waiting = code(&mut notices).await;
+    let waiting = notice(&mut notices, "PAIRING_STARTED").await;
     assert_eq!(
         waiting.verification_code.as_deref(),
         request["request"]["verificationCode"].as_str()
@@ -234,7 +232,7 @@ async fn passwordless_native_management_displays_the_same_code_and_commits_only_
         .confirm_web_login(request["requestId"].as_str().unwrap().into(), true)
         .await
         .unwrap();
-    notice(&mut notices, "PAIRING_COMPLETED").await;
+    completed_without_another_wait(&mut notices).await;
     let peer = plain_rs::infrastructure::db::chat_store::peers::get(&state.db, &remote_id)
         .unwrap()
         .unwrap();
@@ -794,7 +792,7 @@ async fn configured_password_can_complete_without_manual_approval_when_policy_al
         .await
         .unwrap()
     );
-    notice(&mut notices, "PAIRING_COMPLETED").await;
+    completed_without_another_wait(&mut notices).await;
     let peer = plain_rs::infrastructure::db::chat_store::peers::get(
         &state.db,
         &other.native_client_id().unwrap(),

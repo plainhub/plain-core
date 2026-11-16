@@ -141,11 +141,6 @@ pub(super) async fn run(
     .map_err(|_| plain_libs::anyhow::anyhow!("Invalid management address"))?;
     url.query_pairs_mut().append_pair("cid", &client_id);
 
-    crate::features::services::discovery::pairing_runtime::event(
-        state,
-        crate::features::chat::events::WS_PAIRING_STARTED,
-        json!({"deviceId":peer_id,"deviceName":target.target.device_name}),
-    );
     let mut socket = crate::features::services::peers::status_socket::connect(url.as_str())
         .await
         .map_err(|_| plain_libs::anyhow::anyhow!("failed_connect_ws"))?;
@@ -218,11 +213,6 @@ pub(super) async fn run(
             &target.target.device_id,
             plain_libs::chrono::Utc::now().timestamp_millis() as u64,
         )?;
-        crate::features::services::discovery::pairing_runtime::event(
-            state,
-            crate::features::chat::events::WS_PAIRING_STARTED,
-            json!({"deviceId":peer_id,"deviceName":target.target.device_name,"verificationCode":channel.verification_code}),
-        );
         let encrypted = channel.encrypt_request(
             &plain_libs::serde_json::to_vec(&request)?,
             plain_libs::chrono::Utc::now().timestamp_millis() as u64,
@@ -234,6 +224,7 @@ pub(super) async fn run(
             .await?;
         Protection::Confirmation(channel)
     };
+    let mut awaiting_remote_approval = false;
     let response = loop {
         let frame = socket
             .next()
@@ -247,6 +238,24 @@ pub(super) async fn run(
                 let response: Value = plain_libs::serde_json::from_slice(&plain)
                     .map_err(|_| plain_libs::anyhow::anyhow!("invalid_auth_response"))?;
                 if response["status"] == "PENDING" {
+                    if !awaiting_remote_approval {
+                        awaiting_remote_approval = true;
+                        let verification_code = match &protection {
+                            Protection::Confirmation(channel) => {
+                                Some(channel.verification_code.as_str())
+                            }
+                            Protection::Password { .. } => None,
+                        };
+                        crate::features::services::discovery::pairing_runtime::event(
+                            state,
+                            crate::features::chat::events::WS_PAIRING_STARTED,
+                            json!({
+                                "deviceId": peer_id,
+                                "deviceName": target.target.device_name,
+                                "verificationCode": verification_code,
+                            }),
+                        );
+                    }
                     continue;
                 }
                 break response;
