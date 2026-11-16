@@ -3,7 +3,7 @@ use plain_rs::infrastructure::db::{Db, SessionRow};
 use plain_rs::infrastructure::transport::graphql_request::{Envelope, RequestId};
 use sha2::{Digest, Sha256};
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     sync::Mutex,
     time::{Duration, Instant},
 };
@@ -17,7 +17,6 @@ const TOTAL_LIMIT: usize = 262_144;
 type SessionKey = [u8; 32];
 
 pub(crate) struct GraphqlReplay {
-    retired: HashSet<SessionKey>,
     state: Mutex<Cache>,
 }
 
@@ -38,16 +37,9 @@ fn session_key(session: &SessionRow) -> SessionKey {
 }
 
 impl GraphqlReplay {
-    pub(crate) fn new(db: &Db) -> Result<Self, String> {
-        let retired = db
-            .session_list()
-            .map_err(|error| error.to_string())?
-            .iter()
-            .map(session_key)
-            .collect();
+    pub(crate) fn new() -> Self {
         let now = Instant::now();
-        Ok(Self {
-            retired,
+        Self {
             state: Mutex::new(Cache {
                 sessions: HashMap::new(),
                 total: 0,
@@ -55,7 +47,7 @@ impl GraphqlReplay {
                 clock_wall: plain_libs::chrono::Utc::now().timestamp_millis(),
                 clock_instant: now,
             }),
-        })
+        }
     }
 
     pub(crate) fn admit(
@@ -65,9 +57,6 @@ impl GraphqlReplay {
         plain: &str,
     ) -> Result<(), StatusCode> {
         let key = session_key(session);
-        if self.retired.contains(&key) {
-            return Err(StatusCode::UNAUTHORIZED);
-        }
         let id = Envelope::parse(plain)
             .map_err(|_| StatusCode::BAD_REQUEST)?
             .id()

@@ -209,7 +209,7 @@ impl ContentServer {
         });
         let (core, stop) =
             plain_rs::runtime::Runtime::open(directory, token, prefs, host, clients)?;
-        let graphql_replay = Arc::new(crate::http::auth::graphql_replay::GraphqlReplay::new(&core.db)?);
+        let graphql_replay = Arc::new(crate::http::auth::graphql_replay::GraphqlReplay::new());
         let public = crate::graphql::schemas::public::build_with_runtime(core.clone());
         let receiver = core.stop.clone();
         let build_debug = core.host.startup().debug;

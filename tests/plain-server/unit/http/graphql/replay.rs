@@ -128,15 +128,15 @@ async fn malformed_and_unauthed_ids_never_consume_a_valid_request() {
 }
 
 #[tokio::test]
-async fn restart_rejects_the_old_key_without_deleting_sessions_and_rekey_recovers() {
+async fn encrypted_graphql_session_survives_restart_and_keeps_request_validation() {
     let dir = plain_libs::temporary::tempdir().unwrap();
     let server = crate::server::ContentServer::open(dir.path()).unwrap();
     let state = server.runtime_state();
     let session = plain_rs::features::services::sessions::create(&state, "fixture".into()).unwrap();
-    let plain = request(&plain_rs::features::record_id::generate(), "{ __typename }");
-    let body = seal(&session, &plain);
+    let query = "{ __typename }";
+    let fresh = || request(&plain_rs::features::record_id::generate(), query);
     assert_eq!(
-        call(State(state.clone()), headers(&session), body.clone())
+        call(State(state.clone()), headers(&session), seal(&session, &fresh()))
             .await
             .status(),
         StatusCode::OK
@@ -144,56 +144,36 @@ async fn restart_rejects_the_old_key_without_deleting_sessions_and_rekey_recover
     server.stop_core().await;
     drop(state);
     drop(server);
+
     let server = crate::server::ContentServer::open(dir.path()).unwrap();
     let state = server.runtime_state();
-    assert_eq!(
-        state
-            .db
-            .session_get(&session.client_id)
-            .unwrap()
-            .unwrap()
-            .token,
-        session.token
-    );
+    let body = seal(&session, &fresh());
     assert_eq!(
         call(State(state.clone()), headers(&session), body.clone())
             .await
             .status(),
-        StatusCode::UNAUTHORIZED
-    );
-    let mut bearer = headers(&session);
-    bearer.insert(
-        "authorization",
-        format!("Bearer {}", session.token).parse().unwrap(),
-    );
-    assert_eq!(
-        call(
-            State(state.clone()),
-            bearer,
-            Bytes::from_static(br#"{"query":"{ __typename }"}"#)
-        )
-        .await
-        .status(),
         StatusCode::OK
     );
-    let mut renewed = session.clone();
-    renewed.token = plain_libs::utils::base64::base64_encode(&plain_libs::crypto::random_bytes(32));
-    state.db.session_save(&renewed).unwrap();
     assert_eq!(
         call(State(state.clone()), headers(&session), body)
             .await
             .status(),
-        StatusCode::UNAUTHORIZED
+        StatusCode::BAD_REQUEST
     );
+    // A valid UUIDv7 with a timestamp at the Unix epoch is always expired here.
+    let expired = request("00000000-0000-7000-8000-000000000000", query);
     assert_eq!(
-        call(
-            State(state.clone()),
-            headers(&renewed),
-            seal(&renewed, &plain)
-        )
-        .await
-        .status(),
-        StatusCode::OK
+        call(State(state.clone()), headers(&session), seal(&session, &expired))
+            .await
+            .status(),
+        StatusCode::BAD_REQUEST
+    );
+    assert!(plain_rs::features::services::sessions::logout(&state, &session.client_id).unwrap());
+    assert_eq!(
+        call(State(state.clone()), headers(&session), seal(&session, &fresh()))
+            .await
+            .status(),
+        StatusCode::UNAUTHORIZED
     );
     server.stop_core().await;
 }
