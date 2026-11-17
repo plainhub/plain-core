@@ -1,6 +1,34 @@
 use super::*;
 
 #[test]
+fn dot_aad_binds_resource_purpose_scope_and_complete_owner() {
+    let key = [7; 32];
+    for (scope, mode) in [
+        (Scope::Session("owner.with.dots".into()), "c"),
+        (Scope::Share("share.with.dots".into()), "s"),
+    ] {
+        let (_, owner) = scope.parts();
+        for purpose in [ResourcePurpose::Fs, ResourcePurpose::ZipFiles] {
+            let expected = format!("{}.{mode}.{owner}", purpose.as_str());
+            assert_eq!(scope.aad(purpose), expected.as_bytes());
+            let envelope = encrypt(&scope, purpose, &key, b"payload").unwrap();
+            let (_, payload) = parse(&envelope).unwrap();
+            let bytes = plain_libs::utils::base64::base64_decode_checked(payload).unwrap();
+            assert_eq!(
+                plain_libs::crypto::xchacha_decrypt_raw_with_aad(&key, &bytes, expected.as_bytes())
+                    .unwrap(),
+                b"payload"
+            );
+            let old = format!("{}\0{mode}\0{owner}", purpose.as_str());
+            assert!(
+                plain_libs::crypto::xchacha_decrypt_raw_with_aad(&key, &bytes, old.as_bytes())
+                    .is_none()
+            );
+        }
+    }
+}
+
+#[test]
 fn scopes_roundtrip_variable_identifiers_and_encode_only_binary_payload() {
     for scope in [
         Scope::Session("706c6169-fdbb-865c-ab5a-2260e9b9f142".into()),

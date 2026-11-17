@@ -3,9 +3,9 @@ use plain_libs::aad::AadPurpose;
 /// Request binding uses the logical destination across HTTP, proxy, BLE and Aware.
 pub fn aad(method: &str, endpoint: &str) -> Vec<u8> {
     let mut aad = AadPurpose::HttpRequest.as_str().as_bytes().to_vec();
-    aad.push(0);
+    aad.push(b'.');
     aad.extend_from_slice(method.as_bytes());
-    aad.push(0);
+    aad.push(b'.');
     aad.extend_from_slice(endpoint.as_bytes());
     aad
 }

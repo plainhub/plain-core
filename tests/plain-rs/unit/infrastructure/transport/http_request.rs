@@ -1,6 +1,37 @@
 use super::*;
 
 #[test]
+fn dot_aad_binds_requests_and_rejects_zero_separators() {
+    let key = [7; 32];
+    for endpoint in [
+        "/init",
+        "/upload",
+        "/upload_chunk",
+        "/graphql",
+        "/guest_graphql",
+        "/peer_graphql",
+        "/file.with.dots",
+    ] {
+        let expected = format!("HTTP_REQUEST.POST.{endpoint}");
+        assert_eq!(aad("POST", endpoint), expected.as_bytes());
+        let body = encrypt_raw(&key, "POST", endpoint, b"payload").unwrap();
+        assert_eq!(
+            plain_libs::crypto::xchacha_decrypt_raw_with_aad(&key, &body, expected.as_bytes())
+                .unwrap(),
+            b"payload"
+        );
+        let old = format!("HTTP_REQUEST\0POST\0{endpoint}");
+        assert!(
+            plain_libs::crypto::xchacha_decrypt_raw_with_aad(&key, &body, old.as_bytes()).is_none()
+        );
+        let old_body =
+            plain_libs::crypto::xchacha_encrypt_raw_with_aad(&key, b"payload", old.as_bytes())
+                .unwrap();
+        assert!(decrypt_raw(&key, "POST", endpoint, &old_body).is_none());
+    }
+}
+
+#[test]
 fn encrypts_graphql_json_with_fresh_uuid_v7_request_ids() {
     let token = plain_libs::crypto::gen_token();
     let key = plain_libs::utils::base64::base64_decode(&token);

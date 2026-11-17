@@ -18,7 +18,7 @@ impl Scope {
 
     fn aad(&self, purpose: ResourcePurpose) -> Vec<u8> {
         let (mode, owner) = self.parts();
-        format!("{}\0{mode}\0{owner}", purpose.as_str()).into_bytes()
+        format!("{}.{mode}.{owner}", purpose.as_str()).into_bytes()
     }
 }
 
