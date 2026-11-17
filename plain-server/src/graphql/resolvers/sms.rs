@@ -170,7 +170,7 @@ impl SmsQuery {
             },
         )
         .await
-        .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
+        .map_err(|error| plain_graphql::Error::from(error))?;
         Ok(receipt["items"]
             .as_array()
             .map(|items| items.iter().map(|item| message(item)).collect())
@@ -194,7 +194,7 @@ impl SmsQuery {
             sms_query::Request::Counts,
         )
         .await
-        .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
+        .map_err(|error| plain_graphql::Error::from(error))?;
         Ok(SmsCounts {
             total: integer(&receipt, "total") as i32,
             inbox: integer(&receipt, "inbox") as i32,
@@ -263,7 +263,7 @@ impl SmsMutation {
                 sms_query::Request::ConversationDate { id: id.0.clone() },
             )
             .await
-            .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
+            .map_err(|error| plain_graphql::Error::from(error))?;
             receipt["date"]
                 .as_str()
                 .map(str::to_owned)
@@ -273,14 +273,14 @@ impl SmsMutation {
                 })
         };
         sms_state::archive(ctx.data_unchecked::<Arc<Db>>(), id.as_str(), &date)
-            .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
+            .map_err(|error| plain_graphql::Error::from(error))?;
         Ok(true)
     }
 
     fn unarchive_sms_conversation(&self, ctx: &Context<'_>, id: ID) -> plain_graphql::Result<bool> {
         public_gate::require(ctx, ctx.data_unchecked::<Arc<Prefs>>(), &[SMS])?;
         sms_state::unarchive(ctx.data_unchecked::<Arc<Db>>(), id.as_str())
-            .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
+            .map_err(|error| plain_graphql::Error::from(error))?;
         Ok(true)
     }
 
@@ -346,7 +346,7 @@ impl SmsMutation {
             },
         )
         .await
-        .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
+        .map_err(|error| plain_graphql::Error::from(error))?;
         Ok(SmsSendReceipt {
             request_id: receipt.request_id,
             requires_confirmation: receipt.requires_confirmation,
@@ -361,7 +361,7 @@ async fn count(ctx: &Context<'_>, request: sms_query::Request) -> plain_graphql:
         request,
     )
     .await
-    .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
+    .map_err(|error| plain_graphql::Error::from(error))?;
     Ok(integer(&receipt, "count") as i32)
 }
 
@@ -391,7 +391,7 @@ async fn conversations(
         request,
     )
     .await
-    .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
+    .map_err(|error| plain_graphql::Error::from(error))?;
     Ok(receipt["items"]
         .as_array()
         .map(|items| items.iter().map(conversation).collect())
@@ -408,7 +408,7 @@ async fn bulk(
         .data_unchecked::<Arc<plain_rs::features::services::sms::mutations::Mutations>>()
         .execute(action, query)
         .await
-        .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
+        .map_err(|error| plain_graphql::Error::from(error))?;
     Ok(ActionResult { affected_count })
 }
 

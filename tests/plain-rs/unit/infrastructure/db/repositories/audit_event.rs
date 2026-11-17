@@ -206,7 +206,7 @@ fn every_event_roundtrips_its_exact_payload_and_rejects_unknown_contracts() {
         (
             "LOGIN_FAILED",
             AuditEvent::LoginFailed(LoginFailedEventData {
-                reason: EventReason::InvalidPassword,
+                reason: ErrorCode::InvalidPassword,
             }),
         ),
         ("LOGOUT", AuditEvent::Logout(session.clone())),
@@ -229,7 +229,7 @@ fn every_event_roundtrips_its_exact_payload_and_rejects_unknown_contracts() {
             AuditEvent::MountFailed(VolumeFailedEventData {
                 volume: volume.clone(),
                 failure: EventFailure {
-                    reason: EventReason::MountFailed,
+                    reason: ErrorCode::MountFailed,
                     detail: None,
                 },
             }),
@@ -248,7 +248,7 @@ fn every_event_roundtrips_its_exact_payload_and_rejects_unknown_contracts() {
                 disk,
                 file_system: "ext4".into(),
                 failure: EventFailure {
-                    reason: EventReason::FormatDiskFailed,
+                    reason: ErrorCode::FormatDiskFailed,
                     detail: None,
                 },
             }),

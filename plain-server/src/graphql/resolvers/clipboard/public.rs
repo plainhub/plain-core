@@ -1,3 +1,4 @@
+use plain_rs::infrastructure::error_code::ErrorCode;
 use plain_rs::features::access::AccessFeature;
 use crate::graphql::resolvers::clipboard::models::ClipboardItem;
 use crate::graphql::types::ActionResult;
@@ -57,7 +58,7 @@ impl ClipboardMutation {
             .map(crate::graphql::executor::RequestClient::client_id)
             .unwrap_or_default();
         plain_rs::features::clipboard::validate_text(&text)
-            .map_err(plain_graphql::Error::new)?;
+            .map_err(plain_graphql::Error::from)?;
         let _receipt = ctx
             .data_opt::<crate::server::ServerState>()
             .map(|state| state.clipboard_changes.received(&text));
@@ -65,7 +66,7 @@ impl ClipboardMutation {
             .data::<Arc<Host>>()?
             .call("systemSetClipboard", plain_libs::serde_json::json!({ "text": &text }))
             .await
-            .map_err(plain_graphql::Error::new)?;
+            .map_err(plain_graphql::Error::from)?;
         let written = plain_libs::serde_json::from_value(result)?;
         if written {
             plain_rs::features::services::clipboard::record_history(
@@ -75,7 +76,7 @@ impl ClipboardMutation {
                 source,
                 false,
             )
-            .map_err(plain_graphql::Error::new)?;
+            .map_err(plain_graphql::Error::from)?;
         }
         Ok(written)
     }
@@ -97,7 +98,7 @@ impl ClipboardMutation {
         let affected_count = ctx
             .data::<Arc<Db>>()?
             .clipboard_delete_query(&query)
-            .map_err(plain_graphql::Error::new)?;
+            .map_err(plain_graphql::Error::from)?;
         if affected_count > 0 {
             ctx.data::<Arc<Host>>()?
                 .invalidate("clipboardHistoryRefresh");
@@ -118,7 +119,7 @@ fn enabled(ctx: &Context<'_>) -> plain_graphql::Result<()> {
     {
         Ok(())
     } else {
-        Err(plain_graphql::Error::new("clipboard_sync_disabled"))
+        Err(plain_graphql::Error::from(ErrorCode::ClipboardSyncDisabled))
     }
 }
 

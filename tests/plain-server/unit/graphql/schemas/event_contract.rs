@@ -138,10 +138,10 @@ fn event_payloads_keep_named_union_members_enums_and_nullable_actor_fields() {
                 "clientName: String!",
             ],
         ),
-        ("LoginFailedEventData", vec!["reason: EventReason!"]),
+        ("LoginFailedEventData", vec!["reason: ErrorCode!"]),
         (
             "EventFailure",
-            vec!["reason: EventReason!", "detail: String"],
+            vec!["reason: ErrorCode!", "detail: String"],
         ),
         ("EventDisk", vec!["sizeBytes: Long"]),
         ("VolumeFailedEventData", vec!["failure: EventFailure!"]),
@@ -170,7 +170,7 @@ fn event_payloads_keep_named_union_members_enums_and_nullable_actor_fields() {
         .unwrap();
     assert!(!event.contains("message:"));
     let reasons: Vec<_> = sdl
-        .split("enum EventReason {")
+        .split("enum ErrorCode {")
         .nth(1)
         .unwrap()
         .split('}')
@@ -178,9 +178,7 @@ fn event_payloads_keep_named_union_members_enums_and_nullable_actor_fields() {
         .unwrap()
         .split_whitespace()
         .collect();
-    assert_eq!(
-        reasons,
-        [
+    for reason in [
             "INVALID_LOGIN_REQUEST",
             "INVALID_PASSWORD",
             "PEER_IDENTITY_CHANGED",
@@ -193,6 +191,7 @@ fn event_payloads_keep_named_union_members_enums_and_nullable_actor_fields() {
             "CANCELED",
             "MOUNT_FAILED",
             "FORMAT_DISK_FAILED"
-        ]
-    );
+    ] {
+        assert!(reasons.contains(&reason), "missing shared error {reason}");
+    }
 }

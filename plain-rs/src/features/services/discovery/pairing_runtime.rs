@@ -1,3 +1,4 @@
+use crate::infrastructure::error_code::ErrorCode;
 use crate::features::discovery::nearby_devices::DiscoveryMethod;
 use crate::features::discovery::nearby_http;
 use crate::features::discovery::nearby_wire::Message;
@@ -135,7 +136,7 @@ pub fn event(state: &CoreRuntime, kind: &'static str, value: Value) {
             value.to_string(),
         ));
 }
-pub fn failed(state: &CoreRuntime, target: &Target, error: &str, _generation: Option<&str>) {
+pub fn failed(state: &CoreRuntime, target: &Target, error: ErrorCode, _generation: Option<&str>) {
     let result = json!({"deviceId":target.device_id,"deviceName":target.device_name,"error":error});
     event(
         state,
@@ -320,7 +321,7 @@ pub async fn execute(state: &CoreRuntime, request: Request) -> plain_libs::anyho
                     state, target, device, generation,
                 )?
             } else {
-                failed(state, &target, "No pairing transport available", None);
+                failed(state, &target, ErrorCode::PairingTransportUnavailable, None);
                 Value::Null
             }
         }
@@ -335,7 +336,7 @@ pub async fn execute(state: &CoreRuntime, request: Request) -> plain_libs::anyho
                 &crate::infrastructure::transport::lan::local_interfaces(),
             );
             if target.device_ip.is_empty() {
-                failed(state, &target, "No reachable pairing address", None);
+                failed(state, &target, ErrorCode::PairingAddressUnavailable, None);
                 return Ok(Value::Null);
             }
             let result = {
@@ -423,7 +424,7 @@ pub async fn execute(state: &CoreRuntime, request: Request) -> plain_libs::anyho
                 failed(
                     state,
                     &ticket.target,
-                    "Failed to send pairing request",
+                    ErrorCode::FailedConnect,
                     Some(&ticket.generation),
                 );
             }

@@ -1,3 +1,4 @@
+use plain_rs::infrastructure::error_code::ErrorCode;
 use super::{PeerRoute, authorize_graphql, caller, current, decode_key};
 use crate::native::sockets::{MAX_SOCKET_CONTROL_BYTES, NativeSockets, SocketKind};
 use crate::server::ServerState;
@@ -117,9 +118,9 @@ async fn run(
             reason: (if result.is_ok() {
                 ""
             } else if kind.is_some() {
-                "managed_socket_closed"
+                ErrorCode::ManagedSocketClosed.as_str()
             } else {
-                "managed_subscription_closed"
+                ErrorCode::ManagedSubscriptionClosed.as_str()
             })
             .into(),
         })),

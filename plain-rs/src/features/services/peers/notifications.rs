@@ -1,3 +1,4 @@
+use crate::infrastructure::error_code::ErrorCode;
 use crate::features::capability::Capability;
 use crate::features::chat::enums::DeviceType;
 use crate::features::services::notifications::types::Notification;
@@ -280,8 +281,8 @@ impl Store {
             }
             Err(error)
                 if matches!(
-                    error.downcast_ref::<crate::features::services::peers::management_http::AuthorizationError>(),
-                    Some(crate::features::services::peers::management_http::AuthorizationError::Permission)
+                    error.downcast_ref::<ErrorCode>(),
+                    Some(ErrorCode::RemoteAccessDisabled)
                 ) =>
             {
                 peer.group.items.clear();
@@ -293,8 +294,8 @@ impl Store {
             }
             Err(error)
                 if matches!(
-                    error.downcast_ref::<crate::features::services::peers::management_http::AuthorizationError>(),
-                    Some(crate::features::services::peers::management_http::AuthorizationError::Session)
+                    error.downcast_ref::<ErrorCode>(),
+                    Some(ErrorCode::Unauthorized)
                 ) =>
             {
                 peer.group.items.clear();

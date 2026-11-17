@@ -57,8 +57,8 @@ impl Query {
         let path = relative_path.unwrap_or_default();
         let (share, roots) = tokio::task::spawn_blocking(move || service.browse(&id, &path))
             .await
-            .map_err(|e| plain_graphql::Error::new(e.to_string()))?
-            .map_err(|e| plain_graphql::Error::new(e.to_string()))?;
+            .map_err(|e| plain_graphql::Error::from(e))?
+            .map_err(|e| plain_graphql::Error::from(e))?;
         let mut entries = Vec::new();
         for root in roots {
             let name = root

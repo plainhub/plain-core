@@ -101,7 +101,7 @@ fn validation_uses_kotlin_utf16_length() {
     let db = Db::open(std::path::Path::new(":memory:")).unwrap();
     for text in ["", " \t\n", "\u{a0}", &"🌍".repeat(128 * 1024 + 1)] {
         assert_eq!(
-            crate::features::clipboard::record(&db, text, "", "", false).unwrap_err(),
+            crate::features::clipboard::record(&db, text, "", "", false).unwrap_err().to_string(),
             "invalid_clipboard_text"
         );
     }

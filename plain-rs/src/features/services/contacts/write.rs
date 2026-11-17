@@ -1,3 +1,4 @@
+use crate::infrastructure::error_code::ErrorCode;
 use crate::features::capability::Capability;
 use crate::features::prefs::Prefs;
 use crate::features::services::capabilities;
@@ -190,7 +191,7 @@ pub async fn execute(
         crate::features::prefs::pref_keys::API_PERMISSIONS,
         Vec::new(),
     );
-    plain_libs::anyhow::ensure!(permission_allowed(&configured), "no_permission");
+    plain_libs::anyhow::ensure!(permission_allowed(&configured), ErrorCode::NoPermission);
     capabilities::require(host, Capability::Telephony).await?;
     match request.action {
         Action::CreateContact | Action::UpdateContact => {

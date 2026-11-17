@@ -1,3 +1,4 @@
+use plain_rs::infrastructure::error_code::ErrorCode;
 use crate::graphql::executor::{RequestClient, RequestOrigin};
 use crate::server::ServerState;
 use futures_util::{
@@ -17,7 +18,7 @@ pub(super) async fn authorize(
     if let Some(capability) = spec.capability {
         plain_rs::features::services::capabilities::require(&state.host, capability)
             .await
-            .map_err(|e| plain_graphql::Error::new(e.to_string()))?;
+            .map_err(|e| plain_graphql::Error::from(e))?;
     }
     if !spec.access.is_empty() {
         let features: Vec<_> = spec
@@ -33,13 +34,13 @@ pub(super) async fn authorize(
             })
             .collect();
         if features.is_empty() {
-            return Err("no_permission".into());
+            return Err(ErrorCode::NoPermission.into());
         }
         let granted = plain_rs::features::services::device::access::sample(&state.host, &features)
             .await
             .map_err(plain_graphql::Error::new)?;
         if granted.is_empty() {
-            return Err("no_permission".into());
+            return Err(ErrorCode::NoPermission.into());
         }
     }
     Ok(())
@@ -57,18 +58,18 @@ async fn mirror_snapshot(state: &ServerState, name: &str) -> Result<String> {
             running: bool,
         }
         let running: Running = plain_libs::serde_json::from_value(snapshot)
-            .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
+            .map_err(|error| plain_graphql::Error::from(error))?;
         plain_libs::serde_json::to_string(&running)
-            .map_err(|error| plain_graphql::Error::new(error.to_string()))
+            .map_err(|error| plain_graphql::Error::from(error))
     } else {
         #[derive(serde::Deserialize)]
         struct Codec {
             codec: Option<super::models::MirrorCodecConfiguration>,
         }
         let codec: Codec = plain_libs::serde_json::from_value(snapshot)
-            .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
+            .map_err(|error| plain_graphql::Error::from(error))?;
         plain_libs::serde_json::to_string(&codec.codec)
-            .map_err(|error| plain_graphql::Error::new(error.to_string()))
+            .map_err(|error| plain_graphql::Error::from(error))
     }
 }
 
@@ -86,8 +87,8 @@ pub(super) async fn stream<T: DeserializeOwned + Send + 'static>(
     let receiver = state.events.subscribe();
     authorize(&state, origin, spec).await?;
     if spec.field == "smsSendResult" {
-        state.sms_sends.replay().map_err(|error| plain_graphql::Error::new(error.to_string()))?;
-        state.mms.replay().map_err(|error| plain_graphql::Error::new(error.to_string()))?;
+        state.sms_sends.replay().map_err(|error| plain_graphql::Error::from(error))?;
+        state.mms.replay().map_err(|error| plain_graphql::Error::from(error))?;
     }
     let initial = snapshot(&state, name).await?;
     let has_snapshot = initial.is_some();
@@ -104,7 +105,7 @@ pub(super) async fn stream<T: DeserializeOwned + Send + 'static>(
                     _ = async { let _ = stop.wait_for(|stopped| *stopped).await; } => return None,
                     event = receiver.recv() => match event {
                         Ok(event) => event,
-                        Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => return Some((Err("resync_required".into()), (receiver, state, client, stop, None, true))),
+                        Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => return Some((Err(ErrorCode::ResyncRequired.into()), (receiver, state, client, stop, None, true))),
                         Err(_) => return None,
                     },
                 };
@@ -139,10 +140,10 @@ async fn snapshot(state: &ServerState, name: &str) -> Result<Option<String>> {
             return mirror_snapshot(state, name).await.map(Some);
         }
         "DLNA_SENDER_CHANGED" => plain_libs::serde_json::to_string(&state.cast.snapshot())
-            .map_err(|error| plain_graphql::Error::new(error.to_string()))?,
+            .map_err(|error| plain_graphql::Error::from(error))?,
         plain_rs::infrastructure::events::HTTP_SERVER_CHANGED => {
             plain_libs::serde_json::to_string(&crate::graphql::resolvers::app::http_server::snapshot(state).await?)
-                .map_err(|error| plain_graphql::Error::new(error.to_string()))?
+                .map_err(|error| plain_graphql::Error::from(error))?
         }
         "IMAGE_MODELS_UPDATED" => state.image_models.snapshot().event().payload,
         _ => return Ok(None),

@@ -336,7 +336,7 @@ fn absent_incomplete_and_container_devices_are_never_mount_candidates() {
 #[tokio::test]
 async fn mount_outcomes_submit_typed_snapshots_without_a_client_actor() {
     use crate::features::audit_events::{
-        AuditEvent, EventData, EventReason, EventType, EventVolume,
+        AuditEvent, EventData, ErrorCode, EventType, EventVolume,
     };
     use crate::features::services::audit_events::AuditEvents;
     let db =
@@ -381,7 +381,7 @@ async fn mount_outcomes_submit_typed_snapshots_without_a_client_actor() {
         })
         .data()
     );
-    assert!(rows.iter().any(|row| matches!(&row.data, EventData::VolumeFailed(data) if data.volume == volume && data.failure.reason == EventReason::MountFailed && data.failure.detail.is_none())));
+    assert!(rows.iter().any(|row| matches!(&row.data, EventData::VolumeFailed(data) if data.volume == volume && data.failure.reason == ErrorCode::MountFailed && data.failure.detail.is_none())));
     assert!(
         db.audit_events(0, 10, Some("private-command-output"))
             .unwrap()

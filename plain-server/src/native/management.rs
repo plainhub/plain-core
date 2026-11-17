@@ -187,7 +187,7 @@ impl NativeManagement {
         self.state.native_client_id()?;
         crate::http::auth::ws_login::Confirmation::new(self.state.clone())
             .decide(&request_id, allowed)
-            .await?;
+            .await.map_err(|code| code.to_string())?;
         Ok(true)
     }
 

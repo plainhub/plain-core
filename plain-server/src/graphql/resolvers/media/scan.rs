@@ -1,3 +1,4 @@
+use plain_rs::infrastructure::error_code::ErrorCode;
 use super::types::FileIndexScanProgress;
 use crate::server::ServerState;
 use plain_graphql::{Context, ID, InputObject, Object, Result, SimpleObject};
@@ -13,9 +14,9 @@ async fn state<'a>(ctx: &'a Context<'_>) -> Result<&'a ServerState> {
     crate::http::auth::public_gate::require(ctx, &state.prefs, &[super::public::STORAGE])?;
     if !crate::http::auth::public_gate::require_granted(ctx, &[super::public::STORAGE])
         .await
-        .map_err(|error| plain_graphql::Error::new(error.to_string()))?
+        .map_err(|error| plain_graphql::Error::from(error))?
     {
-        return Err("no_permission".into());
+        return Err(ErrorCode::NoPermission.into());
     }
     Ok(state)
 }
@@ -23,7 +24,7 @@ async fn index_state<'a>(ctx: &'a Context<'_>) -> Result<&'a ServerState> {
     let state = state(ctx).await?;
     plain_rs::features::services::capabilities::require(&state.host, Capability::MediaScan)
         .await
-        .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
+        .map_err(|error| plain_graphql::Error::from(error))?;
     Ok(state)
 }
 #[derive(Default)]

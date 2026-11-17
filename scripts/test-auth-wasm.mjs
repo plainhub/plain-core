@@ -42,7 +42,7 @@ async function exchange(mode) {
     const state = login;
     login = undefined;
     const finish = () => state.finish(ke2,
-      mode === 'wrong-context' ? 'wrong-client' : 'wasm-test-client',
+      mode === 'wrong-context' ? '706c6169-0001-8000-8000-000000000002' : '706c6169-0001-8000-8000-000000000001',
       mode === 'wrong-identity' ? new Uint8Array(32).fill(8) : identity);
     if (mode !== 'success') {
       assert.throws(finish);
@@ -87,7 +87,7 @@ sandbox.initialize = module.namespace.initSync;
 sandbox.bytes = bytes;
 runInContext("initialize({ module: bytes })", sandbox);
 assert.throws(() => module.namespace.OpaqueLogin.start(new Uint8Array([1, 2, 3])),
-  (error) => String(error).includes("Secure randomness is unavailable"));
+  (error) => String(error).includes("secure_login_unavailable"));
 console.log('PASS missing secure randomness fails closed');
 console.log(JSON.stringify({ wasmBytes: bytes.length, gzipBytes: gzipSync(bytes).length,
   brotliBytes: brotliCompressSync(bytes).length, glueBytes: Buffer.byteLength(glue) }));

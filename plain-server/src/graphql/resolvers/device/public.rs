@@ -278,7 +278,7 @@ impl DeviceMutation {
                 capability,
             )
             .await
-            .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
+            .map_err(|error| plain_graphql::Error::from(error))?;
         }
         let accepted = ctx
             .data_unchecked::<Arc<Host>>()
@@ -291,7 +291,7 @@ impl DeviceMutation {
             .await
             .map_err(plain_graphql::Error::new)?;
         plain_libs::serde_json::from_value(accepted)
-            .map_err(|error| plain_graphql::Error::new(error.to_string()))
+            .map_err(|error| plain_graphql::Error::from(error))
     }
 
     async fn clear_app_logs(&self, ctx: &Context<'_>) -> plain_graphql::Result<bool> {
@@ -333,7 +333,7 @@ impl DeviceMutation {
             Capability::AppRelaunch,
         )
         .await
-        .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
+        .map_err(|error| plain_graphql::Error::from(error))?;
         host_call(ctx, "systemRelaunchApp", json!({})).await?;
         Ok(true)
     }

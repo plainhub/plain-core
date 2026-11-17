@@ -289,7 +289,7 @@ fn mount_one(
             AuditEvent::MountFailed(VolumeFailedEventData {
                 volume,
                 failure: EventFailure {
-                    reason: EventReason::MountFailed,
+                    reason: ErrorCode::MountFailed,
                     detail: None,
                 },
             })

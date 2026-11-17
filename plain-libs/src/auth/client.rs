@@ -9,7 +9,7 @@ pub struct OpaqueLogin {
 }
 
 #[derive(Debug)]
-pub(crate) enum LoginError {
+pub enum LoginError {
     Randomness,
     Start,
     SigningKey,
@@ -18,22 +18,24 @@ pub(crate) enum LoginError {
     PeerIdentity,
 }
 impl LoginError {
-    fn native_message(self) -> String {
+    pub fn as_str(&self) -> &'static str {
         match self {
-            Self::Randomness => "Secure randomness unavailable",
-            Self::Start => "Unable to start password login",
+            Self::Randomness => "secure_login_unavailable",
+            Self::Start => "invalid_auth_response",
             Self::SigningKey | Self::Response => "invalid_auth_response",
             Self::Password => "invalid_password",
             Self::PeerIdentity => "peer_identity_changed",
         }
-        .into()
     }
 }
-impl OpaqueLogin {
-    pub fn start(password: Vec<u8>) -> Result<OpaqueLogin, String> {
-        Self::try_start(password).map_err(LoginError::native_message)
+impl std::fmt::Display for LoginError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(self.as_str())
     }
-    pub(crate) fn try_start(password: Vec<u8>) -> Result<OpaqueLogin, LoginError> {
+}
+impl std::error::Error for LoginError {}
+impl OpaqueLogin {
+    pub fn start(password: Vec<u8>) -> Result<OpaqueLogin, LoginError> {
         let password = Zeroizing::new(password);
         let mut rng = OsRng;
         rng.try_fill_bytes(&mut [0u8; 1])
@@ -56,9 +58,8 @@ impl OpaqueLogin {
         cid: &str,
         server_signing_key: &[u8],
         expected_server_key: &[u8],
-    ) -> Result<LoginResult, String> {
+    ) -> Result<LoginResult, LoginError> {
         self.finish_protocol(response, cid, server_signing_key, Some(expected_server_key))
-            .map_err(LoginError::native_message)
     }
     pub(crate) fn finish_protocol(
         self,

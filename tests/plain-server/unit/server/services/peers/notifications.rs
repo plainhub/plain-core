@@ -1,3 +1,4 @@
+use plain_rs::infrastructure::error_code::ErrorCode;
 use plain_libs::anyhow::Result;
 use plain_libs::protocols::http_client;
 use plain_rs::features::chat::enums::DeviceType;
@@ -416,8 +417,8 @@ async fn encrypted_snapshots_keep_socket_delivery_live_and_discard_revoked_crede
     .await
     .unwrap_err();
     assert!(matches!(
-        error.downcast_ref::<plain_rs::features::services::peers::management_http::AuthorizationError>(),
-        Some(plain_rs::features::services::peers::management_http::AuthorizationError::Permission)
+        error.downcast_ref::<ErrorCode>(),
+        Some(ErrorCode::RemoteAccessDisabled)
     ));
     let denied = event(&mut callbacks);
     assert!(denied["group"]["items"].as_array().unwrap().is_empty());

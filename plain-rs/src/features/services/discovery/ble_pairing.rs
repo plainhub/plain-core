@@ -1,3 +1,4 @@
+use crate::infrastructure::error_code::ErrorCode;
 use crate::features::chat::events::WS_PAIRING_STARTED;
 use crate::features::discovery::nearby_wire::Message;
 use crate::features::peers::pairing::sessions::Target;
@@ -18,7 +19,7 @@ use std::{
 pub struct Pairings(Mutex<HashMap<String, Ticket>>);
 enum Cause {
     Stopped,
-    Failed(String),
+    Failed(ErrorCode),
 }
 pub fn start(
     state: &CoreRuntime,
@@ -35,11 +36,11 @@ pub fn start(
         {
             return Ok(json!({"ticket":ticket}));
         }
-        failed(state, &target, "Previous BLE connection is closing", None);
+        failed(state, &target, ErrorCode::BleConnectionClosing, None);
         return Ok(Value::Null);
     }
     if jobs.len() >= 2 {
-        failed(state, &target, "BLE pairing capacity exceeded", None);
+        failed(state, &target, ErrorCode::BlePairingCapacityExceeded, None);
         return Ok(Value::Null);
     }
     target.device_ip.clear();
@@ -82,7 +83,7 @@ pub fn start(
                     .cancel(&ticket.target.device_id, Some(&ticket.generation))
                     .is_some()
             {
-                failed(&state, &ticket.target, &error, Some(&ticket.generation));
+                failed(&state, &ticket.target, error, Some(&ticket.generation));
             }
         }
         let _ = state
@@ -114,7 +115,7 @@ async fn host(
         tokio::select! {
             _=stop.changed()=>return Err(Cause::Stopped),
             _=timer.tick()=>{if *stop.borrow() || state.pairing.remaining_ms(&ticket.target.device_id,&ticket.generation).is_none() {return Err(Cause::Stopped);}},
-            value=&mut call=>return value.map_err(Cause::Failed)
+            value=&mut call=>return value.map_err(|error| { log::warn!("BLE pairing failed: {error}"); Cause::Failed(ErrorCode::FailedConnect) })
         }
     }
 }
@@ -130,12 +131,12 @@ async fn run(
         "clientId": ticket.target.device_id,
     });
     if host(state, ticket, "blePairConnect", connect).await? != Value::Bool(true) {
-        return Err(Cause::Failed("Connection failed".into()));
+        return Err(Cause::Failed(ErrorCode::FailedConnect));
     }
     let mut send = facts.clone();
     send["packet"] = json!(packet);
     if host(state, ticket, "blePairSend", send.clone()).await? != Value::Bool(true) {
-        return Err(Cause::Failed("Failed to send pairing request".into()));
+        return Err(Cause::Failed(ErrorCode::FailedConnect));
     }
     if !state
         .pairing
@@ -163,7 +164,7 @@ async fn run(
                 .awaiting_response(state, ticket)
         {
             if host(state, ticket, "blePairSend", send.clone()).await? != Value::Bool(true) {
-                return Err(Cause::Failed("Failed to resend pairing request".into()));
+                return Err(Cause::Failed(ErrorCode::FailedConnect));
             }
             last_send = Instant::now();
         }
@@ -171,7 +172,7 @@ async fn run(
         wait["timeoutMs"] = json!(remaining.min(1000));
         let response = host(state, ticket, "blePairWait", wait).await?;
         if response.get("connected").and_then(Value::as_bool) != Some(true) {
-            return Err(Cause::Failed("Connection lost".into()));
+            return Err(Cause::Failed(ErrorCode::FailedConnect));
         }
         let Some(body) = response.get("notification").and_then(Value::as_str) else {
             continue;

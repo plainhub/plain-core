@@ -195,7 +195,7 @@ async fn confirmation_is_once_only_and_cancel_or_revoke_prevents_issuance() {
             ws_login::execute(
                 &state,
                 ws_login::Request::Cancel {
-                    reason: "canceled",
+                    reason: plain_rs::infrastructure::error_code::ErrorCode::Canceled,
                     request_id: id.clone(),
                 },
             )

@@ -87,7 +87,7 @@ impl ScreenMirrorQuery {
             Capability::ScreenMirror,
         )
         .await
-        .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
+        .map_err(|error| plain_graphql::Error::from(error))?;
         let stored = plain_rs::features::prefs::settings::snapshot(
             ctx.data_unchecked::<Arc<plain_rs::features::prefs::Prefs>>(),
         )?
@@ -131,7 +131,7 @@ impl ScreenMirrorMutation {
             Capability::ScreenMirror,
         )
         .await
-        .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
+        .map_err(|error| plain_graphql::Error::from(error))?;
         let granted = ctx
             .data_unchecked::<Arc<Host>>()
             .call(
@@ -165,7 +165,7 @@ impl ScreenMirrorMutation {
             Capability::ScreenMirror,
         )
         .await
-        .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
+        .map_err(|error| plain_graphql::Error::from(error))?;
         let quality = plain_libs::serde_json::json!({"mode":mode.name(),"resolution":if mode==ScreenMirrorMode::Smooth {720}else{1080}});
         crate::graphql::resolvers::settings::state::preferences(ctx)?
             .set(
@@ -200,7 +200,7 @@ async fn state(ctx: &Context<'_>) -> plain_graphql::Result<Value> {
         Capability::ScreenMirror,
     )
     .await
-    .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
+    .map_err(|error| plain_graphql::Error::from(error))?;
     ctx.data_unchecked::<Arc<Host>>()
         .call("systemScreenMirrorState", plain_libs::serde_json::json!({}))
         .await
@@ -213,7 +213,7 @@ async fn dispatch(ctx: &Context<'_>, method: &str, params: Value) -> plain_graph
         Capability::ScreenMirror,
     )
     .await
-    .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
+    .map_err(|error| plain_graphql::Error::from(error))?;
     ctx.data_unchecked::<Arc<Host>>()
         .call(method, params)
         .await

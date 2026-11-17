@@ -15,7 +15,7 @@ impl PeerRecordQuery {
             plain_rs::features::services::peers::peer_address::download_url(&peer, &file_id)
         })
         .await?
-        .map_err(|error| plain_graphql::Error::new(error.to_string()))
+        .map_err(|error| plain_graphql::Error::from(error))
     }
 }
 #[cfg(all(test, feature = "http_transport"))]

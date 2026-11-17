@@ -100,7 +100,7 @@ pub fn record_history(
     text: &str,
     source: &str,
     sensitive: bool,
-) -> Result<(crate::infrastructure::db::ClipboardRow, bool), String> {
+) -> crate::infrastructure::error::DomainResult<(crate::infrastructure::db::ClipboardRow, bool)> {
     let result = crate::features::clipboard::record(db, text, source, "", sensitive)?;
     if result.1 {
         host.invalidate("clipboardHistoryRefresh");
@@ -121,7 +121,7 @@ pub fn report(state: &CoreRuntime, payload: &str) -> Result<(), String> {
         return Ok(());
     }
     let (item, inserted) =
-        record_history(&state.db, &state.host, &value.text, "", value.sensitive)?;
+        record_history(&state.db, &state.host, &value.text, "", value.sensitive).map_err(|error| error.to_string())?;
     state
         .clipboard_changes
         .observe(&value.text, value.sensitive, inserted);

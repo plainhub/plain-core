@@ -119,7 +119,7 @@ async fn public_disk_commands_reach_the_registered_provider() {
         Some(state.native_client_id().unwrap().as_str())
     );
     assert!(
-        matches!(&events[0].data, EventData::DiskFormatFailed(data) if data.disk.path == "/dev/example" && data.file_system == "ext4" && data.failure.reason == EventReason::FormatDiskFailed)
+        matches!(&events[0].data, EventData::DiskFormatFailed(data) if data.disk.path == "/dev/example" && data.file_system == "ext4" && data.failure.reason == ErrorCode::FormatDiskFailed)
     );
     provider.await.unwrap();
     core.stop_core().await;

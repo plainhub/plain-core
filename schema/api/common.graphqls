@@ -160,7 +160,7 @@ type PairingProgressNotice {
 	verificationCode: String
 	deviceId: ID!
 	deviceName: String!
-	error: String
+	error: ErrorCode
 }
 
 type PairingRequestNotice {

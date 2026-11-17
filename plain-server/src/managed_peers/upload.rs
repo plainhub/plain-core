@@ -1,3 +1,4 @@
+use plain_rs::infrastructure::error_code::ErrorCode;
 use crate::server::ServerState;
 use futures_util::StreamExt;
 use plain_libs::anyhow::{Result, ensure};
@@ -81,7 +82,7 @@ pub(crate) fn request(
         tokio::select! {
             biased;
             _ = stop.wait_for(|value| *value) => plain_libs::anyhow::bail!("Server stopped"),
-            _ = wait_for_stall(updates) => plain_libs::anyhow::bail!("connection_timeout"),
+            _ = wait_for_stall(updates) => plain_libs::anyhow::bail!(ErrorCode::ConnectionTimeout),
             response = async {
                 route.check_current(&state)?;
                 let response = outgoing.send().await?;

@@ -322,13 +322,13 @@ async fn pending_multicast_requests_remain_independent_until_permission_is_grant
 
 #[test]
 fn remote_transport_errors_preserve_session_and_permission_status() {
-    use plain_rs::features::services::peers::management_http::AuthorizationError;
+    use plain_rs::infrastructure::error_code::ErrorCode;
     assert_eq!(
-        peer_error(AuthorizationError::Session.into()),
+        peer_error(ErrorCode::Unauthorized.into()),
         "unauthorized"
     );
     assert_eq!(
-        peer_error(AuthorizationError::Permission.into()),
+        peer_error(ErrorCode::RemoteAccessDisabled.into()),
         "remote_access_disabled"
     );
     assert_eq!(

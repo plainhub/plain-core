@@ -640,7 +640,7 @@ async fn a_local_commit_failure_preserves_the_old_row_and_reports_the_remote_gra
     let failed = notice(&mut notices, "PAIRING_FAILED").await;
     assert_eq!(
         failed.error.as_deref(),
-        Some("Failed to save paired device")
+        Some("internal_error")
     );
     let previous = plain_rs::infrastructure::db::chat_store::peers::get(&state.db, &remote_id)
         .unwrap()

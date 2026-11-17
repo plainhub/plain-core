@@ -1,4 +1,5 @@
-use crate::http::auth::ws_login::LoginError;
+use crate::http::auth::ws_login::{login_close_code, login_error};
+use plain_rs::infrastructure::error_code::ErrorCode;
 use crate::server::ServerState;
 use futures_util::{SinkExt, StreamExt};
 use plain_libs::axum::{
@@ -154,9 +155,9 @@ impl Runtime {
         Ok(())
     }
     pub(crate) fn reject(&self, request_id: &str) {
-        self.fail_login(request_id, 1008, "rejected");
+        self.fail_login(request_id, ErrorCode::Rejected);
     }
-    pub(crate) fn fail_login(&self, request_id: &str, code: u16, reason: &'static str) {
+    pub(crate) fn fail_login(&self, request_id: &str, reason: ErrorCode) {
         if let Some(c) = self
             .connections
             .lock()
@@ -164,7 +165,7 @@ impl Runtime {
             .values()
             .find(|c| c.pending.as_deref() == Some(request_id))
         {
-            let _ = c.closing.send(Some((code, reason)));
+            let _ = c.closing.send(Some((login_close_code(reason), reason.as_str())));
         }
     }
 }
@@ -191,7 +192,7 @@ pub(super) fn upgrade(
     channel: Channel,
 ) -> Response {
     let Some(permit) = state.main_ws.reserve_unauthenticated(remote.ip()) else {
-        return (StatusCode::TOO_MANY_REQUESTS, "too_many_login_connections").into_response();
+        return (StatusCode::TOO_MANY_REQUESTS, ErrorCode::TooManyLoginConnections.as_str()).into_response();
     };
     ws.max_message_size(65536)
         .max_frame_size(65536)
@@ -212,8 +213,7 @@ fn login_failure(
     state: &ServerState,
     client_id: &str,
     ip: &str,
-    code: u16,
-    reason: &'static str,
+    reason: ErrorCode,
 ) -> Message {
     let client = plain_rs::infrastructure::db::AuditEventClient {
         client_id: client_id.to_owned(),
@@ -221,10 +221,10 @@ fn login_failure(
         ..Default::default()
     };
     match crate::http::auth::ws_login::record_failure(state, &client, reason) {
-        Ok(()) => close(code, reason),
+        Ok(()) => close(login_close_code(reason), reason.as_str()),
         Err(error) => {
             log::error!("Cannot record login failure: {error}");
-            close(1011, "event_storage_failed")
+            close(1011, ErrorCode::EventStorageFailed.as_str())
         }
     }
 }
@@ -249,25 +249,21 @@ async fn run(
     permit: UnauthenticatedConnection,
 ) {
     let mut permit = Some(permit);
-    let mut cancel_reason = "canceled";
+    let mut cancel_reason = ErrorCode::Canceled;
     if !enabled(&state) || !plain_rs::features::client_identity::is_valid(&params.cid) {
         let reason = if !plain_rs::features::client_identity::is_valid(&params.cid) {
-            "invalid_login_request"
+            ErrorCode::InvalidLoginRequest
         } else {
-            "remote_access_disabled"
+            ErrorCode::RemoteAccessDisabled
         };
-        let _ = socket.send(close(1008, reason)).await;
+        let _ = socket.send(close(1008, reason.as_str())).await;
         return;
     }
     if channel == Channel::Auth {
         if let Err(error) = crate::http::auth::ws_login::admit_attempt(&state, &params.cid, &ip) {
-            let reason = if error.to_string() == "too_many_login_attempts" {
-                "too_many_login_attempts"
-            } else {
-                "invalid_login_request"
-            };
+            let reason = login_error(&error);
             let _ = socket
-                .send(login_failure(&state, &params.cid, &ip, 1013, reason))
+                .send(login_failure(&state, &params.cid, &ip, reason))
                 .await;
             return;
         }
@@ -312,11 +308,11 @@ async fn run(
         let message = tokio::select! {
             _ = stop.changed() => break,
             _ = &mut initial_deadline, if !registered && !matches!(handshake, LoginHandshake::Submitted) => {
-                let _ = socket.send(close(1008, "timeout")).await;
+                let _ = socket.send(close(1008, ErrorCode::Timeout.as_str())).await;
                 break;
             },
-            _ = &mut deadline, if channel == Channel::Auth => { cancel_reason = "login_expired"; let _ = socket.send(close(1008, "login_expired")).await; break; },
-            _ = closed.changed() => { let (code, reason) = (*closed.borrow()).unwrap_or((1000, "")); if !reason.is_empty() { cancel_reason = reason; } let _ = socket.send(close(code, reason)).await; break; },
+            _ = &mut deadline, if channel == Channel::Auth => { cancel_reason = ErrorCode::LoginExpired; let _ = socket.send(close(1008, ErrorCode::LoginExpired.as_str())).await; break; },
+            _ = closed.changed() => { let (code, reason) = (*closed.borrow()).unwrap_or((1000, "")); if !reason.is_empty() { cancel_reason = reason.parse().unwrap_or(ErrorCode::Canceled); } let _ = socket.send(close(code, reason)).await; break; },
             message = outgoing.recv() => match message { Some(message) => message, None => break },
             incoming = socket.next() => {
                 let frame = match incoming {
@@ -324,15 +320,15 @@ async fn run(
                     Some(Ok(Message::Ping(bytes))) => { if socket.send(Message::Pong(bytes)).await.is_err() { break; } continue; },
                     Some(Ok(Message::Text(text))) if channel == Channel::Auth => {
                         if text.len() > 4096 {
-                            let _ = socket.send(close(1008, "invalid_login_request")).await;
+                            let _ = socket.send(close(1008, ErrorCode::InvalidLoginRequest.as_str())).await;
                             break;
                         }
                         let accepted = (|| -> plain_libs::anyhow::Result<_> {
                             match std::mem::replace(&mut handshake, LoginHandshake::Submitted) {
                                 LoginHandshake::AwaitingHello => {
                                     let password_type = plain_rs::features::prefs::security::password_type(&state.prefs)?;
-                                    plain_libs::anyhow::ensure!(password_type == PasswordType::None, "invalid_login_request");
-                                    plain_libs::anyhow::ensure!(enabled(&state), "remote_access_disabled");
+                                    plain_libs::anyhow::ensure!(password_type == PasswordType::None, ErrorCode::InvalidLoginRequest);
+                                    plain_libs::anyhow::ensure!(enabled(&state), ErrorCode::RemoteAccessDisabled);
                                     let request = plain_libs::serde_json::from_str::<confirmation_channel::ClientHello>(&text)?;
                                     let device_id = state.prefs.get_or(
                                         plain_rs::features::prefs::pref_keys::CLIENT_ID,
@@ -351,15 +347,15 @@ async fn run(
                                     handshake = LoginHandshake::Ready(pending);
                                     Ok(Some(response))
                                 }
-                                _ => plain_libs::anyhow::bail!("invalid_login_request"),
+                                _ => plain_libs::anyhow::bail!(ErrorCode::InvalidLoginRequest),
                             }
                         })();
                         match accepted {
                             Ok(Some(response)) => { if socket.send(Message::Text(plain_libs::serde_json::to_string(&response).unwrap().into())).await.is_err() { break; } }
                             Ok(None) => {}
                             Err(error) => {
-                                let failure = LoginError::from_error(&error);
-                                let _ = socket.send(login_failure(&state, &params.cid, &ip, failure.close_code(), failure.reason())).await;
+                                let failure = login_error(&error);
+                                let _ = socket.send(login_failure(&state, &params.cid, &ip, failure)).await;
                                 break;
                             }
                         }
@@ -368,37 +364,37 @@ async fn run(
                     Some(Ok(Message::Text(_) | Message::Pong(_))) => continue,
                     _ => break,
                 };
-                if !enabled(&state) { let _ = socket.send(close(1008,"remote_access_disabled")).await; break; }
+                if !enabled(&state) { let _ = socket.send(close(1008, ErrorCode::RemoteAccessDisabled.as_str())).await; break; }
                 if channel == Channel::Auth {
-                    if let Some(request_id) = pending.take() { if let Err(error) = crate::http::auth::ws_login::execute(&state, crate::http::auth::ws_login::Request::Cancel { request_id, reason: "canceled" }).await { log::error!("Cannot record login cancellation: {error}"); } }
+                    if let Some(request_id) = pending.take() { if let Err(error) = crate::http::auth::ws_login::execute(&state, crate::http::auth::ws_login::Request::Cancel { request_id, reason: ErrorCode::Canceled }).await { log::error!("Cannot record login cancellation: {error}"); } }
                     let previous = std::mem::replace(&mut handshake, LoginHandshake::Submitted);
                     let resolved = (|| -> plain_libs::anyhow::Result<_> {
                         use crate::http::auth::ws_login::{LoginChannel, OpaqueChannel};
                         use plain_rs::features::prefs::security;
                         match previous {
                             LoginHandshake::AwaitingHello => {
-                                plain_libs::anyhow::ensure!(security::password_type(&state.prefs)? == PasswordType::Fixed, "invalid_login_request");
-                                let credential = security::password_credential(&state.prefs)?.ok_or_else(|| plain_libs::anyhow::anyhow!("password_setup_required"))?;
+                                plain_libs::anyhow::ensure!(security::password_type(&state.prefs)? == PasswordType::Fixed, ErrorCode::InvalidLoginRequest);
+                                let credential = security::password_credential(&state.prefs)?.ok_or_else(|| plain_libs::anyhow::anyhow!(ErrorCode::PasswordSetupRequired))?;
                                 let signing = security::signing_keypair(&state.prefs)?;
-                                let identity = plain_libs::crypto::ed25519_public_from_keypair(&signing).ok_or_else(|| plain_libs::anyhow::anyhow!("invalid_identity"))?;
+                                let identity = plain_libs::crypto::ed25519_public_from_keypair(&signing).ok_or_else(|| plain_libs::anyhow::anyhow!(ErrorCode::InvalidIdentity))?;
                                 let context = plain_libs::auth::context(&params.cid, &identity);
                                 let setup = plain_libs::utils::base64::base64_decode_checked(&credential.setup)?;
                                 let record = plain_libs::utils::base64::base64_decode_checked(&credential.record)?;
-                                let (login, response) = plain_libs::auth::server::start(&setup, &record, &frame, &context, &identity).map_err(|_| plain_libs::anyhow::anyhow!("invalid_password"))?;
+                                let (login, response) = plain_libs::auth::server::start(&setup, &record, &frame, &context, &identity).map_err(|_| plain_libs::anyhow::anyhow!(ErrorCode::InvalidPassword))?;
                                 initial_deadline.as_mut().reset(tokio::time::Instant::now() + LOGIN_HANDSHAKE_TIMEOUT);
                                 handshake = LoginHandshake::Opaque { login, context, credential, created: std::time::Instant::now() };
                                 Ok(Err(response))
                             }
                             LoginHandshake::Opaque { login, context, credential, created } => {
-                                plain_libs::anyhow::ensure!(security::password_type(&state.prefs)? == PasswordType::Fixed && security::password_credential(&state.prefs)?.as_ref() == Some(&credential), "invalid_password");
+                                plain_libs::anyhow::ensure!(security::password_type(&state.prefs)? == PasswordType::Fixed && security::password_credential(&state.prefs)?.as_ref() == Some(&credential), ErrorCode::InvalidPassword);
                                 let length = plain_libs::auth::server::finalization_len();
-                                plain_libs::anyhow::ensure!(frame.len() > length, "invalid_password");
-                                let session = login.finish(&frame[..length]).map_err(|_| plain_libs::anyhow::anyhow!("invalid_password"))?;
+                                plain_libs::anyhow::ensure!(frame.len() > length, ErrorCode::InvalidPassword);
+                                let session = login.finish(&frame[..length]).map_err(|_| plain_libs::anyhow::anyhow!(ErrorCode::InvalidPassword))?;
                                 let key = plain_libs::auth::api_key(&session, &context);
                                 Ok(Ok((LoginChannel::Opaque(OpaqueChannel { key, context, credential, created }), frame[length..].to_vec())))
                             }
                             LoginHandshake::Ready(channel) => Ok(Ok((LoginChannel::Confirmation(channel), frame.to_vec()))),
-                            _ => plain_libs::anyhow::bail!("invalid_login_request"),
+                            _ => plain_libs::anyhow::bail!(ErrorCode::InvalidLoginRequest),
                         }
                     })();
                     let (channel, frame) = match resolved {
@@ -407,7 +403,7 @@ async fn run(
                             continue;
                         }
                         Ok(Ok(ready)) => ready,
-                        Err(error) => { let failure = LoginError::from_error(&error); let _ = socket.send(login_failure(&state, &params.cid, &ip, failure.close_code(), failure.reason())).await; break; }
+                        Err(error) => { let failure = login_error(&error); let _ = socket.send(login_failure(&state, &params.cid, &ip, failure)).await; break; }
                     };
                     let request = crate::http::auth::ws_login::Request::Issue {
                         client_id: params.cid.clone(),
@@ -431,35 +427,35 @@ async fn run(
                             continue;
                         },
                         Err(error) => {
-                            let failure = LoginError::from_error(&error);
-                            let _ = socket.send(close(failure.close_code(), failure.reason())).await;
+                            let failure = login_error(&error);
+                            let _ = socket.send(close(login_close_code(failure), failure.as_str())).await;
                             break;
                         }
                     }
                 }
                 let Some(key) = plain_rs::features::services::sessions::local_key(&state, &params.cid)
                     .or_else(|| plain_rs::features::services::sessions::key(&state.db, &params.cid).ok().flatten())
-                    else { let _ = socket.send(close(1013,"invalid_request")).await; break; };
+                    else { let _ = socket.send(close(1013, ErrorCode::InvalidRequest.as_str())).await; break; };
                 let path = match channel { Channel::Screen => "/screen", Channel::ImageEditor => "/image_editor", Channel::Auth => unreachable!() };
                 if stream.is_none() {
                     let ack = match plain_rs::infrastructure::protocols::websocket::accept_registration(&key, &params.cid, path, &frame) {
                         Some(ack) => ack,
-                        None => { let _ = socket.send(close(1008, "invalid_request")).await; break; }
+                        None => { let _ = socket.send(close(1008, ErrorCode::InvalidRequest.as_str())).await; break; }
                     };
                     stream = plain_rs::infrastructure::protocols::websocket::Stream::new(path, &params.cid, &frame, &ack, plain_rs::infrastructure::protocols::websocket::Role::Server);
                     if socket.send(Message::Binary(ack.into())).await.is_err() { break; }
                     continue;
                 }
                 let Some(plain) = stream.as_mut().and_then(|stream| stream.decode(&frame, &key)) else {
-                    let _ = socket.send(close(1008, "invalid_request")).await;
+                    let _ = socket.send(close(1008, ErrorCode::InvalidRequest.as_str())).await;
                     break;
                 };
                 if !registered {
-                    if !plain.is_empty() { let _ = socket.send(close(1008, "invalid_request")).await; break; }
+                    if !plain.is_empty() { let _ = socket.send(close(1008, ErrorCode::InvalidRequest.as_str())).await; break; }
                     if channel == Channel::Screen {
                         if let Err(error) = plain_rs::features::services::capabilities::require(&state.host, Capability::ScreenMirror).await {
                             log::warn!("Screen mirror connection: {error}");
-                            let _ = socket.send(close(1008, "unsupported_capability")).await;
+                            let _ = socket.send(close(1008, ErrorCode::UnsupportedCapability.as_str())).await;
                             break;
                         }
                     }
@@ -472,19 +468,19 @@ async fn run(
                     }
                 } else {
                     if channel != Channel::Screen {
-                        let _ = socket.send(close(1008, "invalid_request")).await;
+                        let _ = socket.send(close(1008, ErrorCode::InvalidRequest.as_str())).await;
                         break;
                     }
                     if let Err(error) = dispatch_controls(&state, &plain).await {
                         log::warn!("Screen mirror controls: {error}");
-                        let _ = socket.send(close(1008, "unsupported_capability")).await;
+                        let _ = socket.send(close(1008, ErrorCode::UnsupportedCapability.as_str())).await;
                         break;
                     }
                 }
                 continue;
             },
             event = receiver.recv(), if registered => {
-                let event = match event { Ok(event) => event, Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => { let _ = socket.send(close(1013,"slow_client")).await; break; }, Err(_) => break };
+                let event = match event { Ok(event) => event, Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => { let _ = socket.send(close(1013,ErrorCode::SlowClient.as_str())).await; break; }, Err(_) => break };
                 let Some(event) = channel.public_event(event, &params.cid) else { continue; };
                 if !enabled(&state) { break; }
                 // Same key the inbound frames used: the shell holds no session.

@@ -175,8 +175,8 @@ where
 {
     tokio::task::spawn_blocking(work)
         .await
-        .map_err(|error| plain_graphql::Error::new(error.to_string()))?
-        .map_err(|error| plain_graphql::Error::new(error.to_string()))
+        .map_err(|error| plain_graphql::Error::from(error))?
+        .map_err(|error| plain_graphql::Error::from(error))
 }
 
 #[cfg(test)]

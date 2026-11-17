@@ -1,3 +1,5 @@
+use crate::infrastructure::error::{DomainError, DomainResult};
+use crate::infrastructure::error_code::ErrorCode;
 pub mod sync;
 
 use crate::infrastructure::db::ClipboardRow;
@@ -10,7 +12,7 @@ pub fn record(
     source: &str,
     label: &str,
     sensitive: bool,
-) -> Result<(ClipboardRow, bool), String> {
+) -> DomainResult<(ClipboardRow, bool)> {
     validate_text(text)?;
     let row = ClipboardRow {
         id: crate::features::record_id::generate(),
@@ -21,12 +23,12 @@ pub fn record(
         sensitive,
         created_at: plain_libs::chrono::Utc::now().to_rfc3339_opts(plain_libs::chrono::SecondsFormat::Millis, true),
     };
-    db.clipboard_record(&row).map_err(|error| error.to_string())
+    db.clipboard_record(&row).map_err(DomainError::from)
 }
 
-pub fn validate_text(text: &str) -> Result<(), String> {
+pub fn validate_text(text: &str) -> Result<(), ErrorCode> {
     if text.chars().all(char::is_whitespace) || text.encode_utf16().count() > 256 * 1024 {
-        return Err("invalid_clipboard_text".into());
+        return Err(ErrorCode::InvalidClipboardText);
     }
     Ok(())
 }

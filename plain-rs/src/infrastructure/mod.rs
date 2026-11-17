@@ -5,6 +5,8 @@ pub mod cache_paths;
 
 pub mod data_paths;
 
+pub mod error_code;
+
 #[cfg(any(feature = "chat", feature = "library", feature = "sqlite_browse"))]
 pub mod db;
 

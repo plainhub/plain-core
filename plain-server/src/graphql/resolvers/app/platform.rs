@@ -50,7 +50,7 @@ impl PlatformQuery {
                             at.with_timezone(&plain_libs::chrono::Utc),
                         ),
                     })
-                    .map_err(|error| plain_graphql::Error::new(error.to_string()))
+                    .map_err(|error| plain_graphql::Error::from(error))
             })
             .collect()
     }
@@ -59,7 +59,7 @@ impl PlatformQuery {
         require_capability(ctx, Capability::DiskManager).await?;
         let disks = tokio::task::spawn_blocking(plain_rs::infrastructure::platform::disks::list)
             .await
-            .map_err(|error| plain_graphql::Error::new(error.to_string()))?
+            .map_err(|error| plain_graphql::Error::from(error))?
             .map_err(plain_graphql::Error::new)?;
         Ok(disks
             .into_iter()
@@ -85,7 +85,7 @@ impl PlatformQuery {
 async fn require_capability(ctx: &Context<'_>, name: Capability) -> Result<()> {
     plain_rs::features::services::capabilities::require(ctx.data::<Arc<Host>>()?, name)
         .await
-        .map_err(|error| plain_graphql::Error::new(error.to_string()))
+        .map_err(|error| plain_graphql::Error::from(error))
 }
 
 #[derive(Default)]

@@ -5,7 +5,7 @@ use plain_rs::features::downloads::Command;
 use plain_rs::features::services::downloads;
 
 fn error(error: plain_libs::anyhow::Error) -> plain_graphql::Error {
-    plain_graphql::Error::new(error.to_string())
+    plain_graphql::Error::from(error)
 }
 
 #[derive(Default)]

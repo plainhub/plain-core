@@ -71,7 +71,7 @@ impl MediaQuery {
                     id: plain_graphql::ID::from(bucket.id),
                     name: bucket.name,
                     item_count: i32::try_from(bucket.item_count)
-                        .map_err(|error| plain_graphql::Error::new(error.to_string()))?,
+                        .map_err(|error| plain_graphql::Error::from(error))?,
                     size: Long(bucket.size),
                     top_item_paths: bucket.top_items,
                 })
@@ -117,7 +117,7 @@ pub(crate) async fn media_count(
         .count(data_type_of(data_type)?, &query)
         .await
         .map_err(plain_graphql::Error::new)?;
-    i32::try_from(count).map_err(|error| plain_graphql::Error::new(error.to_string()))
+    i32::try_from(count).map_err(|error| plain_graphql::Error::from(error))
 }
 
 #[derive(serde::Deserialize)]

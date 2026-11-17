@@ -24,7 +24,7 @@ pub(crate) async fn host_json(
         .await
         .map_err(|error| plain_graphql::Error::new(error))?;
     plain_libs::serde_json::from_value(facts)
-        .map_err(|error| plain_graphql::Error::new(error.to_string()))
+        .map_err(|error| plain_graphql::Error::from(error))
 }
 
 pub(crate) async fn provider_params(
@@ -39,7 +39,7 @@ pub(crate) async fn provider_params(
         query,
         params,
     )
-    .map_err(|error| plain_graphql::Error::new(error.to_string()))
+    .map_err(|error| plain_graphql::Error::from(error))
 }
 
 pub(crate) fn text(value: &Value, key: &str) -> String {

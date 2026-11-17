@@ -1,5 +1,5 @@
 use super::*;
-use plain_rs::features::audit_events::{EventData, EventReason, EventType};
+use plain_rs::features::audit_events::{EventData, ErrorCode, EventType};
 
 #[cfg(feature = "http_transport")]
 #[tokio::test]
@@ -57,7 +57,7 @@ async fn invalid_password_proof_is_recorded_once_without_session_or_secrets() {
     assert_eq!(records.len(), 1);
     assert_eq!(records[0].r#type, EventType::LoginFailed);
     assert!(
-        matches!(&records[0].data, EventData::LoginFailed(data) if data.reason == EventReason::InvalidPassword)
+        matches!(&records[0].data, EventData::LoginFailed(data) if data.reason == ErrorCode::InvalidPassword)
     );
     assert_eq!(records[0].client_ip.as_deref(), Some("127.0.0.1"));
     assert!(records[0].app_name.is_none());

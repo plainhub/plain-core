@@ -287,3 +287,21 @@ async fn sms_subscription_replays_results_after_its_receiver_is_ready() {
     responder.abort();
     core.shutdown().await;
 }
+
+#[tokio::test]
+async fn business_error_codes_survive_context_and_graphql_execution() {
+    struct Query;
+    #[plain_graphql::Object]
+    impl Query {
+        async fn rejected(&self) -> plain_graphql::Result<bool> {
+            Err(plain_libs::anyhow::Error::new(ErrorCode::Rejected)
+                .context("approval failed")
+                .into())
+        }
+    }
+    let schema = Schema::build(Query, plain_graphql::EmptyMutation, plain_graphql::EmptySubscription).finish();
+    let response = execute_graphql(&schema, Request::new("{ rejected }"), RequestContext::remote(None)).await;
+    assert_eq!(response.errors.len(), 1);
+    assert_eq!(response.errors[0].message, "approval failed");
+    assert_eq!(response.errors[0].extensions.as_ref().unwrap().get("code"), Some(&plain_graphql::Value::from("rejected")));
+}

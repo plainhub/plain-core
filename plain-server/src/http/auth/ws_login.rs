@@ -1,3 +1,4 @@
+use plain_rs::infrastructure::error_code::ErrorCode;
 use crate::server::ServerState;
 use plain_libs::serde_json::{Value, json};
 use plain_rs::features::prefs::security::PasswordType;
@@ -12,62 +13,26 @@ const LOGIN_ATTEMPT_LIMIT: usize = 5;
 const LOGIN_ATTEMPT_WINDOW: Duration = Duration::from_secs(60);
 const MAX_TRACKED_CLIENTS: usize = 256;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum LoginError {
-    InvalidRequest,
-    InvalidPassword,
-    IdentityChanged,
-    AccessDisabled,
-    Expired,
-    RateLimited,
-    SetupRequired,
-    Internal,
+pub(crate) fn login_error(error: &plain_libs::anyhow::Error) -> ErrorCode {
+    if error.downcast_ref::<plain_libs::serde_json::Error>().is_some() {
+        return ErrorCode::InvalidLoginRequest;
+    }
+    let code = ErrorCode::from_error(error);
+    match code {
+        ErrorCode::InvalidLoginIdentity | ErrorCode::InvalidLoginKey => ErrorCode::InvalidLoginRequest,
+        ErrorCode::InternalError => {
+            log::error!("Login failed: {error:#}");
+            code
+        }
+        _ => code,
+    }
 }
 
-impl LoginError {
-    pub(crate) fn from_error(error: &plain_libs::anyhow::Error) -> Self {
-        match error.to_string().as_str() {
-            "invalid_login_request" | "invalid_login_identity" | "invalid_login_key" => {
-                Self::InvalidRequest
-            }
-            "invalid_password" => Self::InvalidPassword,
-            "peer_identity_changed" | "Peer identity changed" => Self::IdentityChanged,
-            "remote_access_disabled" => Self::AccessDisabled,
-            "login_expired"
-            | "Login confirmation expired"
-            | "Login confirmation is no longer pending" => Self::Expired,
-            "too_many_login_attempts" => Self::RateLimited,
-            "password_setup_required" => Self::SetupRequired,
-            _ if error
-                .downcast_ref::<plain_libs::serde_json::Error>()
-                .is_some() =>
-            {
-                Self::InvalidRequest
-            }
-            _ => {
-                log::error!("Login failed: {error}");
-                Self::Internal
-            }
-        }
-    }
-    pub(crate) fn reason(self) -> &'static str {
-        match self {
-            Self::InvalidRequest => "invalid_login_request",
-            Self::InvalidPassword => "invalid_password",
-            Self::IdentityChanged => "peer_identity_changed",
-            Self::AccessDisabled => "remote_access_disabled",
-            Self::Expired => "login_expired",
-            Self::RateLimited => "too_many_login_attempts",
-            Self::SetupRequired => "password_setup_required",
-            Self::Internal => "internal_error",
-        }
-    }
-    pub(crate) fn close_code(self) -> u16 {
-        match self {
-            Self::RateLimited => 1013,
-            Self::Internal => 1011,
-            _ => 1008,
-        }
+pub(crate) fn login_close_code(code: ErrorCode) -> u16 {
+    match code {
+        ErrorCode::TooManyLoginAttempts => 1013,
+        ErrorCode::InternalError => 1011,
+        _ => 1008,
     }
 }
 
@@ -78,7 +43,7 @@ pub(crate) fn admit_attempt(
 ) -> plain_libs::anyhow::Result<()> {
     plain_libs::anyhow::ensure!(
         plain_rs::features::client_identity::is_valid(client_id),
-        "invalid_login_request"
+        ErrorCode::InvalidLoginRequest
     );
     let allowed = state
         .login_attempts
@@ -89,7 +54,7 @@ pub(crate) fn admit_attempt(
         } else {
             client_ip.into()
         });
-    plain_libs::anyhow::ensure!(allowed, "too_many_login_attempts");
+    plain_libs::anyhow::ensure!(allowed, ErrorCode::TooManyLoginAttempts);
     Ok(())
 }
 
@@ -214,7 +179,7 @@ impl LoginChannel {
             Self::Opaque(c) => {
                 plain_libs::anyhow::ensure!(
                     c.created.elapsed() < Duration::from_secs(300),
-                    "login_expired"
+                    ErrorCode::LoginExpired
                 );
                 Ok(())
             }
@@ -229,7 +194,7 @@ impl LoginChannel {
                 bytes,
                 &plain_libs::auth::auth_aad(&c.context, false),
             )
-            .ok_or_else(|| plain_libs::anyhow::anyhow!("invalid_password")),
+            .ok_or_else(|| plain_libs::anyhow::anyhow!(ErrorCode::InvalidPassword)),
             Self::Confirmation(c) => c.decrypt_request(bytes, now),
         }
     }
@@ -241,7 +206,7 @@ impl LoginChannel {
                 bytes,
                 &plain_libs::auth::auth_aad(&c.context, true),
             )
-            .ok_or_else(|| plain_libs::anyhow::anyhow!("invalid_auth_response")),
+            .ok_or_else(|| plain_libs::anyhow::anyhow!(ErrorCode::InvalidAuthResponse)),
             Self::Confirmation(c) => c.encrypt_response(bytes, now),
         }
     }
@@ -265,7 +230,7 @@ impl LoginProtection {
     fn validate(&self, state: &ServerState, request: &Value) -> plain_libs::anyhow::Result<()> {
         plain_libs::anyhow::ensure!(
             !plain_rs::features::prefs::security::password_setup_required(&state.prefs)?,
-            "password_setup_required"
+            ErrorCode::PasswordSetupRequired
         );
         let channel = self.channel();
         channel.fresh(now_ms())?;
@@ -277,11 +242,11 @@ impl LoginProtection {
                     && Some(credential)
                         == plain_rs::features::prefs::security::password_credential(&state.prefs)?
                             .as_ref(),
-                "invalid_password"
+                ErrorCode::InvalidPassword
             ),
             Self::Passwordless(_) => plain_libs::anyhow::ensure!(
                 password_type == PasswordType::None && request.get("password").is_none(),
-                "invalid_login_request"
+                ErrorCode::InvalidLoginRequest
             ),
         }
         Ok(())
@@ -359,7 +324,7 @@ pub(crate) enum Request {
     },
     Cancel {
         request_id: String,
-        reason: &'static str,
+        reason: ErrorCode,
     },
 }
 
@@ -372,10 +337,10 @@ impl Confirmation {
         Self { state }
     }
 
-    pub async fn decide(&self, request_id: &str, allowed: bool) -> Result<(), String> {
+    pub async fn decide(&self, request_id: &str, allowed: bool) -> Result<(), ErrorCode> {
         if allowed {
             if !self.state.main_ws.login_pending(request_id) {
-                return Err("Login confirmation is no longer pending".into());
+                return Err(ErrorCode::LoginExpired);
             }
             let result = execute(
                 &self.state,
@@ -387,31 +352,27 @@ impl Confirmation {
             let result = match result {
                 Ok(result) => result,
                 Err(error) => {
-                    let failure = LoginError::from_error(&error);
-                    self.state.main_ws.fail_login(
-                        request_id,
-                        failure.close_code(),
-                        failure.reason(),
-                    );
-                    return Err(error.to_string());
+                    let failure = login_error(&error);
+                    self.state.main_ws.fail_login(request_id, failure);
+                    return Err(failure);
                 }
             };
             self.state
                 .main_ws
                 .complete(&self.state, request_id, &result)
                 .await
-                .map_err(|error| error.to_string())
+                .map_err(|error| login_error(&error))
         } else {
             self.state.main_ws.reject(request_id);
             execute(
                 &self.state,
                 Request::Cancel {
                     request_id: request_id.into(),
-                    reason: "rejected",
+                    reason: ErrorCode::Rejected,
                 },
             )
             .await
-            .map_err(|error| error.to_string())?;
+            .map_err(|error| login_error(&error))?;
             Ok(())
         }
     }
@@ -463,7 +424,7 @@ fn validate_metadata(request: &Value) -> plain_libs::anyhow::Result<LoginMetadat
                     .all(|ip| ip.parse::<std::net::IpAddr>().is_ok())
                 && plain_libs::utils::base64::base64_decode_checked(&peer.signature_public_key)
                     .is_ok_and(|key| key.len() == 32),
-            "invalid_login_request"
+            ErrorCode::InvalidLoginRequest
         );
     }
     Ok(metadata)
@@ -498,7 +459,7 @@ async fn issue(state: &ServerState, request: &Pending) -> plain_libs::anyhow::Re
         if let Some(saved) = plain_rs::infrastructure::db::chat_store::peers::get(&state.db, id)? {
             plain_libs::anyhow::ensure!(
                 saved.public_key.is_empty() || saved.public_key == offered_key,
-                "peer_identity_changed"
+                ErrorCode::PeerIdentityChanged
             );
         }
     }
@@ -551,7 +512,7 @@ fn persist(state: &ServerState, request: &Pending, token: &str) -> plain_libs::a
             != state
                 .native_client_id()
                 .map_err(plain_libs::anyhow::Error::msg)?,
-        "invalid_login_request"
+        ErrorCode::InvalidLoginRequest
     );
     let existing = state
         .db
@@ -619,14 +580,14 @@ fn login_client(
 pub(crate) fn record_failure(
     state: &ServerState,
     client: &AuditEventClient,
-    reason: &str,
+    reason: ErrorCode,
 ) -> plain_libs::anyhow::Result<()> {
     state
         .audit_events
         .record(
             plain_rs::features::audit_events::AuditEvent::LoginFailed(
                 plain_rs::features::audit_events::LoginFailedEventData {
-                    reason: plain_libs::serde_json::from_value(Value::String(reason.to_owned()))?,
+                    reason,
                 },
             ),
             Some(client.clone()),
@@ -672,7 +633,7 @@ pub(crate) async fn execute(
     let result = execute_request(state, request, &mut client).await;
     if let Err(error) = &result {
         if let Some(client) = client {
-            record_failure(state, &client, LoginError::from_error(error).reason())?;
+            record_failure(state, &client, login_error(error))?;
         }
     }
     result
@@ -686,7 +647,7 @@ async fn execute_request(
     if matches!(&request, Request::Issue { .. } | Request::Complete { .. }) {
         plain_libs::anyhow::ensure!(
             state.prefs.get_or("remote_access", true),
-            "remote_access_disabled"
+            ErrorCode::RemoteAccessDisabled
         );
     }
     let (pending, request_id) = match request {
@@ -720,14 +681,14 @@ async fn execute_request(
                     .lock()
                     .map_err(|_| plain_libs::anyhow::anyhow!("Login state unavailable"))?;
                 let pending = attempts.pending.remove(&request_id).ok_or_else(|| {
-                    plain_libs::anyhow::anyhow!("Login confirmation is no longer pending")
+                    plain_libs::anyhow::anyhow!(ErrorCode::LoginExpired)
                 })?;
                 notify_closed(state, &mut attempts, &request_id);
                 pending
             };
             plain_libs::anyhow::ensure!(
                 pending.at.elapsed() < Duration::from_secs(300),
-                "Login confirmation expired"
+                ErrorCode::LoginExpired
             );
             (pending, request_id)
         }
@@ -745,7 +706,7 @@ async fn execute_request(
                 LoginChannel::Opaque(c) => {
                     plain_libs::anyhow::ensure!(
                         request.get("password").is_none(),
-                        "invalid_login_request"
+                        ErrorCode::InvalidLoginRequest
                     );
                     LoginProtection::Password {
                         credential: c.credential.clone(),

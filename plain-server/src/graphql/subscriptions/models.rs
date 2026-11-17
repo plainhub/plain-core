@@ -113,7 +113,7 @@ pub struct PairingProgressNotice {
     pub verification_code: Option<String>,
     pub device_id: ID,
     pub device_name: String,
-    pub error: Option<String>,
+    pub error: Option<plain_rs::infrastructure::error_code::ErrorCode>,
 }
 #[derive(SimpleObject, Deserialize)]
 #[serde(rename_all = "camelCase")]

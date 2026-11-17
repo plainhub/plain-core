@@ -1,1 +1,0 @@
-import{o as e}from"./chunk-login-peers-BNc_Roxp.js";import{r as t}from"./chunk-gql-client-D_ZTfb1q.js";async function n(n,r,i){return t(`${e(n)}/graphql`,n.token,r,i)}export{n as t};

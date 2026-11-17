@@ -181,7 +181,7 @@ pub(super) async fn auth(state: ServerState, target: String, request: Request) -
                 let _ = socket
                     .close(Some(CloseFrame {
                         code: 1008u16.into(),
-                        reason: "proxy_auth_failed".into(),
+                        reason: plain_rs::infrastructure::error_code::ErrorCode::ProxyAuthFailed.as_str().into(),
                     }))
                     .await;
             }

@@ -1,3 +1,4 @@
+use crate::infrastructure::error_code::ErrorCode;
 use crate::features::files::tasks::CompletedOp;
 use crate::features::files::tasks::Events;
 use crate::features::files::tasks::FileTask;
@@ -223,7 +224,7 @@ impl FileTasks {
         ops: Vec<FileTaskOp>,
     ) -> Result<FileTask> {
         if client_id.is_empty() {
-            bail!("unauthorized");
+            bail!(ErrorCode::Unauthorized);
         }
         if ops.is_empty()
             || ops.iter().any(|op| {

@@ -1,3 +1,4 @@
+use plain_rs::infrastructure::error_code::ErrorCode;
 use crate::graphql::executor::RequestClient;
 use crate::server::ServerState;
 use plain_graphql::{Context, ID, Object, Result, SimpleObject};
@@ -6,14 +7,14 @@ use plain_rs::features::services::http_status::HttpServerState;
 
 pub(crate) async fn authorized_capabilities(ctx: &Context<'_>) -> Result<Vec<Capability>> {
     if ctx.data_opt::<RequestClient>().is_none() {
-        return Err("no_permission".into());
+        return Err(ErrorCode::NoPermission.into());
     }
     let capabilities =
         plain_rs::features::services::capabilities::snapshot(&ctx.data::<ServerState>()?.host)
             .await
-            .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
+            .map_err(|error| plain_graphql::Error::from(error))?;
     plain_rs::features::services::capabilities::require_list(&capabilities, Capability::HttpServer)
-        .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
+        .map_err(|error| plain_graphql::Error::from(error))?;
     Ok(capabilities)
 }
 

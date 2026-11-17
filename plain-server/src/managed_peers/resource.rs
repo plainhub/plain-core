@@ -1,3 +1,4 @@
+use plain_rs::infrastructure::error_code::ErrorCode;
 use super::request_error;
 use crate::{native::resources::MAX_RESOURCE_RESPONSE_BYTES, server::ServerState};
 use plain_libs::axum::http::{Method, StatusCode, header};
@@ -195,8 +196,8 @@ fn request(
 
 fn validate(response: &http_client::Response, status: StatusCode) -> Result<(), String> {
     match response.status() {
-        StatusCode::UNAUTHORIZED => return Err("unauthorized".into()),
-        StatusCode::FORBIDDEN => return Err("remote_access_disabled".into()),
+        StatusCode::UNAUTHORIZED => return Err(ErrorCode::Unauthorized.to_string()),
+        StatusCode::FORBIDDEN => return Err(ErrorCode::RemoteAccessDisabled.to_string()),
         actual if actual != status => return Err(format!("Resource response HTTP {actual}")),
         _ => {}
     }

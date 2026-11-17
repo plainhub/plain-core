@@ -1,3 +1,4 @@
+use plain_rs::infrastructure::error_code::ErrorCode;
 use crate::{http::ConnectionScheme, server::ServerState};
 use plain_libs::anyhow::{Result, anyhow, ensure};
 use plain_libs::axum::{
@@ -11,7 +12,7 @@ use plain_rs::{
     features::{
         access::AccessFeature,
         files::resource_link::{self, Resource, ResourcePurpose, Scope},
-        services::{device::access, peers::management_http},
+        services::device::access,
     },
     infrastructure::{db::SessionRow, transport::http_response},
 };
@@ -154,7 +155,7 @@ fn remote_access(state: &ServerState) -> bool {
 }
 
 pub(crate) fn caller(state: &ServerState, id: &str) -> Result<SessionRow> {
-    ensure!(remote_access(state), "no_permission");
+    ensure!(remote_access(state), ErrorCode::NoPermission);
     state
         .db
         .session_get(id)?
@@ -270,8 +271,8 @@ async fn graphql(state: ServerState, target: &str, request: Request) -> Response
         Ok(response) => response,
         Err(error)
             if matches!(
-                error.downcast_ref::<management_http::AuthorizationError>(),
-                Some(management_http::AuthorizationError::Permission)
+                error.downcast_ref::<ErrorCode>(),
+                Some(ErrorCode::RemoteAccessDisabled)
             ) =>
         {
             return StatusCode::FORBIDDEN.into_response();

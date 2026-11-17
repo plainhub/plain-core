@@ -1,3 +1,4 @@
+use crate::infrastructure::error_code::ErrorCode;
 use crate::features::sessions::SessionType;
 use crate::infrastructure::types::Long;
 use serde::{Deserialize, Serialize};
@@ -18,24 +19,6 @@ pub enum EventType {
     FormatDiskFailed,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-#[cfg_attr(feature = "graphql", derive(plain_graphql::Enum))]
-pub enum EventReason {
-    InvalidLoginRequest,
-    InvalidPassword,
-    PeerIdentityChanged,
-    RemoteAccessDisabled,
-    LoginExpired,
-    TooManyLoginAttempts,
-    PasswordSetupRequired,
-    InternalError,
-    Rejected,
-    Canceled,
-    MountFailed,
-    FormatDiskFailed,
-}
-
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 #[cfg_attr(feature = "graphql", derive(plain_graphql::SimpleObject))]
@@ -47,7 +30,7 @@ pub struct LoginEventData {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 #[cfg_attr(feature = "graphql", derive(plain_graphql::SimpleObject))]
 pub struct LoginFailedEventData {
-    pub reason: EventReason,
+    pub reason: ErrorCode,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -89,7 +72,7 @@ pub struct EventVolume {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 #[cfg_attr(feature = "graphql", derive(plain_graphql::SimpleObject))]
 pub struct EventFailure {
-    pub reason: EventReason,
+    pub reason: ErrorCode,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub detail: Option<String>,
 }

@@ -23,16 +23,16 @@ fn malformed_peer_metadata_is_rejected_instead_of_skipping_pairing() {
 
 #[test]
 fn login_errors_keep_storage_failures_distinct_from_credentials() {
-    let invalid = plain_libs::anyhow::anyhow!("invalid_password");
+    let invalid = plain_libs::anyhow::anyhow!(ErrorCode::InvalidPassword);
     assert_eq!(
-        LoginError::from_error(&invalid),
-        LoginError::InvalidPassword
+        login_error(&invalid),
+        ErrorCode::InvalidPassword
     );
-    assert_eq!(LoginError::InvalidPassword.close_code(), 1008);
+    assert_eq!(login_close_code(ErrorCode::InvalidPassword), 1008);
     let storage = plain_libs::anyhow::anyhow!("fixture disk failure");
-    assert_eq!(LoginError::from_error(&storage), LoginError::Internal);
-    assert_eq!(LoginError::Internal.close_code(), 1011);
-    assert_eq!(LoginError::RateLimited.close_code(), 1013);
+    assert_eq!(login_error(&storage), ErrorCode::InternalError);
+    assert_eq!(login_close_code(ErrorCode::InternalError), 1011);
+    assert_eq!(login_close_code(ErrorCode::TooManyLoginAttempts), 1013);
 }
 
 #[cfg(feature = "http_transport")]
@@ -57,4 +57,10 @@ async fn auth_rejects_non_uuid_client_id_before_handshake() {
             .is_none()
     );
     server.shutdown().await;
+}
+
+#[test]
+fn login_error_classification_preserves_contextual_failure() {
+    let failure = plain_libs::anyhow::anyhow!(ErrorCode::InvalidPassword).context("login request failed");
+    assert_eq!(login_error(&failure), ErrorCode::InvalidPassword);
 }

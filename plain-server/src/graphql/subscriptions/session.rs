@@ -1,3 +1,4 @@
+use plain_rs::infrastructure::error_code::ErrorCode;
 use super::events::authorize;
 use super::operation;
 use crate::graphql::executor::RequestContext;
@@ -364,7 +365,7 @@ impl Session {
             encoded = plain_libs::serde_json::to_string(&ServerMessage::Error {
                 id: id.clone(),
                 payload: vec![plain_graphql::ServerError::new(
-                    "subscription_result_too_large",
+                    ErrorCode::SubscriptionResultTooLarge.as_str(),
                     None,
                 )],
             })

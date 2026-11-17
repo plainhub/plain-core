@@ -1,6 +1,6 @@
 use crate::features::audit_events::{
     AuditEvent, DiskFormatEventData, DiskFormatFailedEventData, EventDisk, EventFailure,
-    EventReason,
+    ErrorCode,
 };
 use crate::infrastructure::host::commands::{DiskFormatRequest, SYSTEM_DISK_FORMAT};
 use crate::infrastructure::types::Long;
@@ -56,7 +56,7 @@ pub async fn format(state: &Runtime, client_id: &str, path: String) -> Result<bo
             disk,
             file_system: "ext4".into(),
             failure: EventFailure {
-                reason: EventReason::FormatDiskFailed,
+                reason: ErrorCode::FormatDiskFailed,
                 detail: None,
             },
         }),

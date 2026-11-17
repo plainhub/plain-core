@@ -1,3 +1,4 @@
+use plain_rs::infrastructure::error_code::ErrorCode;
 use crate::{
     managed_peers::{
         request_error,
@@ -130,8 +131,8 @@ impl PeerUploadChunk {
 fn response_error((status, body): UploadResponse) -> Option<String> {
     match status {
         StatusCode::CREATED => None,
-        StatusCode::UNAUTHORIZED => Some("unauthorized".into()),
-        StatusCode::FORBIDDEN => Some("remote_access_disabled".into()),
+        StatusCode::UNAUTHORIZED => Some(ErrorCode::Unauthorized.to_string()),
+        StatusCode::FORBIDDEN => Some(ErrorCode::RemoteAccessDisabled.to_string()),
         _ => Some(
             String::from_utf8(body)
                 .ok()

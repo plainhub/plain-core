@@ -153,7 +153,7 @@ impl CallsQuery {
         }
         capabilities::require(ctx.data_unchecked::<Arc<Host>>(), Capability::Telephony)
             .await
-            .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
+            .map_err(|error| plain_graphql::Error::from(error))?;
 
         let facts = host_json(
             ctx,
@@ -200,7 +200,7 @@ impl CallsQuery {
         }
         capabilities::require(ctx.data_unchecked::<Arc<Host>>(), Capability::Telephony)
             .await
-            .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
+            .map_err(|error| plain_graphql::Error::from(error))?;
         let count = ctx
             .data_unchecked::<Arc<Host>>()
             .call(
@@ -242,10 +242,10 @@ impl CallsMutation {
             Provider::Call,
             &query,
         )
-        .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
+        .map_err(|error| plain_graphql::Error::from(error))?;
         capabilities::require(ctx.data_unchecked::<Arc<Host>>(), Capability::Telephony)
             .await
-            .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
+            .map_err(|error| plain_graphql::Error::from(error))?;
         let ids: Vec<Value> = host_json(
             ctx,
             "systemCallIds",
@@ -271,7 +271,7 @@ impl CallsMutation {
                 .await
                 .map_err(|error| plain_graphql::Error::new(error))?,
         )
-        .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
+        .map_err(|error| plain_graphql::Error::from(error))?;
         Ok(ActionResult {
             affected_count: deleted.len() as i32,
         })
@@ -292,7 +292,7 @@ impl CallsMutation {
         )?;
         capabilities::require(ctx.data_unchecked::<Arc<Host>>(), Capability::Telephony)
             .await
-            .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
+            .map_err(|error| plain_graphql::Error::from(error))?;
         ctx.data_unchecked::<Arc<Host>>()
             .call(
                 "systemMakeCall",

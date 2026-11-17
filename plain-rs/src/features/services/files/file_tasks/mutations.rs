@@ -1,3 +1,4 @@
+use crate::infrastructure::error_code::ErrorCode;
 use crate::features::files::tasks::FileTaskOp;
 use crate::features::files::tasks::FileTaskStatus;
 use crate::features::files::tasks::FileTaskType;
@@ -43,7 +44,7 @@ impl FileTasks {
             return Ok(None);
         }
         if client_id.is_empty() {
-            bail!("unauthorized");
+            bail!(ErrorCode::Unauthorized);
         }
         let service = self.service()?;
         let task = service.rename(client_id, path, destination.clone())?;

@@ -48,7 +48,7 @@ impl FilesQuery {
             .data::<Arc<plain_rs::features::services::files::platform::FilePlatform>>()?
             .indexed_files(query, offset, limit, sort_by, false)
             .await
-            .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
+            .map_err(|error| plain_graphql::Error::from(error))?;
         Ok(rows(&items, file))
     }
     async fn indexed_file_count(
@@ -63,7 +63,7 @@ impl FilesQuery {
             .data::<Arc<plain_rs::features::services::files::platform::FilePlatform>>()?
             .indexed_files(query, 0, 0, FileSortBy::NameAsc, true)
             .await
-            .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
+            .map_err(|error| plain_graphql::Error::from(error))?;
         Ok(Long(count.as_i64().ok_or("invalid indexed file count")?))
     }
 
@@ -72,7 +72,7 @@ impl FilesQuery {
             .data::<Arc<plain_rs::features::services::files::platform::FilePlatform>>()?
             .mounts()
             .await
-            .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
+            .map_err(|error| plain_graphql::Error::from(error))?;
         Ok(rows(&facts, mount))
     }
 
@@ -154,7 +154,7 @@ impl FilesQuery {
             &path,
         )
         .await
-        .map_err(|error| plain_graphql::Error::new(error.to_string()))?
+        .map_err(|error| plain_graphql::Error::from(error))?
         else {
             return Ok(None);
         };

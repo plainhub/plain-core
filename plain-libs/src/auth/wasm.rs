@@ -2,14 +2,7 @@ use super::client::{self, LoginError};
 use wasm_bindgen::prelude::*;
 
 fn javascript_error(error: LoginError) -> JsValue {
-    JsValue::from_str(match error {
-        LoginError::Randomness => "Secure randomness is unavailable",
-        LoginError::Start => "Unable to start password login",
-        LoginError::SigningKey => "Invalid server signing key",
-        LoginError::Response => "Invalid password login response",
-        LoginError::Password => "Password login failed",
-        LoginError::PeerIdentity => "Peer identity changed",
-    })
+    JsValue::from_str(error.as_str())
 }
 
 #[wasm_bindgen]
@@ -19,7 +12,7 @@ pub struct OpaqueLogin {
 #[wasm_bindgen]
 impl OpaqueLogin {
     pub fn start(password: Vec<u8>) -> Result<OpaqueLogin, JsValue> {
-        client::OpaqueLogin::try_start(password)
+        client::OpaqueLogin::start(password)
             .map(|inner| Self { inner })
             .map_err(javascript_error)
     }

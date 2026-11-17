@@ -91,11 +91,9 @@ async fn native_app_query_uses_startup_data_and_live_capabilities_without_public
         directory.0.to_string_lossy().as_ref()
     );
     assert_eq!(data["app"]["deviceType"], "COMPUTER");
-    let mut capabilities = vec![Capability::MediaScan];
-    capabilities.extend(plain_rs::features::services::files::browser::capabilities());
     assert_eq!(
         data["app"]["capabilities"],
-        plain_libs::serde_json::json!(capabilities)
+        plain_libs::serde_json::json!([Capability::MediaScan])
     );
     assert_eq!(data["app"]["httpPort"], 0);
     assert_eq!(data["app"]["httpsPort"], 0);

@@ -491,7 +491,7 @@ async fn invalid_snapshots_do_not_mutate_projection_and_icons_decrypt_with_stand
 
 #[tokio::test]
 async fn confirmed_authorization_failures_clear_data_instead_of_looking_like_network_timeouts() {
-    use crate::features::services::peers::management_http::AuthorizationError;
+    use crate::infrastructure::error_code::ErrorCode;
     for permission in [true, false] {
         let (store, peer, identity, events, mut receiver) = fixture();
         event(&mut receiver);
@@ -506,9 +506,9 @@ async fn confirmed_authorization_failures_clear_data_instead_of_looking_like_net
             .unwrap();
         event(&mut receiver);
         let error = if permission {
-            AuthorizationError::Permission
+            ErrorCode::RemoteAccessDisabled
         } else {
-            AuthorizationError::Session
+            ErrorCode::Unauthorized
         };
         store
             .apply(

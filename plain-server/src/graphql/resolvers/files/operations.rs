@@ -1,6 +1,7 @@
 //! Public `/graphql` roots that write: file operations, media-library
 //! actions and the resumable-upload merge state.
 //!
+use plain_rs::infrastructure::error_code::ErrorCode;
 use crate::graphql::resolvers::files::types::File;
 use crate::graphql::resolvers::media::public::MediaDataType;
 use crate::graphql::types::ActionResult;
@@ -226,7 +227,7 @@ impl FileOpsMutation {
         if (src.starts_with("content://") || src.starts_with("ph://"))
             && !public_gate::is_local(ctx)
         {
-            return Err(plain_graphql::Error::new("no_permission"));
+            return Err(plain_graphql::Error::from(ErrorCode::NoPermission));
         }
         Ok(plain_rs::features::services::files::named_copy::copy(
             ctx.data::<crate::server::ServerState>()?,
@@ -248,7 +249,7 @@ impl FileOpsMutation {
         ctx.data_unchecked::<std::sync::Arc<plain_rs::features::files::uploads::Runtime>>()
             .delete(&base, &file_id)
             .await
-            .map_err(|error| plain_graphql::Error::new(error.to_string()))
+            .map_err(|error| plain_graphql::Error::from(error))
     }
 
     /// Starts the merge and returns immediately; completion arrives over the
@@ -414,7 +415,7 @@ async fn require_narrowing_media(
         MediaDataType::DOC => Provider::Doc,
     };
     provider_plan::require_narrowing(ctx.data_unchecked::<Arc<Db>>(), provider, query)
-        .map_err(|error| plain_graphql::Error::new(error.to_string()))
+        .map_err(|error| plain_graphql::Error::from(error))
 }
 
 async fn media_action(
@@ -515,6 +516,6 @@ async fn start_merge(
     let value = runtime
         .start(store, base, id, count, size, kind, events)
         .await
-        .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
+        .map_err(|error| plain_graphql::Error::from(error))?;
     Ok(merge_task(&value))
 }

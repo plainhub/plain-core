@@ -1,3 +1,4 @@
+use plain_rs::infrastructure::error_code::ErrorCode;
 use plain_rs::features::access::AccessFeature;
 use crate::graphql::resolvers::tags::domain_types::Tag;
 use crate::http::auth::public_gate;
@@ -87,7 +88,7 @@ impl Audio {
             &plain_libs::utils::base64::base64_decode(&token),
             &resource,
         )
-        .map_err(|error| plain_graphql::Error::new(error.to_string()))
+        .map_err(|error| plain_graphql::Error::from(error))
     }
 
     async fn tags(&self, ctx: &plain_graphql::Context<'_>) -> plain_graphql::Result<Vec<Tag>> {
@@ -617,7 +618,7 @@ pub(crate) async fn search_tracks(
     sort_by: AudioSortBy,
 ) -> plain_graphql::Result<Vec<AudioTrack>> {
     if query.trim().is_empty() {
-        return Err(plain_graphql::Error::new("bulk_query_required"));
+        return Err(plain_graphql::Error::from(ErrorCode::BulkQueryRequired));
     }
     if let Some(id) = plain_libs::utils::search_dsl::field_value(query, "playlist_id") {
         let query = query.to_owned();
@@ -732,7 +733,7 @@ async fn stage_audio_selection(
     let host = ctx.data::<Arc<Host>>()?;
     if is_local(ctx) && host.connected() {
         let params = plain_libs::serde_json::to_value(selection)
-            .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
+            .map_err(|error| plain_graphql::Error::from(error))?;
         host.call("audioPlaybackRefresh", params)
             .await
             .map_err(plain_graphql::Error::new)?;

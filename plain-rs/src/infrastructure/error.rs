@@ -1,8 +1,7 @@
-/// Library-domain error: a SQLite failure or a domain-level message
-/// (e.g. "tag not found"). `Send + Sync` so it converts into anyhow and
-/// GraphQL error types at the consumers' boundaries.
+use super::error_code::ErrorCode;
 #[derive(Debug)]
 pub enum DomainError {
+    Code(ErrorCode),
     Sqlite(plain_libs::rusqlite::Error),
     Other(String),
 }
@@ -10,6 +9,7 @@ pub enum DomainError {
 impl std::fmt::Display for DomainError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            DomainError::Code(code) => write!(f, "{code}"),
             DomainError::Sqlite(e) => write!(f, "sqlite: {e}"),
             DomainError::Other(m) => write!(f, "{m}"),
         }
@@ -19,6 +19,7 @@ impl std::fmt::Display for DomainError {
 impl std::error::Error for DomainError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
+            DomainError::Code(code) => Some(code),
             DomainError::Sqlite(e) => Some(e),
             DomainError::Other(_) => None,
         }
@@ -32,3 +33,9 @@ impl From<plain_libs::rusqlite::Error> for DomainError {
 }
 
 pub type DomainResult<T> = std::result::Result<T, DomainError>;
+
+impl From<ErrorCode> for DomainError {
+    fn from(code: ErrorCode) -> Self {
+        Self::Code(code)
+    }
+}

@@ -1,3 +1,4 @@
+use crate::infrastructure::error_code::ErrorCode;
 use crate::features::discovery::nearby_devices::DiscoveryMethod;
 use crate::features::services::discovery::pairing_runtime;
 use crate::runtime::Runtime as CoreRuntime;
@@ -184,7 +185,7 @@ pub async fn start(
                             return Ok(());
                         }
                     }
-                    plain_libs::anyhow::bail!("Core stopped")
+                    plain_libs::anyhow::bail!(ErrorCode::Canceled)
                 }
             }
         };
@@ -201,8 +202,8 @@ pub async fn start(
         let result = tokio::select! { biased;
             _ = scope_closed => { let _ = cancel(&state, &peer_id).await; return; },
             _ = canceled.changed() => return,
-            _ = stop.changed() => Err(plain_libs::anyhow::anyhow!("Core stopped")),
-            result = tokio::time::timeout(deadline, work) => result.unwrap_or_else(|_| Err(plain_libs::anyhow::anyhow!("Pairing timed out"))),
+            _ = stop.changed() => Err(plain_libs::anyhow::anyhow!(ErrorCode::Canceled)),
+            result = tokio::time::timeout(deadline, work) => result.unwrap_or_else(|_| Err(plain_libs::anyhow::anyhow!(ErrorCode::Timeout))),
         };
         {
             let _commit = state.pairing_runtime.commit.lock().unwrap();
@@ -215,11 +216,12 @@ pub async fn start(
                 .remove(&peer_id);
         }
         if let Err(error) = result {
+            log::warn!("Pairing failed: {error:#}");
             state.pairing.cancel(&peer_id, None);
             pairing_runtime::event(
                 &state,
                 crate::features::chat::events::WS_PAIRING_FAILED,
-                plain_libs::serde_json::json!({"deviceId":peer_id,"deviceName":"","error":error.to_string()}),
+                plain_libs::serde_json::json!({"deviceId":peer_id,"deviceName":"","error":ErrorCode::from_error(&error)}),
             );
         }
     });

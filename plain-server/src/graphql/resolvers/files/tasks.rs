@@ -1,3 +1,4 @@
+use plain_rs::infrastructure::error_code::ErrorCode;
 use plain_rs::features::access::AccessFeature;
 use plain_graphql::{Context, ID, InputObject, Object, Result, SimpleObject};
 
@@ -110,7 +111,7 @@ impl FileTaskMutation {
 pub(super) fn caller(ctx: &Context<'_>) -> Result<String> {
     let client_id = ctx.data::<String>()?;
     if client_id.is_empty() {
-        return Err("unauthorized".into());
+        return Err(ErrorCode::Unauthorized.into());
     }
     Ok(client_id.clone())
 }

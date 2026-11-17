@@ -68,14 +68,14 @@ impl ImageIndexMutation {
     ) -> plain_graphql::Result<bool> {
         ctx.data_unchecked::<Arc<plain_rs::features::services::images::index::ImageIndex>>()
             .start(force.unwrap_or(false))
-            .map_err(|e| plain_graphql::Error::new(e.to_string()))?;
+            .map_err(|e| plain_graphql::Error::from(e))?;
         Ok(true)
     }
 
     fn cancel_image_index(&self, ctx: &Context<'_>) -> plain_graphql::Result<bool> {
         ctx.data_unchecked::<Arc<plain_rs::features::services::images::index::ImageIndex>>()
             .cancel()
-            .map_err(|e| plain_graphql::Error::new(e.to_string()))?;
+            .map_err(|e| plain_graphql::Error::from(e))?;
         Ok(true)
     }
 }

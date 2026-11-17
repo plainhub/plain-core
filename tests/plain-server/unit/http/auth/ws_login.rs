@@ -1,5 +1,5 @@
 use super::*;
-use plain_rs::features::audit_events::{EventData, EventReason, EventType};
+use plain_rs::features::audit_events::{EventData, ErrorCode, EventType};
 
 #[test]
 fn local_request_pages_are_bounded_and_never_expose_request_secrets() {
@@ -526,7 +526,7 @@ async fn passwordless_browser_requires_approval_when_enabled_and_only_approval_i
     assert!(records.iter().any(|row| row.r#type == EventType::Login
         && row.client_id.as_deref() == Some("706c6169-f7d7-8d09-8d7a-640faf6dbebc")));
     assert!(records.iter().any(|row| row.r#type == EventType::LoginFailed
-        && matches!(&row.data, EventData::LoginFailed(data) if data.reason == EventReason::Rejected)
+        && matches!(&row.data, EventData::LoginFailed(data) if data.reason == ErrorCode::Rejected)
         && row.client_id.as_deref() == Some("706c6169-b825-8257-96b3-1672d7320085")));
     server.shutdown().await;
 }
@@ -1039,7 +1039,7 @@ async fn first_password_login_completes_without_owner_approval() {
     check(
         reopened.runtime_state(),
         &key,
-        plain_libs::axum::http::StatusCode::UNAUTHORIZED,
+        plain_libs::axum::http::StatusCode::OK,
     )
     .await;
     let (cert, cert_key) = plain_libs::tls::generate_pem(&["localhost".into()]).unwrap();
@@ -1059,6 +1059,12 @@ async fn first_password_login_completes_without_owner_approval() {
         reopened.runtime_state(),
         &channel.key,
         plain_libs::axum::http::StatusCode::OK,
+    )
+    .await;
+    check(
+        reopened.runtime_state(),
+        &key,
+        plain_libs::axum::http::StatusCode::UNAUTHORIZED,
     )
     .await;
     socket.close(None).await.unwrap();
@@ -1342,7 +1348,7 @@ async fn password_login_verifies_the_salted_record_and_rejects_reusable_stored_v
     for row in &records {
         assert_eq!(row.r#type, EventType::LoginFailed);
         assert!(
-            matches!(&row.data, EventData::LoginFailed(data) if data.reason == EventReason::InvalidLoginRequest)
+            matches!(&row.data, EventData::LoginFailed(data) if data.reason == ErrorCode::InvalidLoginRequest)
         );
         assert_eq!(row.client_ip.as_deref(), Some("fixture"));
         assert_eq!(row.app_name.as_deref(), Some("Fixture"));

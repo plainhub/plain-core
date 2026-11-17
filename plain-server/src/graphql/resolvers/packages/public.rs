@@ -40,7 +40,7 @@ impl PackagesQuery {
             Capability::Packages,
         )
         .await
-        .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
+        .map_err(|error| plain_graphql::Error::from(error))?;
         let statuses = ctx
             .data::<Arc<Host>>()?
             .call(
@@ -60,7 +60,7 @@ impl PackagesQuery {
             path,
         )
         .await
-        .map_err(|error| plain_graphql::Error::new(error.to_string()))
+        .map_err(|error| plain_graphql::Error::from(error))
     }
 
     async fn packages(
@@ -77,7 +77,7 @@ impl PackagesQuery {
             Capability::Packages,
         )
         .await
-        .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
+        .map_err(|error| plain_graphql::Error::from(error))?;
         let items = package_items(ctx, &query, sort_by).await?;
         Ok(items
             .into_iter()
@@ -96,7 +96,7 @@ impl PackagesQuery {
             Capability::Packages,
         )
         .await
-        .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
+        .map_err(|error| plain_graphql::Error::from(error))?;
         Ok(package_items(ctx, &query, FileSortBy::NameAsc).await?.len() as i32)
     }
 
@@ -111,7 +111,7 @@ impl PackagesQuery {
             Capability::Packages,
         )
         .await
-        .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
+        .map_err(|error| plain_graphql::Error::from(error))?;
         let ids: Vec<String> = ids.iter().map(|id| id.0.clone()).collect();
         let facts = ctx
             .data_unchecked::<Arc<Host>>()
@@ -142,7 +142,7 @@ impl PackagesMutation {
             Capability::Packages,
         )
         .await
-        .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
+        .map_err(|error| plain_graphql::Error::from(error))?;
         let ids: Vec<String> = ids.iter().map(|id| id.0.clone()).collect();
         ctx.data_unchecked::<Arc<Host>>()
             .call(
@@ -165,7 +165,7 @@ impl PackagesMutation {
             Capability::Packages,
         )
         .await
-        .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
+        .map_err(|error| plain_graphql::Error::from(error))?;
         let receipt = plain_rs::features::services::packages::install::execute(
             ctx.data::<plain_rs::runtime::Runtime>()?,
             ctx.data::<Arc<Host>>()?.clone(),
@@ -192,14 +192,14 @@ async fn package_items(
         .await
         .map_err(|error| plain_graphql::Error::new(error))?;
     let facts: Vec<Value> = plain_libs::serde_json::from_value(facts)
-        .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
+        .map_err(|error| plain_graphql::Error::from(error))?;
     plain_rs::features::services::packages::query::packages(
         ctx.data_unchecked::<Arc<Db>>(),
         facts,
         query,
         sort_by.as_str(),
     )
-    .map_err(|error| plain_graphql::Error::new(error.to_string()))
+    .map_err(|error| plain_graphql::Error::from(error))
 }
 
 fn package(value: &Value) -> Package {

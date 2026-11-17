@@ -1,3 +1,4 @@
+use plain_rs::infrastructure::error_code::ErrorCode;
 use crate::graphql::executor::GraphqlExecutor;
 use crate::managed_peers::request_error as peer_error;
 use crate::server::ServerState;
@@ -85,7 +86,7 @@ impl NativeGraphqlExecutor {
             biased;
             _ = scope.wait_closed() => Err("Native request scope closed".into()),
             _ = stop.wait_for(|value| *value) => Err("Server stopped".into()),
-            _ = tokio::time::sleep_until(deadline) => Err("connection_timeout".into()),
+            _ = tokio::time::sleep_until(deadline) => Err(ErrorCode::ConnectionTimeout.to_string()),
             result = async {
                 let route = self.state.managed_resources.route(&self.state, peer_id).await?;
                 let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());

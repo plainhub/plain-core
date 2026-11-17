@@ -163,7 +163,7 @@ async fn provider_query_keys(
     if kind == DataType::Contact {
         capabilities::require(ctx.data_unchecked::<Arc<Host>>(), Capability::Telephony)
             .await
-            .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
+            .map_err(|error| plain_graphql::Error::from(error))?;
     }
     if kind == DataType::Sms {
         let facts = plain_rs::features::services::sms::query::execute(
@@ -175,20 +175,20 @@ async fn provider_query_keys(
             },
         )
         .await
-        .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
+        .map_err(|error| plain_graphql::Error::from(error))?;
         return plain_libs::serde_json::from_value(facts["ids"].clone())
-            .map_err(|error| plain_graphql::Error::new(error.to_string()));
+            .map_err(|error| plain_graphql::Error::from(error));
     }
     let method = if kind == DataType::Call {
         capabilities::require(ctx.data_unchecked::<Arc<Host>>(), Capability::Telephony)
             .await
-            .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
+            .map_err(|error| plain_graphql::Error::from(error))?;
         "systemCallIds"
     } else {
         "systemContactIds"
     };
     let provider = plain_rs::features::services::files::provider_query::media_provider(kind)
-        .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
+        .map_err(|error| plain_graphql::Error::from(error))?;
     let params =
         crate::graphql::types::facts::provider_params(ctx, provider, query, json!({})).await?;
     let facts = crate::graphql::types::facts::host_json(ctx, method, params).await?;
@@ -249,7 +249,7 @@ fn data_type_name(kind: DataType) -> &'static str {
 }
 
 fn failed(error: plain_rs::infrastructure::error::DomainError) -> plain_graphql::Error {
-    plain_graphql::Error::new(error.to_string())
+    plain_graphql::Error::from(error)
 }
 
 fn db<'a>(ctx: &'a Context<'_>) -> &'a Arc<Db> {

@@ -35,7 +35,7 @@ impl ContactsQuery {
         public_gate::require(ctx, ctx.data_unchecked::<Arc<Prefs>>(), &[FEATURE])?;
         capabilities::require(ctx.data_unchecked::<Arc<Host>>(), Capability::Telephony)
             .await
-            .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
+            .map_err(|error| plain_graphql::Error::from(error))?;
         if public_gate::is_local(ctx) && !public_gate::require_granted(ctx, &[FEATURE]).await? {
             return Ok(Vec::new());
         }
@@ -57,7 +57,7 @@ impl ContactsQuery {
     async fn contact_count(&self, ctx: &Context<'_>, query: String) -> plain_graphql::Result<i32> {
         capabilities::require(ctx.data_unchecked::<Arc<Host>>(), Capability::Telephony)
             .await
-            .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
+            .map_err(|error| plain_graphql::Error::from(error))?;
         if !public_gate::require_granted(
             ctx,
             &[if public_gate::is_local(ctx) {
@@ -94,7 +94,7 @@ impl ContactsQuery {
         public_gate::require(ctx, ctx.data_unchecked::<Arc<Prefs>>(), &[FEATURE])?;
         capabilities::require(ctx.data_unchecked::<Arc<Host>>(), Capability::Telephony)
             .await
-            .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
+            .map_err(|error| plain_graphql::Error::from(error))?;
         Ok(plain_rs::features::services::contacts::projection::sources(
             host_json(ctx, "systemContactSources", json!({})).await?,
         )
@@ -110,7 +110,7 @@ impl ContactsQuery {
         public_gate::require(ctx, ctx.data_unchecked::<Arc<Prefs>>(), &[FEATURE])?;
         capabilities::require(ctx.data_unchecked::<Arc<Host>>(), Capability::Telephony)
             .await
-            .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
+            .map_err(|error| plain_graphql::Error::from(error))?;
         Ok(plain_rs::features::services::contacts::projection::groups(
             host_json(ctx, "systemContactGroupFacts", json!({})).await?,
         )
@@ -179,13 +179,13 @@ impl ContactsMutation {
         public_gate::require(ctx, ctx.data_unchecked::<Arc<Prefs>>(), &[FEATURE])?;
         capabilities::require(ctx.data_unchecked::<Arc<Host>>(), Capability::Telephony)
             .await
-            .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
+            .map_err(|error| plain_graphql::Error::from(error))?;
         plain_rs::features::services::phone_query::require_narrowing(
             ctx.data_unchecked::<Arc<plain_rs::infrastructure::db::Db>>(),
             plain_rs::features::services::files::provider_query::Provider::Contact,
             &query,
         )
-        .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
+        .map_err(|error| plain_graphql::Error::from(error))?;
         let ids: Vec<Value> = host_json(
             ctx,
             "systemContactIds",
@@ -211,7 +211,7 @@ impl ContactsMutation {
                 .await
                 .map_err(|error| plain_graphql::Error::new(error))?,
         )
-        .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
+        .map_err(|error| plain_graphql::Error::from(error))?;
         Ok(ActionResult {
             affected_count: deleted.len() as i32,
         })
@@ -297,7 +297,7 @@ async fn contact_write_call(
         request,
     )
     .await
-    .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
+    .map_err(|error| plain_graphql::Error::from(error))?;
     Ok(result["id"].as_str().unwrap_or_default().to_owned())
 }
 
@@ -310,7 +310,7 @@ async fn contact_rows(ctx: &Context<'_>, params: Value) -> plain_graphql::Result
         .await
         .map_err(plain_graphql::Error::new)?;
     plain_rs::features::services::contacts::projection::contacts(value)
-        .map_err(|error| plain_graphql::Error::new(error.to_string()))
+        .map_err(|error| plain_graphql::Error::from(error))
 }
 
 async fn reload(ctx: &Context<'_>, id: &str, phase: &str) -> plain_graphql::Result<Contact> {

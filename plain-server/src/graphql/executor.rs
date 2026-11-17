@@ -1,6 +1,7 @@
 #[cfg(feature = "core")]
 use crate::server::ServerState;
 use plain_graphql::{ObjectType, Request, Response, Schema, SubscriptionType};
+use plain_rs::infrastructure::error_code::ErrorCode;
 #[cfg(feature = "core")]
 use plain_rs::infrastructure::events::WsEvent;
 
@@ -34,13 +35,16 @@ pub(crate) fn resource_credentials(
     use plain_rs::features::files::resource_link::Scope;
     if ctx.data_opt::<RequestOrigin>() == Some(&RequestOrigin::Remote) {
         let id = ctx.data::<RequestClient>()?.client_id();
-        let row = ctx.data::<std::sync::Arc<plain_rs::infrastructure::db::Db>>()?
+        let row = ctx
+            .data::<std::sync::Arc<plain_rs::infrastructure::db::Db>>()?
             .session_get(id)?
             .ok_or_else(|| plain_graphql::Error::new("Session unavailable"))?;
         Ok((Scope::Session(row.client_id), row.url_token))
     } else {
         let state = ctx.data::<plain_rs::runtime::Runtime>()?;
-        let client_id = state.native_client_id().map_err(plain_graphql::Error::new)?;
+        let client_id = state
+            .native_client_id()
+            .map_err(plain_graphql::Error::new)?;
         Ok((Scope::Session(client_id), state.token.to_string()))
     }
 }
@@ -126,6 +130,40 @@ impl RequestContext {
     }
 }
 
+pub(crate) fn error_codes(mut response: Response) -> Response {
+    for error in &mut response.errors {
+        let code = error
+            .source
+            .as_ref()
+            .and_then(|source| {
+                source
+                    .downcast_ref::<ErrorCode>()
+                    .copied()
+                    .or_else(|| {
+                        source
+                            .downcast_ref::<plain_rs::infrastructure::error::DomainError>()
+                            .and_then(|error| match error {
+                                plain_rs::infrastructure::error::DomainError::Code(code) => {
+                                    Some(*code)
+                                }
+                                _ => None,
+                            })
+                    })
+                    .or_else(|| {
+                        source
+                            .downcast_ref::<plain_libs::anyhow::Error>()
+                            .map(ErrorCode::from_error)
+                    })
+            })
+            .unwrap_or(ErrorCode::InternalError);
+        error
+            .extensions
+            .get_or_insert_with(Default::default)
+            .set("code", code.as_str());
+    }
+    response
+}
+
 pub async fn execute_graphql<
     Q: ObjectType + 'static,
     M: ObjectType + 'static,
@@ -138,9 +176,9 @@ pub async fn execute_graphql<
     let changed = context.notify_changes && content_changes(&request);
     let request = match context.prepare(request) {
         Ok(request) => request,
-        Err(response) => return response,
+        Err(response) => return error_codes(response),
     };
-    let response = schema.execute(request).await;
+    let response = error_codes(schema.execute(request).await);
     if changed && response.errors.is_empty() {
         #[cfg(feature = "core")]
         if let Some(state) = context.state {
@@ -286,8 +324,12 @@ pub(crate) fn subscription_stream(
         ]))
     };
     match request {
-        Ok(request) => state.public.execute_stream(request),
-        Err(response) => futures_util::stream::once(async move { response }).boxed(),
+        Ok(request) => state
+            .public
+            .execute_stream(request)
+            .map(error_codes)
+            .boxed(),
+        Err(response) => futures_util::stream::once(async move { error_codes(response) }).boxed(),
     }
 }
 

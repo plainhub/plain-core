@@ -1,3 +1,4 @@
+use crate::infrastructure::error_code::ErrorCode;
 use crate::features::capability::Capability;
 use crate::features::prefs::Prefs;
 use crate::infrastructure::host::bridge::Host;
@@ -83,7 +84,7 @@ pub async fn execute(
         crate::features::prefs::pref_keys::API_PERMISSIONS,
         Vec::new(),
     );
-    plain_libs::anyhow::ensure!(permission_allowed(&configured), "no_permission");
+    plain_libs::anyhow::ensure!(permission_allowed(&configured), ErrorCode::NoPermission);
     crate::features::services::capabilities::require(host, Capability::Telephony).await?;
     let requires_confirmation = !request.attachment_paths.is_empty();
     plain_libs::anyhow::ensure!(

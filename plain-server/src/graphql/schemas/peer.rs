@@ -125,6 +125,7 @@ pub(crate) async fn execute(
             channel_id: channel_id.into(),
         }))
         .await;
+    let response = crate::graphql::executor::error_codes(response);
     let context = plain_rs::infrastructure::transport::http_response::Context::new(body);
     match plain_libs::serde_json::to_vec(&response) {
         Ok(body) => context
