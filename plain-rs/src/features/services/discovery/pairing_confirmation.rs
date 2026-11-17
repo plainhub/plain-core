@@ -99,6 +99,12 @@ impl Confirmations {
         let previous_identity =
             crate::infrastructure::db::chat_store::peers::get(&state.db, &ticket.target.device_id)?
                 .map(|peer| peer.public_key);
+        ensure!(
+            previous_identity.as_deref().is_none_or(|key| {
+                key.is_empty() || key == ticket.target.device_public_key
+            }),
+            "Pairing identity mismatch"
+        );
         self.with(|entries| {
             ensure!(entries.len() < 128, "Pairing capacity exceeded");
             entries.insert(
@@ -121,6 +127,12 @@ impl Confirmations {
         let previous_identity =
             crate::infrastructure::db::chat_store::peers::get(&state.db, &request.from_id)?
                 .map(|p| p.public_key);
+        ensure!(
+            previous_identity.as_deref().is_none_or(|key| {
+                key.is_empty() || key == request.payload.signature_public_key
+            }),
+            "Pairing identity mismatch"
+        );
         self.with(|entries| {
             if entries.contains_key(&request.payload.request_id()) {
                 return Ok(false);
