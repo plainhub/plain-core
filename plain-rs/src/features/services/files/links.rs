@@ -10,7 +10,7 @@ pub struct File {
 
 pub fn download_url(id: &str) -> String {
     format!(
-        "/fs?id={}&action=download",
+        "/fs?id={}&action=DOWNLOAD",
         plain_libs::utils::query::url_encode(id)
     )
 }

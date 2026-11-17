@@ -288,7 +288,7 @@ fn attachment_uris_and_response_receipts_match_mobile_contract() {
     );
     assert!(
         crate::infrastructure::transport::contract::message_response(
-            &json!({"data":{"createChatItem":[]},"errors":[{"message":"rejected"}]})
+            &json!({"data":{"createChatItem":[]},"errors":[{"message":"REJECTED"}]})
         )
         .is_err()
     );

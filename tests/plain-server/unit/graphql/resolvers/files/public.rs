@@ -108,7 +108,7 @@ async fn files_are_gated_on_storage_permission() {
         )
         .await;
     assert_eq!(response.errors.len(), 1);
-    assert_eq!(response.errors[0].message, "no_permission");
+    assert_eq!(response.errors[0].message, "NO_PERMISSION");
 }
 
 #[tokio::test]
@@ -142,7 +142,7 @@ async fn trash_count_matches_filtered_list_before_pagination() {
     );
     let (_denied_dir, denied) = fixture("[]");
     let response = denied.execute(r#"{ trashedFileCount(query: "") }"#).await;
-    assert_eq!(response.errors[0].message, "no_permission");
+    assert_eq!(response.errors[0].message, "NO_PERMISSION");
 }
 
 #[tokio::test]
@@ -1034,7 +1034,7 @@ async fn audio_duration_selection_preserves_permission_and_probe_errors() {
         "{fileInfo(path:\"missing\"){data{... on AudioFileInfo{durationMs}}}}"
     ).await;
     assert_eq!(response.errors.len(), 1);
-    assert_eq!(response.errors[0].message, "no_permission");
+    assert_eq!(response.errors[0].message, "NO_PERMISSION");
     let (directory, schema) = fixture(GRANTED);
     let path = directory.path().join("duration-source.mp3");
     fs::copy(

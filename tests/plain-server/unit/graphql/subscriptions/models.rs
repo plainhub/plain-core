@@ -108,3 +108,26 @@ async fn feed_sync_change_uses_canceled_and_rejects_the_retired_field() {
         .find(|spec| spec.field == "feedsFetched").unwrap();
     assert_eq!(spec.selection, "{ feedId error canceled }");
 }
+
+#[tokio::test]
+async fn domain_error_contract_pairing_has_a_dedicated_enum() {
+    struct Query;
+    #[plain_graphql::Object]
+    impl Query {
+        fn progress(&self) -> PairingProgressNotice {
+            plain_libs::serde_json::from_value(json!({"deviceId":"fixture","deviceName":"Fixture","error":"TIMEOUT"})).unwrap()
+        }
+    }
+    let schema = plain_graphql::Schema::build(Query, plain_graphql::EmptyMutation, plain_graphql::EmptySubscription).finish();
+    assert!(schema.sdl().contains("error: PairingErrorCode"), "{}", schema.sdl());
+    let response = schema.execute("{ progress { deviceId deviceName error } }").await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    assert_eq!(response.data.into_json().unwrap(), json!({"progress":{"deviceId":"fixture","deviceName":"Fixture","error":"TIMEOUT"}}));
+    assert!(!schema.sdl().contains("enum ErrorCode {"));
+
+    let source = |error| json!({"deviceId":"fixture","deviceName":"Fixture","error":error});
+    assert!(plain_libs::serde_json::from_value::<PairingProgressNotice>(source("TIMEOUT")).is_ok());
+    for code in ["timeout", "MOUNT_FAILED", "INVALID_PREF_VALUE", "PROXY_AUTH_FAILED", "EVENT_STORAGE_FAILED", "FUTURE_ERROR"] {
+        assert!(plain_libs::serde_json::from_value::<PairingProgressNotice>(source(code)).is_err(), "{code}");
+    }
+}

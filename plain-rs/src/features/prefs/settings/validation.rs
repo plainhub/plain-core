@@ -52,7 +52,7 @@ pub(super) fn validate(patch: &SettingsPatch) -> Result<()> {
     }
     if let Some(value) = &patch.notification_filter {
         ensure!(
-            matches!(value["mode"].as_str(), Some("allowlist" | "blacklist")),
+            matches!(value["mode"].as_str(), Some("ALLOWLIST" | "BLACKLIST")),
             "Invalid notification mode"
         );
         strings(&value["apps"])?;

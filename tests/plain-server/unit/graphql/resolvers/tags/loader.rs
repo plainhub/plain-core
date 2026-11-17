@@ -38,7 +38,7 @@ async fn batches_duplicate_keys_and_separates_kinds() {
 #[tokio::test(start_paused = true)]
 async fn canceling_the_first_waiter_does_not_cancel_the_batch() {
     let (_dir, loader) = fixture();
-    let mut canceled = Box::pin(loader.load_one(key(DataType::Note, "canceled")));
+    let mut canceled = Box::pin(loader.load_one(key(DataType::Note, "CANCELED")));
     assert!(futures_util::poll!(&mut canceled).is_pending());
     drop(canceled);
     assert!(

@@ -1,4 +1,4 @@
-use plain_rs::infrastructure::error_code::ErrorCode;
+use plain_rs::features::access_error::AccessErrorCode;
 use plain_rs::features::access::AccessFeature;
 use plain_graphql::Context;
 use plain_rs::features::prefs::Prefs;
@@ -17,7 +17,7 @@ impl plain_graphql::Guard for LocalOwner {
         if is_local(ctx) {
             Ok(())
         } else {
-            Err(plain_graphql::Error::from(ErrorCode::NoPermission))
+            Err(plain_graphql::Error::from(AccessErrorCode::NoPermission))
         }
     }
 }
@@ -33,7 +33,7 @@ pub(crate) fn require(
     if plain_rs::features::services::device::access::is_enabled(prefs, features) {
         Ok(())
     } else {
-        Err(plain_graphql::Error::from(ErrorCode::NoPermission))
+        Err(plain_graphql::Error::from(AccessErrorCode::NoPermission))
     }
 }
 

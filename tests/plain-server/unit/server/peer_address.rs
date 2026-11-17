@@ -54,7 +54,7 @@ async fn main_peer_records_and_file_urls_use_current_addresses_without_host() {
         parsed.query_pairs().collect::<Vec<_>>(),
         vec![
             ("id".into(), file_id.into()),
-            ("action".into(), "download".into())
+            ("action".into(), "DOWNLOAD".into())
         ]
     );
     peer.ip = "::1".into();

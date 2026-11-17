@@ -69,7 +69,7 @@ async fn truncated_or_failed_streams_remove_staging_and_never_publish_a_download
         assert!(
             save_stream(
                 &state,
-                "failed",
+                "FAILED",
                 &identity,
                 futures_util::stream::iter(chunks),
                 Some(4),
@@ -122,7 +122,7 @@ async fn cancellation_interrupts_a_pending_body_and_cleans_staging_before_join_r
     let worker = tokio::spawn(async move {
         save_stream(
             &worker_state,
-            "canceled",
+            "CANCELED",
             &identity,
             body,
             None,

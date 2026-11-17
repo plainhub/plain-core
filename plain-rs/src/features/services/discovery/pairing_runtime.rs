@@ -1,4 +1,4 @@
-use crate::infrastructure::error_code::ErrorCode;
+use crate::features::services::discovery::pairing_error::PairingErrorCode;
 use crate::features::discovery::nearby_devices::DiscoveryMethod;
 use crate::features::discovery::nearby_http;
 use crate::features::discovery::nearby_wire::Message;
@@ -89,7 +89,7 @@ impl Runtime {
     }
 }
 #[derive(Deserialize)]
-#[serde(tag = "action", rename_all = "camelCase", deny_unknown_fields)]
+#[serde(tag = "action", rename_all = "SCREAMING_SNAKE_CASE", deny_unknown_fields)]
 pub enum Request {
     Start {
         target: Target,
@@ -136,7 +136,7 @@ pub fn event(state: &CoreRuntime, kind: &'static str, value: Value) {
             value.to_string(),
         ));
 }
-pub fn failed(state: &CoreRuntime, target: &Target, error: ErrorCode, _generation: Option<&str>) {
+pub fn failed(state: &CoreRuntime, target: &Target, error: PairingErrorCode, _generation: Option<&str>) {
     let result = json!({"deviceId":target.device_id,"deviceName":target.device_name,"error":error});
     event(
         state,
@@ -321,7 +321,7 @@ pub async fn execute(state: &CoreRuntime, request: Request) -> plain_libs::anyho
                     state, target, device, generation,
                 )?
             } else {
-                failed(state, &target, ErrorCode::PairingTransportUnavailable, None);
+                failed(state, &target, PairingErrorCode::PairingTransportUnavailable, None);
                 Value::Null
             }
         }
@@ -336,7 +336,7 @@ pub async fn execute(state: &CoreRuntime, request: Request) -> plain_libs::anyho
                 &crate::infrastructure::transport::lan::local_interfaces(),
             );
             if target.device_ip.is_empty() {
-                failed(state, &target, ErrorCode::PairingAddressUnavailable, None);
+                failed(state, &target, PairingErrorCode::PairingAddressUnavailable, None);
                 return Ok(Value::Null);
             }
             let result = {
@@ -424,7 +424,7 @@ pub async fn execute(state: &CoreRuntime, request: Request) -> plain_libs::anyho
                 failed(
                     state,
                     &ticket.target,
-                    ErrorCode::FailedConnect,
+                    PairingErrorCode::FailedConnect,
                     Some(&ticket.generation),
                 );
             }

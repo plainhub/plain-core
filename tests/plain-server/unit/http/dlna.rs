@@ -68,7 +68,7 @@ fn snapshot_omits_the_internal_pending_slot() {
     // is the rules input and must not leak into the host surface.
     assert!(row.get("rawPendingCastRequest").is_none());
     assert_eq!(row["pendingCastRequest"], Value::Null);
-    assert_eq!(row["playbackState"], "NoMediaPresent");
+    assert_eq!(row["playbackState"], "NO_MEDIA_PRESENT");
     assert_eq!(row["seekTargetMs"], Value::Null);
 }
 
@@ -245,7 +245,7 @@ async fn native_control_uses_shared_http_lifecycle_and_cast_prompt() {
     );
     assert!(
         controller
-            .execute_json(r#"{"action":"snapshot","unexpected":true}"#)
+            .execute_json(r#"{"action":"SNAPSHOT","unexpected":true}"#)
             .await
             .is_err()
     );
@@ -269,7 +269,7 @@ async fn native_control_uses_shared_http_lifecycle_and_cast_prompt() {
         },
     );
 
-    let (status, body) = post(json!({"action": "accept", "remember": true})).await;
+    let (status, body) = post(json!({"action": "ACCEPT", "remember": true})).await;
     assert_eq!(status, 200);
     let row: Value = plain_libs::serde_json::from_str(&body).unwrap();
     assert_eq!(row["result"]["pendingCastRequest"], Value::Null);
@@ -291,7 +291,7 @@ async fn native_control_uses_shared_http_lifecycle_and_cast_prompt() {
             album_art_uri: String::new(),
         },
     );
-    let (status, body) = post(json!({"action": "reject", "remember": true})).await;
+    let (status, body) = post(json!({"action": "REJECT", "remember": true})).await;
     assert_eq!(status, 200);
     let row: Value = plain_libs::serde_json::from_str(&body).unwrap();
     assert_eq!(row["result"]["pendingCastRequest"], Value::Null);
@@ -310,7 +310,7 @@ async fn native_control_uses_shared_http_lifecycle_and_cast_prompt() {
 
     let rules: Value = plain_libs::serde_json::from_str(
         &controller
-            .execute_json(r#"{"action":"rules"}"#)
+            .execute_json(r#"{"action":"RULES"}"#)
             .await
             .unwrap(),
     )
@@ -318,34 +318,34 @@ async fn native_control_uses_shared_http_lifecycle_and_cast_prompt() {
     assert_eq!(rules["allowed"][0]["ip"], "10.0.0.9");
     let rules: Value = plain_libs::serde_json::from_str(
         &controller
-            .execute_json(r#"{"action":"removeRule","ip":"10.0.0.9","allowed":true}"#)
+            .execute_json(r#"{"action":"REMOVE_RULE","ip":"10.0.0.9","allowed":true}"#)
             .await
             .unwrap(),
     )
     .unwrap();
     assert_eq!(rules["allowed"], json!([]));
-    post(json!({"action":"playback","state":"PausedPlayback"})).await;
+    post(json!({"action":"playback","state":"PAUSED_PLAYBACK"})).await;
     state.dlna.state.write().await.seek_target_ms = Some(3000);
     post(json!({"action":"seekConsumed"})).await;
     let snapshot: Value = plain_libs::serde_json::from_str(
         &controller
-            .execute_json(r#"{"action":"snapshot"}"#)
+            .execute_json(r#"{"action":"SNAPSHOT"}"#)
             .await
             .unwrap(),
     )
     .unwrap();
-    assert_eq!(snapshot["playbackState"], "PausedPlayback");
+    assert_eq!(snapshot["playbackState"], "PAUSED_PLAYBACK");
     assert_eq!(snapshot["seekTargetMs"], Value::Null);
     post(json!({"action":"stopped"})).await;
     let snapshot: Value = plain_libs::serde_json::from_str(
         &controller
-            .execute_json(r#"{"action":"snapshot"}"#)
+            .execute_json(r#"{"action":"SNAPSHOT"}"#)
             .await
             .unwrap(),
     )
     .unwrap();
     assert_eq!(snapshot["mediaUri"], "");
-    post(json!({"action":"retry"})).await;
+    post(json!({"action":"RETRY"})).await;
     let (_, body) = post(json!({"action": "setEnabled", "enabled": false})).await;
     let row: Value = plain_libs::serde_json::from_str(&body).unwrap();
     assert_eq!(row["result"]["isRunning"], json!(false));

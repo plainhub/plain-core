@@ -47,7 +47,7 @@ async fn attachment_upload_dedupe_release_and_restart_use_core_storage() {
     let url = format!("http://127.0.0.1:{}/fs", server.port);
     let response = client
         .get(&url)
-        .query(&[("id", encoded.as_str()), ("action", "download")])
+        .query(&[("id", encoded.as_str()), ("action", "DOWNLOAD")])
         .bearer_auth(&token)
         .header("range", "bytes=2-7")
         .send()
@@ -58,7 +58,7 @@ async fn attachment_upload_dedupe_release_and_restart_use_core_storage() {
     assert_eq!(response.bytes().await.unwrap().as_ref(), b"ared a");
     let response = client
         .get(&url)
-        .query(&[("id", encoded.as_str()), ("action", "download")])
+        .query(&[("id", encoded.as_str()), ("action", "DOWNLOAD")])
         .bearer_auth(&token)
         .header("range", "bytes=100-")
         .send()
@@ -177,7 +177,7 @@ async fn remote_attachment_merge_preserves_chunks_when_file_access_is_denied() {
             .data(crate::graphql::executor::RequestOrigin::Remote).data(state.clone()),
     ).await;
     assert_eq!(response.errors.len(), 1);
-    assert_eq!(response.errors[0].message, "no_permission");
+    assert_eq!(response.errors[0].message, "NO_PERMISSION");
     assert_eq!(state.db.app_file_count("").unwrap(), 0);
     assert_eq!(
         state.upload_chunks.list("denied-attachment").await.unwrap(),

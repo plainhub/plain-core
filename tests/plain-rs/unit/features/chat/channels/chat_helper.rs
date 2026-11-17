@@ -19,11 +19,11 @@ fn compute_status_aggregates() {
         ChatStatus::Sent
     );
     assert_eq!(
-        compute_status(&[result("a", Some("timeout")), result("b", Some("refused"))]),
+        compute_status(&[result("a", Some("TIMEOUT")), result("b", Some("refused"))]),
         ChatStatus::Failed
     );
     assert_eq!(
-        compute_status(&[result("a", None), result("b", Some("timeout"))]),
+        compute_status(&[result("a", None), result("b", Some("TIMEOUT"))]),
         ChatStatus::Partial
     );
 }

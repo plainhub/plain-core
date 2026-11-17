@@ -4,10 +4,10 @@ use plain_libs::serde_json::json;
 #[test]
 fn command_rejects_missing_fields_and_unknown_actions() {
     for body in [
-        json!({"action":"select"}),
-        json!({"action":"seek"}),
-        json!({"action":"cast","item":{"path":"a"}}),
-        json!({"action":"snapshot","nativeFallback":true}),
+        json!({"action":"SELECT"}),
+        json!({"action":"SEEK"}),
+        json!({"action":"CAST","item":{"path":"a"}}),
+        json!({"action":"SNAPSHOT","nativeFallback":true}),
         json!({"action":"unknown"}),
     ] {
         assert!(plain_libs::serde_json::from_value::<Command>(body).is_err());

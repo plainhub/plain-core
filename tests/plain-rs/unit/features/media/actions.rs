@@ -15,12 +15,12 @@ fn only_acknowledged_successes_are_cleaned_and_type_isolated() {
     db.with_conn(|c|c.execute_batch("INSERT INTO tags(id,name,type,created_at,updated_at) VALUES('audio','audio','AUDIO','now','now'),('video','video','VIDEO','now','now'); INSERT INTO tag_relations(tag_id,target_key,type,created_at) VALUES('audio','one','AUDIO','now'),('audio','failed','AUDIO','now'),('video','one','VIDEO','now'); INSERT INTO platform_audio_media(file_id,path,title,artist,duration_ms,album_id) VALUES('test:/one','/one','one','',123,''),('test:/failed','/failed','failed','',123,''); INSERT INTO audio_queue_items(file_id,sort_order) VALUES('test:/one',0),('test:/failed',1);")).unwrap();
     let outcome = Outcome {
         successful: vec![item("one", "/one")],
-        failed_ids: vec!["failed".into()],
+        failed_ids: vec!["FAILED".into()],
     };
     validate(
         DataType::Audio,
         Action::Delete,
-        &["one".into(), "failed".into()],
+        &["one".into(), "FAILED".into()],
         &outcome,
     )
     .unwrap();

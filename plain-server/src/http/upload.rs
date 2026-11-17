@@ -13,8 +13,8 @@
 //! `UploadChunks` writer, which owns the temp file and the atomic placement. A
 //! chunk with no declared size keeps the legacy streaming path, because the
 //! shared writer cannot finish an unknown-length chunk.
+use plain_rs::features::access_error::AccessErrorCode;
 
-use plain_rs::infrastructure::error_code::ErrorCode;
 use crate::server::ServerState;
 use plain_libs::axum::{
     extract::{Request, State},
@@ -93,7 +93,7 @@ async fn read_info<T: for<'de> Deserialize<'de>>(
     let plaintext = plain_rs::infrastructure::transport::http_request::decrypt_raw(
         key, "POST", endpoint, &bytes,
     )
-    .ok_or_else(|| plain_libs::anyhow::anyhow!(ErrorCode::Unauthorized))?;
+    .ok_or_else(|| plain_libs::anyhow::anyhow!(AccessErrorCode::Unauthorized))?;
     let plaintext = std::str::from_utf8(&plaintext)?;
     let payload = state
         .main_replay
@@ -193,11 +193,11 @@ pub(crate) async fn upload(State(state): State<ServerState>, request: Request) -
     if !remote_access_allowed(&state)
         || !super::managed_proxy::forwarded_upload_allowed(&state, &request)
     {
-        return plain(StatusCode::FORBIDDEN, ErrorCode::Forbidden.as_str());
+        return plain(StatusCode::FORBIDDEN, AccessErrorCode::Forbidden.as_str());
     }
     let key = match session_key(&state, request.headers()).await {
         Ok(key) => key,
-        Err(_) => return plain(StatusCode::UNAUTHORIZED, ErrorCode::Unauthorized.as_str()),
+        Err(_) => return plain(StatusCode::UNAUTHORIZED, AccessErrorCode::Unauthorized.as_str()),
     };
     let client = request
         .headers()
@@ -225,8 +225,8 @@ pub(crate) async fn upload(State(state): State<ServerState>, request: Request) -
         match name.as_str() {
             "info" => match read_info(&state, &client, &key, field, "/upload").await {
                 Ok(value) => info = Some(value),
-                Err(error) if ErrorCode::from_error(&error) == ErrorCode::Unauthorized => {
-                    return plain(StatusCode::UNAUTHORIZED, ErrorCode::Unauthorized.as_str());
+                Err(error) if AccessErrorCode::from_error(&error) == Some(AccessErrorCode::Unauthorized) => {
+                    return plain(StatusCode::UNAUTHORIZED, AccessErrorCode::Unauthorized.as_str());
                 }
                 Err(error) => return plain(StatusCode::BAD_REQUEST, error.to_string()),
             },
@@ -250,7 +250,7 @@ pub(crate) async fn upload(State(state): State<ServerState>, request: Request) -
                 let content_type = field.content_type().unwrap_or_default().to_owned();
                 if current.is_app_file {
                     if managed {
-                        return plain(StatusCode::FORBIDDEN, ErrorCode::Forbidden.as_str());
+                        return plain(StatusCode::FORBIDDEN, AccessErrorCode::Forbidden.as_str());
                     }
                     match store_app_file(
                         &state,
@@ -425,11 +425,11 @@ pub(crate) async fn upload_chunk(State(state): State<ServerState>, request: Requ
     if !remote_access_allowed(&state)
         || !super::managed_proxy::forwarded_upload_allowed(&state, &request)
     {
-        return plain(StatusCode::FORBIDDEN, ErrorCode::Forbidden.as_str());
+        return plain(StatusCode::FORBIDDEN, AccessErrorCode::Forbidden.as_str());
     }
     let key = match session_key(&state, request.headers()).await {
         Ok(key) => key,
-        Err(_) => return plain(StatusCode::UNAUTHORIZED, ErrorCode::Unauthorized.as_str()),
+        Err(_) => return plain(StatusCode::UNAUTHORIZED, AccessErrorCode::Unauthorized.as_str()),
     };
     let client = request
         .headers()
@@ -458,8 +458,8 @@ pub(crate) async fn upload_chunk(State(state): State<ServerState>, request: Requ
         match name.as_str() {
             "info" => match read_info(&state, &client, &key, field, "/upload_chunk").await {
                 Ok(value) => info = Some(value),
-                Err(error) if ErrorCode::from_error(&error) == ErrorCode::Unauthorized => {
-                    failure = Some(plain(StatusCode::UNAUTHORIZED, ErrorCode::Unauthorized.as_str()));
+                Err(error) if AccessErrorCode::from_error(&error) == Some(AccessErrorCode::Unauthorized) => {
+                    failure = Some(plain(StatusCode::UNAUTHORIZED, AccessErrorCode::Unauthorized.as_str()));
                     break;
                 }
                 Err(error) => {

@@ -1,3 +1,4 @@
+use plain_rs::features::services::auth_error::AuthErrorCode;
 use crate::http::{auth::ws_login, graphql};
 use crate::server::ContentServer;
 use crate::server::ServerState;
@@ -195,7 +196,7 @@ async fn confirmation_is_once_only_and_cancel_or_revoke_prevents_issuance() {
             ws_login::execute(
                 &state,
                 ws_login::Request::Cancel {
-                    reason: plain_rs::infrastructure::error_code::ErrorCode::Canceled,
+                    reason: AuthErrorCode::Canceled,
                     request_id: id.clone(),
                 },
             )
@@ -428,7 +429,7 @@ async fn main_schema_keeps_secrets_local_and_remote_metadata_and_resource_token_
     ] {
         let denied = remote(&state, &headers, query).await;
         assert_eq!(
-            denied["errors"][0]["message"], "no_permission",
+            denied["errors"][0]["message"], "NO_PERMISSION",
             "{query}: {denied}"
         );
     }

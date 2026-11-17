@@ -1,4 +1,4 @@
-use plain_rs::infrastructure::error_code::ErrorCode;
+use plain_rs::features::access_error::AccessErrorCode;
 use crate::{http::ConnectionScheme, server::ServerState};
 use plain_libs::anyhow::{Result, anyhow, ensure};
 use plain_libs::axum::{
@@ -155,7 +155,7 @@ fn remote_access(state: &ServerState) -> bool {
 }
 
 pub(crate) fn caller(state: &ServerState, id: &str) -> Result<SessionRow> {
-    ensure!(remote_access(state), ErrorCode::NoPermission);
+    ensure!(remote_access(state), AccessErrorCode::NoPermission);
     state
         .db
         .session_get(id)?
@@ -271,8 +271,8 @@ async fn graphql(state: ServerState, target: &str, request: Request) -> Response
         Ok(response) => response,
         Err(error)
             if matches!(
-                error.downcast_ref::<ErrorCode>(),
-                Some(ErrorCode::RemoteAccessDisabled)
+                error.downcast_ref::<AccessErrorCode>(),
+                Some(AccessErrorCode::RemoteAccessDisabled)
             ) =>
         {
             return StatusCode::FORBIDDEN.into_response();
@@ -482,8 +482,8 @@ fn resource_url(
             query.append_pair(
                 "size",
                 match size {
-                    Size::Small => "sm",
-                    Size::Large => "lg",
+                    Size::Small => "SM",
+                    Size::Large => "LG",
                 },
             );
         }

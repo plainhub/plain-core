@@ -1,4 +1,4 @@
-use crate::infrastructure::error_code::ErrorCode;
+use crate::features::services::discovery::pairing_error::PairingErrorCode;
 use crate::features::discovery::nearby_devices::DiscoveryMethod;
 use crate::features::services::discovery::pairing_runtime;
 use crate::runtime::Runtime as CoreRuntime;
@@ -185,7 +185,7 @@ pub async fn start(
                             return Ok(());
                         }
                     }
-                    plain_libs::anyhow::bail!(ErrorCode::Canceled)
+                    plain_libs::anyhow::bail!(PairingErrorCode::Canceled)
                 }
             }
         };
@@ -202,8 +202,8 @@ pub async fn start(
         let result = tokio::select! { biased;
             _ = scope_closed => { let _ = cancel(&state, &peer_id).await; return; },
             _ = canceled.changed() => return,
-            _ = stop.changed() => Err(plain_libs::anyhow::anyhow!(ErrorCode::Canceled)),
-            result = tokio::time::timeout(deadline, work) => result.unwrap_or_else(|_| Err(plain_libs::anyhow::anyhow!(ErrorCode::Timeout))),
+            _ = stop.changed() => Err(plain_libs::anyhow::anyhow!(PairingErrorCode::Canceled)),
+            result = tokio::time::timeout(deadline, work) => result.unwrap_or_else(|_| Err(plain_libs::anyhow::anyhow!(PairingErrorCode::Timeout))),
         };
         {
             let _commit = state.pairing_runtime.commit.lock().unwrap();
@@ -221,7 +221,7 @@ pub async fn start(
             pairing_runtime::event(
                 &state,
                 crate::features::chat::events::WS_PAIRING_FAILED,
-                plain_libs::serde_json::json!({"deviceId":peer_id,"deviceName":"","error":ErrorCode::from_error(&error)}),
+                plain_libs::serde_json::json!({"deviceId":peer_id,"deviceName":"","error":PairingErrorCode::from_error(&error).or_else(|| crate::features::services::auth_error::AuthErrorCode::from_error(&error).map(PairingErrorCode::from)).unwrap_or(PairingErrorCode::InternalError)}),
             );
         }
     });

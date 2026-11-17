@@ -75,7 +75,7 @@ async fn duplicate_and_invalid_urls_are_rejected_before_network_io() {
                 .await
                 .unwrap_err()
                 .to_string()
-                .contains("invalid_feed_url")
+                .contains("INVALID_FEED_URL")
         );
     }
     assert_eq!(db.feeds_list().unwrap().len(), 1);

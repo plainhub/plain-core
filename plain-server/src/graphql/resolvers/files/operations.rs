@@ -1,7 +1,7 @@
 //! Public `/graphql` roots that write: file operations, media-library
 //! actions and the resumable-upload merge state.
 //!
-use plain_rs::infrastructure::error_code::ErrorCode;
+use plain_rs::features::access_error::AccessErrorCode;
 use crate::graphql::resolvers::files::types::File;
 use crate::graphql::resolvers::media::public::MediaDataType;
 use crate::graphql::types::ActionResult;
@@ -227,7 +227,7 @@ impl FileOpsMutation {
         if (src.starts_with("content://") || src.starts_with("ph://"))
             && !public_gate::is_local(ctx)
         {
-            return Err(plain_graphql::Error::from(ErrorCode::NoPermission));
+            return Err(plain_graphql::Error::from(AccessErrorCode::NoPermission));
         }
         Ok(plain_rs::features::services::files::named_copy::copy(
             ctx.data::<crate::server::ServerState>()?,

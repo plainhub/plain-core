@@ -1,4 +1,4 @@
-use plain_rs::infrastructure::error_code::ErrorCode;
+use plain_rs::features::access_error::AccessErrorCode;
 use super::{
     item::MediaItem,
     public::{library_rows, prefs},
@@ -66,7 +66,7 @@ impl MediaPlayHistoryQuery {
             })
             .collect();
         if allowed.is_empty() {
-            return Err(ErrorCode::NoPermission.into());
+            return Err(AccessErrorCode::NoPermission.into());
         }
 
         let offset = usize::try_from(offset)?;

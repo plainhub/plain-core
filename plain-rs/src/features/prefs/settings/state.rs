@@ -78,7 +78,7 @@ impl Default for Settings {
             editor_status_bar: true,
             nearby_discoverable: true,
             ai_image_search_enabled: false,
-            notification_filter: plain_libs::serde_json::json!({"mode":"blacklist","apps":[]}),
+            notification_filter: plain_libs::serde_json::json!({"mode":"BLACKLIST","apps":[]}),
             pomodoro_settings: plain_libs::serde_json::json!({"workDurationMin":25,"shortBreakDurationMin":5,"longBreakDurationMin":15,"pomodorosBeforeLongBreak":4,"showNotification":true,"playSoundOnComplete":true,"soundPath":"","originalSoundName":""}),
             app_home_features: "IMAGES|VIDEOS|AUDIO|DOCS|FILES|NOTES|FEEDS".into(),
             launcher_shortcuts: "NOTES|DOCS|FEEDS|POMODORO_TIMER".into(),

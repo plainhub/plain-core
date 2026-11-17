@@ -134,9 +134,9 @@ async fn invalid_resource_contracts_fail_before_creating_tasks_or_destinations()
     let target = root.path().join("out");
     for urls in [
         vec![],
-        vec!["http://fixture.invalid/fs?id=s.share.AA&action=download".into()],
-        vec!["https://fixture.invalid/fs?id=s.share.AA&action=preview".into()],
-        vec!["https://fixture.invalid/fs?id=s.share.AA&action=download&size=sm".into()],
+        vec!["http://fixture.invalid/fs?id=s.share.AA&action=DOWNLOAD".into()],
+        vec!["https://fixture.invalid/fs?id=s.share.AA&action=PREVIEW".into()],
+        vec!["https://fixture.invalid/fs?id=s.share.AA&action=DOWNLOAD&size=SM".into()],
     ] {
         assert!(
             super::super::create(

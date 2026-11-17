@@ -1,3 +1,6 @@
+use crate::features::services::auth_error::AuthErrorCode;
+use crate::features::services::disk_format_error::DiskFormatErrorCode;
+use crate::infrastructure::platform::mount_error::MountErrorCode;
 use super::*;
 use crate::features::audit_events::*;
 use crate::features::sessions::SessionType;
@@ -206,7 +209,7 @@ fn every_event_roundtrips_its_exact_payload_and_rejects_unknown_contracts() {
         (
             "LOGIN_FAILED",
             AuditEvent::LoginFailed(LoginFailedEventData {
-                reason: ErrorCode::InvalidPassword,
+                reason: AuthErrorCode::InvalidPassword,
             }),
         ),
         ("LOGOUT", AuditEvent::Logout(session.clone())),
@@ -228,8 +231,8 @@ fn every_event_roundtrips_its_exact_payload_and_rejects_unknown_contracts() {
             "MOUNT_FAILED",
             AuditEvent::MountFailed(VolumeFailedEventData {
                 volume: volume.clone(),
-                failure: EventFailure {
-                    reason: ErrorCode::MountFailed,
+                failure: MountFailure {
+                    reason: MountErrorCode::MountFailed,
                     detail: None,
                 },
             }),
@@ -247,8 +250,8 @@ fn every_event_roundtrips_its_exact_payload_and_rejects_unknown_contracts() {
             AuditEvent::FormatDiskFailed(DiskFormatFailedEventData {
                 disk,
                 file_system: "ext4".into(),
-                failure: EventFailure {
-                    reason: ErrorCode::FormatDiskFailed,
+                failure: DiskFormatFailure {
+                    reason: DiskFormatErrorCode::FormatDiskFailed,
                     detail: None,
                 },
             }),
@@ -276,7 +279,7 @@ fn every_event_roundtrips_its_exact_payload_and_rejects_unknown_contracts() {
             );
         }
         if kind == "LOGIN_FAILED" {
-            assert_eq!(data, json!({"reason":"invalid_password"}));
+            assert_eq!(data, json!({"reason":"INVALID_PASSWORD"}));
         }
     }
     assert_eq!(db.audit_events(0, 100, None).unwrap().len(), 10);

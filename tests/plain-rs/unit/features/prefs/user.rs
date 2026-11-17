@@ -83,13 +83,13 @@ fn notification_actions_are_atomic_and_reject_invalid_modes() {
             .len(),
         12
     );
-    Action::SetNotificationMode("allowlist".into())
+    Action::SetNotificationMode("ALLOWLIST".into())
         .apply(&prefs)
         .unwrap();
     Action::ClearNotificationApps.apply(&prefs).unwrap();
     assert_eq!(
         snapshot(&prefs).unwrap().notification_filter,
-        plain_libs::serde_json::json!({"mode":"allowlist","apps":[]})
+        plain_libs::serde_json::json!({"mode":"ALLOWLIST","apps":[]})
     );
     assert!(
         Action::SetNotificationMode("other".into())

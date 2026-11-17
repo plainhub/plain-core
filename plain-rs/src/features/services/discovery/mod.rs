@@ -1,3 +1,4 @@
+pub mod pairing_error;
 pub mod ble_pairing;
 
 pub mod ble_scan;

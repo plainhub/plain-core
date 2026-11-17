@@ -113,7 +113,7 @@ async fn call_reads_refuse_to_answer_without_the_web_permission() {
     let response = schema
         .execute(r#"query { calls(offset:0, limit:1, query:"") { id } }"#)
         .await;
-    assert_eq!(response.errors[0].message, "no_permission");
+    assert_eq!(response.errors[0].message, "NO_PERMISSION");
 }
 
 #[tokio::test]
@@ -125,7 +125,7 @@ async fn placing_a_call_needs_the_call_phone_permission() {
     let response = schema
         .execute(r#"mutation { call(number:"+1555", showDialer:false) }"#)
         .await;
-    assert_eq!(response.errors[0].message, "no_permission");
+    assert_eq!(response.errors[0].message, "NO_PERMISSION");
 
     let (_dir, schema) = fixture(json!(["CALL_PHONE"]));
     stub(schema_host(&schema), |method, params| match method {

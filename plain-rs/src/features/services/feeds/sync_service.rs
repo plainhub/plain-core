@@ -1,4 +1,4 @@
-use crate::infrastructure::error_code::ErrorCode;
+use crate::features::feeds::error::FeedOperationErrorCode;
 use crate::infrastructure::db::Db;
 use crate::infrastructure::events::WsEvent;
 use std::{
@@ -167,7 +167,7 @@ impl SyncService {
             vec![
                 self.db
                     .feed_get(id)?
-                    .ok_or_else(|| plain_libs::anyhow::anyhow!(ErrorCode::FeedNotFound))?,
+                    .ok_or_else(|| plain_libs::anyhow::anyhow!(FeedOperationErrorCode::FeedNotFound))?,
             ]
         } else {
             self.db.feeds_list()?

@@ -196,7 +196,7 @@ async fn contact_reads_refuse_to_answer_without_the_web_permission() {
     ] {
         let response = schema.execute(query).await;
         assert_eq!(
-            response.errors[0].message, "no_permission",
+            response.errors[0].message, "NO_PERMISSION",
             "ungated contact root: {query}"
         );
     }

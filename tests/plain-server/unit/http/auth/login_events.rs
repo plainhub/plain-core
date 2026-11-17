@@ -1,5 +1,6 @@
+use plain_rs::features::services::auth_error::AuthErrorCode;
 use super::*;
-use plain_rs::features::audit_events::{EventData, ErrorCode, EventType};
+use plain_rs::features::audit_events::{EventData, EventType};
 
 #[cfg(feature = "http_transport")]
 #[tokio::test]
@@ -50,14 +51,14 @@ async fn invalid_password_proof_is_recorded_once_without_session_or_secrets() {
     proof[0] ^= 1;
     socket.send(Message::Binary(proof.into())).await.unwrap();
     assert!(
-        matches!(login_frame(&mut socket).await, Message::Close(Some(frame)) if frame.reason == "invalid_password")
+        matches!(login_frame(&mut socket).await, Message::Close(Some(frame)) if frame.reason == "INVALID_PASSWORD")
     );
     state.audit_events.flush().await.unwrap();
     let records = state.db.audit_events(0, 10, None).unwrap();
     assert_eq!(records.len(), 1);
     assert_eq!(records[0].r#type, EventType::LoginFailed);
     assert!(
-        matches!(&records[0].data, EventData::LoginFailed(data) if data.reason == ErrorCode::InvalidPassword)
+        matches!(&records[0].data, EventData::LoginFailed(data) if data.reason == AuthErrorCode::InvalidPassword)
     );
     assert_eq!(records[0].client_ip.as_deref(), Some("127.0.0.1"));
     assert!(records[0].app_name.is_none());

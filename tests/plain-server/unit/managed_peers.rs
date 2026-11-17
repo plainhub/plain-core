@@ -565,7 +565,7 @@ async fn native_request_budgets_outlive_shared_timeouts_and_cancel_without_retry
     let release = requests.recv().await.unwrap();
     tokio::time::pause();
     tokio::time::advance(Duration::from_secs(31)).await;
-    assert_eq!(pending.await.unwrap().unwrap_err(), "connection_timeout");
+    assert_eq!(pending.await.unwrap().unwrap_err(), "CONNECTION_TIMEOUT");
     tokio::time::resume();
     let _ = release.send(());
     let scope = NativeRequestScope::default();
@@ -604,7 +604,7 @@ async fn request_timeout_errors_use_the_native_timeout_contract() {
     let error = pending.await.unwrap().err().unwrap();
     tokio::time::resume();
     assert!(error.is_timeout());
-    assert_eq!(request_error(error.into()), "connection_timeout");
+    assert_eq!(request_error(error.into()), "CONNECTION_TIMEOUT");
     drop(socket);
 }
 
@@ -684,7 +684,7 @@ async fn stale_bootstrap_unauthorized_cannot_revoke_a_replacement_management_ses
             if changed {
                 "Management session revoked"
             } else {
-                "unauthorized"
+                "UNAUTHORIZED"
             }
         );
         assert_eq!(

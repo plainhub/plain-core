@@ -233,7 +233,7 @@ async fn send_sms_needs_the_send_permission_and_passes_the_sim_choice() {
             r#"mutation { sendSms(number:"+1555", body:"hi", subscriptionId:2, requestId:"11111111-1111-4111-8111-111111111111") { requestId requiresConfirmation } }"#,
         )
         .await;
-    assert_eq!(response.errors[0].message, "no_permission");
+    assert_eq!(response.errors[0].message, "NO_PERMISSION");
 
     let (_dir, schema) = fixture(json!(["SMS"]));
     stub(schema_host(&schema), |method, params| match method {

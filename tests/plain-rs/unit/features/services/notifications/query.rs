@@ -8,7 +8,7 @@ fn notifications_apply_preferences_literal_text_and_instant_order() {
     prefs
         .set(
             "notification_filter",
-            json!({"mode":"allowlist","apps":["allowed"]}),
+            json!({"mode":"ALLOWLIST","apps":["allowed"]}),
         )
         .unwrap();
     let facts = vec![

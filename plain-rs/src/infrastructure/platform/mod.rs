@@ -1,3 +1,4 @@
+pub mod mount_error;
 #[cfg(any(feature = "linux-platform", feature = "linux-system"))]
 pub mod linux;
 

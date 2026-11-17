@@ -323,7 +323,7 @@ async fn native_provider_uri_copy_is_not_exposed_to_remote_filesystem_callers() 
         )
         .await;
         assert_eq!(response.errors.len(), 1);
-        assert_eq!(response.errors[0].message, "no_permission");
+        assert_eq!(response.errors[0].message, "NO_PERMISSION");
     }
     while let Ok(request) = requests.try_recv() {
         assert_eq!(request["method"], "systemCapabilities");
@@ -369,7 +369,7 @@ async fn copies_logical_image_references_without_changing_the_source() {
         assert_eq!(std::fs::read(&source).unwrap(), b"original image");
     }
     assert_eq!(std::fs::read_dir(&target).unwrap().count(), 2);
-    let rejected = dir.path().join("rejected");
+    let rejected = dir.path().join("REJECTED");
     let response = execute(&core, "app://../outside.png", &rejected, "escape.png").await;
     assert!(!response.errors.is_empty());
     assert!(!rejected.exists());

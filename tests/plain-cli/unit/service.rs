@@ -95,7 +95,7 @@ async fn management_pairing_with_cli_requires_password_without_second_approval()
             assert_eq!(
                 plain_libs::serde_json::from_str::<plain_libs::serde_json::Value>(&outcome.payload)
                     .unwrap()["error"],
-                "invalid_password"
+                "INVALID_PASSWORD"
             );
             assert!(session.is_none());
             assert!(peer.is_none() && remote_peer.is_none());

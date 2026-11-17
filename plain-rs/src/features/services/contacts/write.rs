@@ -1,4 +1,4 @@
-use crate::infrastructure::error_code::ErrorCode;
+use crate::features::access_error::AccessErrorCode;
 use crate::features::capability::Capability;
 use crate::features::prefs::Prefs;
 use crate::features::services::capabilities;
@@ -14,7 +14,7 @@ const MAX_VALUE_LEN: usize = 512;
 const MAX_ENTRIES: usize = 128;
 
 #[derive(Clone, Copy, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum Action {
     CreateContact,
     UpdateContact,
@@ -191,7 +191,7 @@ pub async fn execute(
         crate::features::prefs::pref_keys::API_PERMISSIONS,
         Vec::new(),
     );
-    plain_libs::anyhow::ensure!(permission_allowed(&configured), ErrorCode::NoPermission);
+    plain_libs::anyhow::ensure!(permission_allowed(&configured), AccessErrorCode::NoPermission);
     capabilities::require(host, Capability::Telephony).await?;
     match request.action {
         Action::CreateContact | Action::UpdateContact => {

@@ -32,7 +32,7 @@ impl Host {
         match method {
             "httpServerStatusChanged" => {
                 let status = self.core.http_status();
-                if status.state == "error" {
+                if status.state == plain_rs::features::services::http_status::HttpServiceState::Error {
                     self.failure
                         .send_replace(Some(format!("HTTP server failed: {}", status.message)));
                 }

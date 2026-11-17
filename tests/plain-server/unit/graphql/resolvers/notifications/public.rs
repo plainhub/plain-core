@@ -82,7 +82,7 @@ async fn notification_roots_error_out_without_the_api_permission() {
     let response = schema
         .execute(r#"query { notifications(offset:0, limit:1, query:"") { id } }"#)
         .await;
-    assert_eq!(response.errors[0].message, "no_permission");
+    assert_eq!(response.errors[0].message, "NO_PERMISSION");
 }
 
 #[tokio::test]
@@ -145,7 +145,7 @@ async fn reply_notification_reports_a_vanished_action_as_action_not_found() {
     let response = schema
         .execute(r#"mutation { replyNotification(id:"a", actionIndex:0, text:"hi") }"#)
         .await;
-    assert_eq!(response.errors[0].message, "action_not_found");
+    assert_eq!(response.errors[0].message, "ACTION_NOT_FOUND");
 }
 
 /// A negative index never reaches the platform: plain-app's `getOrNull`
@@ -159,7 +159,7 @@ async fn reply_notification_rejects_a_negative_index_without_calling_the_host() 
     let response = schema
         .execute(r#"mutation { replyNotification(id:"a", actionIndex:-1, text:"hi") }"#)
         .await;
-    assert_eq!(response.errors[0].message, "action_not_found");
+    assert_eq!(response.errors[0].message, "ACTION_NOT_FOUND");
 }
 
 #[test]
@@ -232,7 +232,7 @@ fn sms_refresh_hints_follow_notification_permissions_filters_and_event_kinds() {
         assert!(receiver.try_recv().is_err());
     }
     prefs
-        .set("notification_filter", json!({"mode":"allowlist","apps":[]}))
+        .set("notification_filter", json!({"mode":"ALLOWLIST","apps":[]}))
         .unwrap();
     publish(
         &prefs,

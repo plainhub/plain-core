@@ -87,7 +87,7 @@ sandbox.initialize = module.namespace.initSync;
 sandbox.bytes = bytes;
 runInContext("initialize({ module: bytes })", sandbox);
 assert.throws(() => module.namespace.OpaqueLogin.start(new Uint8Array([1, 2, 3])),
-  (error) => String(error).includes("secure_login_unavailable"));
+  (error) => String(error).includes("SECURE_LOGIN_UNAVAILABLE"));
 console.log('PASS missing secure randomness fails closed');
 console.log(JSON.stringify({ wasmBytes: bytes.length, gzipBytes: gzipSync(bytes).length,
   brotliBytes: brotliCompressSync(bytes).length, glueBytes: Buffer.byteLength(glue) }));

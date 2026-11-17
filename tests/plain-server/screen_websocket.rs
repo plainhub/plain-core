@@ -181,7 +181,7 @@ async fn image_editor_reconnect_requires_fresh_confirmation_before_ready() {
             .unwrap();
         if replay {
             assert!(
-                matches!(response, ClientMessage::Close(Some(frame)) if frame.reason == "invalid_request")
+                matches!(response, ClientMessage::Close(Some(frame)) if frame.reason == "INVALID_REQUEST")
             );
         } else {
             let ClientMessage::Binary(frame) = response else {
@@ -460,7 +460,7 @@ async fn screen_transports_authenticated_media_and_controls_separately_from_subs
         .unwrap()
         .unwrap();
     assert!(
-        matches!(message, ClientMessage::Close(Some(frame)) if frame.reason == "invalid_request")
+        matches!(message, ClientMessage::Close(Some(frame)) if frame.reason == "INVALID_REQUEST")
     );
     assert!(received.try_recv().is_err());
     native_scope.close();
@@ -541,7 +541,7 @@ async fn screen_rejects_missing_clients_invalid_keys_and_disabled_access() {
         .unwrap()
         .unwrap();
     assert!(
-        matches!(message, ClientMessage::Close(Some(frame)) if frame.reason == "remote_access_disabled")
+        matches!(message, ClientMessage::Close(Some(frame)) if frame.reason == "REMOTE_ACCESS_DISABLED")
     );
     core.shutdown().await;
 }

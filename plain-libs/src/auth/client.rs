@@ -20,11 +20,11 @@ pub enum LoginError {
 impl LoginError {
     pub fn as_str(&self) -> &'static str {
         match self {
-            Self::Randomness => "secure_login_unavailable",
-            Self::Start => "invalid_auth_response",
-            Self::SigningKey | Self::Response => "invalid_auth_response",
-            Self::Password => "invalid_password",
-            Self::PeerIdentity => "peer_identity_changed",
+            Self::Randomness => "SECURE_LOGIN_UNAVAILABLE",
+            Self::Start => "INVALID_AUTH_RESPONSE",
+            Self::SigningKey | Self::Response => "INVALID_AUTH_RESPONSE",
+            Self::Password => "INVALID_PASSWORD",
+            Self::PeerIdentity => "PEER_IDENTITY_CHANGED",
         }
     }
 }

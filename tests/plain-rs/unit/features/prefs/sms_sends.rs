@@ -73,22 +73,22 @@ fn partial_state_and_terminal_outbox_survive_reopen_and_expire_once() {
     assert_eq!(pending(&prefs).unwrap()[0].result(), Some(result));
     assert!(tick(&prefs, 300 + RETENTION_MS).unwrap().is_empty());
     assert!(pending(&prefs).unwrap().is_empty());
-    register(&prefs, "timeout".into(), 1, 100).unwrap();
+    register(&prefs, "TIMEOUT".into(), 1, 100).unwrap();
     assert!(tick(&prefs, 100 + RETENTION_MS - 1).unwrap().is_empty());
     assert_eq!(
         tick(&prefs, 100 + RETENTION_MS).unwrap(),
         [Outcome {
-            request_id: "timeout".into(),
+            request_id: "TIMEOUT".into(),
             success: false,
             result_code: -1000
         }]
     );
     assert_eq!(
         pending(&prefs).unwrap()[0].result().unwrap().request_id,
-        "timeout"
+        "TIMEOUT"
     );
     assert!(tick(&prefs, 100 + RETENTION_MS + 1).unwrap().is_empty());
-    cancel(&prefs, "timeout").unwrap();
+    cancel(&prefs, "TIMEOUT").unwrap();
     assert!(pending(&prefs).unwrap().is_empty());
 }
 

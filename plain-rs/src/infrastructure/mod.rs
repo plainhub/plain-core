@@ -1,3 +1,6 @@
+pub mod graphql_error;
+pub mod native_error;
+pub mod http_error;
 #[cfg(feature = "runtime")]
 pub mod cache;
 
@@ -5,7 +8,7 @@ pub mod cache_paths;
 
 pub mod data_paths;
 
-pub mod error_code;
+pub mod feature_error;
 
 #[cfg(any(feature = "chat", feature = "library", feature = "sqlite_browse"))]
 pub mod db;

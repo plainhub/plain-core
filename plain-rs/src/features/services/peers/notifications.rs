@@ -1,4 +1,4 @@
-use crate::infrastructure::error_code::ErrorCode;
+use crate::features::access_error::AccessErrorCode;
 use crate::features::capability::Capability;
 use crate::features::chat::enums::DeviceType;
 use crate::features::services::notifications::types::Notification;
@@ -281,8 +281,8 @@ impl Store {
             }
             Err(error)
                 if matches!(
-                    error.downcast_ref::<ErrorCode>(),
-                    Some(ErrorCode::RemoteAccessDisabled)
+                    error.downcast_ref::<AccessErrorCode>(),
+                    Some(AccessErrorCode::RemoteAccessDisabled)
                 ) =>
             {
                 peer.group.items.clear();
@@ -294,8 +294,8 @@ impl Store {
             }
             Err(error)
                 if matches!(
-                    error.downcast_ref::<ErrorCode>(),
-                    Some(ErrorCode::Unauthorized)
+                    error.downcast_ref::<AccessErrorCode>(),
+                    Some(AccessErrorCode::Unauthorized)
                 ) =>
             {
                 peer.group.items.clear();

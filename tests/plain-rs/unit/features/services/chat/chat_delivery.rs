@@ -74,7 +74,7 @@ async fn host_transport_preserves_signed_wire_and_requires_an_actual_receipt() {
                 let errors = if data == json!({"createChatItem":null}) {
                     Value::Null
                 } else if data == json!({"createChatItem":[]}) && index == 2 {
-                    json!([{"message":"rejected"}])
+                    json!([{"message":"REJECTED"}])
                 } else {
                     Value::Null
                 };

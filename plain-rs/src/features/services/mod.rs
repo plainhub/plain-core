@@ -1,3 +1,5 @@
+pub mod disk_format_error;
+pub mod auth_error;
 pub mod backups;
 pub mod bookmarks;
 pub mod feeds;

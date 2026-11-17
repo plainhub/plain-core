@@ -375,7 +375,7 @@ fn scan_paths_commit_one_transaction_and_roll_back_a_failed_batch() {
         conn.execute_batch("CREATE TRIGGER reject_scan_record BEFORE UPDATE ON files WHEN NEW.file_name='299.rs' BEGIN SELECT RAISE(ABORT,'rejected'); END;")
     }).unwrap();
     let before = commits.load(std::sync::atomic::Ordering::SeqCst);
-    assert!(db.record_scan_paths(&paths, "failed").is_err());
+    assert!(db.record_scan_paths(&paths, "FAILED").is_err());
     assert_eq!(commits.load(std::sync::atomic::Ordering::SeqCst), before);
     db.with_conn(|conn| {
         assert_eq!(

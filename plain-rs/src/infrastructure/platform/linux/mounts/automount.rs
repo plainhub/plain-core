@@ -1,3 +1,4 @@
+use crate::infrastructure::platform::mount_error::MountErrorCode;
 use plain_libs::anyhow::{Result, anyhow};
 use plain_libs::kv::Db;
 use plain_libs::platform::linux::disks::blockdev::flatten_devices;
@@ -288,8 +289,8 @@ fn mount_one(
             log::error!("mount {} failed: {error}", volume.mount_path);
             AuditEvent::MountFailed(VolumeFailedEventData {
                 volume,
-                failure: EventFailure {
-                    reason: ErrorCode::MountFailed,
+                failure: MountFailure {
+                    reason: MountErrorCode::MountFailed,
                     detail: None,
                 },
             })

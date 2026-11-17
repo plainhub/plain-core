@@ -133,7 +133,7 @@ async fn file_writes_are_gated_on_storage_permission() {
             "{operation}: {:?}",
             response.errors
         );
-        assert_eq!(response.errors[0].message, "no_permission", "{operation}");
+        assert_eq!(response.errors[0].message, "NO_PERMISSION", "{operation}");
     }
 }
 
@@ -274,7 +274,7 @@ async fn moving_media_is_gated() {
         .execute(r#"mutation { moveMediaItems(type:IMAGE, query:"text:x", destDir:"/d") { affectedCount } }"#)
         .await;
     assert_eq!(response.errors.len(), 1);
-    assert_eq!(response.errors[0].message, "no_permission");
+    assert_eq!(response.errors[0].message, "NO_PERMISSION");
 }
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]

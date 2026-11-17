@@ -146,8 +146,8 @@ async fn peer_upload_finish_rejects_wrong_index_length_and_authorization_receipt
         (StatusCode::CREATED, "0:1", "Upload receipt mismatch"),
         (StatusCode::CREATED, "invalid", "Invalid upload receipt"),
         (StatusCode::OK, "unexpected", "unexpected"),
-        (StatusCode::UNAUTHORIZED, "private", "unauthorized"),
-        (StatusCode::FORBIDDEN, "private", "remote_access_disabled"),
+        (StatusCode::UNAUTHORIZED, "private", "UNAUTHORIZED"),
+        (StatusCode::FORBIDDEN, "private", "REMOTE_ACCESS_DISABLED"),
     ] {
         let mut chunk =
             PeerUploadChunk::open(fixture.local.runtime_state(), &fixture.peer.id, "fixture", 0, 0)
@@ -160,7 +160,7 @@ async fn peer_upload_finish_rejects_wrong_index_length_and_authorization_receipt
         .await
         .unwrap();
     chunk.request = Box::pin(async { Ok((StatusCode::UNAUTHORIZED, vec![])) });
-    assert_eq!(chunk.write(b"a").await.unwrap_err(), "unauthorized");
+    assert_eq!(chunk.write(b"a").await.unwrap_err(), "UNAUTHORIZED");
     fixture.stop().await;
 }
 
@@ -225,7 +225,7 @@ async fn native_peer_upload_rejects_remote_permission_and_session_revocation_ove
         .unwrap();
     assert_eq!(
         writers.finish(&scope, &denied).await.unwrap_err(),
-        "remote_access_disabled"
+        "REMOTE_ACCESS_DISABLED"
     );
     assert!(
         remote
@@ -253,7 +253,7 @@ async fn native_peer_upload_rejects_remote_permission_and_session_revocation_ove
     remote.db.session_delete(&fixture.local.runtime_state().native_client_id().unwrap()).unwrap();
     assert_eq!(
         writers.finish(&scope, &revoked).await.unwrap_err(),
-        "unauthorized"
+        "UNAUTHORIZED"
     );
     assert!(
         remote

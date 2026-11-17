@@ -59,7 +59,7 @@ async fn native_main_record_queries_preserve_addresses_keys_members_and_checked_
             .find(|(key, _)| key == "action")
             .unwrap()
             .1,
-        "download"
+        "DOWNLOAD"
     );
     peer.key = plain_libs::utils::base64::base64_encode(&[8; 32]);
     peers::save(&state.db, &[peer], SaveMode::Update).unwrap();
@@ -186,7 +186,7 @@ async fn remote_requests_cannot_access_or_change_local_login_sessions() {
         )
         .await;
         assert_eq!(response.errors.len(), 1);
-        assert_eq!(response.errors[0].message, "no_permission");
+        assert_eq!(response.errors[0].message, "NO_PERMISSION");
     }
     let rows = plain_rs::infrastructure::db::chat_store::peers::all(&state.db).unwrap();
     assert_eq!(rows.len(), 1);

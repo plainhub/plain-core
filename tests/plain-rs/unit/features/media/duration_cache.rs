@@ -68,7 +68,7 @@ fn path_invalidation_respects_directory_boundaries_and_other_prefixes() {
         .save(value("audio", "sibling", "/root_sibling/song", 30))
         .unwrap();
     cache
-        .save(value("video", "failed", "/other/failed", 40))
+        .save(value("video", "FAILED", "/other/failed", 40))
         .unwrap();
     let db =
         Db::open(&crate::infrastructure::data_paths::DataPaths::new(directory.path()).database())

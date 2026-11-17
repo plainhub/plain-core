@@ -21,7 +21,7 @@ pub const MAX_SOCKET_CONTROL_BYTES: usize = 65536 - 48;
 const QUEUE_CAPACITY: usize = 8;
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum SocketKind {
     Screen,
     ImageEditor,

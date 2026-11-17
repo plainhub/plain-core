@@ -90,7 +90,7 @@ async fn scanning_with_300_http_requests_and_page_changes_preserves_the_encrypte
         loop {
             let ClientMessage::Binary(frame) = socket.next().await.unwrap().unwrap() else { panic!("socket closed during scan and page changes") };
             let message: Value = plain_libs::serde_json::from_slice(&cipher.decode(&frame, &key).unwrap()).unwrap();
-            assert!(message["type"] != "error" || message["payload"][0]["message"] == "resync_required", "{message}");
+            assert!(message["type"] != "error" || message["payload"][0]["message"] == "RESYNC_REQUIRED", "{message}");
             if message["type"] == "pong" {
                 assert_eq!(message["payload"]["afterPageChange"], true);
                 break;
@@ -208,8 +208,8 @@ async fn fs_burst_and_page_cancellation(
     for (id, connection) in ids[..300].iter().zip(&connections) {
         let request = connection
             .get(format!("{origin}/fs"))
-            .query(&[("action", "preview")])
-            .query(&[("id", id.as_str()), ("size", "sm")]);
+            .query(&[("action", "PREVIEW")])
+            .query(&[("id", id.as_str()), ("size", "SM")]);
         pending.spawn(async move { request.send().await.unwrap() });
     }
     tokio::time::timeout(Duration::from_secs(10), async {
@@ -271,8 +271,8 @@ async fn fs_burst_and_page_cancellation(
     gate.add_permits(workers);
     let next = http
         .get(format!("{origin}/fs"))
-        .query(&[("action", "preview")])
-        .query(&[("id", ids[300].as_str()), ("size", "sm")])
+        .query(&[("action", "PREVIEW")])
+        .query(&[("id", ids[300].as_str()), ("size", "SM")])
         .send()
         .await
         .unwrap();
@@ -288,8 +288,8 @@ async fn fs_burst_and_page_cancellation(
     for (id, connection) in ids[..300].iter().zip(&connections) {
         let request = connection
             .get(format!("{origin}/fs"))
-            .query(&[("action", "preview")])
-            .query(&[("id", id.as_str()), ("size", "sm")]);
+            .query(&[("action", "PREVIEW")])
+            .query(&[("id", id.as_str()), ("size", "SM")]);
         complete.spawn(async move {
             let response = request.send().await.unwrap();
             assert_eq!(response.status(), StatusCode::OK);

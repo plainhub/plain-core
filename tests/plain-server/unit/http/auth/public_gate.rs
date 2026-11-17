@@ -45,7 +45,7 @@ fn remote_caller_without_permission_is_refused() {
                 .await
         });
         assert!(
-            response.errors.iter().any(|e| e.message == "no_permission"),
+            response.errors.iter().any(|e| e.message == "NO_PERMISSION"),
             "remote caller must still be refused, got {:?}",
             response.errors
         );

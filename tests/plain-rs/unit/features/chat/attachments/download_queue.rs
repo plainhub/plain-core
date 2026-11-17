@@ -183,7 +183,7 @@ fn queued_tasks_recheck_current_peer_and_attachment_before_start() {
     let public = q.public_progress();
     assert!(!public.contains("peer"));
     assert!(!public.contains("generation"));
-    assert!(public.contains("failed"));
+    assert!(public.contains("FAILED"));
 }
 #[test]
 fn registry_and_effect_capacity_are_bounded() {

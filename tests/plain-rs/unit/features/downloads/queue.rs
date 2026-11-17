@@ -5,7 +5,7 @@ fn create(queue: &Queue, name: &str) -> Download {
         .create(
             Source::Resources {
                 urls: vec![format!(
-                    "https://fixture.invalid/fs?id=s.owner.{name}&action=download"
+                    "https://fixture.invalid/fs?id=s.owner.{name}&action=DOWNLOAD"
                 )],
             },
             "/downloads".into(),
@@ -212,7 +212,7 @@ fn explicit_retry_is_consumed_by_one_accepted_generation() {
 #[test]
 fn canceled_files_and_archives_never_execute_commit_effects() {
     let queue = Queue::default();
-    let download = create(&queue, "canceled");
+    let download = create(&queue, "CANCELED");
     let run = queue.claim().unwrap();
     queue
         .begin_file(&download.id, &run.generation, "file", 0)

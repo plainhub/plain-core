@@ -1,4 +1,4 @@
-use crate::infrastructure::error_code::ErrorCode;
+use crate::features::services::discovery::pairing_error::PairingErrorCode;
 use crate::features::services::discovery::pairing_attempts::Resolved;
 use crate::runtime::Runtime as CoreRuntime;
 use futures_util::{SinkExt, StreamExt};
@@ -36,15 +36,15 @@ pub(super) async fn run(
         .timeout(Duration::from_secs(10))
         .send()
         .await
-        .map_err(|_| plain_libs::anyhow::anyhow!(ErrorCode::FailedConnect))?;
-    ensure!(response.status().is_success(), ErrorCode::RemoteAccessDisabled);
+        .map_err(|_| plain_libs::anyhow::anyhow!(PairingErrorCode::FailedConnect))?;
+    ensure!(response.status().is_success(), PairingErrorCode::RemoteAccessDisabled);
     let init: Value = plain_libs::serde_json::from_slice(
         &crate::features::services::peers::peer_lan::limited(response, 8192).await?,
     )?;
     let public_key = init["signaturePublicKey"]
         .as_str()
         .filter(|k| base64_decode(k).len() == 32)
-        .ok_or_else(|| plain_libs::anyhow::anyhow!(ErrorCode::SignatureVerificationFailed))?
+        .ok_or_else(|| plain_libs::anyhow::anyhow!(PairingErrorCode::SignatureVerificationFailed))?
         .to_owned();
     if let Some(saved) = saved
         .as_ref()
@@ -61,7 +61,7 @@ pub(super) async fn run(
             let _commit = state.pairing_runtime.commit.lock().unwrap();
             ensure!(
                 state.pairing_runtime.attempts.contains(peer_id),
-                ErrorCode::Canceled
+                PairingErrorCode::Canceled
             );
             let name = text(&metadata, "deviceName")?;
             let changed = state.db.with_conn(|connection| {
@@ -90,10 +90,10 @@ pub(super) async fn run(
     }
     let password_required = init["passwordRequired"]
         .as_bool()
-        .ok_or_else(|| plain_libs::anyhow::anyhow!(ErrorCode::InvalidAuthResponse))?;
+        .ok_or_else(|| plain_libs::anyhow::anyhow!(PairingErrorCode::InvalidAuthResponse))?;
     ensure!(
         !password_required || password.is_some(),
-        ErrorCode::PasswordRequired
+        PairingErrorCode::PasswordRequired
     );
     let changed = saved.as_ref().is_some_and(|p| p.public_key != public_key);
     if changed || (!password_required && saved.is_none()) {
@@ -116,16 +116,16 @@ pub(super) async fn run(
             trust
                 .changed()
                 .await
-                .map_err(|_| plain_libs::anyhow::anyhow!(ErrorCode::Canceled))?;
+                .map_err(|_| plain_libs::anyhow::anyhow!(PairingErrorCode::Canceled))?;
         }
     }
     let password = if password_required {
-        Some(password.ok_or_else(|| plain_libs::anyhow::anyhow!(ErrorCode::PasswordRequired))?)
+        Some(password.ok_or_else(|| plain_libs::anyhow::anyhow!(PairingErrorCode::PasswordRequired))?)
     } else {
         None
     };
     let local = crate::features::services::discovery::pairing_runtime::local_device(state).await?;
-    ensure!(local.port != 0, ErrorCode::ChatPairingUnavailable);
+    ensure!(local.port != 0, PairingErrorCode::ChatPairingUnavailable);
     let signing = crate::features::services::peers::peer_wire::signing_keypair(&state.prefs)?;
     let startup = state.host.startup();
     let request = json!({
@@ -144,10 +144,10 @@ pub(super) async fn run(
 
     let mut socket = crate::features::services::peers::status_socket::connect(url.as_str())
         .await
-        .map_err(|_| plain_libs::anyhow::anyhow!(ErrorCode::FailedConnectWs))?;
+        .map_err(|_| plain_libs::anyhow::anyhow!(PairingErrorCode::FailedConnectWs))?;
     let protection = if let Some(password) = password {
         let client = plain_libs::auth::client::OpaqueLogin::start(password.into_bytes())
-            .map_err(ErrorCode::from)?;
+            .map_err(PairingErrorCode::from)?;
         socket
             .send(plain_libs::tokio_tungstenite::tungstenite::Message::Binary(
                 client.request().into(),
@@ -161,7 +161,7 @@ pub(super) async fn run(
                 &base64_decode(&public_key),
                 &base64_decode(text(&init, "opaquePublicKey")?),
             )
-            .map_err(ErrorCode::from)?;
+            .map_err(PairingErrorCode::from)?;
         let key: [u8; 32] = result
             .api_key
             .as_slice()
@@ -197,7 +197,7 @@ pub(super) async fn run(
             match socket
                 .next()
                 .await
-                .ok_or_else(|| plain_libs::anyhow::anyhow!(ErrorCode::FailedConnectWs))??
+                .ok_or_else(|| plain_libs::anyhow::anyhow!(PairingErrorCode::FailedConnectWs))??
             {
                 Message::Text(text) => {
                     break plain_libs::serde_json::from_str::<
@@ -205,7 +205,7 @@ pub(super) async fn run(
                     >(&text)?;
                 }
                 Message::Ping(bytes) => socket.send(Message::Pong(bytes)).await?,
-                _ => plain_libs::anyhow::bail!(ErrorCode::InvalidAuthResponse),
+                _ => plain_libs::anyhow::bail!(PairingErrorCode::InvalidAuthResponse),
             }
         };
         let channel = client.accept(
@@ -230,14 +230,14 @@ pub(super) async fn run(
         let frame = socket
             .next()
             .await
-            .ok_or_else(|| plain_libs::anyhow::anyhow!(ErrorCode::FailedConnectWs))?
-            .map_err(|_| plain_libs::anyhow::anyhow!(ErrorCode::FailedConnectWs))?;
+            .ok_or_else(|| plain_libs::anyhow::anyhow!(PairingErrorCode::FailedConnectWs))?
+            .map_err(|_| plain_libs::anyhow::anyhow!(PairingErrorCode::FailedConnectWs))?;
         use plain_libs::tokio_tungstenite::tungstenite::Message;
         match frame {
             Message::Binary(data) => {
                 let plain = protection.decrypt(&data)?;
                 let response: Value = plain_libs::serde_json::from_slice(&plain)
-                    .map_err(|_| plain_libs::anyhow::anyhow!(ErrorCode::InvalidAuthResponse))?;
+                    .map_err(|_| plain_libs::anyhow::anyhow!(PairingErrorCode::InvalidAuthResponse))?;
                 if response["status"] == "PENDING" {
                     if !awaiting_remote_approval {
                         awaiting_remote_approval = true;
@@ -264,12 +264,12 @@ pub(super) async fn run(
             Message::Ping(data) => socket
                 .send(Message::Pong(data))
                 .await
-                .map_err(|_| plain_libs::anyhow::anyhow!(ErrorCode::FailedConnectWs))?,
+                .map_err(|_| plain_libs::anyhow::anyhow!(PairingErrorCode::FailedConnectWs))?,
             Message::Close(reason) => {
                 let reason = reason.map(|r| r.reason.to_string()).unwrap_or_default();
-                plain_libs::anyhow::bail!(reason.parse::<ErrorCode>().unwrap_or(ErrorCode::FailedConnectWs));
+                plain_libs::anyhow::bail!(PairingErrorCode::from(reason.parse::<crate::features::services::auth_error::AuthErrorCode>().map_err(|_| PairingErrorCode::InvalidAuthResponse)?));
             }
-            _ => plain_libs::anyhow::bail!(ErrorCode::InvalidAuthResponse),
+            _ => plain_libs::anyhow::bail!(PairingErrorCode::InvalidAuthResponse),
         }
     };
     let remote_id = verify_response(&response, &target.target.device_id)?;
@@ -277,7 +277,7 @@ pub(super) async fn run(
     let metadata = metadata(state, base, &client_id, &shared).await?;
     ensure!(
         text(&metadata, "clientId")? == remote_id,
-        ErrorCode::PeerIdentityChanged
+        PairingErrorCode::PeerIdentityChanged
     );
     let mut material = b"chat-pairing".to_vec();
     material.extend(shared);
@@ -286,12 +286,12 @@ pub(super) async fn run(
     let _commit = state.pairing_runtime.commit.lock().unwrap();
     ensure!(
         state.pairing_runtime.attempts.contains(peer_id),
-        ErrorCode::Canceled
+        PairingErrorCode::Canceled
     );
     let current = crate::infrastructure::db::chat_store::peers::get(&state.db, &remote_id)?;
     ensure!(
         current.as_ref().map(|p| &p.public_key) == saved.as_ref().map(|p| &p.public_key),
-        ErrorCode::PeerIdentityChanged
+        PairingErrorCode::PeerIdentityChanged
     );
 
     let device_type = text(&metadata, "deviceType")?
@@ -337,13 +337,13 @@ pub(super) async fn run(
 fn text<'a>(value: &'a Value, field: &str) -> Result<&'a str> {
     value[field]
         .as_str()
-        .ok_or_else(|| plain_libs::anyhow::anyhow!(ErrorCode::InvalidAuthResponse))
+        .ok_or_else(|| plain_libs::anyhow::anyhow!(PairingErrorCode::InvalidAuthResponse))
 }
 fn check_identity(expected_id: &str, expected_key: &str, id: &str, key: &str) -> Result<()> {
     ensure!(
         (expected_id.is_empty() || expected_id == id)
             && (expected_key.is_empty() || expected_key == key),
-        ErrorCode::PeerIdentityChanged
+        PairingErrorCode::PeerIdentityChanged
     );
     Ok(())
 }
@@ -351,11 +351,11 @@ fn verify_response(response: &Value, expected: &str) -> Result<String> {
     let id = text(response, "deviceId")?;
     ensure!(
         !id.is_empty() && id.len() <= 256 && (expected.is_empty() || expected == id),
-        ErrorCode::PeerIdentityChanged
+        PairingErrorCode::PeerIdentityChanged
     );
     ensure!(
         response["status"] == "COMPLETED" && response["chatPaired"] == true,
-        ErrorCode::ChatPairingUnavailable
+        PairingErrorCode::ChatPairingUnavailable
     );
     Ok(id.into())
 }
@@ -374,7 +374,7 @@ impl Protection {
         match self {
             Self::Password { key, aad } => {
                 plain_libs::crypto::xchacha_decrypt_raw_with_aad(key, data, aad)
-                    .ok_or_else(|| plain_libs::anyhow::anyhow!(ErrorCode::InvalidAuthResponse))
+                    .ok_or_else(|| plain_libs::anyhow::anyhow!(PairingErrorCode::InvalidAuthResponse))
             }
             Self::Confirmation(c) => c.decrypt_response(
                 data,
@@ -394,11 +394,11 @@ where
         match socket
             .next()
             .await
-            .ok_or_else(|| plain_libs::anyhow::anyhow!(ErrorCode::FailedConnectWs))??
+            .ok_or_else(|| plain_libs::anyhow::anyhow!(PairingErrorCode::FailedConnectWs))??
         {
             Message::Binary(bytes) => return Ok(bytes.to_vec()),
             Message::Ping(bytes) => socket.send(Message::Pong(bytes)).await?,
-            _ => plain_libs::anyhow::bail!(ErrorCode::InvalidAuthResponse),
+            _ => plain_libs::anyhow::bail!(PairingErrorCode::InvalidAuthResponse),
         }
     }
 }
@@ -419,12 +419,12 @@ async fn metadata(
     .await
     .map_err(|error| {
         if error.downcast_ref::<http_client::Error>().is_some() {
-            plain_libs::anyhow::anyhow!(ErrorCode::FailedConnect)
+            plain_libs::anyhow::anyhow!(PairingErrorCode::FailedConnect)
         } else {
-            plain_libs::anyhow::anyhow!(ErrorCode::InvalidSession)
+            plain_libs::anyhow::anyhow!(PairingErrorCode::InvalidSession)
         }
     })?;
-    ensure!(data["app"].is_object(), ErrorCode::InvalidSession);
+    ensure!(data["app"].is_object(), PairingErrorCode::InvalidSession);
     Ok(data["app"].clone())
 }
 

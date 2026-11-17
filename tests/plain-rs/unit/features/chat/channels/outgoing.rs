@@ -166,7 +166,7 @@ async fn encrypted_delivery_requires_a_true_acknowledgement() {
         (r#"{"data":{"channelSystemMessage":false}}"#, false),
         (r#"{"data":{}}"#, false),
         (
-            r#"{"data":{"channelSystemMessage":true},"errors":[{"message":"rejected"}]}"#,
+            r#"{"data":{"channelSystemMessage":true},"errors":[{"message":"REJECTED"}]}"#,
             false,
         ),
     ] {

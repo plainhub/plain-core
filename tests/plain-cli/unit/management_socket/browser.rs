@@ -127,7 +127,7 @@ async fn local_approval_socket_controls_real_passwordless_browser_sessions() {
                 plain_libs::utils::base64::base64_encode(&shared)
             );
         } else {
-            assert!(matches!(response, Message::Close(Some(close)) if close.reason == "rejected"));
+            assert!(matches!(response, Message::Close(Some(close)) if close.reason == "REJECTED"));
             assert!(state.db.session_get(client_id).unwrap().is_none());
         }
         assert!(

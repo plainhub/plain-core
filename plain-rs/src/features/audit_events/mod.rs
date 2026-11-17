@@ -1,5 +1,4 @@
-pub use crate::infrastructure::error_code::ErrorCode;
-mod types;
+pub mod types;
 use serde::{Deserialize, Serialize};
 pub use types::*;
 

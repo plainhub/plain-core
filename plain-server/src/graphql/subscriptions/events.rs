@@ -1,4 +1,5 @@
-use plain_rs::infrastructure::error_code::ErrorCode;
+use plain_rs::features::access_error::AccessErrorCode;
+use plain_rs::infrastructure::protocols::graphql::error::SubscriptionErrorCode;
 use crate::graphql::executor::{RequestClient, RequestOrigin};
 use crate::server::ServerState;
 use futures_util::{
@@ -34,13 +35,13 @@ pub(super) async fn authorize(
             })
             .collect();
         if features.is_empty() {
-            return Err(ErrorCode::NoPermission.into());
+            return Err(AccessErrorCode::NoPermission.into());
         }
         let granted = plain_rs::features::services::device::access::sample(&state.host, &features)
             .await
             .map_err(plain_graphql::Error::new)?;
         if granted.is_empty() {
-            return Err(ErrorCode::NoPermission.into());
+            return Err(AccessErrorCode::NoPermission.into());
         }
     }
     Ok(())
@@ -105,7 +106,7 @@ pub(super) async fn stream<T: DeserializeOwned + Send + 'static>(
                     _ = async { let _ = stop.wait_for(|stopped| *stopped).await; } => return None,
                     event = receiver.recv() => match event {
                         Ok(event) => event,
-                        Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => return Some((Err(ErrorCode::ResyncRequired.into()), (receiver, state, client, stop, None, true))),
+                        Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => return Some((Err(SubscriptionErrorCode::ResyncRequired.into()), (receiver, state, client, stop, None, true))),
                         Err(_) => return None,
                     },
                 };

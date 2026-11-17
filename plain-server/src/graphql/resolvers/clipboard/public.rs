@@ -1,4 +1,4 @@
-use plain_rs::infrastructure::error_code::ErrorCode;
+use plain_rs::features::clipboard::error::ClipboardErrorCode;
 use plain_rs::features::access::AccessFeature;
 use crate::graphql::resolvers::clipboard::models::ClipboardItem;
 use crate::graphql::types::ActionResult;
@@ -119,7 +119,7 @@ fn enabled(ctx: &Context<'_>) -> plain_graphql::Result<()> {
     {
         Ok(())
     } else {
-        Err(plain_graphql::Error::from(ErrorCode::ClipboardSyncDisabled))
+        Err(plain_graphql::Error::from(ClipboardErrorCode::ClipboardSyncDisabled))
     }
 }
 

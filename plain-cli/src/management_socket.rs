@@ -19,7 +19,7 @@ struct Request {
 #[derive(Serialize, Deserialize)]
 #[serde(
     tag = "type",
-    rename_all = "camelCase",
+    rename_all = "SCREAMING_SNAKE_CASE",
     rename_all_fields = "camelCase",
     deny_unknown_fields
 )]
@@ -49,7 +49,7 @@ struct Reply {
 }
 
 #[derive(Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "camelCase", deny_unknown_fields)]
+#[serde(tag = "type", rename_all = "SCREAMING_SNAKE_CASE", deny_unknown_fields)]
 enum ReplyResult {
     Requests { page: NativeWebLoginRequests },
     Decided,
@@ -69,7 +69,7 @@ pub struct Status {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum ListenerState {
     Running,
     Restarting,

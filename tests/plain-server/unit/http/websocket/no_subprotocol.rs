@@ -105,7 +105,7 @@ async fn no_subprotocol_keeps_encrypted_handshake_and_frame_validation() {
                 panic!("invalid encrypted frame must close the connection")
             };
             assert_eq!(u16::from(close.code), 1008);
-            assert_eq!(close.reason, "invalid_subscription");
+            assert_eq!(close.reason, "INVALID_SUBSCRIPTION");
         }
         serving.abort();
         server.shutdown().await;

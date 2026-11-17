@@ -29,7 +29,7 @@ fn writes_preserve_existing_files_and_report_real_failures() {
     assert_eq!(
         Operation::WriteText {
             path: path.clone(),
-            content: "rejected".into(),
+            content: "REJECTED".into(),
             overwrite: false
         }
         .apply()

@@ -1,4 +1,4 @@
-use plain_rs::infrastructure::error_code::ErrorCode;
+use plain_rs::features::access_error::AccessErrorCode;
 use super::request_error;
 use crate::{native::resources::MAX_RESOURCE_RESPONSE_BYTES, server::ServerState};
 use plain_libs::axum::http::{Method, StatusCode, header};
@@ -46,17 +46,17 @@ impl PeerResource {
             query.append_pair("id", &id).append_pair(
                 "action",
                 if thumbnail.is_some() {
-                    "preview"
+                    "PREVIEW"
                 } else {
-                    "download"
+                    "DOWNLOAD"
                 },
             );
             if let Some(size) = thumbnail {
                 query.append_pair(
                     "size",
                     match size {
-                        Size::Small => "sm",
-                        Size::Large => "lg",
+                        Size::Small => "SM",
+                        Size::Large => "LG",
                     },
                 );
             }
@@ -196,8 +196,8 @@ fn request(
 
 fn validate(response: &http_client::Response, status: StatusCode) -> Result<(), String> {
     match response.status() {
-        StatusCode::UNAUTHORIZED => return Err(ErrorCode::Unauthorized.to_string()),
-        StatusCode::FORBIDDEN => return Err(ErrorCode::RemoteAccessDisabled.to_string()),
+        StatusCode::UNAUTHORIZED => return Err(AccessErrorCode::Unauthorized.to_string()),
+        StatusCode::FORBIDDEN => return Err(AccessErrorCode::RemoteAccessDisabled.to_string()),
         actual if actual != status => return Err(format!("Resource response HTTP {actual}")),
         _ => {}
     }

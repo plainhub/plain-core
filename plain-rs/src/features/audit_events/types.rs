@@ -1,4 +1,6 @@
-use crate::infrastructure::error_code::ErrorCode;
+use crate::features::services::auth_error::AuthErrorCode;
+use crate::infrastructure::platform::mount_error::MountErrorCode;
+use crate::features::services::disk_format_error::DiskFormatErrorCode;
 use crate::features::sessions::SessionType;
 use crate::infrastructure::types::Long;
 use serde::{Deserialize, Serialize};
@@ -30,7 +32,7 @@ pub struct LoginEventData {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 #[cfg_attr(feature = "graphql", derive(plain_graphql::SimpleObject))]
 pub struct LoginFailedEventData {
-    pub reason: ErrorCode,
+    pub reason: AuthErrorCode,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -71,8 +73,17 @@ pub struct EventVolume {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 #[cfg_attr(feature = "graphql", derive(plain_graphql::SimpleObject))]
-pub struct EventFailure {
-    pub reason: ErrorCode,
+pub struct MountFailure {
+    pub reason: MountErrorCode,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub detail: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[cfg_attr(feature = "graphql", derive(plain_graphql::SimpleObject))]
+pub struct DiskFormatFailure {
+    pub reason: DiskFormatErrorCode,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub detail: Option<String>,
 }
@@ -107,7 +118,7 @@ pub struct DiskFormatEventData {
 #[cfg_attr(feature = "graphql", derive(plain_graphql::SimpleObject))]
 pub struct VolumeFailedEventData {
     pub volume: EventVolume,
-    pub failure: EventFailure,
+    pub failure: MountFailure,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -116,5 +127,5 @@ pub struct VolumeFailedEventData {
 pub struct DiskFormatFailedEventData {
     pub disk: EventDisk,
     pub file_system: String,
-    pub failure: EventFailure,
+    pub failure: DiskFormatFailure,
 }

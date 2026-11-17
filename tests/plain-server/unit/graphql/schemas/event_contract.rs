@@ -42,7 +42,7 @@ fn events_keep_their_own_named_type_and_closed_status_values() {
             "MOUNT_FAILED",
             "UNMOUNT",
             "FORMAT_DISK",
-            "FORMAT_DISK_FAILED"
+            "FORMAT_DISK_FAILED",
         ]
     );
     assert!(sdl.contains("enum ContactEventType {"));
@@ -138,14 +138,14 @@ fn event_payloads_keep_named_union_members_enums_and_nullable_actor_fields() {
                 "clientName: String!",
             ],
         ),
-        ("LoginFailedEventData", vec!["reason: ErrorCode!"]),
+        ("LoginFailedEventData", vec!["reason: AuthErrorCode!"]),
         (
-            "EventFailure",
-            vec!["reason: ErrorCode!", "detail: String"],
+            "MountFailure",
+            vec!["reason: MountErrorCode!", "detail: String"],
         ),
         ("EventDisk", vec!["sizeBytes: Long"]),
-        ("VolumeFailedEventData", vec!["failure: EventFailure!"]),
-        ("DiskFormatFailedEventData", vec!["failure: EventFailure!"]),
+        ("VolumeFailedEventData", vec!["failure: MountFailure!"]),
+        ("DiskFormatFailedEventData", vec!["failure: DiskFormatFailure!"]),
     ] {
         let body = sdl
             .split(&format!("type {name} {{"))
@@ -170,7 +170,7 @@ fn event_payloads_keep_named_union_members_enums_and_nullable_actor_fields() {
         .unwrap();
     assert!(!event.contains("message:"));
     let reasons: Vec<_> = sdl
-        .split("enum ErrorCode {")
+        .split("enum AuthErrorCode {")
         .nth(1)
         .unwrap()
         .split('}')
@@ -189,9 +189,33 @@ fn event_payloads_keep_named_union_members_enums_and_nullable_actor_fields() {
             "INTERNAL_ERROR",
             "REJECTED",
             "CANCELED",
-            "MOUNT_FAILED",
-            "FORMAT_DISK_FAILED"
     ] {
-        assert!(reasons.contains(&reason), "missing shared error {reason}");
+        assert!(reasons.contains(&reason), "missing authentication error {reason}");
+    }
+}
+
+#[tokio::test]
+async fn all_public_enum_values_use_uppercase_snake_case_without_a_global_error_enum() {
+    use crate::graphql::schemas::public::{PublicSchema, Query, Mutation};
+    let schema = PublicSchema::build(Query::default(), Mutation::default(), crate::graphql::subscriptions::Subscription::default()).finish();
+    let response = schema.execute("{ __schema { types { kind name enumValues { name } } } }").await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    let data = response.data.into_json().unwrap();
+    let types = data["__schema"]["types"].as_array().unwrap();
+    for (name, expected) in [
+        ("AuthErrorCode", "CANCELED EVENT_STORAGE_FAILED INTERNAL_ERROR INVALID_AUTH_RESPONSE INVALID_IDENTITY INVALID_LOGIN_IDENTITY INVALID_LOGIN_KEY INVALID_LOGIN_REQUEST INVALID_PASSWORD LOGIN_EXPIRED PASSWORD_SETUP_REQUIRED PEER_IDENTITY_CHANGED REJECTED REMOTE_ACCESS_DISABLED TOO_MANY_LOGIN_ATTEMPTS TOO_MANY_LOGIN_CONNECTIONS TIMEOUT SECURE_LOGIN_UNAVAILABLE SIGNATURE_VERIFICATION_FAILED FAILED_CONNECT_WS PROXY_AUTH_FAILED FAILED UNAUTHORIZED CHAT_PAIRING_UNAVAILABLE"),
+        ("PairingErrorCode", "CANCELED TIMEOUT INTERNAL_ERROR REJECTED BLE_CONNECTION_CLOSING BLE_PAIRING_CAPACITY_EXCEEDED FAILED_CONNECT PAIRING_TRANSPORT_UNAVAILABLE PAIRING_ADDRESS_UNAVAILABLE FAILED_CONNECT_WS INVALID_AUTH_RESPONSE INVALID_SESSION PASSWORD_REQUIRED PEER_IDENTITY_CHANGED REMOTE_ACCESS_DISABLED SIGNATURE_VERIFICATION_FAILED CHAT_PAIRING_UNAVAILABLE INVALID_PASSWORD LOGIN_EXPIRED TOO_MANY_LOGIN_ATTEMPTS PASSWORD_SETUP_REQUIRED SECURE_LOGIN_UNAVAILABLE INVALID_LOGIN_REQUEST TOO_MANY_LOGIN_CONNECTIONS"),
+    ] {
+        let entry = types.iter().find(|entry| entry["name"] == name).unwrap();
+        let actual = entry["enumValues"].as_array().unwrap().iter().map(|value| value["name"].as_str().unwrap()).collect::<std::collections::BTreeSet<_>>();
+        assert_eq!(actual, expected.split_whitespace().collect::<std::collections::BTreeSet<_>>(), "{name}");
+    }
+    for entry in types {
+        if entry["kind"] != "ENUM" { continue; }
+        assert_ne!(entry["name"], "ErrorCode");
+        for value in entry["enumValues"].as_array().unwrap() {
+            let name = value["name"].as_str().unwrap();
+            assert!(name.bytes().all(|byte| byte.is_ascii_uppercase() || byte.is_ascii_digit() || byte == b'_'), "{}: {name}", entry["name"]);
+        }
     }
 }

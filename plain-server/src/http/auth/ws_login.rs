@@ -1,4 +1,4 @@
-use plain_rs::infrastructure::error_code::ErrorCode;
+use plain_rs::features::services::auth_error::AuthErrorCode;
 use crate::server::ServerState;
 use plain_libs::serde_json::{Value, json};
 use plain_rs::features::prefs::security::PasswordType;
@@ -13,14 +13,14 @@ const LOGIN_ATTEMPT_LIMIT: usize = 5;
 const LOGIN_ATTEMPT_WINDOW: Duration = Duration::from_secs(60);
 const MAX_TRACKED_CLIENTS: usize = 256;
 
-pub(crate) fn login_error(error: &plain_libs::anyhow::Error) -> ErrorCode {
+pub(crate) fn login_error(error: &plain_libs::anyhow::Error) -> AuthErrorCode {
     if error.downcast_ref::<plain_libs::serde_json::Error>().is_some() {
-        return ErrorCode::InvalidLoginRequest;
+        return AuthErrorCode::InvalidLoginRequest;
     }
-    let code = ErrorCode::from_error(error);
+    let code = AuthErrorCode::from_error(error).unwrap_or(AuthErrorCode::InternalError);
     match code {
-        ErrorCode::InvalidLoginIdentity | ErrorCode::InvalidLoginKey => ErrorCode::InvalidLoginRequest,
-        ErrorCode::InternalError => {
+        AuthErrorCode::InvalidLoginIdentity | AuthErrorCode::InvalidLoginKey => AuthErrorCode::InvalidLoginRequest,
+        AuthErrorCode::InternalError => {
             log::error!("Login failed: {error:#}");
             code
         }
@@ -28,10 +28,10 @@ pub(crate) fn login_error(error: &plain_libs::anyhow::Error) -> ErrorCode {
     }
 }
 
-pub(crate) fn login_close_code(code: ErrorCode) -> u16 {
+pub(crate) fn login_close_code(code: AuthErrorCode) -> u16 {
     match code {
-        ErrorCode::TooManyLoginAttempts => 1013,
-        ErrorCode::InternalError => 1011,
+        AuthErrorCode::TooManyLoginAttempts => 1013,
+        AuthErrorCode::InternalError => 1011,
         _ => 1008,
     }
 }
@@ -43,7 +43,7 @@ pub(crate) fn admit_attempt(
 ) -> plain_libs::anyhow::Result<()> {
     plain_libs::anyhow::ensure!(
         plain_rs::features::client_identity::is_valid(client_id),
-        ErrorCode::InvalidLoginRequest
+        AuthErrorCode::InvalidLoginRequest
     );
     let allowed = state
         .login_attempts
@@ -54,7 +54,7 @@ pub(crate) fn admit_attempt(
         } else {
             client_ip.into()
         });
-    plain_libs::anyhow::ensure!(allowed, ErrorCode::TooManyLoginAttempts);
+    plain_libs::anyhow::ensure!(allowed, AuthErrorCode::TooManyLoginAttempts);
     Ok(())
 }
 
@@ -179,7 +179,7 @@ impl LoginChannel {
             Self::Opaque(c) => {
                 plain_libs::anyhow::ensure!(
                     c.created.elapsed() < Duration::from_secs(300),
-                    ErrorCode::LoginExpired
+                    AuthErrorCode::LoginExpired
                 );
                 Ok(())
             }
@@ -194,7 +194,7 @@ impl LoginChannel {
                 bytes,
                 &plain_libs::auth::auth_aad(&c.context, false),
             )
-            .ok_or_else(|| plain_libs::anyhow::anyhow!(ErrorCode::InvalidPassword)),
+            .ok_or_else(|| plain_libs::anyhow::anyhow!(AuthErrorCode::InvalidPassword)),
             Self::Confirmation(c) => c.decrypt_request(bytes, now),
         }
     }
@@ -206,7 +206,7 @@ impl LoginChannel {
                 bytes,
                 &plain_libs::auth::auth_aad(&c.context, true),
             )
-            .ok_or_else(|| plain_libs::anyhow::anyhow!(ErrorCode::InvalidAuthResponse)),
+            .ok_or_else(|| plain_libs::anyhow::anyhow!(AuthErrorCode::InvalidAuthResponse)),
             Self::Confirmation(c) => c.encrypt_response(bytes, now),
         }
     }
@@ -230,7 +230,7 @@ impl LoginProtection {
     fn validate(&self, state: &ServerState, request: &Value) -> plain_libs::anyhow::Result<()> {
         plain_libs::anyhow::ensure!(
             !plain_rs::features::prefs::security::password_setup_required(&state.prefs)?,
-            ErrorCode::PasswordSetupRequired
+            AuthErrorCode::PasswordSetupRequired
         );
         let channel = self.channel();
         channel.fresh(now_ms())?;
@@ -242,11 +242,11 @@ impl LoginProtection {
                     && Some(credential)
                         == plain_rs::features::prefs::security::password_credential(&state.prefs)?
                             .as_ref(),
-                ErrorCode::InvalidPassword
+                AuthErrorCode::InvalidPassword
             ),
             Self::Passwordless(_) => plain_libs::anyhow::ensure!(
                 password_type == PasswordType::None && request.get("password").is_none(),
-                ErrorCode::InvalidLoginRequest
+                AuthErrorCode::InvalidLoginRequest
             ),
         }
         Ok(())
@@ -324,7 +324,7 @@ pub(crate) enum Request {
     },
     Cancel {
         request_id: String,
-        reason: ErrorCode,
+        reason: AuthErrorCode,
     },
 }
 
@@ -337,10 +337,10 @@ impl Confirmation {
         Self { state }
     }
 
-    pub async fn decide(&self, request_id: &str, allowed: bool) -> Result<(), ErrorCode> {
+    pub async fn decide(&self, request_id: &str, allowed: bool) -> Result<(), AuthErrorCode> {
         if allowed {
             if !self.state.main_ws.login_pending(request_id) {
-                return Err(ErrorCode::LoginExpired);
+                return Err(AuthErrorCode::LoginExpired);
             }
             let result = execute(
                 &self.state,
@@ -368,7 +368,7 @@ impl Confirmation {
                 &self.state,
                 Request::Cancel {
                     request_id: request_id.into(),
-                    reason: ErrorCode::Rejected,
+                    reason: AuthErrorCode::Rejected,
                 },
             )
             .await
@@ -424,7 +424,7 @@ fn validate_metadata(request: &Value) -> plain_libs::anyhow::Result<LoginMetadat
                     .all(|ip| ip.parse::<std::net::IpAddr>().is_ok())
                 && plain_libs::utils::base64::base64_decode_checked(&peer.signature_public_key)
                     .is_ok_and(|key| key.len() == 32),
-            ErrorCode::InvalidLoginRequest
+            AuthErrorCode::InvalidLoginRequest
         );
     }
     Ok(metadata)
@@ -459,7 +459,7 @@ async fn issue(state: &ServerState, request: &Pending) -> plain_libs::anyhow::Re
         if let Some(saved) = plain_rs::infrastructure::db::chat_store::peers::get(&state.db, id)? {
             plain_libs::anyhow::ensure!(
                 saved.public_key.is_empty() || saved.public_key == offered_key,
-                ErrorCode::PeerIdentityChanged
+                AuthErrorCode::PeerIdentityChanged
             );
         }
     }
@@ -512,7 +512,7 @@ fn persist(state: &ServerState, request: &Pending, token: &str) -> plain_libs::a
             != state
                 .native_client_id()
                 .map_err(plain_libs::anyhow::Error::msg)?,
-        ErrorCode::InvalidLoginRequest
+        AuthErrorCode::InvalidLoginRequest
     );
     let existing = state
         .db
@@ -580,7 +580,7 @@ fn login_client(
 pub(crate) fn record_failure(
     state: &ServerState,
     client: &AuditEventClient,
-    reason: ErrorCode,
+    reason: AuthErrorCode,
 ) -> plain_libs::anyhow::Result<()> {
     state
         .audit_events
@@ -647,7 +647,7 @@ async fn execute_request(
     if matches!(&request, Request::Issue { .. } | Request::Complete { .. }) {
         plain_libs::anyhow::ensure!(
             state.prefs.get_or("remote_access", true),
-            ErrorCode::RemoteAccessDisabled
+            AuthErrorCode::RemoteAccessDisabled
         );
     }
     let (pending, request_id) = match request {
@@ -681,14 +681,14 @@ async fn execute_request(
                     .lock()
                     .map_err(|_| plain_libs::anyhow::anyhow!("Login state unavailable"))?;
                 let pending = attempts.pending.remove(&request_id).ok_or_else(|| {
-                    plain_libs::anyhow::anyhow!(ErrorCode::LoginExpired)
+                    plain_libs::anyhow::anyhow!(AuthErrorCode::LoginExpired)
                 })?;
                 notify_closed(state, &mut attempts, &request_id);
                 pending
             };
             plain_libs::anyhow::ensure!(
                 pending.at.elapsed() < Duration::from_secs(300),
-                ErrorCode::LoginExpired
+                AuthErrorCode::LoginExpired
             );
             (pending, request_id)
         }
@@ -706,7 +706,7 @@ async fn execute_request(
                 LoginChannel::Opaque(c) => {
                     plain_libs::anyhow::ensure!(
                         request.get("password").is_none(),
-                        ErrorCode::InvalidLoginRequest
+                        AuthErrorCode::InvalidLoginRequest
                     );
                     LoginProtection::Password {
                         credential: c.credential.clone(),

@@ -1,4 +1,4 @@
-use crate::infrastructure::error_code::ErrorCode;
+use crate::features::services::discovery::pairing_error::PairingErrorCode;
 use crate::features::chat::events::WS_PAIRING_FAILED;
 use crate::features::peers::pairing::sessions::Sessions;
 use crate::infrastructure::events::WsEvent;
@@ -25,7 +25,7 @@ pub fn start(
                     for ticket in sessions.expire_all() {
                         let _ = events.send(WsEvent::broadcast(WS_PAIRING_FAILED, json!({
                             "deviceId":ticket.target.device_id,"deviceName":ticket.target.device_name,
-                            "generation":ticket.generation,"error":ErrorCode::Timeout
+                            "generation":ticket.generation,"error":PairingErrorCode::Timeout
                         }).to_string()));
                     }
                 }

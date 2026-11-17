@@ -1,3 +1,4 @@
+use plain_rs::features::services::disk_format_error::DiskFormatErrorCode;
 use super::*;
 use plain_rs::features::audit_events::*;
 
@@ -119,7 +120,7 @@ async fn public_disk_commands_reach_the_registered_provider() {
         Some(state.native_client_id().unwrap().as_str())
     );
     assert!(
-        matches!(&events[0].data, EventData::DiskFormatFailed(data) if data.disk.path == "/dev/example" && data.file_system == "ext4" && data.failure.reason == ErrorCode::FormatDiskFailed)
+        matches!(&events[0].data, EventData::DiskFormatFailed(data) if data.disk.path == "/dev/example" && data.file_system == "ext4" && data.failure.reason == DiskFormatErrorCode::FormatDiskFailed)
     );
     provider.await.unwrap();
     core.stop_core().await;

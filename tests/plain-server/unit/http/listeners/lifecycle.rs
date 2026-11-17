@@ -120,12 +120,12 @@ async fn listener_failure_cleans_up_and_notifies_host() {
         .unwrap();
     assert_eq!(
         failure,
-        plain_libs::serde_json::json!({"state":"error","message":"injected listener failure","httpPort":0,"httpsPort":0})
+        plain_libs::serde_json::json!({"state":"ERROR","message":"injected listener failure","httpPort":0,"httpsPort":0})
     );
     assert!(server.http_ports().await.is_none());
     assert!(tasks.iter().all(|task| task.is_finished()));
     start(&server).await;
-    assert_eq!(server.http_status().state, "started");
+    assert_eq!(plain_libs::serde_json::to_value(server.http_status()).unwrap()["state"], "STARTED");
     assert!(server.http_status().message.is_empty());
     state.host.disconnect(host_generation);
     server.shutdown().await;

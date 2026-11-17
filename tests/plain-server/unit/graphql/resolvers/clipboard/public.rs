@@ -30,7 +30,7 @@ async fn clipboard_roots_refuse_to_answer_without_the_web_permission() {
     ] {
         let response = schema.execute(query).await;
         assert_eq!(
-            response.errors[0].message, "clipboard_sync_disabled",
+            response.errors[0].message, "CLIPBOARD_SYNC_DISABLED",
             "ungated clipboard root: {query}"
         );
     }
@@ -238,7 +238,7 @@ async fn set_clipboard_rejects_invalid_text_without_history_or_platform_writes()
         let response = write_request(&state, &text).await;
         assert_eq!(
             response.errors.first().map(|error| error.message.as_str()),
-            Some("invalid_clipboard_text")
+            Some("INVALID_CLIPBOARD_TEXT")
         );
     }
     assert!(seen.lock().unwrap().is_empty());

@@ -1,6 +1,6 @@
 //! Public peer and pairing roots.
+use plain_rs::features::access_error::AccessErrorCode;
 
-use plain_rs::infrastructure::error_code::ErrorCode;
 use plain_graphql::{Context, Enum, InputObject, Object, SimpleObject};
 
 use plain_libs::serde_json::Value;
@@ -107,11 +107,11 @@ fn management_login(
 ) -> plain_graphql::Result<()> {
     let id = ctx
         .data_opt::<crate::graphql::executor::RequestClient>()
-        .ok_or_else(|| plain_graphql::Error::from(ErrorCode::NoPermission))?
+        .ok_or_else(|| plain_graphql::Error::from(AccessErrorCode::NoPermission))?
         .client_id();
     crate::http::managed_proxy::caller(state, id)
         .map(|_| ())
-        .map_err(|_| plain_graphql::Error::from(ErrorCode::NoPermission))
+        .map_err(|_| plain_graphql::Error::from(AccessErrorCode::NoPermission))
 }
 
 #[derive(Default)]
@@ -130,7 +130,7 @@ impl PeersMutation {
                 .native_client_id()
                 .is_ok_and(|local| input.peer_id.as_str() == local)
             {
-                return Err(plain_graphql::Error::from(ErrorCode::NoPermission));
+                return Err(plain_graphql::Error::from(AccessErrorCode::NoPermission));
             }
             management_login(ctx, core)?;
         }

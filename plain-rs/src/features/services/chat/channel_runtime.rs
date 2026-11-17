@@ -11,7 +11,7 @@ use plain_libs::anyhow::{Result, ensure};
 use serde::Deserialize;
 use plain_libs::serde_json::{Value, json};
 #[derive(Deserialize)]
-#[serde(tag = "action", rename_all = "camelCase", deny_unknown_fields)]
+#[serde(tag = "action", rename_all = "SCREAMING_SNAKE_CASE", deny_unknown_fields)]
 pub enum Request {
     Snapshot,
     Invitation {

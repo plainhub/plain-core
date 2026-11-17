@@ -45,8 +45,8 @@ async fn tls() -> (
                     plain_rs::features::files::resource_link::open(&scope, &[8; 32], payload)
                         .unwrap();
                 let path = resource.id;
-                if params.get("action").map(String::as_str) == Some("describe") {
-                    return plain_libs::axum::Json(json!({"entry":{"url":format!("/fs?id={}&action=download", params["id"]),"name":format!("{path}.bin"),"isDir":false,"sizeBytes":3},"children":[]})).into_response();
+                if params.get("action").map(String::as_str) == Some("DESCRIBE") {
+                    return plain_libs::axum::Json(json!({"entry":{"url":format!("/fs?id={}&action=DOWNLOAD", params["id"]),"name":format!("{path}.bin"),"isDir":false,"sizeBytes":3},"children":[]})).into_response();
                 }
                 Body::from_stream(futures_util::stream::unfold(0, move |step| {
                     let path = path.clone();
@@ -118,7 +118,7 @@ async fn enqueue(
     )
     .unwrap();
     let url = format!(
-        "{}&action=download",
+        "{}&action=DOWNLOAD",
         link.file_url(
             &plain_libs::utils::base64::base64_encode(&[8; 32]),
             path,

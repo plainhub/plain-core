@@ -1,4 +1,5 @@
 //! One instance, one flat preferences file: prefs.json.
+pub mod error;
 pub mod dlna;
 pub mod identity;
 pub mod pref_keys;

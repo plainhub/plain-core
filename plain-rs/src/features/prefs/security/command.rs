@@ -3,7 +3,7 @@ use super::*;
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
-#[serde(tag = "action", rename_all = "camelCase", deny_unknown_fields)]
+#[serde(tag = "action", rename_all = "SCREAMING_SNAKE_CASE", deny_unknown_fields)]
 pub enum Command {
     SetPassword {
         password: String,

@@ -1,4 +1,4 @@
-use plain_rs::infrastructure::error_code::ErrorCode;
+use plain_rs::infrastructure::protocols::graphql::error::SubscriptionErrorCode;
 use crate::graphql::executor::RequestContext;
 use crate::server::ServerState;
 use futures_util::{SinkExt, StreamExt};
@@ -174,7 +174,7 @@ async fn run(mut socket: WebSocket, state: ServerState, client: String) {
         socket.send(Message::Close(Some(CloseFrame {
             code: (if result.is_err() { 1008u16 } else { 1000u16 }).into(),
             reason: if result.is_err() {
-                ErrorCode::InvalidSubscription.as_str()
+                SubscriptionErrorCode::InvalidSubscription.as_str()
             } else {
                 ""
             }

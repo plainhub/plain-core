@@ -1,8 +1,9 @@
+use plain_rs::features::services::chat::channel_runtime::Request as ChannelRequest;
 use super::content::{ChatContent, ChatDeliveryResult};
 use crate::graphql::types::ActionResult;
 use plain_graphql::{Context, Enum, Object, SimpleObject};
 
-use plain_libs::serde_json::{Value, json};
+use plain_libs::serde_json::Value;
 use plain_rs::infrastructure::db::DChat;
 use plain_rs::infrastructure::db::Db;
 use plain_rs::infrastructure::types::Instant;
@@ -203,7 +204,7 @@ impl ChatMutation {
         ctx: &Context<'_>,
         name: String,
     ) -> plain_graphql::Result<ChatChannel> {
-        action(ctx, "create", &[("name", json!(name))]).await
+        action(ctx, ChannelRequest::Create { name }).await
     }
 
     async fn update_chat_channel(
@@ -212,11 +213,7 @@ impl ChatMutation {
         id: plain_graphql::ID,
         name: String,
     ) -> plain_graphql::Result<ChatChannel> {
-        action(
-            ctx,
-            "rename",
-            &[("id", json!(id.as_str())), ("name", json!(name))],
-        )
+        action(ctx, ChannelRequest::Rename { id: id.to_string(), name })
         .await
     }
 
@@ -225,7 +222,7 @@ impl ChatMutation {
         ctx: &Context<'_>,
         id: plain_graphql::ID,
     ) -> plain_graphql::Result<bool> {
-        flag(ctx, "delete", &[("id", json!(id.as_str()))]).await
+        flag(ctx, ChannelRequest::Delete { id: id.to_string() }).await
     }
 
     async fn leave_chat_channel(
@@ -233,7 +230,7 @@ impl ChatMutation {
         ctx: &Context<'_>,
         id: plain_graphql::ID,
     ) -> plain_graphql::Result<bool> {
-        flag(ctx, "leave", &[("id", json!(id.as_str()))]).await
+        flag(ctx, ChannelRequest::Leave { id: id.to_string() }).await
     }
 
     async fn add_chat_channel_member(
@@ -242,14 +239,7 @@ impl ChatMutation {
         id: plain_graphql::ID,
         peer_id: plain_graphql::ID,
     ) -> plain_graphql::Result<ChatChannel> {
-        action(
-            ctx,
-            "invite",
-            &[
-                ("id", json!(id.as_str())),
-                ("peer", json!(peer_id.as_str())),
-            ],
-        )
+        action(ctx, ChannelRequest::Invite { id: id.to_string(), peer: peer_id.to_string() })
         .await
     }
 
@@ -259,14 +249,7 @@ impl ChatMutation {
         id: plain_graphql::ID,
         peer_id: plain_graphql::ID,
     ) -> plain_graphql::Result<ChatChannel> {
-        action(
-            ctx,
-            "kick",
-            &[
-                ("id", json!(id.as_str())),
-                ("peer", json!(peer_id.as_str())),
-            ],
-        )
+        action(ctx, ChannelRequest::Kick { id: id.to_string(), peer: peer_id.to_string() })
         .await
     }
 
@@ -275,7 +258,7 @@ impl ChatMutation {
         ctx: &Context<'_>,
         id: plain_graphql::ID,
     ) -> plain_graphql::Result<bool> {
-        flag(ctx, "accept", &[("id", json!(id.as_str()))]).await
+        flag(ctx, ChannelRequest::Accept { id: id.to_string() }).await
     }
 
     async fn decline_chat_channel_invite(
@@ -283,21 +266,14 @@ impl ChatMutation {
         ctx: &Context<'_>,
         id: plain_graphql::ID,
     ) -> plain_graphql::Result<bool> {
-        flag(ctx, "decline", &[("id", json!(id.as_str()))]).await
+        flag(ctx, ChannelRequest::Decline { id: id.to_string() }).await
     }
 }
 
 async fn action(
     ctx: &Context<'_>,
-    action: &str,
-    fields: &[(&str, Value)],
+    request: ChannelRequest,
 ) -> plain_graphql::Result<ChatChannel> {
-    let mut params = plain_libs::serde_json::Map::new();
-    params.insert("action".to_string(), json!(action));
-    for (key, value) in fields {
-        params.insert((*key).to_string(), value.clone());
-    }
-    let request = plain_libs::serde_json::from_value(Value::Object(params))?;
     let result = plain_rs::features::services::chat::channel_runtime::execute(
         ctx.data::<crate::server::ServerState>()?,
         request,
@@ -316,15 +292,8 @@ async fn action(
 /// the caller wanted.
 async fn flag(
     ctx: &Context<'_>,
-    action: &str,
-    fields: &[(&str, Value)],
+    request: ChannelRequest,
 ) -> plain_graphql::Result<bool> {
-    let mut params = plain_libs::serde_json::Map::new();
-    params.insert("action".to_string(), json!(action));
-    for (key, value) in fields {
-        params.insert((*key).to_string(), value.clone());
-    }
-    let request = plain_libs::serde_json::from_value(Value::Object(params))?;
     plain_rs::features::services::chat::channel_runtime::execute(
         ctx.data::<crate::server::ServerState>()?,
         request,

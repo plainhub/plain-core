@@ -14,7 +14,7 @@ async fn malformed_and_oversized_frames_do_not_echo_or_allocate_unbounded_payloa
             .unwrap();
         assert!(!error.to_string().contains("oops"));
     }
-    let bytes = br#"{"version":1,"command":{"type":"requests","after":null,"token":"secret"}}"#;
+    let bytes = br#"{"version":1,"command":{"type":"REQUESTS","after":null,"token":"secret"}}"#;
     assert!(plain_libs::serde_json::from_slice::<Request>(bytes).is_err());
 }
 
@@ -238,8 +238,27 @@ async fn management_requests_preserve_existing_key_permissions_and_frame_bounds(
         .is_err()
     );
     assert_eq!(core.runtime().prefs.entries(), before);
-    let unknown = br#"{"version":1,"command":{"type":"status","action":"run"}}"#;
+    let unknown = br#"{"version":1,"command":{"type":"STATUS","action":"run"}}"#;
     assert!(plain_libs::serde_json::from_slice::<Request>(unknown).is_err());
     core.stop_core().await;
     listener.shutdown().await.unwrap();
+}
+
+#[test]
+fn local_protocol_enum_values_are_uppercase_and_reject_lowercase() {
+    for (command, expected) in [
+        (Command::Requests { after: None }, "REQUESTS"),
+        (Command::Decide { request_id: "fixture".into(), allowed: false }, "DECIDE"),
+        (Command::SetPref { key: "fixture".into(), value: plain_libs::serde_json::Value::Null }, "SET_PREF"),
+        (Command::SetPassword { password: "fixture".into() }, "SET_PASSWORD"),
+        (Command::Status {}, "STATUS"),
+    ] {
+        let mut value = plain_libs::serde_json::to_value(command).unwrap();
+        assert_eq!(value["type"], expected);
+        assert!(plain_libs::serde_json::from_value::<Command>(value.clone()).is_ok());
+        value["type"] = expected.to_lowercase().into();
+        assert!(plain_libs::serde_json::from_value::<Command>(value).is_err());
+    }
+    assert_eq!(plain_libs::serde_json::to_value(ListenerState::Running).unwrap(), "RUNNING");
+    assert_eq!(plain_libs::serde_json::to_value(ReplyResult::Updated).unwrap()["type"], "UPDATED");
 }

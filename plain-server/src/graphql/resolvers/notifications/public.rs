@@ -1,4 +1,4 @@
-use plain_rs::infrastructure::error_code::ErrorCode;
+use plain_rs::features::services::notifications::error::NotificationErrorCode;
 use crate::graphql::types::ActionResult;
 use crate::graphql::types::facts::flag;
 use crate::graphql::types::facts::id;
@@ -122,7 +122,7 @@ impl NotificationsMutation {
     ) -> plain_graphql::Result<bool> {
         public_gate::require(ctx, ctx.data_unchecked::<Arc<Prefs>>(), &[FEATURE])?;
         if action_index < 0 {
-            return Err(plain_graphql::Error::from(ErrorCode::ActionNotFound));
+            return Err(plain_graphql::Error::from(NotificationErrorCode::ActionNotFound));
         }
         plain_rs::features::services::capabilities::require(
             ctx.data_unchecked::<Arc<Host>>(),
@@ -143,7 +143,7 @@ impl NotificationsMutation {
             .await
             .map_err(|error| plain_graphql::Error::new(error))?;
         if receipt != Value::Bool(true) {
-            return Err(plain_graphql::Error::from(ErrorCode::ActionNotFound));
+            return Err(plain_graphql::Error::from(NotificationErrorCode::ActionNotFound));
         }
         Ok(true)
     }

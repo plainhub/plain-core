@@ -36,7 +36,7 @@ pub fn url(state: &CoreRuntime, raw: &str) -> Result<Url> {
             && fields.iter().filter(|(key, _)| key == "id").count() == 1
             && fields
                 .iter()
-                .any(|(key, value)| key == "action" && value == "download"),
+                .any(|(key, value)| key == "action" && value == "DOWNLOAD"),
         "Original resource URL required"
     );
     crate::features::files::resource_link::parse(

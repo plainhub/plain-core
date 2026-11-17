@@ -1,5 +1,6 @@
+use crate::features::clipboard::error::ClipboardErrorCode;
+pub mod error;
 use crate::infrastructure::error::{DomainError, DomainResult};
-use crate::infrastructure::error_code::ErrorCode;
 pub mod sync;
 
 use crate::infrastructure::db::ClipboardRow;
@@ -26,9 +27,9 @@ pub fn record(
     db.clipboard_record(&row).map_err(DomainError::from)
 }
 
-pub fn validate_text(text: &str) -> Result<(), ErrorCode> {
+pub fn validate_text(text: &str) -> Result<(), ClipboardErrorCode> {
     if text.chars().all(char::is_whitespace) || text.encode_utf16().count() > 256 * 1024 {
-        return Err(ErrorCode::InvalidClipboardText);
+        return Err(ClipboardErrorCode::InvalidClipboardText);
     }
     Ok(())
 }

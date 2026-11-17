@@ -76,7 +76,7 @@ async fn key_values_report_changes_reject_null_and_enforce_encoded_byte_limit() 
         if accepted {
             assert!(response.errors.is_empty(), "{:?}", response.errors);
         } else {
-            assert_eq!(response.errors[0].message, "invalid_key_value");
+            assert_eq!(response.errors[0].message, "INVALID_KEY_VALUE");
         }
     }
     let response = schema

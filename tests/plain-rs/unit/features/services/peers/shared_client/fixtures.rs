@@ -75,7 +75,7 @@ pub(super) async fn tls() -> (
         count.fetch_add(1, Ordering::SeqCst);
         assert!(!params.contains_key("sid"));
         if let Some(size) = params.get("size") {
-            assert_eq!(size, "sm");
+            assert_eq!(size, "SM");
         }
         assert!(!params.contains_key("w"));
         assert!(!params.contains_key("h"));

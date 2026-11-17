@@ -1,3 +1,4 @@
+use plain_rs::features::services::auth_error::AuthErrorCode;
 use super::*;
 
 #[test]
@@ -23,16 +24,16 @@ fn malformed_peer_metadata_is_rejected_instead_of_skipping_pairing() {
 
 #[test]
 fn login_errors_keep_storage_failures_distinct_from_credentials() {
-    let invalid = plain_libs::anyhow::anyhow!(ErrorCode::InvalidPassword);
+    let invalid = plain_libs::anyhow::anyhow!(AuthErrorCode::InvalidPassword);
     assert_eq!(
         login_error(&invalid),
-        ErrorCode::InvalidPassword
+        AuthErrorCode::InvalidPassword
     );
-    assert_eq!(login_close_code(ErrorCode::InvalidPassword), 1008);
+    assert_eq!(login_close_code(AuthErrorCode::InvalidPassword), 1008);
     let storage = plain_libs::anyhow::anyhow!("fixture disk failure");
-    assert_eq!(login_error(&storage), ErrorCode::InternalError);
-    assert_eq!(login_close_code(ErrorCode::InternalError), 1011);
-    assert_eq!(login_close_code(ErrorCode::TooManyLoginAttempts), 1013);
+    assert_eq!(login_error(&storage), AuthErrorCode::InternalError);
+    assert_eq!(login_close_code(AuthErrorCode::InternalError), 1011);
+    assert_eq!(login_close_code(AuthErrorCode::TooManyLoginAttempts), 1013);
 }
 
 #[cfg(feature = "http_transport")]
@@ -46,7 +47,7 @@ async fn auth_rejects_non_uuid_client_id_before_handshake() {
     .await
     .unwrap();
     assert!(
-        matches!(login_frame(&mut socket).await, Message::Close(Some(frame)) if frame.code == 1008.into() && frame.reason == "invalid_login_request")
+        matches!(login_frame(&mut socket).await, Message::Close(Some(frame)) if frame.code == 1008.into() && frame.reason == "INVALID_LOGIN_REQUEST")
     );
     assert!(
         server
@@ -61,6 +62,6 @@ async fn auth_rejects_non_uuid_client_id_before_handshake() {
 
 #[test]
 fn login_error_classification_preserves_contextual_failure() {
-    let failure = plain_libs::anyhow::anyhow!(ErrorCode::InvalidPassword).context("login request failed");
-    assert_eq!(login_error(&failure), ErrorCode::InvalidPassword);
+    let failure = plain_libs::anyhow::anyhow!(AuthErrorCode::InvalidPassword).context("login request failed");
+    assert_eq!(login_error(&failure), AuthErrorCode::InvalidPassword);
 }

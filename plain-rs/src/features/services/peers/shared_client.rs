@@ -270,7 +270,7 @@ pub async fn files(
         .map(|record| -> Result<_> {
             let (_, path) = Link::parse(&record.path)?;
             let url = format!(
-                "{}&action=download",
+                "{}&action=DOWNLOAD",
                 link.file_url(&info.url_token, &path, false)?
             );
             Ok(File { record, url })

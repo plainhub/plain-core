@@ -13,16 +13,24 @@ pub struct HttpServerState {
     pub error: String,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum HttpServiceState {
+    Started,
+    Stopped,
+    Error,
+}
+
 #[derive(Clone, serde::Serialize)]
 pub struct HttpStatus {
-    pub state: &'static str,
+    pub state: HttpServiceState,
     pub message: String,
 }
 
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 struct HostStatus {
-    state: &'static str,
+    state: HttpServiceState,
     message: String,
     http_port: i32,
     https_port: i32,
@@ -100,17 +108,17 @@ impl Runtime {
         let state = self.state.lock().unwrap();
         if state.http_port != 0 {
             HttpStatus {
-                state: "started",
+                state: HttpServiceState::Started,
                 message: state.error.clone(),
             }
         } else if !state.error.is_empty() {
             HttpStatus {
-                state: "error",
+                state: HttpServiceState::Error,
                 message: state.error.clone(),
             }
         } else {
             HttpStatus {
-                state: "stopped",
+                state: HttpServiceState::Stopped,
                 message: String::new(),
             }
         }
@@ -120,11 +128,11 @@ impl Runtime {
         let state = self.state.lock().unwrap();
         HostStatus {
             state: if state.http_port != 0 {
-                "started"
+                HttpServiceState::Started
             } else if !state.error.is_empty() {
-                "error"
+                HttpServiceState::Error
             } else {
-                "stopped"
+                HttpServiceState::Stopped
             },
             message: state.error.clone(),
             http_port: state.http_port,

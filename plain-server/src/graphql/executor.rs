@@ -1,7 +1,6 @@
 #[cfg(feature = "core")]
 use crate::server::ServerState;
 use plain_graphql::{ObjectType, Request, Response, Schema, SubscriptionType};
-use plain_rs::infrastructure::error_code::ErrorCode;
 #[cfg(feature = "core")]
 use plain_rs::infrastructure::events::WsEvent;
 
@@ -132,34 +131,41 @@ impl RequestContext {
 
 pub(crate) fn error_codes(mut response: Response) -> Response {
     for error in &mut response.errors {
-        let code = error
-            .source
-            .as_ref()
-            .and_then(|source| {
-                source
-                    .downcast_ref::<ErrorCode>()
-                    .copied()
-                    .or_else(|| {
-                        source
-                            .downcast_ref::<plain_rs::infrastructure::error::DomainError>()
-                            .and_then(|error| match error {
-                                plain_rs::infrastructure::error::DomainError::Code(code) => {
-                                    Some(*code)
-                                }
-                                _ => None,
-                            })
-                    })
-                    .or_else(|| {
-                        source
-                            .downcast_ref::<plain_libs::anyhow::Error>()
-                            .map(ErrorCode::from_error)
-                    })
-            })
-            .unwrap_or(ErrorCode::InternalError);
-        error
-            .extensions
-            .get_or_insert_with(Default::default)
-            .set("code", code.as_str());
+        if error.extensions.as_ref().is_some_and(|extensions| extensions.get("code").is_some()) { continue; }
+        let mut code = None;
+        if let Some(source) = &error.source {
+            macro_rules! classify {
+                ($ty:ty) => {
+                    if code.is_none() {
+                        code = source.downcast_ref::<$ty>().map(|value| value.as_str())
+                            .or_else(|| source.downcast_ref::<plain_libs::anyhow::Error>()
+                                .and_then(<$ty>::from_error).map(|value| value.as_str()))
+                            .or_else(|| source.downcast_ref::<plain_rs::infrastructure::error::DomainError>()
+                                .and_then(|error| std::error::Error::source(error))
+                                .and_then(|source| source.downcast_ref::<$ty>()).map(|value| value.as_str()));
+                    }
+                };
+            }
+            classify!(plain_rs::features::services::auth_error::AuthErrorCode);
+            classify!(plain_rs::features::services::discovery::pairing_error::PairingErrorCode);
+            classify!(plain_rs::features::access_error::AccessErrorCode);
+            classify!(plain_rs::features::clipboard::error::ClipboardErrorCode);
+            classify!(plain_rs::features::feeds::error::FeedOperationErrorCode);
+            classify!(plain_rs::features::media::audio::error::AudioQueueErrorCode);
+            classify!(plain_rs::features::prefs::error::PreferenceErrorCode);
+            classify!(plain_rs::infrastructure::db::key_value_error::KeyValueErrorCode);
+            classify!(plain_rs::features::services::notifications::error::NotificationErrorCode);
+            classify!(plain_rs::infrastructure::platform::mount_error::MountErrorCode);
+            classify!(plain_rs::features::services::disk_format_error::DiskFormatErrorCode);
+            classify!(plain_rs::infrastructure::protocols::graphql::error::SubscriptionErrorCode);
+            classify!(plain_rs::features::peers::error::PeerConnectionErrorCode);
+            classify!(plain_rs::infrastructure::http_error::HttpErrorCode);
+            classify!(plain_rs::infrastructure::native_error::NativeErrorCode);
+            classify!(plain_rs::infrastructure::graphql_error::GraphqlErrorCode);
+            classify!(plain_rs::features::files::archive_error::ArchiveErrorCode);
+            classify!(plain_rs::features::files::share_access_error::ShareAccessErrorCode);
+        }
+        error.extensions.get_or_insert_with(Default::default).set("code", code.unwrap_or("INTERNAL_ERROR"));
     }
     response
 }

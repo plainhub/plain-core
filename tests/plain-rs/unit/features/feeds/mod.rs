@@ -61,7 +61,7 @@ fn invalid_duplicate_empty_and_missing_updates_preserve_existing_rows() {
     )
     .unwrap();
     for (url, expected) in [
-        ("file:///fixture/feed", "invalid_feed_url"),
+        ("file:///fixture/feed", "INVALID_FEED_URL"),
         ("https://example.org/neighbor", "feed_already_exists"),
     ] {
         assert!(
@@ -86,7 +86,7 @@ fn invalid_duplicate_empty_and_missing_updates_preserve_existing_rows() {
         update_fields(&db, "missing", Some("Name"), None, None)
             .unwrap_err()
             .to_string()
-            .contains("feed_not_found")
+            .contains("FEED_NOT_FOUND")
     );
     let neighbor = get(&db, "neighbor").unwrap().unwrap();
     assert_eq!(

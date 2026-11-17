@@ -58,7 +58,7 @@ pub(crate) async fn dispatch(state: ServerState, data: &[u8]) -> Result<Vec<u8>>
             let mut url = http_client::Url::parse("http://localhost/fs")?;
             url.query_pairs_mut()
                 .append_pair("id", &file_id)
-                .append_pair("action", "download");
+                .append_pair("action", "DOWNLOAD");
             (
                 plain_libs::axum::http::Request::builder()
                     .method("GET")

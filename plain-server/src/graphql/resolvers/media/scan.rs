@@ -1,4 +1,4 @@
-use plain_rs::infrastructure::error_code::ErrorCode;
+use plain_rs::features::access_error::AccessErrorCode;
 use super::types::FileIndexScanProgress;
 use crate::server::ServerState;
 use plain_graphql::{Context, ID, InputObject, Object, Result, SimpleObject};
@@ -16,7 +16,7 @@ async fn state<'a>(ctx: &'a Context<'_>) -> Result<&'a ServerState> {
         .await
         .map_err(|error| plain_graphql::Error::from(error))?
     {
-        return Err(ErrorCode::NoPermission.into());
+        return Err(AccessErrorCode::NoPermission.into());
     }
     Ok(state)
 }

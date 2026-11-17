@@ -77,7 +77,7 @@ async fn cancellation_releases_waiting_and_running_keys() {
         let entered = entered.clone();
         async move {
             locks
-                .with_lock("canceled".into(), async {
+                .with_lock("CANCELED".into(), async {
                     entered.notify_one();
                     std::future::pending::<()>().await
                 })
@@ -87,7 +87,7 @@ async fn cancellation_releases_waiting_and_running_keys() {
     entered.notified().await;
     let second = tokio::spawn({
         let locks = locks.clone();
-        async move { locks.with_lock("canceled".into(), async {}).await }
+        async move { locks.with_lock("CANCELED".into(), async {}).await }
     });
     tokio::task::yield_now().await;
     second.abort();
@@ -95,7 +95,7 @@ async fn cancellation_releases_waiting_and_running_keys() {
     first.abort();
     let _ = first.await;
     assert_eq!(locks.in_flight_keys(), 0);
-    locks.with_lock("canceled".into(), async {}).await;
+    locks.with_lock("CANCELED".into(), async {}).await;
     assert_eq!(locks.in_flight_keys(), 0);
 }
 

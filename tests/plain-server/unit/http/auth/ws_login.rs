@@ -1,5 +1,6 @@
+use plain_rs::features::services::auth_error::AuthErrorCode;
 use super::*;
-use plain_rs::features::audit_events::{EventData, ErrorCode, EventType};
+use plain_rs::features::audit_events::{EventData, EventType};
 
 #[test]
 fn local_request_pages_are_bounded_and_never_expose_request_secrets() {
@@ -336,7 +337,7 @@ async fn passwordless_hello_consumes_the_same_ip_limiter_before_key_exchange() {
             assert!(matches!(response, Message::Text(_)));
         } else {
             assert!(
-                matches!(response, Message::Close(Some(close)) if close.reason == "too_many_login_attempts")
+                matches!(response, Message::Close(Some(close)) if close.reason == "TOO_MANY_LOGIN_ATTEMPTS")
             );
         }
         let _ = socket.close(None).await;
@@ -470,7 +471,7 @@ async fn passwordless_browser_requires_approval_when_enabled_and_only_approval_i
         closed_event(&mut events, request["requestId"].as_str().unwrap()).await;
         let response = login_frame(&mut socket).await;
         if !allowed {
-            assert!(matches!(response, Message::Close(Some(close)) if close.reason == "rejected"));
+            assert!(matches!(response, Message::Close(Some(close)) if close.reason == "REJECTED"));
             assert!(state.db.session_get(client_id).unwrap().is_none());
             continue;
         }
@@ -526,7 +527,7 @@ async fn passwordless_browser_requires_approval_when_enabled_and_only_approval_i
     assert!(records.iter().any(|row| row.r#type == EventType::Login
         && row.client_id.as_deref() == Some("706c6169-f7d7-8d09-8d7a-640faf6dbebc")));
     assert!(records.iter().any(|row| row.r#type == EventType::LoginFailed
-        && matches!(&row.data, EventData::LoginFailed(data) if data.reason == ErrorCode::Rejected)
+        && matches!(&row.data, EventData::LoginFailed(data) if data.reason == AuthErrorCode::Rejected)
         && row.client_id.as_deref() == Some("706c6169-b825-8257-96b3-1672d7320085")));
     server.shutdown().await;
 }
@@ -628,7 +629,7 @@ async fn successful_passwordless_logins_still_count_toward_the_rolling_ip_limit(
         .await
         .unwrap();
     assert!(
-        matches!(login_frame(&mut socket).await, Message::Close(Some(close)) if close.reason == "too_many_login_attempts")
+        matches!(login_frame(&mut socket).await, Message::Close(Some(close)) if close.reason == "TOO_MANY_LOGIN_ATTEMPTS")
     );
     assert!(
         state
@@ -679,7 +680,7 @@ async fn passwordless_without_approval_issues_a_session_once_and_preserves_acces
             panic!("a second submission must close the connection");
         };
         if disabled {
-            assert_eq!(close.reason, "remote_access_disabled");
+            assert_eq!(close.reason, "REMOTE_ACCESS_DISABLED");
         }
         let unchanged = state
             .db
@@ -836,7 +837,7 @@ async fn password_login_requires_setup_and_the_configured_password() {
     let request = json!({"loginContext": pending.channel().context()});
     assert_eq!(
         pending.validate(&state, &request).unwrap_err().to_string(),
-        "password_setup_required"
+        "PASSWORD_SETUP_REQUIRED"
     );
     plain_rs::features::prefs::security::set_password_login(security, "owned-password").unwrap();
     let protection = password_protection(
@@ -846,7 +847,7 @@ async fn password_login_requires_setup_and_the_configured_password() {
     protection.validate(&state, &request).unwrap();
     assert_eq!(
         pending.validate(&state, &request).unwrap_err().to_string(),
-        "invalid_password"
+        "INVALID_PASSWORD"
     );
     plain_rs::features::prefs::security::set_password_login(security, "replacement-password")
         .unwrap();
@@ -855,7 +856,7 @@ async fn password_login_requires_setup_and_the_configured_password() {
             .validate(&state, &request)
             .unwrap_err()
             .to_string(),
-        "invalid_password"
+        "INVALID_PASSWORD"
     );
     server.stop_core().await;
 }
@@ -1222,7 +1223,7 @@ async fn idle_connections_consume_the_login_budget_before_any_message() {
     match rejected {
         Ok((mut socket, _)) => {
             assert!(
-                matches!(login_frame(&mut socket).await, Message::Close(Some(frame)) if frame.reason == "too_many_login_attempts")
+                matches!(login_frame(&mut socket).await, Message::Close(Some(frame)) if frame.reason == "TOO_MANY_LOGIN_ATTEMPTS")
             );
         }
         Err(plain_libs::tokio_tungstenite::tungstenite::Error::Http(response)) => {
@@ -1287,7 +1288,7 @@ async fn a_signed_hello_starts_the_bounded_handshake_deadline() {
         .unwrap()
         .unwrap()
         .unwrap();
-    assert!(matches!(response, Message::Close(Some(frame)) if frame.reason == "timeout"));
+    assert!(matches!(response, Message::Close(Some(frame)) if frame.reason == "TIMEOUT"));
     assert!(server.runtime_state().db.session_list().unwrap().is_empty());
     server.shutdown().await;
 }
@@ -1332,7 +1333,7 @@ async fn password_login_verifies_the_salted_record_and_rejects_reusable_stored_v
             },
         )
         .await;
-        assert_eq!(result.unwrap_err().to_string(), "invalid_login_request");
+        assert_eq!(result.unwrap_err().to_string(), "INVALID_LOGIN_REQUEST");
         assert!(
             state
                 .db
@@ -1348,7 +1349,7 @@ async fn password_login_verifies_the_salted_record_and_rejects_reusable_stored_v
     for row in &records {
         assert_eq!(row.r#type, EventType::LoginFailed);
         assert!(
-            matches!(&row.data, EventData::LoginFailed(data) if data.reason == ErrorCode::InvalidLoginRequest)
+            matches!(&row.data, EventData::LoginFailed(data) if data.reason == AuthErrorCode::InvalidLoginRequest)
         );
         assert_eq!(row.client_ip.as_deref(), Some("fixture"));
         assert_eq!(row.app_name.as_deref(), Some("Fixture"));
@@ -1417,7 +1418,7 @@ async fn web_login_cannot_persist_or_replace_the_native_transport_credentials() 
         persist(&state, &request, "untrusted-token")
             .unwrap_err()
             .to_string(),
-        "invalid_login_request"
+        "INVALID_LOGIN_REQUEST"
     );
     assert!(state.db.session_get(&id).unwrap().is_none());
     assert_eq!(state.token, token);
@@ -1426,3 +1427,20 @@ async fn web_login_cannot_persist_or_replace_the_native_transport_credentials() 
 
 #[path = "review_regressions.rs"]
 mod review_regressions;
+
+#[test]
+fn domain_error_contract_auth_has_a_dedicated_enum() {
+    let code = login_error(&plain_libs::anyhow::anyhow!("fixture diagnostic"));
+    assert!(std::any::type_name_of_val(&code).ends_with("::AuthErrorCode"));
+    assert_eq!(code.to_string(), "INTERNAL_ERROR");
+    for wire in ["INVALID_PASSWORD", "PEER_IDENTITY_CHANGED", "REMOTE_ACCESS_DISABLED", "REJECTED", "LOGIN_EXPIRED", "TOO_MANY_LOGIN_ATTEMPTS"] {
+        let parsed: AuthErrorCode = wire.parse().unwrap();
+        let wrapped = plain_libs::anyhow::Error::new(parsed).context("fixture context");
+        assert_eq!(login_error(&wrapped), parsed);
+        assert_eq!(plain_libs::serde_json::to_value(parsed).unwrap(), wire);
+    }
+    for wire in ["invalid_password", "MOUNT_FAILED", "FORMAT_DISK_FAILED", "PASSWORD_REQUIRED", "FUTURE_ERROR"] {
+        assert!(wire.parse::<AuthErrorCode>().is_err(), "{wire}");
+    }
+
+}

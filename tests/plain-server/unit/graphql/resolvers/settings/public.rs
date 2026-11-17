@@ -203,7 +203,7 @@ async fn an_oversized_pref_value_is_refused_by_its_byte_length() {
     let document = format!("mutation {{ setPref(key: \"locale\", value: {value}) }}");
     let response = schema.execute(&document).await;
     assert_eq!(response.errors.len(), 1);
-    assert_eq!(response.errors[0].message, "invalid_pref_value");
+    assert_eq!(response.errors[0].message, "INVALID_PREF_VALUE");
 }
 
 #[tokio::test]

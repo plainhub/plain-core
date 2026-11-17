@@ -11,7 +11,7 @@ use plain_libs::anyhow::{Result, bail};
 use plain_libs::rusqlite::{OptionalExtension, params};
 
 #[derive(serde::Deserialize)]
-#[serde(tag = "kind", rename_all = "camelCase", deny_unknown_fields)]
+#[serde(tag = "kind", rename_all = "SCREAMING_SNAKE_CASE", deny_unknown_fields)]
 pub enum Action {
     Rename { name: String },
     Leave,

@@ -16,7 +16,7 @@ pub async fn copy(
         let cached = if let Some(url) = shared_resource(&source) {
             let thumbnail = url
                 .query_pairs()
-                .any(|(key, value)| key == "action" && value == "preview");
+                .any(|(key, value)| key == "action" && value == "PREVIEW");
             Some(
                 state
                     .remote_cache

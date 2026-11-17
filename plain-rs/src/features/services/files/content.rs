@@ -7,14 +7,14 @@ use std::path::PathBuf;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Deserialize)]
 pub enum Size {
-    #[serde(rename = "sm")]
+    #[serde(rename = "SM")]
     Small,
-    #[serde(rename = "lg")]
+    #[serde(rename = "LG")]
     Large,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Deserialize)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum Action {
     Describe,
     Preview,
@@ -26,11 +26,11 @@ pub enum Action {
 impl Action {
     pub fn as_str(self) -> &'static str {
         match self {
-            Self::Describe => "describe",
-            Self::Preview => "preview",
-            Self::Download => "download",
-            Self::Probe => "probe",
-            Self::Transcode => "transcode",
+            Self::Describe => "DESCRIBE",
+            Self::Preview => "PREVIEW",
+            Self::Download => "DOWNLOAD",
+            Self::Probe => "PROBE",
+            Self::Transcode => "TRANSCODE",
         }
     }
 }

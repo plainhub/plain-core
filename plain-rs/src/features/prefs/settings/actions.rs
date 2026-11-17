@@ -2,7 +2,7 @@ use super::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "action", content = "value", rename_all = "camelCase")]
+#[serde(tag = "action", content = "value", rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum Action {
     ToggleNotificationApp(String),
     SetNotificationMode(String),
@@ -13,7 +13,7 @@ impl Action {
         let toggle = matches!(&self, Self::ToggleNotificationApp(_));
         if let Self::SetNotificationMode(ref mode) = self {
             plain_libs::anyhow::ensure!(
-                ["allowlist", "blacklist"].contains(&mode.as_str()),
+                ["ALLOWLIST", "BLACKLIST"].contains(&mode.as_str()),
                 "Invalid notification mode"
             );
         }

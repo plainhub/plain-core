@@ -4,7 +4,7 @@ use serde::Serialize;
 use tokio::sync::watch;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "snake_case")]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum Status {
     Queued,
     Running,
@@ -24,7 +24,7 @@ pub struct SourceCoverage {
 }
 
 #[derive(Clone, Copy, Debug, Serialize)]
-#[serde(rename_all = "snake_case")]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum CoverageState {
     Pending,
     Scanning,

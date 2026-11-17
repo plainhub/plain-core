@@ -1,4 +1,5 @@
-use crate::infrastructure::error_code::ErrorCode;
+use crate::features::access_error::AccessErrorCode;
+use crate::features::peers::error::PeerConnectionErrorCode;
 use crate::runtime::Runtime as CoreRuntime;
 use plain_libs::anyhow::{Result, ensure};
 use plain_libs::protocols::http_client;
@@ -29,9 +30,9 @@ pub async fn query(
         if !errors.is_empty()
             && errors
                 .iter()
-                .all(|error| error["extensions"]["code"] == ErrorCode::NoPermission.as_str())
+                .all(|error| error["extensions"]["code"] == AccessErrorCode::NoPermission.as_str())
         {
-            return Err(ErrorCode::RemoteAccessDisabled.into());
+            return Err(AccessErrorCode::RemoteAccessDisabled.into());
         }
     }
     ensure!(
@@ -49,7 +50,7 @@ pub async fn exchange(
 ) -> Result<Vec<u8>> {
     let encrypted =
         crate::infrastructure::transport::http_request::encrypt(key, "/graphql", request)
-            .map_err(|_| plain_libs::anyhow::anyhow!(ErrorCode::InvalidSession))?;
+            .map_err(|_| plain_libs::anyhow::anyhow!(PeerConnectionErrorCode::InvalidSession))?;
     let context = crate::infrastructure::transport::http_response::Context::new(&encrypted);
     let response = outgoing
         .header("content-type", "application/octet-stream")
@@ -57,13 +58,13 @@ pub async fn exchange(
         .send()
         .await?;
     match response.status().as_u16() {
-        401 => return Err(ErrorCode::Unauthorized.into()),
-        403 => return Err(ErrorCode::RemoteAccessDisabled.into()),
+        401 => return Err(AccessErrorCode::Unauthorized.into()),
+        403 => return Err(AccessErrorCode::RemoteAccessDisabled.into()),
         _ => {}
     }
-    ensure!(response.status().is_success(), ErrorCode::InvalidSession);
+    ensure!(response.status().is_success(), PeerConnectionErrorCode::InvalidSession);
     let bytes = crate::features::services::peers::peer_lan::limited(response, limit).await?;
     context
         .decrypt(key, &bytes)
-        .ok_or_else(|| plain_libs::anyhow::anyhow!(ErrorCode::InvalidSession))
+        .ok_or_else(|| plain_libs::anyhow::anyhow!(PeerConnectionErrorCode::InvalidSession))
 }

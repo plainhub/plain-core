@@ -96,7 +96,7 @@ async fn package_roots_error_out_without_the_api_permission() {
     let response = schema
         .execute(r#"query { packages(offset:0, limit:1, query:"", sortBy:NAME_ASC) { id } }"#)
         .await;
-    assert_eq!(response.errors[0].message, "no_permission");
+    assert_eq!(response.errors[0].message, "NO_PERMISSION");
 }
 
 #[tokio::test]
@@ -199,7 +199,7 @@ async fn package_manifest_preserves_package_permission_and_missing_package_error
         response
             .errors
             .iter()
-            .any(|error| error.message == "no_permission")
+            .any(|error| error.message == "NO_PERMISSION")
     );
     let (_dir, schema, _prefs) = fixture(json!(["APPS"]));
     stub(schema_host(&schema), |method, _| match method {

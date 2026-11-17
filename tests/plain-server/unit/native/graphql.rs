@@ -1,3 +1,4 @@
+use plain_rs::features::access_error::AccessErrorCode;
 use super::*;
 use plain_libs::serde_json::json;
 use crate::server::ContentServer;
@@ -322,14 +323,13 @@ async fn pending_multicast_requests_remain_independent_until_permission_is_grant
 
 #[test]
 fn remote_transport_errors_preserve_session_and_permission_status() {
-    use plain_rs::infrastructure::error_code::ErrorCode;
-    assert_eq!(
-        peer_error(ErrorCode::Unauthorized.into()),
-        "unauthorized"
+        assert_eq!(
+        peer_error(AccessErrorCode::Unauthorized.into()),
+        "UNAUTHORIZED"
     );
     assert_eq!(
-        peer_error(ErrorCode::RemoteAccessDisabled.into()),
-        "remote_access_disabled"
+        peer_error(AccessErrorCode::RemoteAccessDisabled.into()),
+        "REMOTE_ACCESS_DISABLED"
     );
     assert_eq!(
         peer_error(plain_libs::anyhow::anyhow!("fixture failure")),

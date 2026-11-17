@@ -133,7 +133,7 @@ async fn listener_failure_is_reported_to_the_host_with_current_status() {
     assert_eq!(request["method"], "httpServerStatusChanged");
     assert_eq!(
         request["params"],
-        json!({"state":"error","message":"listener failed","httpPort":0,"httpsPort":0})
+        json!({"state":"ERROR","message":"listener failed","httpPort":0,"httpsPort":0})
     );
     state
         .host
@@ -182,7 +182,7 @@ async fn state_changes_before_host_attachment_are_delivered_as_the_initial_snaps
     state.http_server.notify_snapshot(&state.host).unwrap();
     let request = requests.try_recv().unwrap();
     assert_eq!(request["method"], "httpServerStatusChanged");
-    assert_eq!(request["params"]["state"], "error");
+    assert_eq!(request["params"]["state"], "ERROR");
     assert_eq!(request["params"]["message"], "listener startup failed");
     state
         .host

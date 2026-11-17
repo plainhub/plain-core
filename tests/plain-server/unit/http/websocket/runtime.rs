@@ -87,7 +87,7 @@ fn rejecting_confirmation_closes_with_policy_violation() {
         },
     );
     runtime.reject("request");
-    assert_eq!(*receiver.borrow(), Some((1008, "rejected")));
+    assert_eq!(*receiver.borrow(), Some((1008, "REJECTED")));
 }
 
 #[cfg(feature = "http_transport")]
@@ -218,7 +218,7 @@ async fn auth_confirmation_uses_host_callbacks_and_returns_the_hosts_decision_to
                 panic!("expected rejected close frame")
             };
             assert_eq!(u16::from(frame.code), 1008);
-            assert_eq!(frame.reason, "rejected");
+            assert_eq!(frame.reason, "REJECTED");
             assert!(
                 server
                     .runtime_state()
@@ -330,7 +330,7 @@ async fn malformed_login_frames_exhaust_the_ip_limit_before_decryption_despite_r
                 assert!(state.db.session_get(&cid).unwrap().is_some());
             } else {
                 assert!(
-                    matches!(response, ClientMessage::Close(Some(frame)) if frame.reason == "invalid_login_request")
+                    matches!(response, ClientMessage::Close(Some(frame)) if frame.reason == "INVALID_LOGIN_REQUEST")
                 );
                 assert!(state.db.session_get(&cid).unwrap().is_none());
             }
@@ -346,7 +346,7 @@ async fn malformed_login_frames_exhaust_the_ip_limit_before_decryption_despite_r
         let ClientMessage::Close(Some(frame)) = response else {
             panic!("expected rate-limited login")
         };
-        assert_eq!(frame.reason, "too_many_login_attempts");
+        assert_eq!(frame.reason, "TOO_MANY_LOGIN_ATTEMPTS");
         assert!(state.db.session_get(&cid).unwrap().is_none());
         socket.close(None).await.ok();
         assert_eq!(state.db.session_list().unwrap().len(), 1);
@@ -518,7 +518,7 @@ async fn sequenced_controls_preserve_order_without_clock_or_database_replay_rece
         while let Some(message) = socket.next().await {
             if let ClientMessage::Close(Some(close)) = message.unwrap() {
                 assert_eq!(u16::from(close.code), 1008);
-                assert_eq!(close.reason, "invalid_request");
+                assert_eq!(close.reason, "INVALID_REQUEST");
                 return;
             }
         }
@@ -556,7 +556,7 @@ async fn sequenced_controls_preserve_order_without_clock_or_database_replay_rece
             .unwrap()
             .unwrap();
         assert!(
-            matches!(rejected, ClientMessage::Close(Some(frame)) if frame.reason == "invalid_request")
+            matches!(rejected, ClientMessage::Close(Some(frame)) if frame.reason == "INVALID_REQUEST")
         );
         assert!(received.try_recv().is_err());
     }

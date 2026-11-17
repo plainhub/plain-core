@@ -74,13 +74,13 @@ pub(super) async fn tls() -> (
         let (scope,payload)=plain_rs::features::files::resource_link::parse(&params["id"]).unwrap();
         assert_eq!(scope,plain_rs::features::files::resource_link::Scope::Share("fixture".into()));
         if let Some(size) = params.get("s") {
-            assert_eq!(size, "sm");
+            assert_eq!(size, "SM");
         }
         assert!(!params.contains_key("w"));
         assert!(!params.contains_key("h"));
         assert!(!params.contains_key("cc"));
         let resource=plain_rs::features::files::resource_link::open(&scope,&[8;32],payload).unwrap();
-        if params.get("action").map(String::as_str) == Some("describe") {
+        if params.get("action").map(String::as_str) == Some("DESCRIBE") {
             let root = resource.id == "root";
             let child_id = plain_rs::features::files::resource_link::seal(&scope, &[8;32], &plain_rs::features::files::resource_link::Resource { r#type: plain_rs::features::files::resource_link::ResourceType::SharedFile, id: "folder/ +?#中文%".into() }).unwrap();
             let child = json!({"url":plain_rs::features::services::files::links::download_url(&child_id),"name":"a 中文.txt","isDir":false,"sizeBytes":8});

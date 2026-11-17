@@ -1,4 +1,4 @@
-use crate::infrastructure::error_code::ErrorCode;
+use crate::features::access_error::AccessErrorCode;
 use plain_libs::anyhow::{Result, anyhow, bail};
 use plain_libs::chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -148,7 +148,7 @@ impl Service {
         rename: bool,
     ) -> Result<FileTask> {
         if client_id.is_empty() {
-            bail!(ErrorCode::Unauthorized);
+            bail!(AccessErrorCode::Unauthorized);
         }
         if ops.is_empty() {
             bail!("no operations");
@@ -191,7 +191,7 @@ impl Service {
     }
     pub fn list(&self, client_id: &str) -> Result<Vec<FileTask>> {
         if client_id.is_empty() {
-            bail!(ErrorCode::Unauthorized);
+            bail!(AccessErrorCode::Unauthorized);
         }
         let mut tasks = self
             .tasks

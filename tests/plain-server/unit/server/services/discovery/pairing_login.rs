@@ -453,7 +453,7 @@ async fn wrong_password_never_creates_a_local_grant() {
         .unwrap()
     );
     let result = notice(&mut notices, "PAIRING_FAILED").await;
-    assert_eq!(result.error.as_deref(), Some("invalid_password"));
+    assert_eq!(result.error.as_deref(), Some("INVALID_PASSWORD"));
     assert!(
         plain_rs::infrastructure::db::chat_store::peers::all(&state.db)
             .unwrap()
@@ -554,7 +554,7 @@ async fn remote_rejection_and_native_scope_closure_do_not_save_credentials() {
         .await
         .unwrap();
     let failed = notice(&mut notices, "PAIRING_FAILED").await;
-    assert_eq!(failed.error.as_deref(), Some("rejected"));
+    assert_eq!(failed.error.as_deref(), Some("REJECTED"));
     assert!(
         plain_rs::infrastructure::db::chat_store::peers::all(&state.db)
             .unwrap()
@@ -640,7 +640,7 @@ async fn a_local_commit_failure_preserves_the_old_row_and_reports_the_remote_gra
     let failed = notice(&mut notices, "PAIRING_FAILED").await;
     assert_eq!(
         failed.error.as_deref(),
-        Some("internal_error")
+        Some("INTERNAL_ERROR")
     );
     let previous = plain_rs::infrastructure::db::chat_store::peers::get(&state.db, &remote_id)
         .unwrap()
@@ -723,7 +723,7 @@ async fn web_management_pairs_by_device_id_and_keeps_the_grant_on_a() {
         }
     };
     let denied = query(json!({"peerId":a_id,"mode":"MANAGE"})).await;
-    assert_eq!(denied["errors"][0]["message"], "no_permission");
+    assert_eq!(denied["errors"][0]["message"], "NO_PERMISSION");
     let started = query(json!({"peerId":b_id,"mode":"MANAGE"})).await;
     assert_eq!(started["data"]["pairPeer"], true, "{started}");
     notice(&mut notices, "PAIRING_REQUESTED").await;

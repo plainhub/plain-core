@@ -629,7 +629,7 @@ pub fn playlist_filtered_count(db: &Db, playlist_id: &str, query: &str) -> Domai
 
 pub fn remove_playlist_query(db: &Db, playlist_id: &str, query: &str) -> DomainResult<usize> {
     if query.trim().is_empty() {
-        return Err(crate::infrastructure::error_code::ErrorCode::BulkQueryRequired.into());
+        return Err(crate::features::media::audio::error::AudioQueueErrorCode::BulkQueryRequired.into());
     }
     transaction(db, |c, _| {
         let mut count = 0;

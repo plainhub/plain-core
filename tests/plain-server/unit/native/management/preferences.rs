@@ -128,14 +128,14 @@ async fn native_notification_actions_validate_and_preserve_change_events() {
     let mut events = state.events.subscribe();
     assert!(
         management
-            .set_notification_filter_mode("allowlist".into())
+            .set_notification_filter_mode("ALLOWLIST".into())
             .await
             .unwrap()
     );
     assert_eq!(preference_updates(&mut events), 1);
     assert!(
         !management
-            .set_notification_filter_mode("allowlist".into())
+            .set_notification_filter_mode("ALLOWLIST".into())
             .await
             .unwrap()
     );
@@ -525,7 +525,7 @@ async fn password_status_validates_private_storage_and_generation_never_saves() 
         assert!(management.get_pref(key).is_err());
         assert!(
             management
-                .set_pref(key, plain_libs::serde_json::json!("forbidden"))
+                .set_pref(key, plain_libs::serde_json::json!("FORBIDDEN"))
                 .await
                 .is_err()
         );

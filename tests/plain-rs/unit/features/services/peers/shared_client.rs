@@ -42,8 +42,8 @@ async fn discovery_selects_complete_matching_records_and_safe_ipv6_urls() {
             false,
         )
         .unwrap();
-    assert!(download_url(&state, &format!("{url}&action=download")).is_ok());
-    assert!(download_url(&state, &format!("{url}&action=preview")).is_err());
+    assert!(download_url(&state, &format!("{url}&action=DOWNLOAD")).is_ok());
+    assert!(download_url(&state, &format!("{url}&action=PREVIEW")).is_err());
     assert!(download_url(&state, "https://localhost/fs?id=c.owner.AA").is_err());
     assert!(download_url(&state, "https://localhost/fs?id=c.client.AA").is_err());
     assert!(download_url(&state, "https://localhost/fs?id=x").is_err());
@@ -252,7 +252,7 @@ async fn generic_preview_copy_reuses_named_thumbnail_bytes_without_reusing_obsol
     let copy = |version: u8| {
         let state = state.clone();
         let target = target.to_string_lossy().into_owned();
-        let source = format!("{url}&action=preview&size=sm&v={version}");
+        let source = format!("{url}&action=PREVIEW&size=SM&v={version}");
         async move {
             crate::features::services::files::named_copy::copy(
                 &state,

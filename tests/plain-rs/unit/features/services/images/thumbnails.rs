@@ -32,13 +32,13 @@ fn canceled_thumbnail_output_discards_its_token() {
         .outputs
         .lock()
         .unwrap()
-        .insert("canceled".into(), sender);
+        .insert("CANCELED".into(), sender);
     let output = super::Output {
         service: &thumbnails,
-        token: "canceled".into(),
+        token: "CANCELED".into(),
     };
     drop(output);
-    assert!(thumbnails.submit("canceled", vec![1]).is_err());
+    assert!(thumbnails.submit("CANCELED", vec![1]).is_err());
     assert!(receiver.blocking_recv().is_err());
 }
 

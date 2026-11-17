@@ -1,4 +1,4 @@
-use crate::infrastructure::error_code::ErrorCode;
+use crate::features::prefs::error::PreferenceErrorCode;
 use crate::features::enums::DataType;
 use crate::features::prefs::Prefs;
 use crate::features::prefs::pref_keys::{
@@ -41,7 +41,7 @@ impl<'a> Preferences<'a> {
             crate::features::prefs::pref_keys::writable(key, true, &[]),
             "Preference is not accessible"
         );
-        plain_libs::anyhow::ensure!(value.to_string().len() <= 65536, ErrorCode::InvalidPrefValue);
+        plain_libs::anyhow::ensure!(value.to_string().len() <= 65536, PreferenceErrorCode::InvalidPrefValue);
         if key == MEDIA_EXCLUDED_DIRS {
             crate::features::media::visibility::validate(&value)?;
         }

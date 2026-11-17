@@ -283,7 +283,7 @@ async fn background_session_is_reserved_before_running_and_shutdown_joins_it() {
                     started.send(()).unwrap();
                     let mut cancel = session.cancel.clone();
                     wait_stop(&mut cancel).await;
-                    session.finish(Err("canceled".into())).unwrap();
+                    session.finish(Err("CANCELED".into())).unwrap();
                 })
             },
         )

@@ -62,7 +62,7 @@ fn parallel_permission_updates_do_not_lose_changes() {
     });
     assert_eq!(snapshot(&prefs).unwrap().api_permissions.len(), 4);
     assert!(plain_libs::serde_json::from_value::<Command>(plain_libs::serde_json::json!({
-        "action":"setApiPermission", "permission":"UNKNOWN", "enabled":true,
+        "action":"SET_API_PERMISSION", "permission":"UNKNOWN", "enabled":true,
     })).is_err());
 }
 

@@ -155,7 +155,7 @@ async fn browsing_media_errors_out_without_the_api_permission() {
             ))
             .await;
         assert_eq!(response.errors.len(), 1, "{field}: {:?}", response.errors);
-        assert_eq!(response.errors[0].message, "no_permission", "{field}");
+        assert_eq!(response.errors[0].message, "NO_PERMISSION", "{field}");
     }
 }
 

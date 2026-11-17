@@ -10,7 +10,7 @@ use plain_libs::anyhow::{Result, bail};
 use plain_libs::serde_json::json;
 use serde::{Deserialize, Serialize};
 #[derive(Deserialize)]
-#[serde(tag = "kind", rename_all = "camelCase", deny_unknown_fields)]
+#[serde(tag = "kind", rename_all = "SCREAMING_SNAKE_CASE", deny_unknown_fields)]
 pub enum Operation {
     Chat { content: String, channel_id: String },
     StartAware,

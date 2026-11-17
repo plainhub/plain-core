@@ -1,3 +1,4 @@
+pub mod key_value_error;
 use plain_libs::rusqlite::Connection;
 #[cfg(all(feature = "chat", feature = "library"))]
 mod media_paths;

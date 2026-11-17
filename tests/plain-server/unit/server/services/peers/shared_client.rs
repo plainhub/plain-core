@@ -71,7 +71,7 @@ async fn authenticated_main_browse_caches_and_queues_real_tls_files_without_host
         &token,
         "mutation($input: DownloadInput!) { createDownload(input: $input) { id } }",
         json!({"input":{"resources":{
-            "urls":[format!("{}&action=download", link.file_url(&plain_libs::utils::base64::base64_encode(&[8;32]), "root", false).unwrap())],
+            "urls":[format!("{}&action=DOWNLOAD", link.file_url(&plain_libs::utils::base64::base64_encode(&[8;32]), "root", false).unwrap())],
             "targetDir":target.to_str().unwrap()
         }}}),
     ).await;

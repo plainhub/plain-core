@@ -1,3 +1,5 @@
+pub mod share_access_error;
+pub mod archive_error;
 #[cfg(feature = "chat")]
 pub mod app_files;
 

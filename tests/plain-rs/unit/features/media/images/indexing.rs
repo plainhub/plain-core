@@ -101,7 +101,7 @@ struct Guard {
 impl Control for Guard {
     fn check(&self) -> DomainResult<()> {
         if self.canceled.load(Ordering::SeqCst) {
-            Err(invalid("canceled"))
+            Err(invalid("CANCELED"))
         } else {
             Ok(())
         }

@@ -402,7 +402,7 @@ async fn path_lyrics_reject_missing_storage_permission_before_reading_a_sidecar(
         ),
     )
     .await;
-    assert_eq!(response["errors"][0]["message"], "no_permission");
+    assert_eq!(response["errors"][0]["message"], "NO_PERMISSION");
     assert!(!response.to_string().contains("owned sidecar lyrics"));
 }
 
@@ -1536,7 +1536,7 @@ async fn replace_queue_returns_one_selected_track_and_keeps_remote_state_separat
         r#"mutation { replaceAudioQueue(query:"playlist_id:unknown",sortBy:TITLE_ASC,shuffle:false) { mediaId } }"#,
     )
     .await;
-    assert_eq!(result["errors"][0]["message"], "no_permission");
+    assert_eq!(result["errors"][0]["message"], "NO_PERMISSION");
 }
 
 #[tokio::test]

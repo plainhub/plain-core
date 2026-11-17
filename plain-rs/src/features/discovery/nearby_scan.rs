@@ -9,7 +9,7 @@ use std::{
 };
 
 #[derive(Serialize)]
-#[serde(tag = "kind", rename_all = "camelCase")]
+#[serde(tag = "kind", rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum Step {
     Read { generation: String },
     Wait,

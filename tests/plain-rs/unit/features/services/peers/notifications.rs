@@ -1,3 +1,4 @@
+use crate::features::access_error::AccessErrorCode;
 use crate::features::chat::enums::DeviceType;
 use crate::features::services::notifications::types::Notification;
 use crate::features::services::peers::management::Identity;
@@ -491,8 +492,7 @@ async fn invalid_snapshots_do_not_mutate_projection_and_icons_decrypt_with_stand
 
 #[tokio::test]
 async fn confirmed_authorization_failures_clear_data_instead_of_looking_like_network_timeouts() {
-    use crate::infrastructure::error_code::ErrorCode;
-    for permission in [true, false] {
+        for permission in [true, false] {
         let (store, peer, identity, events, mut receiver) = fixture();
         event(&mut receiver);
         store
@@ -505,10 +505,10 @@ async fn confirmed_authorization_failures_clear_data_instead_of_looking_like_net
             )
             .unwrap();
         event(&mut receiver);
-        let error = if permission {
-            ErrorCode::RemoteAccessDisabled
+        let error: plain_libs::anyhow::Error = if permission {
+            AccessErrorCode::RemoteAccessDisabled.into()
         } else {
-            ErrorCode::Unauthorized
+            AccessErrorCode::Unauthorized.into()
         };
         store
             .apply(

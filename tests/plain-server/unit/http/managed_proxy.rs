@@ -224,7 +224,7 @@ async fn managed_proxy_keeps_the_browser_session_and_streams_a_peer_range() {
         http.get(format!("{proxy}/fs"))
             .query(&[("id", id.as_str()), ("action", action)])
     };
-    let response = get("preview")
+    let response = get("PREVIEW")
         .header(header::RANGE, "bytes=2-5")
         .send()
         .await
@@ -233,11 +233,11 @@ async fn managed_proxy_keeps_the_browser_session_and_streams_a_peer_range() {
     assert_eq!(response.headers()[header::CONTENT_RANGE], "bytes 2-5/10");
     assert!(!response.headers().contains_key(MANAGED_RESOURCE));
     assert_eq!(&response.bytes().await.unwrap()[..], b"2345");
-    let download = get("download").send().await.unwrap();
+    let download = get("DOWNLOAD").send().await.unwrap();
     assert_eq!(download.status(), StatusCode::OK);
     assert_eq!(&download.bytes().await.unwrap()[..], b"0123456789");
     assert_eq!(
-        get("preview")
+        get("PREVIEW")
             .header(header::ORIGIN, "https://other.example.test")
             .send()
             .await
@@ -258,7 +258,7 @@ async fn managed_proxy_keeps_the_browser_session_and_streams_a_peer_range() {
     .unwrap();
     let response = http
         .get(format!("{proxy}/zip/dir"))
-        .query(&[("id", archive_id.as_str()), ("action", "download")])
+        .query(&[("id", archive_id.as_str()), ("action", "DOWNLOAD")])
         .send()
         .await
         .unwrap();
@@ -284,7 +284,7 @@ async fn managed_proxy_keeps_the_browser_session_and_streams_a_peer_range() {
         selection.to_string().as_bytes(),
     ).unwrap();
     let response = http.get(format!("{proxy}/zip/files"))
-        .query(&[("id", id.as_str()), ("action", "download")])
+        .query(&[("id", id.as_str()), ("action", "DOWNLOAD")])
         .send().await.unwrap();
     assert_eq!(response.status(), StatusCode::OK);
     let mut archive =
@@ -304,7 +304,7 @@ async fn managed_proxy_keeps_the_browser_session_and_streams_a_peer_range() {
         &Resource::reference(&format!("fid:{}", app_file.id)),
     ).unwrap();
     let response = http.get(format!("{proxy}/fs"))
-        .query(&[("id", id.as_str()), ("action", "download")]).send().await.unwrap();
+        .query(&[("id", id.as_str()), ("action", "DOWNLOAD")]).send().await.unwrap();
     assert_eq!(response.status(), StatusCode::OK);
     assert_eq!(&response.bytes().await.unwrap()[..], b"0123456789");
 
@@ -451,7 +451,7 @@ async fn managed_proxy_keeps_the_browser_session_and_streams_a_peer_range() {
         .set(pref_keys::API_PERMISSIONS, Vec::<AccessFeature>::new())
         .unwrap();
     assert_eq!(
-        get("preview").send().await.unwrap().status(),
+        get("PREVIEW").send().await.unwrap().status(),
         StatusCode::FORBIDDEN
     );
     let chunks = http_request::encrypt(
@@ -466,7 +466,7 @@ async fn managed_proxy_keeps_the_browser_session_and_streams_a_peer_range() {
     assert_eq!(
         plain_libs::serde_json::from_slice::<plain_libs::serde_json::Value>(&plaintext).unwrap()["errors"]
             [0]["message"],
-        "no_permission"
+        "NO_PERMISSION"
     );
     a.stop_core().await;
     b.stop_core().await;
@@ -816,7 +816,7 @@ async fn first_login_and_chat_range_use_proxy_without_a_management_token() {
             .await
             .unwrap(),
         Some(Ok(Message::Close(Some(frame))))
-            if frame.code == 1008u16.into() && frame.reason == "proxy_auth_failed"
+            if frame.code == 1008u16.into() && frame.reason == "PROXY_AUTH_FAILED"
     ));
     a_state.prefs.set("remote_access", true).unwrap();
 
@@ -834,7 +834,7 @@ async fn first_login_and_chat_range_use_proxy_without_a_management_token() {
     let reference = format!("fsid:{file_id}");
     let attachment =
         resource_link::encrypt(&scope, ResourcePurpose::Fs, &key, reference.as_bytes()).unwrap();
-    let url = format!("{origin}/proxy/{b_id}/fs?id={attachment}&action=preview");
+    let url = format!("{origin}/proxy/{b_id}/fs?id={attachment}&action=PREVIEW");
     let unknown_peer = url.replace(&format!("/proxy/{b_id}/"), "/proxy/other-device/");
     assert_eq!(
         http.get(unknown_peer).send().await.unwrap().status(),
@@ -868,7 +868,7 @@ async fn first_login_and_chat_range_use_proxy_without_a_management_token() {
     .unwrap();
     let native_base = format!("http://127.0.0.1:{a_http}/proxy/{ticket}");
     let response = http
-        .get(format!("{native_base}/fs?id={file_id}&action=preview"))
+        .get(format!("{native_base}/fs?id={file_id}&action=PREVIEW"))
         .header(header::ORIGIN, "tauri://localhost")
         .header(header::RANGE, "bytes=0-3")
         .send()
@@ -899,7 +899,7 @@ async fn first_login_and_chat_range_use_proxy_without_a_management_token() {
     .unwrap();
     let response = http
         .get(format!(
-            "http://localhost:{a_http}/proxy/{b_id}/fs?id={native_attachment}&action=preview"
+            "http://localhost:{a_http}/proxy/{b_id}/fs?id={native_attachment}&action=PREVIEW"
         ))
         .header(header::ORIGIN, "tauri://localhost")
         .header(header::RANGE, "bytes=0-3")
@@ -925,7 +925,7 @@ async fn first_login_and_chat_range_use_proxy_without_a_management_token() {
     .unwrap();
     let response = http
         .get(format!(
-            "http://localhost:{a_http}/fs?id={local_id}&action=download"
+            "http://localhost:{a_http}/fs?id={local_id}&action=DOWNLOAD"
         ))
         .header(header::ORIGIN, "tauri://localhost")
         .send()

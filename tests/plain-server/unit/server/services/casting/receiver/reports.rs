@@ -51,7 +51,7 @@ async fn position_facts_keep_exact_milliseconds_without_snapshots_or_public_refr
         json!({"mediaUri":"", "positionMs":1, "durationMs":2}),
         json!({"mediaUri":"https://example.test/current", "positionMs":1.5, "durationMs":2}),
         json!({"mediaUri":"https://example.test/current", "positionMs":u64::MAX, "durationMs":2}),
-        json!({"mediaUri":"https://example.test/current", "positionMs":1, "durationMs":2, "action":"stop"}),
+        json!({"mediaUri":"https://example.test/current", "positionMs":1, "durationMs":2, "action":"STOP"}),
     ] {
         assert!(
             bridge
@@ -95,7 +95,7 @@ async fn stale_players_cannot_change_the_current_media_and_seek_acknowledgements
             "DLNA_POSITION_REPORTED",
             json!({"positionMs":99,"durationMs":100}),
         ),
-        ("DLNA_PLAYBACK_REPORTED", json!({"state":"PausedPlayback"})),
+        ("DLNA_PLAYBACK_REPORTED", json!({"state":"PAUSED_PLAYBACK"})),
         ("DLNA_SEEK_CONSUMED_REPORTED", json!({"positionMs":42})),
         ("DLNA_STOPPED_REPORTED", json!({})),
     ] {
@@ -129,7 +129,7 @@ async fn stale_players_cannot_change_the_current_media_and_seek_acknowledgements
     bridge
         .publish_text(
             "DLNA_PLAYBACK_REPORTED",
-            json!({"mediaUri":"https://example.test/current","state":"PausedPlayback"}).to_string(),
+            json!({"mediaUri":"https://example.test/current","state":"PAUSED_PLAYBACK"}).to_string(),
         )
         .await
         .unwrap();

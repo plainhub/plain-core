@@ -33,7 +33,7 @@ pub struct Step {
     pub error: Option<String>,
 }
 #[derive(Deserialize)]
-#[serde(tag = "kind", rename_all = "camelCase", deny_unknown_fields)]
+#[serde(tag = "kind", rename_all = "SCREAMING_SNAKE_CASE", deny_unknown_fields)]
 pub enum Outcome {
     Connected,
     Unavailable { error: String },

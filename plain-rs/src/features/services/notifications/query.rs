@@ -27,8 +27,8 @@ pub fn notifications(
             .as_array()
             .is_some_and(|apps| apps.contains(&item["appId"]));
         let allowed = match filter["mode"].as_str() {
-            Some("allowlist") => listed,
-            Some("blacklist") => !listed,
+            Some("ALLOWLIST") => listed,
+            Some("BLACKLIST") => !listed,
             _ => true,
         };
         allowed

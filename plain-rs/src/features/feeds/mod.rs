@@ -1,4 +1,5 @@
-use crate::infrastructure::error_code::ErrorCode;
+use crate::features::feeds::error::FeedOperationErrorCode;
+pub mod error;
 use crate::infrastructure::db::Db;
 use crate::infrastructure::db::notes_feeds::FeedEntryRow;
 use crate::infrastructure::db::notes_feeds::FeedRow;
@@ -20,9 +21,9 @@ pub fn error(message: impl ToString) -> DomainError {
 }
 
 pub fn require_url(url: &str) -> DomainResult<()> {
-    let parsed = parse_http_url(url).ok_or_else(|| DomainError::Code(ErrorCode::InvalidFeedUrl))?;
+    let parsed = parse_http_url(url).ok_or_else(|| DomainError::from(FeedOperationErrorCode::InvalidFeedUrl))?;
     if parsed.host.is_empty() {
-        return Err(DomainError::Code(ErrorCode::InvalidFeedUrl));
+        return Err(DomainError::from(FeedOperationErrorCode::InvalidFeedUrl));
     }
     Ok(())
 }
@@ -50,7 +51,7 @@ pub fn update_fields(
     }
     db.feed_update(id, name, url, fetch_full_content, &now())
         .map_err(save_error)?
-        .ok_or_else(|| DomainError::Code(ErrorCode::FeedNotFound))
+        .ok_or_else(|| DomainError::from(FeedOperationErrorCode::FeedNotFound))
 }
 
 pub fn delete(db: &Db, id: &str) -> DomainResult<bool> {

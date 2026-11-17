@@ -176,7 +176,7 @@ async fn unsafe_socket_and_unsupported_replies_never_fall_back_to_configuration_
         let length = connection.read_u32().await.unwrap();
         let mut payload = vec![0; length as usize];
         connection.read_exact(&mut payload).await.unwrap();
-        let reply = br#"{"version":9,"result":{"type":"updated"}}"#;
+        let reply = br#"{"version":9,"result":{"type":"UPDATED"}}"#;
         connection.write_u32(reply.len() as u32).await.unwrap();
         connection.write_all(reply).await.unwrap();
     });

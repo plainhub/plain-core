@@ -1,4 +1,4 @@
-use plain_rs::infrastructure::error_code::ErrorCode;
+use plain_rs::features::media::audio::error::AudioQueueErrorCode;
 use plain_rs::features::access::AccessFeature;
 use crate::graphql::resolvers::tags::domain_types::Tag;
 use crate::http::auth::public_gate;
@@ -618,7 +618,7 @@ pub(crate) async fn search_tracks(
     sort_by: AudioSortBy,
 ) -> plain_graphql::Result<Vec<AudioTrack>> {
     if query.trim().is_empty() {
-        return Err(plain_graphql::Error::from(ErrorCode::BulkQueryRequired));
+        return Err(plain_graphql::Error::from(AudioQueueErrorCode::BulkQueryRequired));
     }
     if let Some(id) = plain_libs::utils::search_dsl::field_value(query, "playlist_id") {
         let query = query.to_owned();
