@@ -44,13 +44,15 @@ async fn access_primitives_report_capabilities_and_grants_without_an_app_busines
     let permissions = runtime
         .dispatch(
             "systemAccessFacts",
-            plain_libs::serde_json::json!({"features":["FILES","SMS"]}),
+            plain_libs::serde_json::json!({"features":["IMAGES","VIDEOS","AUDIO","DOCS","FILES","SMS"]}),
         )
         .await
         .unwrap();
     assert_eq!(
         permissions,
-        plain_libs::serde_json::json!({"granted":{"FILES":true,"SMS":false}})
+        plain_libs::serde_json::json!({
+            "granted": {"IMAGES":true,"VIDEOS":true,"AUDIO":true,"DOCS":true,"FILES":true,"SMS":false}
+        })
     );
     assert!(
         runtime
