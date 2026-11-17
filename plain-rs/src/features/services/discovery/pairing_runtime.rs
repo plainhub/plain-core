@@ -491,14 +491,23 @@ pub async fn execute(state: &CoreRuntime, request: Request) -> plain_libs::anyho
                 return Ok(Value::Null);
             }
             let known =
-                crate::infrastructure::db::chat_store::peers::get(&state.db, &request.from_id)?
-                    .filter(|peer| peer.public_key == request.payload.signature_public_key);
+                crate::infrastructure::db::chat_store::peers::get(&state.db, &request.from_id)?;
+            let saved_key = known.as_ref().filter(|peer| !peer.public_key.is_empty());
+            if let Some(peer) = saved_key {
+                if peer.public_key != request.payload.signature_public_key {
+                    return Ok(Value::Null);
+                }
+            } else if !state
+                .prefs
+                .get::<bool>(crate::features::prefs::pref_keys::NEARBY_DISCOVERABLE)?
+                .unwrap_or(crate::features::prefs::settings::Settings::default().nearby_discoverable)
+            {
+                return Ok(Value::Null);
+            }
             if ble {
                 state.pairing_runtime.check_address(&request, &address)?;
             }
-            let Some(known) = known else {
-                return Ok(Value::Null);
-            };
+            let pinned = saved_key.is_some_and(|peer| peer.is_paired());
             let (cached, is_new) = {
                 let _commit = state.pairing_runtime.commit.lock().unwrap();
                 let cached = state
@@ -525,7 +534,7 @@ pub async fn execute(state: &CoreRuntime, request: Request) -> plain_libs::anyho
                 }
             }
             if let Some(response) = cached {
-                if matches!(response, PairingReply::Accept(_)) && !known.is_paired() {
+                if matches!(response, PairingReply::Accept(_)) && !pinned {
                     return Ok(Value::Null);
                 }
                 send_incoming(
@@ -541,7 +550,6 @@ pub async fn execute(state: &CoreRuntime, request: Request) -> plain_libs::anyho
                     .confirmations
                     .register(state, &request)?
             {
-                let pinned = known.is_paired();
                 if pinned {
                     Box::pin(respond_device(state, request, true)).await?;
                 } else {

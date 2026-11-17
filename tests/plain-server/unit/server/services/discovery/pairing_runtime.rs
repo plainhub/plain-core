@@ -108,14 +108,16 @@ async fn public_nearby_endpoint_runs_pairing_parser_in_rust() {
             aware_supported: false,
         },
     };
-    for (header, fresh, correct_target, pinned, accepted) in [
-        (None, true, true, false, false),
-        (Some("another-peer"), true, true, false, false),
-        (Some("peer"), false, true, false, false),
-        (Some("peer"), true, false, false, false),
-        (Some("peer"), true, true, false, false),
-        (Some("peer"), true, true, true, true),
+    for (header, fresh, correct_target, discoverable, pinned, accepted) in [
+        (None, true, true, true, None, false),
+        (Some("another-peer"), true, true, true, None, false),
+        (Some("peer"), false, true, true, None, false),
+        (Some("peer"), true, false, true, None, false),
+        (Some("peer"), true, true, false, None, false),
+        (Some("peer"), true, true, true, Some(encode(&recipient_key[32..])), false),
+        (Some("peer"), true, true, false, Some(encode(&sender_public_key)), true),
     ] {
+        state.prefs.set("nearby_discoverable", discoverable).unwrap();
         request.payload.timestamp =
             plain_rs::features::peers::pairing::now_ms() - if fresh { 0 } else { 300_001 };
         request.target_public_key = if correct_target {
@@ -125,14 +127,14 @@ async fn public_nearby_endpoint_runs_pairing_parser_in_rust() {
         };
         request.payload.signature =
             plain_libs::crypto::ed25519_sign(&sender_key, request.signature_data().as_bytes());
-        if pinned {
+        if let Some(public_key) = pinned {
             let mut pinned = plain_rs::infrastructure::db::DPeer::new(
                 &request.from_id, "Fixture", "192.0.2.1", None,
                 plain_rs::features::chat::enums::DeviceType::Phone,
             );
-            pinned.public_key = request.payload.signature_public_key.clone();
+            pinned.public_key = public_key;
             plain_rs::infrastructure::db::chat_store::peers::save(
-                &state.db, &[pinned], plain_rs::infrastructure::db::chat_store::SaveMode::Insert,
+                &state.db, &[pinned], plain_rs::infrastructure::db::chat_store::SaveMode::Upsert,
             ).unwrap();
         }
         let body = Message::PairRequest(request.payload.clone())
@@ -384,4 +386,83 @@ async fn unavailable_nearby_transport_reports_a_generic_pairing_failure() {
     let payload: plain_libs::serde_json::Value = plain_libs::serde_json::from_str(&failure.payload).unwrap();
     assert_eq!(payload["error"], "INTERNAL_ERROR");
     server.shutdown().await;
+}
+
+#[cfg(feature = "http_transport")]
+#[tokio::test]
+async fn first_nearby_chat_pairing_waits_for_matching_code_approval_without_qr() {
+    use plain_rs::features::chat::events::{WS_PAIRING_COMPLETED, WS_PAIRING_REQUESTED, WS_PAIRING_STARTED};
+    use plain_rs::features::discovery::nearby_devices::{Device as NearbyDevice, DiscoveryMethod};
+    use plain_rs::infrastructure::db::chat_store::peers;
+    use plain_rs::infrastructure::events::WsEvent;
+    use tokio::sync::broadcast;
+    use tokio::time::{Duration, timeout};
+
+    async fn next_event(events: &mut broadcast::Receiver<WsEvent>, kind: &str) -> plain_libs::serde_json::Value {
+        timeout(Duration::from_secs(5), async {
+            loop {
+                let event = events.recv().await.unwrap();
+                if event.event_type == kind {
+                    return plain_libs::serde_json::from_str(&event.payload).unwrap();
+                }
+            }
+        }).await.unwrap()
+    }
+
+    let a_id = "706c6169-0001-8000-8000-000000000001";
+    let b_id = "706c6169-0002-8000-8000-000000000002";
+    let (_a_dir, a) = fixture(a_id);
+    let (_b_dir, b) = fixture(b_id);
+    let (cert, cert_key) = plain_libs::tls::generate_pem(&["localhost".into()]).unwrap();
+    a.start_public(0, 0, cert.clone(), cert_key.clone()).await.unwrap();
+    let (_, port) = b.start_public(0, 0, cert, cert_key).await.unwrap();
+    let a_state = a.runtime_state();
+    let b_state = b.runtime_state();
+    let b_key = plain_rs::features::services::peers::peer_wire::signing_keypair(&b_state.prefs).unwrap();
+    a_state.nearby_devices.observe(NearbyDevice {
+        id: b_id.into(),
+        name: "Nearby fixture".into(),
+        ips: vec!["127.0.0.1".into()],
+        port,
+        remote_access: Some(false),
+        signature_public_key: plain_libs::utils::base64::base64_encode(&b_key[32..]),
+        device_type: device().device_type,
+        version: "test".into(),
+        platform: "test".into(),
+        last_seen_at: plain_libs::utils::dbtime::now_iso(),
+        discovery_methods: vec![DiscoveryMethod::Lan],
+    }).unwrap();
+    assert!(peers::get(&a_state.db, b_id).unwrap().is_none());
+    assert!(peers::get(&b_state.db, a_id).unwrap().is_none());
+
+    let mut a_events = a_state.events.subscribe();
+    let mut b_events = b_state.events.subscribe();
+    let response = a.native_graphql().unwrap().execute(format!(
+        r#"mutation {{ pairPeer(input: {{peerId:"{b_id}",mode:CHAT}}) }}"#
+    ).into()).await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    assert_eq!(response.data.into_json().unwrap()["pairPeer"], true);
+    let sent = next_event(&mut a_events, WS_PAIRING_STARTED).await;
+    let received = next_event(&mut b_events, WS_PAIRING_REQUESTED).await;
+    assert_eq!(sent["deviceId"], b_id);
+    assert_eq!(received["fromId"], a_id);
+    assert_eq!(sent["verificationCode"].as_str().map(str::len), Some(8));
+    assert_eq!(sent["verificationCode"], received["verificationCode"]);
+    assert!(peers::get(&a_state.db, b_id).unwrap().is_none());
+    assert!(peers::get(&b_state.db, a_id).unwrap().is_none());
+
+    let response = b.native_graphql().unwrap().execute(format!(
+        r#"mutation {{ respondToPairing(peerId:"{a_id}",accepted:true) }}"#
+    ).into()).await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    assert_eq!(response.data.into_json().unwrap()["respondToPairing"], true);
+    next_event(&mut a_events, WS_PAIRING_COMPLETED).await;
+    next_event(&mut b_events, WS_PAIRING_COMPLETED).await;
+    let saved_a = peers::get(&b_state.db, a_id).unwrap().unwrap();
+    let saved_b = peers::get(&a_state.db, b_id).unwrap().unwrap();
+    assert!(saved_a.is_paired() && saved_b.is_paired());
+    assert!(!saved_a.key.is_empty());
+    assert_eq!(saved_a.key, saved_b.key);
+    a.shutdown().await;
+    b.shutdown().await;
 }

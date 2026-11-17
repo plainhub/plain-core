@@ -296,19 +296,23 @@ fn resolve(state: &CoreRuntime, id: &str, mode: Mode) -> Result<Resolved> {
     } else {
         None
     };
+    let saved_key = saved
+        .as_ref()
+        .map(|peer| &peer.public_key)
+        .filter(|key| !key.is_empty());
+    let advertised_key = nearby
+        .as_ref()
+        .map(|device| &device.signature_public_key)
+        .filter(|key| !key.is_empty());
     let public_key = if mode == Mode::Chat {
-        saved
-            .as_ref()
-            .map(|peer| peer.public_key.clone())
-            .filter(|key| !key.is_empty())
-            .ok_or_else(|| plain_libs::anyhow::anyhow!("A trusted pairing QR is required"))?
+        // Discovery supplies a candidate for signature verification of this attempt,
+        // never permission to replace a pinned key.
+        saved_key
+            .or(advertised_key)
+            .cloned()
+            .ok_or_else(|| plain_libs::anyhow::anyhow!("Nearby pairing identity unavailable"))?
     } else {
-        nearby
-            .as_ref()
-            .map(|device| device.signature_public_key.clone())
-            .filter(|key| !key.is_empty())
-            .or_else(|| saved.as_ref().map(|peer| peer.public_key.clone()))
-            .unwrap_or_default()
+        advertised_key.or(saved_key).cloned().unwrap_or_default()
     };
     Ok(Resolved {
         target: crate::features::peers::pairing::sessions::Target {

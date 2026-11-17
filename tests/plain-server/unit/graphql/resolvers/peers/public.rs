@@ -136,7 +136,7 @@ async fn an_empty_sim_list_is_not_an_error() {
 }
 
 #[tokio::test]
-async fn first_chat_pairing_requires_a_scanned_request() {
+async fn chat_pairing_rejects_a_peer_without_a_nearby_or_saved_identity() {
     let (_dir, schema) = fixture();
     let paired = query(
         &schema,
@@ -146,7 +146,7 @@ async fn first_chat_pairing_requires_a_scanned_request() {
     assert!(
         paired["errors"]
             .to_string()
-            .contains("A trusted pairing QR is required"),
+            .contains("Nearby pairing identity unavailable"),
         "{paired}"
     );
 }
