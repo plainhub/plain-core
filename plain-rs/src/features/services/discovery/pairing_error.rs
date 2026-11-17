@@ -1,71 +1,79 @@
+use crate::features::services::auth_error::AuthErrorCode;
+
 crate::feature_error! { PairingErrorCode {
-    Canceled => "CANCELED",
     Timeout => "TIMEOUT",
-    InternalError => "INTERNAL_ERROR",
     Rejected => "REJECTED",
-    BleConnectionClosing => "BLE_CONNECTION_CLOSING",
-    BlePairingCapacityExceeded => "BLE_PAIRING_CAPACITY_EXCEEDED",
-    FailedConnect => "FAILED_CONNECT",
-    PairingTransportUnavailable => "PAIRING_TRANSPORT_UNAVAILABLE",
-    PairingAddressUnavailable => "PAIRING_ADDRESS_UNAVAILABLE",
-    FailedConnectWs => "FAILED_CONNECT_WS",
-    InvalidAuthResponse => "INVALID_AUTH_RESPONSE",
-    InvalidSession => "INVALID_SESSION",
     PasswordRequired => "PASSWORD_REQUIRED",
-    PeerIdentityChanged => "PEER_IDENTITY_CHANGED",
-    RemoteAccessDisabled => "REMOTE_ACCESS_DISABLED",
-    SignatureVerificationFailed => "SIGNATURE_VERIFICATION_FAILED",
-    ChatPairingUnavailable => "CHAT_PAIRING_UNAVAILABLE",
     InvalidPassword => "INVALID_PASSWORD",
-    LoginExpired => "LOGIN_EXPIRED",
+    PeerIdentityChanged => "PEER_IDENTITY_CHANGED",
     TooManyLoginAttempts => "TOO_MANY_LOGIN_ATTEMPTS",
-    PasswordSetupRequired => "PASSWORD_SETUP_REQUIRED",
-    SecureLoginUnavailable => "SECURE_LOGIN_UNAVAILABLE",
-    InvalidLoginRequest => "INVALID_LOGIN_REQUEST",
-    TooManyLoginConnections => "TOO_MANY_LOGIN_CONNECTIONS",
+    InternalError => "INTERNAL_ERROR",
 } }
 
-impl From<crate::features::services::auth_error::AuthErrorCode> for PairingErrorCode {
-    fn from(code: crate::features::services::auth_error::AuthErrorCode) -> Self {
-        use crate::features::services::auth_error::AuthErrorCode;
-        match code {
-            AuthErrorCode::Canceled => Self::Canceled,
-            AuthErrorCode::EventStorageFailed => Self::InternalError,
-            AuthErrorCode::InternalError => Self::InternalError,
-            AuthErrorCode::InvalidAuthResponse => Self::InvalidAuthResponse,
-            AuthErrorCode::InvalidIdentity => Self::InvalidAuthResponse,
-            AuthErrorCode::InvalidLoginIdentity => Self::InvalidAuthResponse,
-            AuthErrorCode::InvalidLoginKey => Self::InvalidAuthResponse,
-            AuthErrorCode::InvalidLoginRequest => Self::InvalidLoginRequest,
-            AuthErrorCode::InvalidPassword => Self::InvalidPassword,
-            AuthErrorCode::LoginExpired => Self::LoginExpired,
-            AuthErrorCode::PasswordSetupRequired => Self::PasswordSetupRequired,
-            AuthErrorCode::PeerIdentityChanged => Self::PeerIdentityChanged,
-            AuthErrorCode::Rejected => Self::Rejected,
-            AuthErrorCode::RemoteAccessDisabled => Self::RemoteAccessDisabled,
-            AuthErrorCode::TooManyLoginAttempts => Self::TooManyLoginAttempts,
-            AuthErrorCode::TooManyLoginConnections => Self::TooManyLoginConnections,
-            AuthErrorCode::Timeout => Self::Timeout,
-            AuthErrorCode::SecureLoginUnavailable => Self::SecureLoginUnavailable,
-            AuthErrorCode::SignatureVerificationFailed => Self::SignatureVerificationFailed,
-            AuthErrorCode::FailedConnectWs => Self::FailedConnectWs,
-            AuthErrorCode::ProxyAuthFailed => Self::FailedConnectWs,
-            AuthErrorCode::Failed => Self::InternalError,
-            AuthErrorCode::Unauthorized => Self::InvalidSession,
-            AuthErrorCode::ChatPairingUnavailable => Self::ChatPairingUnavailable,
-        }
+#[derive(Debug)]
+pub(super) enum PairingFailure {
+    Canceled,
+    Timeout,
+    Rejected,
+    BleConnectionClosing,
+    BlePairingCapacityExceeded,
+    FailedConnect,
+    PairingTransportUnavailable,
+    PairingAddressUnavailable,
+    FailedConnectWs,
+    InvalidAuthResponse,
+    InvalidSession,
+    PasswordRequired,
+    PeerIdentityChanged,
+    RemoteAccessDisabled,
+    SignatureVerificationFailed,
+    ChatPairingUnavailable,
+}
+
+impl std::fmt::Display for PairingFailure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{self:?}")
     }
 }
 
-#[cfg(feature = "prefs")]
-impl From<plain_libs::auth::client::LoginError> for PairingErrorCode {
-    fn from(error: plain_libs::auth::client::LoginError) -> Self {
+impl std::error::Error for PairingFailure {}
+
+pub(super) fn public_failure(error: &plain_libs::anyhow::Error) -> Option<PairingErrorCode> {
+    use PairingErrorCode as Public;
+
+    if let Some(cause) = error.chain().find_map(|cause| cause.downcast_ref::<PairingFailure>()) {
+        return match cause {
+            PairingFailure::Canceled => None,
+            PairingFailure::Timeout => Some(Public::Timeout),
+            PairingFailure::Rejected => Some(Public::Rejected),
+            PairingFailure::PasswordRequired => Some(Public::PasswordRequired),
+            PairingFailure::PeerIdentityChanged => Some(Public::PeerIdentityChanged),
+            _ => Some(Public::InternalError),
+        };
+    }
+    if let Some(cause) = AuthErrorCode::from_error(error) {
+        return match cause {
+            AuthErrorCode::Canceled => None,
+            AuthErrorCode::Timeout | AuthErrorCode::LoginExpired => Some(Public::Timeout),
+            AuthErrorCode::Rejected => Some(Public::Rejected),
+            AuthErrorCode::InvalidPassword => Some(Public::InvalidPassword),
+            AuthErrorCode::PeerIdentityChanged => Some(Public::PeerIdentityChanged),
+            AuthErrorCode::TooManyLoginAttempts => Some(Public::TooManyLoginAttempts),
+            _ => Some(Public::InternalError),
+        };
+    }
+    #[cfg(feature = "prefs")]
+    {
         use plain_libs::auth::client::LoginError;
-        match error {
-            LoginError::Randomness => Self::SecureLoginUnavailable,
-            LoginError::Start | LoginError::SigningKey | LoginError::Response => Self::InvalidAuthResponse,
-            LoginError::Password => Self::InvalidPassword,
-            LoginError::PeerIdentity => Self::PeerIdentityChanged,
+        match error.chain().find_map(|cause| cause.downcast_ref::<LoginError>()) {
+            Some(LoginError::Password) => return Some(Public::InvalidPassword),
+            Some(LoginError::PeerIdentity) => return Some(Public::PeerIdentityChanged),
+            _ => {}
         }
     }
+    Some(Public::InternalError)
 }
+
+#[cfg(test)]
+#[path = "../../../../../tests/plain-rs/unit/features/services/discovery/pairing_error.rs"]
+mod tests;

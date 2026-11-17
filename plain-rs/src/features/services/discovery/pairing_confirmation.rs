@@ -1,4 +1,4 @@
-use crate::features::services::discovery::pairing_error::PairingErrorCode;
+use crate::features::services::discovery::pairing_error::PairingFailure;
 use crate::features::peers::pairing::{
     peer_store::{self, Facts},
     prefer_sender_ip,
@@ -289,7 +289,7 @@ impl Confirmations {
                     pairing_runtime::failed(
                         state,
                         &ticket.target,
-                        PairingErrorCode::Rejected,
+                        PairingFailure::Rejected,
                         Some(&ticket.generation),
                     );
                     return Ok(());

@@ -354,3 +354,34 @@ async fn native_main_pairing_queries_are_read_only_and_reject_stale_request_iden
     assert_eq!(response.data.into_json().unwrap()["cancelPairing"], true);
     server.shutdown().await;
 }
+
+#[cfg(feature = "http_transport")]
+#[tokio::test]
+async fn unavailable_nearby_transport_reports_a_generic_pairing_failure() {
+    let (_dir, server) = fixture("706c6169-0001-8000-8000-000000000001");
+    let state = server.runtime_state();
+    let mut events = state.events.subscribe();
+    execute(
+        &state,
+        Request::Start {
+            target: Target {
+                device_id: "fixture-peer".into(),
+                device_name: "Fixture".into(),
+                device_ip: String::new(),
+                device_port: 0,
+                device_public_key: String::new(),
+            },
+            ips: vec![],
+            methods: vec![],
+            ble: false,
+            device: device(),
+            generation: None,
+        },
+    ).await.unwrap();
+    let failure = std::iter::from_fn(|| events.try_recv().ok())
+        .find(|event| event.event_type == "PAIRING_FAILED")
+        .unwrap();
+    let payload: plain_libs::serde_json::Value = plain_libs::serde_json::from_str(&failure.payload).unwrap();
+    assert_eq!(payload["error"], "INTERNAL_ERROR");
+    server.shutdown().await;
+}

@@ -1,4 +1,4 @@
-use crate::features::services::discovery::pairing_error::PairingErrorCode;
+use crate::features::services::discovery::pairing_error::PairingFailure;
 use crate::features::discovery::nearby_devices::DiscoveryMethod;
 use crate::features::discovery::nearby_http;
 use crate::features::discovery::nearby_wire::Message;
@@ -136,13 +136,30 @@ pub fn event(state: &CoreRuntime, kind: &'static str, value: Value) {
             value.to_string(),
         ));
 }
-pub fn failed(state: &CoreRuntime, target: &Target, error: PairingErrorCode, _generation: Option<&str>) {
-    let result = json!({"deviceId":target.device_id,"deviceName":target.device_name,"error":error});
-    event(
-        state,
-        crate::features::chat::events::WS_PAIRING_FAILED,
-        result,
-    );
+pub(super) fn failed(state: &CoreRuntime, target: &Target, cause: PairingFailure, _generation: Option<&str>) {
+    report_failure(state, &target.device_id, &target.device_name, &cause.into());
+}
+
+pub(super) fn report_failure(
+    state: &CoreRuntime,
+    device_id: &str,
+    device_name: &str,
+    error: &plain_libs::anyhow::Error,
+) {
+    if let Some(code) = super::pairing_error::public_failure(error) {
+        log::warn!("Pairing failed: {error:#}");
+        event(
+            state,
+            crate::features::chat::events::WS_PAIRING_FAILED,
+            json!({"deviceId":device_id,"deviceName":device_name,"error":code}),
+        );
+    } else {
+        event(
+            state,
+            crate::features::chat::events::WS_PAIRING_CANCELED,
+            json!({"deviceId":device_id,"deviceName":device_name}),
+        );
+    }
 }
 fn canceled(state: &CoreRuntime, value: &Value) {
     let ticket = &value["ticket"];
@@ -321,7 +338,7 @@ pub async fn execute(state: &CoreRuntime, request: Request) -> plain_libs::anyho
                     state, target, device, generation,
                 )?
             } else {
-                failed(state, &target, PairingErrorCode::PairingTransportUnavailable, None);
+                failed(state, &target, PairingFailure::PairingTransportUnavailable, None);
                 Value::Null
             }
         }
@@ -336,7 +353,7 @@ pub async fn execute(state: &CoreRuntime, request: Request) -> plain_libs::anyho
                 &crate::infrastructure::transport::lan::local_interfaces(),
             );
             if target.device_ip.is_empty() {
-                failed(state, &target, PairingErrorCode::PairingAddressUnavailable, None);
+                failed(state, &target, PairingFailure::PairingAddressUnavailable, None);
                 return Ok(Value::Null);
             }
             let result = {
@@ -424,7 +441,7 @@ pub async fn execute(state: &CoreRuntime, request: Request) -> plain_libs::anyho
                 failed(
                     state,
                     &ticket.target,
-                    PairingErrorCode::FailedConnect,
+                    PairingFailure::FailedConnect,
                     Some(&ticket.generation),
                 );
             }

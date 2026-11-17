@@ -1,4 +1,4 @@
-use crate::features::services::discovery::pairing_error::PairingErrorCode;
+use crate::features::services::discovery::pairing_error::PairingFailure;
 use crate::features::discovery::nearby_devices::DiscoveryMethod;
 use crate::features::services::discovery::pairing_runtime;
 use crate::runtime::Runtime as CoreRuntime;
@@ -185,7 +185,7 @@ pub async fn start(
                             return Ok(());
                         }
                     }
-                    plain_libs::anyhow::bail!(PairingErrorCode::Canceled)
+                    plain_libs::anyhow::bail!(PairingFailure::Canceled)
                 }
             }
         };
@@ -202,8 +202,8 @@ pub async fn start(
         let result = tokio::select! { biased;
             _ = scope_closed => { let _ = cancel(&state, &peer_id).await; return; },
             _ = canceled.changed() => return,
-            _ = stop.changed() => Err(plain_libs::anyhow::anyhow!(PairingErrorCode::Canceled)),
-            result = tokio::time::timeout(deadline, work) => result.unwrap_or_else(|_| Err(plain_libs::anyhow::anyhow!(PairingErrorCode::Timeout))),
+            _ = stop.changed() => Err(plain_libs::anyhow::anyhow!(PairingFailure::Canceled)),
+            result = tokio::time::timeout(deadline, work) => result.unwrap_or_else(|_| Err(plain_libs::anyhow::anyhow!(PairingFailure::Timeout))),
         };
         {
             let _commit = state.pairing_runtime.commit.lock().unwrap();
@@ -216,13 +216,8 @@ pub async fn start(
                 .remove(&peer_id);
         }
         if let Err(error) = result {
-            log::warn!("Pairing failed: {error:#}");
             state.pairing.cancel(&peer_id, None);
-            pairing_runtime::event(
-                &state,
-                crate::features::chat::events::WS_PAIRING_FAILED,
-                plain_libs::serde_json::json!({"deviceId":peer_id,"deviceName":"","error":PairingErrorCode::from_error(&error).or_else(|| crate::features::services::auth_error::AuthErrorCode::from_error(&error).map(PairingErrorCode::from)).unwrap_or(PairingErrorCode::InternalError)}),
-            );
+            pairing_runtime::report_failure(&state, &peer_id, "", &error);
         }
     });
     Ok(true)
