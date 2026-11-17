@@ -1,4 +1,4 @@
-use plain_rs::features::services::auth_error::AuthErrorCode;
+use plain_rs::features::services::auth_error::{AuthErrorCode, AuthFailure};
 use crate::server::ServerState;
 use plain_libs::serde_json::{Value, json};
 use plain_rs::features::prefs::security::PasswordType;
@@ -14,18 +14,11 @@ const LOGIN_ATTEMPT_WINDOW: Duration = Duration::from_secs(60);
 const MAX_TRACKED_CLIENTS: usize = 256;
 
 pub(crate) fn login_error(error: &plain_libs::anyhow::Error) -> AuthErrorCode {
-    if error.downcast_ref::<plain_libs::serde_json::Error>().is_some() {
-        return AuthErrorCode::InvalidLoginRequest;
+    let code = AuthErrorCode::for_failure(error);
+    if code == AuthErrorCode::InternalError {
+        log::error!("Login failed: {error:#}");
     }
-    let code = AuthErrorCode::from_error(error).unwrap_or(AuthErrorCode::InternalError);
-    match code {
-        AuthErrorCode::InvalidLoginIdentity | AuthErrorCode::InvalidLoginKey => AuthErrorCode::InvalidLoginRequest,
-        AuthErrorCode::InternalError => {
-            log::error!("Login failed: {error:#}");
-            code
-        }
-        _ => code,
-    }
+    code
 }
 
 pub(crate) fn login_close_code(code: AuthErrorCode) -> u16 {
@@ -179,7 +172,7 @@ impl LoginChannel {
             Self::Opaque(c) => {
                 plain_libs::anyhow::ensure!(
                     c.created.elapsed() < Duration::from_secs(300),
-                    AuthErrorCode::LoginExpired
+                    AuthFailure::LoginExpired
                 );
                 Ok(())
             }
@@ -206,7 +199,7 @@ impl LoginChannel {
                 bytes,
                 &plain_libs::auth::auth_aad(&c.context, true),
             )
-            .ok_or_else(|| plain_libs::anyhow::anyhow!(AuthErrorCode::InvalidAuthResponse)),
+            .ok_or_else(|| plain_libs::anyhow::anyhow!(AuthFailure::InvalidAuthResponse)),
             Self::Confirmation(c) => c.encrypt_response(bytes, now),
         }
     }
@@ -340,7 +333,7 @@ impl Confirmation {
     pub async fn decide(&self, request_id: &str, allowed: bool) -> Result<(), AuthErrorCode> {
         if allowed {
             if !self.state.main_ws.login_pending(request_id) {
-                return Err(AuthErrorCode::LoginExpired);
+                return Err(AuthErrorCode::Timeout);
             }
             let result = execute(
                 &self.state,
@@ -681,14 +674,14 @@ async fn execute_request(
                     .lock()
                     .map_err(|_| plain_libs::anyhow::anyhow!("Login state unavailable"))?;
                 let pending = attempts.pending.remove(&request_id).ok_or_else(|| {
-                    plain_libs::anyhow::anyhow!(AuthErrorCode::LoginExpired)
+                    plain_libs::anyhow::anyhow!(AuthFailure::LoginExpired)
                 })?;
                 notify_closed(state, &mut attempts, &request_id);
                 pending
             };
             plain_libs::anyhow::ensure!(
                 pending.at.elapsed() < Duration::from_secs(300),
-                AuthErrorCode::LoginExpired
+                AuthFailure::LoginExpired
             );
             (pending, request_id)
         }

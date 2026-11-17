@@ -1,5 +1,5 @@
 use plain_rs::features::access_error::AccessErrorCode;
-use plain_rs::features::services::auth_error::AuthErrorCode;
+use plain_rs::features::services::auth_error::{AuthErrorCode, AuthFailure};
 use plain_rs::infrastructure::graphql_error::GraphqlErrorCode;
 use plain_rs::infrastructure::protocols::graphql::error::SubscriptionErrorCode;
 use crate::http::auth::ws_login::{login_close_code, login_error};
@@ -195,7 +195,7 @@ pub(super) fn upgrade(
     channel: Channel,
 ) -> Response {
     let Some(permit) = state.main_ws.reserve_unauthenticated(remote.ip()) else {
-        return (StatusCode::TOO_MANY_REQUESTS, AuthErrorCode::TooManyLoginConnections.as_str()).into_response();
+        return StatusCode::TOO_MANY_REQUESTS.into_response();
     };
     ws.max_message_size(65536)
         .max_frame_size(65536)
@@ -227,7 +227,7 @@ fn login_failure(
         Ok(()) => close(login_close_code(reason), reason.as_str()),
         Err(error) => {
             log::error!("Cannot record login failure: {error}");
-            close(1011, AuthErrorCode::EventStorageFailed.as_str())
+            close(1011, AuthErrorCode::InternalError.as_str())
         }
     }
 }
@@ -314,7 +314,7 @@ async fn run(
                 let _ = socket.send(close(1008, AuthErrorCode::Timeout.as_str())).await;
                 break;
             },
-            _ = &mut deadline, if channel == Channel::Auth => { cancel_reason = AuthErrorCode::LoginExpired; let _ = socket.send(close(1008, AuthErrorCode::LoginExpired.as_str())).await; break; },
+            _ = &mut deadline, if channel == Channel::Auth => { cancel_reason = AuthErrorCode::Timeout; let _ = socket.send(close(1008, AuthErrorCode::Timeout.as_str())).await; break; },
             _ = closed.changed() => { let (code, reason) = (*closed.borrow()).unwrap_or((1000, "")); if !reason.is_empty() { cancel_reason = reason.parse().unwrap_or(AuthErrorCode::Canceled); } let _ = socket.send(close(code, reason)).await; break; },
             message = outgoing.recv() => match message { Some(message) => message, None => break },
             incoming = socket.next() => {
@@ -379,7 +379,7 @@ async fn run(
                                 plain_libs::anyhow::ensure!(security::password_type(&state.prefs)? == PasswordType::Fixed, AuthErrorCode::InvalidLoginRequest);
                                 let credential = security::password_credential(&state.prefs)?.ok_or_else(|| plain_libs::anyhow::anyhow!(AuthErrorCode::PasswordSetupRequired))?;
                                 let signing = security::signing_keypair(&state.prefs)?;
-                                let identity = plain_libs::crypto::ed25519_public_from_keypair(&signing).ok_or_else(|| plain_libs::anyhow::anyhow!(AuthErrorCode::InvalidIdentity))?;
+                                let identity = plain_libs::crypto::ed25519_public_from_keypair(&signing).ok_or_else(|| plain_libs::anyhow::anyhow!(AuthFailure::InvalidIdentity))?;
                                 let context = plain_libs::auth::context(&params.cid, &identity);
                                 let setup = plain_libs::utils::base64::base64_decode_checked(&credential.setup)?;
                                 let record = plain_libs::utils::base64::base64_decode_checked(&credential.record)?;

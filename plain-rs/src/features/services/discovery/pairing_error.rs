@@ -51,16 +51,14 @@ pub(super) fn public_failure(error: &plain_libs::anyhow::Error) -> Option<Pairin
             _ => Some(Public::InternalError),
         };
     }
-    if let Some(cause) = AuthErrorCode::from_error(error) {
-        return match cause {
-            AuthErrorCode::Canceled => None,
-            AuthErrorCode::Timeout | AuthErrorCode::LoginExpired => Some(Public::Timeout),
-            AuthErrorCode::Rejected => Some(Public::Rejected),
-            AuthErrorCode::InvalidPassword => Some(Public::InvalidPassword),
-            AuthErrorCode::PeerIdentityChanged => Some(Public::PeerIdentityChanged),
-            AuthErrorCode::TooManyLoginAttempts => Some(Public::TooManyLoginAttempts),
-            _ => Some(Public::InternalError),
-        };
+    match AuthErrorCode::for_failure(error) {
+        AuthErrorCode::Canceled => return None,
+        AuthErrorCode::Timeout => return Some(Public::Timeout),
+        AuthErrorCode::Rejected => return Some(Public::Rejected),
+        AuthErrorCode::InvalidPassword => return Some(Public::InvalidPassword),
+        AuthErrorCode::PeerIdentityChanged => return Some(Public::PeerIdentityChanged),
+        AuthErrorCode::TooManyLoginAttempts => return Some(Public::TooManyLoginAttempts),
+        _ => {}
     }
     #[cfg(feature = "prefs")]
     {

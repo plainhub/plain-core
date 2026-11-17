@@ -576,15 +576,20 @@ async fn disconnect_expiry_mode_changes_and_repeated_requests_cannot_create_a_pa
             }
             _ => unreachable!(),
         }
-        assert!(
-            server
-                .native_management()
-                .unwrap()
-                .confirm_web_login(id.into(), true)
-                .await
-                .is_err(),
-            "{failure}"
-        );
+        let error = server
+            .native_management()
+            .unwrap()
+            .confirm_web_login(id.into(), true)
+            .await
+            .expect_err(failure);
+        if failure == "expiry" {
+            assert_eq!(error, "TIMEOUT");
+            state.audit_events.flush().await.unwrap();
+            let records = state.db.audit_events(0, 10, None).unwrap();
+            assert!(records.iter().any(|row| {
+                matches!(&row.data, EventData::LoginFailed(data) if data.reason == AuthErrorCode::Timeout)
+            }));
+        }
         assert!(
             state
                 .db
@@ -1433,14 +1438,35 @@ fn domain_error_contract_auth_has_a_dedicated_enum() {
     let code = login_error(&plain_libs::anyhow::anyhow!("fixture diagnostic"));
     assert!(std::any::type_name_of_val(&code).ends_with("::AuthErrorCode"));
     assert_eq!(code.to_string(), "INTERNAL_ERROR");
-    for wire in ["INVALID_PASSWORD", "PEER_IDENTITY_CHANGED", "REMOTE_ACCESS_DISABLED", "REJECTED", "LOGIN_EXPIRED", "TOO_MANY_LOGIN_ATTEMPTS"] {
+    for wire in ["INVALID_PASSWORD", "PEER_IDENTITY_CHANGED", "REMOTE_ACCESS_DISABLED", "REJECTED", "TIMEOUT", "TOO_MANY_LOGIN_ATTEMPTS"] {
         let parsed: AuthErrorCode = wire.parse().unwrap();
         let wrapped = plain_libs::anyhow::Error::new(parsed).context("fixture context");
         assert_eq!(login_error(&wrapped), parsed);
         assert_eq!(plain_libs::serde_json::to_value(parsed).unwrap(), wire);
     }
-    for wire in ["invalid_password", "MOUNT_FAILED", "FORMAT_DISK_FAILED", "PASSWORD_REQUIRED", "FUTURE_ERROR"] {
+    for (failure, expected) in [
+        (AuthFailure::LoginExpired, AuthErrorCode::Timeout),
+        (AuthFailure::InvalidLoginIdentity, AuthErrorCode::InvalidLoginRequest),
+        (AuthFailure::InvalidLoginKey, AuthErrorCode::InvalidLoginRequest),
+        (AuthFailure::InvalidAuthResponse, AuthErrorCode::InternalError),
+    ] {
+        let wrapped = plain_libs::anyhow::Error::new(failure).context("fixture context");
+        assert_eq!(login_error(&wrapped), expected);
+    }
+    for wire in ["invalid_password", "MOUNT_FAILED", "FORMAT_DISK_FAILED", "PASSWORD_REQUIRED", "LOGIN_EXPIRED", "EVENT_STORAGE_FAILED", "TOO_MANY_LOGIN_CONNECTIONS", "FUTURE_ERROR"] {
         assert!(wire.parse::<AuthErrorCode>().is_err(), "{wire}");
     }
 
+}
+
+#[cfg(feature = "http_transport")]
+#[tokio::test]
+async fn approving_an_expired_login_reports_timeout_without_creating_a_session() {
+    let (_directory, server, _port) = passwordless_server().await;
+    let state = server.runtime_state();
+    let confirmation = Confirmation::new(state.clone());
+    let error = confirmation.decide("expired-fixture", true).await.unwrap_err();
+    assert_eq!(error.as_str(), "TIMEOUT");
+    assert!(state.db.session_list().unwrap().is_empty());
+    server.shutdown().await;
 }

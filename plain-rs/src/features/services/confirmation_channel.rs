@@ -1,4 +1,4 @@
-use crate::features::services::auth_error::AuthErrorCode;
+use crate::features::services::auth_error::{AuthErrorCode, AuthFailure};
 use plain_libs::aad::{AadPurpose, LoginPurpose};
 use crate::infrastructure::signature::SignaturePurpose;
 use plain_libs::anyhow::{Result, ensure};
@@ -107,7 +107,7 @@ impl Client {
             device.is_empty() || response.device_id == device,
             AuthErrorCode::PeerIdentityChanged
         );
-        ensure!(response.expires_at > now, AuthErrorCode::LoginExpired);
+        ensure!(response.expires_at > now, AuthFailure::LoginExpired);
         canonical(public, 32)?;
         ensure!(
             ed25519_verify(
@@ -115,12 +115,12 @@ impl Client {
                 &signed_bytes(&self.cid, public, &self.request, response),
                 &response.signature
             ),
-            AuthErrorCode::SignatureVerificationFailed
+            AuthFailure::SignatureVerificationFailed
         );
         let shared = self
             .key
             .compute_shared_key(&canonical(&response.server_public_key, 65)?)
-            .ok_or_else(|| plain_libs::anyhow::anyhow!(AuthErrorCode::InvalidAuthResponse))?;
+            .ok_or_else(|| plain_libs::anyhow::anyhow!(AuthFailure::InvalidAuthResponse))?;
         Ok(Channel::new(
             &shared,
             &transcript(&self.cid, &self.request, response),
@@ -143,20 +143,20 @@ impl ServerHandshake {
         let key = EcdhSession::generate();
         let public = base64_encode(
             &ed25519_public_from_keypair(signing)
-                .ok_or_else(|| plain_libs::anyhow::anyhow!(AuthErrorCode::InvalidIdentity))?,
+                .ok_or_else(|| plain_libs::anyhow::anyhow!(AuthFailure::InvalidIdentity))?,
         );
         let mut response = ServerHello {
             device_id: device.into(),
             server_public_key: base64_encode(&key.public_key_bytes),
             expires_at: now
                 .checked_add(LIFETIME_MS)
-                .ok_or_else(|| plain_libs::anyhow::anyhow!(AuthErrorCode::LoginExpired))?,
+                .ok_or_else(|| plain_libs::anyhow::anyhow!(AuthFailure::LoginExpired))?,
             signature: String::new(),
         };
         response.signature = ed25519_sign(signing, &signed_bytes(cid, &public, request, &response));
         ensure!(
             !response.signature.is_empty(),
-            AuthErrorCode::SignatureVerificationFailed
+            AuthFailure::SignatureVerificationFailed
         );
         let shared = key
             .compute_shared_key(&client_public)
@@ -201,7 +201,7 @@ impl Channel {
         self.key
     }
     pub fn fresh(&self, now: u64) -> Result<()> {
-        ensure!(now < self.expires_at, AuthErrorCode::LoginExpired);
+        ensure!(now < self.expires_at, AuthFailure::LoginExpired);
         Ok(())
     }
     fn aad(&self, response: bool) -> Vec<u8> {
@@ -226,23 +226,23 @@ impl Channel {
     pub fn encrypt_response(&self, b: &[u8], now: u64) -> Result<Vec<u8>> {
         self.fresh(now)?;
         xchacha_encrypt_raw_with_aad(&self.key, b, &self.aad(true))
-            .ok_or_else(|| plain_libs::anyhow::anyhow!(AuthErrorCode::InvalidAuthResponse))
+            .ok_or_else(|| plain_libs::anyhow::anyhow!(AuthFailure::InvalidAuthResponse))
     }
     pub fn decrypt_response(&self, b: &[u8], now: u64) -> Result<Vec<u8>> {
         self.fresh(now)?;
         xchacha_decrypt_raw_with_aad(&self.key, b, &self.aad(true))
-            .ok_or_else(|| plain_libs::anyhow::anyhow!(AuthErrorCode::InvalidAuthResponse))
+            .ok_or_else(|| plain_libs::anyhow::anyhow!(AuthFailure::InvalidAuthResponse))
     }
 }
 fn identity(s: &str) -> Result<()> {
-    ensure!(!s.is_empty() && s.len() <= 256, AuthErrorCode::InvalidLoginIdentity);
+    ensure!(!s.is_empty() && s.len() <= 256, AuthFailure::InvalidLoginIdentity);
     Ok(())
 }
 fn canonical(s: &str, len: usize) -> Result<Vec<u8>> {
     let b = base64_decode(s);
     ensure!(
         b.len() == len && base64_encode(&b) == s,
-        AuthErrorCode::InvalidLoginKey
+        AuthFailure::InvalidLoginKey
     );
     Ok(b)
 }
