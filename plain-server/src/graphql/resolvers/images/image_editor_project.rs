@@ -14,7 +14,6 @@ pub struct ImageEditorProject {
     pub thumbnail: Option<String>,
     pub canvas_width: i32,
     pub canvas_height: i32,
-    pub layer_count: i32,
     pub created_at: Instant,
     pub updated_at: Instant,
 }
@@ -25,7 +24,6 @@ pub struct ImageEditorProjectSummary {
     pub thumbnail: Option<String>,
     pub canvas_width: i32,
     pub canvas_height: i32,
-    pub layer_count: i32,
     pub updated_at: Instant,
 }
 
@@ -35,7 +33,6 @@ pub struct ImageEditorProjectInput {
     pub thumbnail: Option<String>,
     pub canvas_width: i32,
     pub canvas_height: i32,
-    pub layer_count: i32,
 }
 
 fn instant(value: &str) -> plain_graphql::Result<Instant> {
@@ -51,7 +48,6 @@ fn to_project(row: store::ImageEditorProjectRow) -> plain_graphql::Result<ImageE
         thumbnail: row.thumbnail,
         canvas_width: row.canvas_width,
         canvas_height: row.canvas_height,
-        layer_count: row.layer_count,
         created_at: instant(&row.created_at)?,
         updated_at: instant(&row.updated_at)?,
     })
@@ -65,7 +61,6 @@ pub(crate) fn to_summary(
         thumbnail: row.thumbnail,
         canvas_width: row.canvas_width,
         canvas_height: row.canvas_height,
-        layer_count: row.layer_count,
         updated_at: instant(&row.updated_at)?,
     })
 }
@@ -109,7 +104,6 @@ impl ImageEditorProjectMutation {
     ) -> plain_graphql::Result<ImageEditorProject> {
         if input.canvas_width < 0
             || input.canvas_height < 0
-            || input.layer_count < 0
             || input.state_b64.len() > plain_rs::features::media::images::editor::MAX_STATE_BYTES
             || input
                 .thumbnail
@@ -132,7 +126,6 @@ impl ImageEditorProjectMutation {
             input.thumbnail.as_deref(),
             input.canvas_width,
             input.canvas_height,
-            input.layer_count,
         )?;
         to_project(row)
     }

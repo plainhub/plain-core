@@ -4,7 +4,6 @@ type ImageEditorProject {
 	thumbnail: String
 	canvasWidth: Int!
 	canvasHeight: Int!
-	layerCount: Int!
 	createdAt: Instant!
 	updatedAt: Instant!
 }
@@ -14,7 +13,6 @@ input ImageEditorProjectInput {
 	thumbnail: String
 	canvasWidth: Int!
 	canvasHeight: Int!
-	layerCount: Int!
 }
 
 type ImageEditorProjectSummary {
@@ -22,7 +20,6 @@ type ImageEditorProjectSummary {
 	thumbnail: String
 	canvasWidth: Int!
 	canvasHeight: Int!
-	layerCount: Int!
 	updatedAt: Instant!
 }
 

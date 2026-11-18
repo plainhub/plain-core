@@ -10,14 +10,13 @@ fn from_row(row: &plain_libs::rusqlite::Row<'_>) -> plain_libs::rusqlite::Result
         thumbnail: row.get(2)?,
         canvas_width: row.get(3)?,
         canvas_height: row.get(4)?,
-        layer_count: row.get(5)?,
-        created_at: row.get(6)?,
-        updated_at: row.get(7)?,
+        created_at: row.get(5)?,
+        updated_at: row.get(6)?,
     })
 }
 
 const COLUMNS: &str =
-    "id,state_b64,thumbnail,canvas_width,canvas_height,layer_count,created_at,updated_at";
+    "id,state_b64,thumbnail,canvas_width,canvas_height,created_at,updated_at";
 
 pub fn get(db: &Db, id: &str) -> plain_libs::rusqlite::Result<Option<ImageEditorProjectRow>> {
     db.with_conn(|conn| {
@@ -54,7 +53,7 @@ pub fn summaries(
             .replace('_', "\\_")
     );
     db.with_conn(|conn| {
-        let mut stmt = conn.prepare("SELECT id,'',thumbnail,canvas_width,canvas_height,layer_count,created_at,updated_at FROM image_editor_projects WHERE id LIKE ?1 ESCAPE '\\' ORDER BY updated_at DESC,id LIMIT ?2 OFFSET ?3")?;
+        let mut stmt = conn.prepare("SELECT id,'',thumbnail,canvas_width,canvas_height,created_at,updated_at FROM image_editor_projects WHERE id LIKE ?1 ESCAPE '\\' ORDER BY updated_at DESC,id LIMIT ?2 OFFSET ?3")?;
         stmt.query_map(params![pattern,limit.clamp(0,100),offset.max(0)],from_row)?.collect()
     })
 }
@@ -66,19 +65,18 @@ pub fn save(
     thumbnail: Option<&str>,
     canvas_width: i32,
     canvas_height: i32,
-    layer_count: i32,
 ) -> plain_libs::rusqlite::Result<ImageEditorProjectRow> {
     let now = plain_libs::utils::dbtime::now_iso_millis();
     db.with_conn(|conn| {
         conn.execute(
             "INSERT INTO image_editor_projects
-                (id,state_b64,thumbnail,canvas_width,canvas_height,layer_count,created_at,updated_at)
-             VALUES (?1,?2,?3,?4,?5,?6,?7,?7)
+                (id,state_b64,thumbnail,canvas_width,canvas_height,created_at,updated_at)
+             VALUES (?1,?2,?3,?4,?5,?6,?6)
              ON CONFLICT(id) DO UPDATE SET state_b64=excluded.state_b64,
                 thumbnail=excluded.thumbnail,canvas_width=excluded.canvas_width,
-                canvas_height=excluded.canvas_height,layer_count=excluded.layer_count,
+                canvas_height=excluded.canvas_height,
                 updated_at=excluded.updated_at",
-            params![id, state_b64, thumbnail, canvas_width, canvas_height, layer_count, now],
+            params![id, state_b64, thumbnail, canvas_width, canvas_height, now],
         )?;
         conn.query_row(
             &format!("SELECT {COLUMNS} FROM image_editor_projects WHERE id=?1"),

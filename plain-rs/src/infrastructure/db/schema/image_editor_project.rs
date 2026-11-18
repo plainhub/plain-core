@@ -8,7 +8,6 @@ pub(crate) fn init(conn: &Connection) -> plain_libs::rusqlite::Result<()> {
     thumbnail TEXT,
     canvas_width INTEGER NOT NULL CHECK(canvas_width>0),
     canvas_height INTEGER NOT NULL CHECK(canvas_height>0),
-    layer_count INTEGER NOT NULL CHECK(layer_count>=0),
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );

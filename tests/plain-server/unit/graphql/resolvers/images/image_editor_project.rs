@@ -10,14 +10,26 @@ async fn projects_persist_project_summaries_and_validate_state() {
     let prefs =
         Arc::new(plain_rs::features::prefs::Prefs::load(&dir.path().join("prefs.json")).unwrap());
     let server = ContentServer::start(path.parent().unwrap(), &token, prefs.clone()).unwrap();
-    let save = r#"mutation {saveImageEditorProject(id:"",input:{stateB64:"AQID",thumbnail:"data:image/jpeg;base64,AQID",canvasWidth:100,canvasHeight:200,layerCount:2}) {id stateB64 thumbnail createdAt updatedAt}}"#;
+    let layer_count_column: i64 = server
+        .runtime_state()
+        .db
+        .with_conn(|connection| {
+            connection.query_row(
+                "SELECT count(*) FROM pragma_table_info('image_editor_projects') WHERE name=?1",
+                ["layer_count"],
+                |row| row.get(0),
+            )
+        })
+        .unwrap();
+    assert_eq!(layer_count_column, 0);
+    let save = r#"mutation {saveImageEditorProject(id:"",input:{stateB64:"AQID",thumbnail:"data:image/jpeg;base64,AQID",canvasWidth:100,canvasHeight:200}) {id stateB64 thumbnail createdAt updatedAt}}"#;
     let result = call(server.port, &token, save).await;
     assert!(result.get("errors").is_none(), "{result}");
     let saved = &result["data"]["saveImageEditorProject"];
     let id = saved["id"].as_str().unwrap();
     assert!(!id.is_empty());
     let update = format!(
-        r#"mutation {{saveImageEditorProject(id:"{id}",input:{{stateB64:"BAU",canvasWidth:300,canvasHeight:200,layerCount:3}}) {{id stateB64 createdAt}}}}"#
+        r#"mutation {{saveImageEditorProject(id:"{id}",input:{{stateB64:"BAU",canvasWidth:300,canvasHeight:200}}) {{id stateB64 createdAt}}}}"#
     );
     let updated = call(server.port, &token, &update).await;
     assert_eq!(
@@ -27,7 +39,7 @@ async fn projects_persist_project_summaries_and_validate_state() {
     assert_eq!(updated["data"]["saveImageEditorProject"]["stateB64"], "BAU");
     for (state, width) in [("!", 100), ("AQID", -1)] {
         let invalid = format!(
-            r#"mutation {{saveImageEditorProject(id:"invalid",input:{{stateB64:"{state}",canvasWidth:{width},canvasHeight:1,layerCount:1}}) {{id}}}}"#
+            r#"mutation {{saveImageEditorProject(id:"invalid",input:{{stateB64:"{state}",canvasWidth:{width},canvasHeight:1}}) {{id}}}}"#
         );
         assert!(
             call(server.port, &token, &invalid)
@@ -38,7 +50,7 @@ async fn projects_persist_project_summaries_and_validate_state() {
     }
     for n in 0..55 {
         let save = format!(
-            r#"mutation {{saveImageEditorProject(id:"project-{n}%_",input:{{stateB64:"AQID",canvasWidth:1,canvasHeight:1,layerCount:1}}) {{id}}}}"#
+            r#"mutation {{saveImageEditorProject(id:"project-{n}%_",input:{{stateB64:"AQID",canvasWidth:1,canvasHeight:1}}) {{id}}}}"#
         );
         assert!(
             call(server.port, &token, &save)
@@ -63,12 +75,26 @@ async fn projects_persist_project_summaries_and_validate_state() {
             Ok(())
         })
         .unwrap();
-    let list = call(server.port, &token, "{imageEditorProjects {id}}").await;
+    let list = call(
+        server.port,
+        &token,
+        "{imageEditorProjects {id canvasWidth canvasHeight}}",
+    )
+    .await;
     assert!(list.get("errors").is_none(), "{list}");
     let rows = list["data"]["imageEditorProjects"].as_array().unwrap();
     assert_eq!(rows.len(), 50);
     assert_eq!(rows[0]["id"], "project-54%_");
+    assert_eq!(rows[0]["canvasWidth"], 1);
+    assert_eq!(rows[0]["canvasHeight"], 1);
     assert_eq!(rows[49]["id"], "project-5%_");
+    let removed = call(server.port, &token, "{imageEditorProjects {layerCount}}").await;
+    assert!(
+        removed["errors"][0]["message"]
+            .as_str()
+            .is_some_and(|message| message.contains("layerCount")),
+        "{removed}"
+    );
     server.shutdown().await;
     let server = ContentServer::start(path.parent().unwrap(), &token, prefs).unwrap();
     let read = call(

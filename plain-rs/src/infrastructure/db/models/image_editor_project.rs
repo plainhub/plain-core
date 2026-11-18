@@ -5,7 +5,6 @@ pub struct ImageEditorProjectRow {
     pub thumbnail: Option<String>,
     pub canvas_width: i32,
     pub canvas_height: i32,
-    pub layer_count: i32,
     pub created_at: String,
     pub updated_at: String,
 }
