@@ -101,12 +101,15 @@ impl Snapshot {
         recent
             .into_iter()
             .filter_map(|(_, device)| {
-                let best_ip = lan::best(&device.ips, interfaces);
-                if let Ok(ip) = best_ip.parse::<IpAddr>()
-                    && !seen.insert((ip, device.port))
-                {
+                let endpoints = device
+                    .ips
+                    .iter()
+                    .filter_map(|ip| ip.parse::<IpAddr>().ok().map(|address| (address, device.port)));
+                if endpoints.clone().any(|endpoint| seen.contains(&endpoint)) {
                     return None;
                 }
+                seen.extend(endpoints);
+                let best_ip = lan::best(&device.ips, interfaces);
                 Some((device, best_ip))
             })
             .collect()

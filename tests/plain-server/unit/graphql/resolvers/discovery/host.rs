@@ -128,6 +128,70 @@ async fn nearby_snapshot_selects_recent_endpoints_and_restores_discovery_facts()
 }
 
 #[tokio::test]
+async fn nearby_snapshot_keeps_one_row_for_a_shared_endpoint_when_preferred_addresses_differ() {
+    use plain_rs::features::discovery::nearby_devices::{Device, DiscoveryMethod};
+
+    let directory = plain_libs::temporary::tempdir().unwrap();
+    let core = crate::server::ContentServer::open(directory.path()).unwrap();
+    let state = core.runtime_state();
+    let native = core.native_graphql().unwrap();
+    let now = plain_libs::chrono::Utc::now();
+    let alternate = Device {
+        id: "previous-id".into(),
+        name: "Fixture".into(),
+        ips: vec!["2001:db8::1".into()],
+        port: 8443,
+        remote_access: None,
+        signature_public_key: "previous-key".into(),
+        device_type: plain_rs::features::chat::enums::DeviceType::Computer,
+        version: "1".into(),
+        platform: "test".into(),
+        last_seen_at: (now - plain_libs::chrono::Duration::minutes(1)).to_rfc3339(),
+        discovery_methods: vec![DiscoveryMethod::Lan],
+    };
+    let current = Device {
+        id: "current-id".into(),
+        ips: vec!["2001:db8::2".into(), "2001:db8::1".into()],
+        signature_public_key: "current-key".into(),
+        last_seen_at: now.to_rfc3339(),
+        ..alternate.clone()
+    };
+    for device in [
+        current,
+        Device {
+            id: "other-port".into(),
+            port: 9443,
+            ..alternate.clone()
+        },
+        Device {
+            id: "other-address".into(),
+            ips: vec!["2001:db8::3".into()],
+            ..alternate.clone()
+        },
+    ] {
+        state.nearby_devices.observe(device).unwrap();
+    }
+    for alternate in [None, Some(alternate)] {
+        if let Some(device) = alternate {
+            state.nearby_devices.observe(device).unwrap();
+        }
+        let response = native
+            .execute(plain_graphql::Request::new("{ nearbyDevices { id bestIp } }"))
+            .await;
+        assert!(response.errors.is_empty(), "{:?}", response.errors);
+        assert_eq!(
+            response.data.into_json().unwrap()["nearbyDevices"],
+            plain_libs::serde_json::json!([
+                {"id":"current-id","bestIp":"2001:db8::2"},
+                {"id":"other-address","bestIp":"2001:db8::3"},
+                {"id":"other-port","bestIp":"2001:db8::1"},
+            ])
+        );
+    }
+    core.shutdown().await;
+}
+
+#[tokio::test]
 async fn is_discovering_reports_the_manual_scan_loop() {
     let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::server::ContentServer::open(directory.path()).unwrap();
