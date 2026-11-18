@@ -28,7 +28,7 @@ pub use crate::features::chat::link_preview::extract_urls;
 use crate::features::chat::link_preview::is_valid_url;
 mod schedule;
 use crate::features::chat::attachments::app_file_store::import_preview_image;
-use crate::infrastructure::db::Db;
+use crate::infrastructure::db::{Db, now_iso};
 pub use commit::{Edit, edit};
 pub use schedule::Schedule;
 
@@ -81,13 +81,14 @@ fn extract_host(url: &str) -> String {
 fn http_client() -> Option<http_client::Client> {
     static CLIENT: OnceLock<Option<http_client::Client>> = OnceLock::new();
     CLIENT
-        .get_or_init(|| {
-            http_client::builder()
-                .timeout(FETCH_TIMEOUT)
-                .build()
-                .ok()
-        })
+        .get_or_init(|| preview_client_builder().build().ok())
         .clone()
+}
+
+fn preview_client_builder() -> http_client::ClientBuilder {
+    http_client::builder()
+        .timeout(FETCH_TIMEOUT)
+        .user_agent("PlainApp-LinkPreview/1.0")
 }
 
 /// Trim a string, return `None` when it becomes empty. Mirrors the
@@ -199,6 +200,7 @@ async fn fetch_link_preview(client: &http_client::Client, url: &str) -> (Value, 
             "imageHeight": image_height,
             "siteName": site_name.and_then(|s| optional(&s).map(|v| v.chars().take(100).collect::<String>())),
             "domain": optional(&domain),
+            "createdAt": now_iso(),
             "hasError": false,
         }),
         image,

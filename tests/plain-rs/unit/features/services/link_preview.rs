@@ -3,12 +3,12 @@ use super::*;
 use plain_libs::axum::{
     Router,
     body::Body,
-    http::{Response, header},
+    http::{HeaderMap, Response, StatusCode, header},
     response::Html,
     routing::get,
 };
 async fn fixture_server() -> (std::net::SocketAddr, tokio::task::JoinHandle<()>) {
-    let server=Router::new().route("/",get(||async{Html("<meta property='og:title' content='Fixture title'><meta property='og:description' content='Fixture description'><meta property='og:image' content='/favicon.png'>")}))
+    let server=Router::new().route("/", get(fixture_page))
         .route("/missing-image",get(||async{Html("<title>Missing image</title><meta property='og:image' content='/missing.png'>")}))
         .route("/favicon.png",get(||async{Response::builder().header(header::CONTENT_TYPE,"image/png").body(Body::from(plain_libs::utils::base64::base64_decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lYUAAAAASUVORK5CYII="))).unwrap()}))
         .route("/chunked",get(||async{Response::builder().header(header::CONTENT_TYPE,"text/html").body(Body::from_stream(futures_util::stream::iter((0..4).map(|_|Ok::<_,std::io::Error>(vec![b'x';16]))))).unwrap()}));
@@ -19,10 +19,25 @@ async fn fixture_server() -> (std::net::SocketAddr, tokio::task::JoinHandle<()>)
     });
     (addr, task)
 }
+
+async fn fixture_page(headers: HeaderMap) -> (StatusCode, Html<&'static str>) {
+    if !headers
+        .get(header::USER_AGENT)
+        .and_then(|value| value.to_str().ok())
+        .is_some_and(|value| value.starts_with("PlainApp-LinkPreview/"))
+    {
+        return (StatusCode::NOT_IMPLEMENTED, Html("Request rejected"));
+    }
+    (
+        StatusCode::OK,
+        Html("<meta property='og:title' content='Fixture title'><meta property='og:description' content='Fixture description'><meta property='og:image' content='/favicon.png'>"),
+    )
+}
+
 #[tokio::test]
 async fn html_image_fetch_and_atomic_message_commit_use_same_rust_pipeline() {
     let (addr, server) = fixture_server().await;
-    let client = http_client::builder()
+    let client = preview_client_builder()
         .no_proxy()
         .resolve("fixture.example", addr)
         .build()
@@ -38,11 +53,11 @@ async fn html_image_fetch_and_atomic_message_commit_use_same_rust_pipeline() {
         &json!({"type":"MESSAGE","value":{"format":"PLAIN","items":[attachment.clone()],"text":url}}).to_string(),
     );
     row.id = "message".into();
-    db.insert_chat(&row);
+    db.insert_chat(&row).unwrap();
     let row = refresh_with(&db, dir.path(), "message", &client)
         .await
         .unwrap()
-        .unwrap();
+        .expect("a successful page response should backfill the stored message");
     let content: Value = plain_libs::serde_json::from_str(&row.content).unwrap();
     assert_eq!(content["value"]["items"], json!([attachment]));
     let mut markdown = row.clone();
@@ -56,6 +71,9 @@ async fn html_image_fetch_and_atomic_message_commit_use_same_rust_pipeline() {
     let preview = &content["value"]["linkPreviews"][0];
     assert_eq!(preview["title"], "Fixture title");
     assert_eq!(preview["description"], "Fixture description");
+    assert!(plain_libs::serde_json::from_value::<crate::infrastructure::types::Instant>(
+        preview["createdAt"].clone(),
+    ).is_ok());
     assert!(preview.get("imageUrl").is_none());
     assert!(preview.get("imageLocalPath").is_none());
     assert_eq!(preview["imageWidth"], 1);
@@ -91,6 +109,9 @@ async fn html_image_fetch_and_atomic_message_commit_use_same_rust_pipeline() {
     let no_image = &missing["value"]["linkPreviews"][0];
     assert_eq!(no_image["title"], "Missing image");
     assert_eq!(no_image["image"], Value::Null);
+    assert!(plain_libs::serde_json::from_value::<crate::infrastructure::types::Instant>(
+        no_image["createdAt"].clone(),
+    ).is_ok());
     assert!(no_image.get("imageUrl").is_none());
     assert!(no_image.get("imageLocalPath").is_none());
     edit(&db, dir.path(), "message", "plain text").unwrap();
