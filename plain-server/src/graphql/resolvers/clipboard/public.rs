@@ -51,7 +51,13 @@ pub struct ClipboardMutation;
 #[Object]
 impl ClipboardMutation {
     /// Record caller-attributed history only after a successful system write; suppress watcher echoes.
-    async fn set_clipboard(&self, ctx: &Context<'_>, text: String) -> plain_graphql::Result<bool> {
+    async fn set_clipboard(
+        &self,
+        ctx: &Context<'_>,
+        text: String,
+        #[graphql(default)] label: String,
+        #[graphql(default)] sensitive: bool,
+    ) -> plain_graphql::Result<bool> {
         enabled(ctx)?;
         let source = ctx
             .data_opt::<crate::graphql::executor::RequestClient>()
@@ -61,20 +67,24 @@ impl ClipboardMutation {
             .map_err(plain_graphql::Error::from)?;
         let _receipt = ctx
             .data_opt::<crate::server::ServerState>()
-            .map(|state| state.clipboard_changes.received(&text));
+            .map(|state| state.clipboard_writes.begin(&text));
         let result = ctx
             .data::<Arc<Host>>()?
-            .call("systemSetClipboard", plain_libs::serde_json::json!({ "text": &text }))
+            .call(
+                "systemSetClipboard",
+                plain_libs::serde_json::json!({ "text": &text, "label": &label, "sensitive": sensitive }),
+            )
             .await
             .map_err(plain_graphql::Error::from)?;
         let written = plain_libs::serde_json::from_value(result)?;
         if written {
-            plain_rs::features::services::clipboard::record_history(
+            plain_rs::features::services::clipboard::record_write(
                 ctx.data::<Arc<Db>>()?,
                 ctx.data::<Arc<Host>>()?,
                 &text,
                 source,
-                false,
+                &label,
+                sensitive,
             )
             .map_err(plain_graphql::Error::from)?;
         }

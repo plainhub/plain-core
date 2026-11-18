@@ -116,6 +116,12 @@ pub(super) async fn stream<T: DeserializeOwned + Send + 'static>(
                     }
                 }
                 if !spec.matches(event.event_type) || event.target_cid.as_ref().is_some_and(|target| target != &client) { continue; }
+                if name == "CLIPBOARD_CHANGED" && origin == RequestOrigin::Remote
+                    && !plain_rs::features::services::peers::clipboard::can_publish(&state, &client)
+                        .unwrap_or(false)
+                {
+                    continue;
+                }
                 if has_snapshot {
                     match snapshot(&state, name).await {
                         Ok(Some(snapshot)) => snapshot,

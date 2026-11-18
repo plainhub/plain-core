@@ -1,452 +1,299 @@
 use crate::server::ContentServer;
-use plain_rs::features::chat::enums::DeviceType;
-use plain_rs::features::services::peers::clipboard::*;
-use plain_rs::features::services::peers::management::Identity;
-use plain_rs::infrastructure::db::DPeer;
-use plain_rs::infrastructure::db::chat_store::SaveMode;
-use plain_rs::infrastructure::db::chat_store::peers;
-use plain_rs::runtime::Runtime as ServerState;
-use plain_libs::serde_json::Value;
-use plain_libs::serde_json::json;
-use std::sync::{
-    Arc,
-    atomic::{AtomicBool, Ordering},
-};
+use plain_libs::serde_json::{Value, json};
+use plain_rs::features::chat::enums::{DeviceType, PeerStatus};
+use plain_rs::features::services::clipboard::report;
+use plain_rs::features::sessions::SessionType;
+use plain_rs::infrastructure::db::chat_store::{SaveMode, peers};
+use plain_rs::infrastructure::db::{DPeer, SessionRow};
+use plain_rs::runtime::Runtime;
 use std::time::Duration;
-use tokio::sync::watch;
+use tokio::sync::mpsc;
 
-async fn fixture() -> (
-    plain_libs::temporary::TempDir,
-    ContentServer,
-    ContentServer,
-    ServerState,
-    ServerState,
-    DPeer,
-    Identity,
-    watch::Receiver<Vec<String>>,
-    Arc<AtomicBool>,
-    tokio::task::JoinHandle<()>,
-) {
-    let directory = plain_libs::temporary::tempdir().unwrap();
-    let remote = ContentServer::open_with_cache(
-        &directory.path().join("remote/data"),
-        &directory.path().join("remote/cache"),
-    )
-    .unwrap();
-    let remote_state = remote.runtime_state().core;
-    remote_state.management.shutdown().await;
-    remote_state
-        .prefs
-        .set("api_permissions", json!(["CLIPBOARD"]))
-        .unwrap();
-    let session = remote
-        .native_management()
-        .unwrap()
-        .create_session("Clipboard send fixture".into())
-        .unwrap();
-    remote_state.prefs.set("http_port", 0).unwrap();
-    remote_state.prefs.set("https_port", 0).unwrap();
-    let (_, port) = remote.start_configured_public().await.unwrap();
-    let local = ContentServer::open_with_cache(
-        &directory.path().join("local/data"),
-        &directory.path().join("local/cache"),
-    )
-    .unwrap();
-    let state = local.runtime_state().core;
-    state.management.shutdown().await;
-    state.prefs.set("client_id", &session.client_id).unwrap();
+async fn device(directory: &std::path::Path) -> (ContentServer, Runtime, u16) {
+    let server =
+        ContentServer::open_with_cache(&directory.join("data"), &directory.join("cache")).unwrap();
+    let state = server.runtime_state().core;
     state
         .prefs
         .set("api_permissions", json!(["CLIPBOARD"]))
         .unwrap();
+    state.prefs.set("http_port", 0).unwrap();
+    state.prefs.set("https_port", 0).unwrap();
+    let (_, port) = server.start_configured_public().await.unwrap();
+    (server, state, port)
+}
+
+fn grant(receiver: &Runtime, caller: &str, kind: SessionType, seed: u8) -> SessionRow {
+    let now = plain_libs::utils::dbtime::now_iso();
+    let session = SessionRow {
+        client_id: caller.into(),
+        url_token: plain_libs::crypto::gen_token(),
+        name: "Synthetic management fixture".into(),
+        r#type: kind,
+        client_ip: String::new(),
+        os_name: String::new(),
+        os_version: String::new(),
+        app_name: String::new(),
+        app_version: String::new(),
+        token: plain_libs::utils::base64::base64_encode(&[seed; 32]),
+        last_seen_at: None,
+        created_at: now.clone(),
+        updated_at: now,
+    };
+    receiver.db.session_save(&session).unwrap();
+    session
+}
+
+fn peer(owner: &Runtime, grant: &SessionRow, remote_id: &str, remote_port: u16) {
     let mut peer = DPeer::new(
-        "remote",
-        "Remote",
+        remote_id,
+        "Synthetic device",
         "127.0.0.1",
-        Some(port),
+        Some(remote_port),
         DeviceType::Computer,
     );
-    peer.token = session.token;
-    peers::save(&state.db, &[peer.clone()], SaveMode::Insert).unwrap();
-    state
-        .prefs
-        .set("clipboard_directions", json!({"remote":"push"}))
-        .unwrap();
-    let identity = Identity {
-        url: format!("wss://127.0.0.1:{port}/?cid={}", session.client_id),
-        token: peer.token.clone(),
-        ip: peer.ip.clone(),
-        port: peer.port,
-    };
-    let (observed, writes) = watch::channel(Vec::<String>::new());
-    let succeeds = Arc::new(AtomicBool::new(false));
-    let (generation, mut requests) = remote_state.host.connect();
-    let (host, success) = (remote_state.host.clone(), succeeds.clone());
-    let responder = tokio::spawn(async move {
+    peer.status = PeerStatus::Paired;
+    peer.token.clone_from(&grant.token);
+    peers::save(&owner.db, &[peer], SaveMode::Insert).unwrap();
+}
+
+fn host(
+    state: &Runtime,
+) -> (
+    mpsc::UnboundedReceiver<()>,
+    mpsc::UnboundedReceiver<Value>,
+    tokio::task::JoinHandle<()>,
+) {
+    let state = state.clone();
+    let (generation, mut requests) = state.host.connect();
+    let (accessed, access) = mpsc::unbounded_channel();
+    let (wrote, writes) = mpsc::unbounded_channel();
+    let task = tokio::spawn(async move {
         while let Some(request) = requests.recv().await {
+            let params = &request["params"];
             let result = match request["method"].as_str().unwrap() {
                 "systemCapabilities" => json!(["CLIPBOARD"]),
+                "systemAccessFacts" => {
+                    if params["features"] == json!(["CLIPBOARD"]) {
+                        let _ = accessed.send(());
+                    }
+                    let granted = params["features"]
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .map(|feature| (feature.as_str().unwrap().to_owned(), json!(true)))
+                        .collect::<plain_libs::serde_json::Map<_, _>>();
+                    json!({"granted":granted})
+                }
                 "systemSetClipboard" => {
-                    observed.send_modify(|writes| {
-                        writes.push(request["params"]["text"].as_str().unwrap().to_owned())
-                    });
-                    json!(success.load(Ordering::SeqCst))
+                    let _ = wrote.send(params.clone());
+                    if params["text"] == "reject OS write" {
+                        json!(false)
+                    } else {
+                        report(
+                            &state,
+                            &json!({"text":params["text"],"sensitive":params["sensitive"]})
+                                .to_string(),
+                        )
+                        .unwrap();
+                        json!(true)
+                    }
                 }
                 _ => Value::Null,
             };
-            let _ = host.reply(generation, json!({"id":request["id"],"result":result}));
+            let _ = state
+                .host
+                .reply(generation, json!({"id":request["id"],"result":result}));
         }
     });
-    plain_rs::features::services::clipboard::report(
-        &state,
-        &json!({"text":"Fixture 🌍","sensitive":false}).to_string(),
-    )
-    .unwrap();
-    (
-        directory,
-        local,
-        remote,
-        state,
-        remote_state,
-        peer,
-        identity,
-        writes,
-        succeeds,
-        responder,
-    )
+    (access, writes, task)
 }
 
-#[tokio::test]
-async fn sending_uses_the_real_encrypted_api_preserves_source_and_retries_platform_failure_without_duplicate_history()
- {
-    let (
-        _directory,
-        local,
-        remote,
-        state,
-        remote_state,
-        peer,
-        identity,
-        writes,
-        succeeds,
-        responder,
-    ) = fixture().await;
-    let mut remote_events = remote_state.events.subscribe();
-    let (_cancel, canceled) = watch::channel(false);
+async fn quiet(writes: &mut mpsc::UnboundedReceiver<Value>) {
     assert!(
-        send(
-            &state,
-            &peer.id,
-            &identity,
-            &canceled,
-            "Fixture 🌍",
-            &watch::channel(Some(true)).1
-        )
-        .await
-        .is_err()
-    );
-    succeeds.store(true, Ordering::SeqCst);
-    assert!(
-        send(
-            &state,
-            &peer.id,
-            &identity,
-            &canceled,
-            "Fixture 🌍",
-            &watch::channel(Some(true)).1
-        )
-        .await
-        .unwrap()
-    );
-    assert_eq!(*writes.borrow(), vec!["Fixture 🌍", "Fixture 🌍"]);
-    assert_eq!(remote_state.db.clipboard_count_rows().unwrap(), 1);
-    assert!(
-        remote_events.try_recv().is_err(),
-        "HTTP writes must not broadcast clipboard text or generic refreshes"
-    );
-    let row = remote_state.db.clipboard_latest().unwrap().unwrap();
-    assert_eq!(row.source, state.native_client_id().unwrap());
-    assert_eq!(row.text, "Fixture 🌍");
-    let outgoing = remote_state.clipboard_changes.subscribe();
-    plain_rs::features::services::clipboard::report(
-        &remote_state,
-        &json!({"text":"Fixture 🌍","sensitive":false}).to_string(),
-    )
-    .unwrap();
-    assert!(!outgoing.has_changed().unwrap());
-    assert!(remote_events.try_recv().is_err());
-    let observation = remote_state.clipboard_changes.subscribe();
-    assert!(!observation.borrow().as_ref().unwrap().eligible);
-    local.stop_core().await;
-    remote.stop_core().await;
-    responder.abort();
-    let _ = responder.await;
-}
-
-#[tokio::test]
-async fn invalid_directions_disabled_local_sharing_revoked_identity_and_canceled_workers_cannot_write_a_remote_clipboard()
- {
-    let (
-        _directory,
-        local,
-        remote,
-        state,
-        remote_state,
-        peer,
-        identity,
-        writes,
-        _succeeds,
-        responder,
-    ) = fixture().await;
-    let (cancel, canceled) = watch::channel(false);
-    for direction in ["off", "pull"] {
-        state
-            .prefs
-            .set("clipboard_directions", json!({"remote":direction}))
-            .unwrap();
-        assert!(
-            !send(
-                &state,
-                &peer.id,
-                &identity,
-                &canceled,
-                "Fixture",
-                &watch::channel(Some(true)).1
-            )
-            .await
-            .unwrap()
-        );
-    }
-    state
-        .prefs
-        .set("clipboard_directions", json!({"remote":"invalid"}))
-        .unwrap();
-    assert!(
-        send(
-            &state,
-            &peer.id,
-            &identity,
-            &canceled,
-            "Fixture",
-            &watch::channel(Some(true)).1
-        )
-        .await
-        .is_err()
-    );
-    state
-        .prefs
-        .set("clipboard_directions", json!({"remote":"push"}))
-        .unwrap();
-    state.prefs.set("api_permissions", json!([])).unwrap();
-    assert!(
-        !send(
-            &state,
-            &peer.id,
-            &identity,
-            &canceled,
-            "Fixture",
-            &watch::channel(Some(true)).1
-        )
-        .await
-        .unwrap()
-    );
-    state
-        .prefs
-        .set("api_permissions", json!(["CLIPBOARD"]))
-        .unwrap();
-    cancel.send_replace(true);
-    assert!(
-        !send(
-            &state,
-            &peer.id,
-            &identity,
-            &canceled,
-            "Fixture",
-            &watch::channel(Some(true)).1
-        )
-        .await
-        .unwrap()
-    );
-    cancel.send_replace(false);
-    state.db.with_conn(|db| {
-        db.execute("UPDATE peers SET token='changed' WHERE id=?1", [&peer.id])
-            .unwrap()
-    });
-    assert!(
-        !send(
-            &state,
-            &peer.id,
-            &identity,
-            &canceled,
-            "Fixture",
-            &watch::channel(Some(true)).1
-        )
-        .await
-        .unwrap()
-    );
-    for text in [" ".to_owned(), "🌍".repeat(128 * 1024 + 1)] {
-        assert!(
-            send(
-                &state,
-                &peer.id,
-                &identity,
-                &canceled,
-                &text,
-                &watch::channel(Some(true)).1
-            )
+        tokio::time::timeout(Duration::from_millis(350), writes.recv())
             .await
             .is_err()
-        );
-    }
-    assert!(writes.borrow().is_empty());
-    assert_eq!(remote_state.db.clipboard_count_rows().unwrap(), 0);
-    local.stop_core().await;
-    remote.stop_core().await;
-    responder.abort();
-    let _ = responder.await;
+    );
 }
 
-#[tokio::test]
-async fn unconfirmed_or_unsupported_remote_capabilities_keep_automatic_pushes_out_of_the_network() {
-    use std::{future::Future, task::Poll};
-    let (
-        _directory,
-        local,
-        remote,
+async fn write(writes: &mut mpsc::UnboundedReceiver<Value>, text: &str) {
+    assert_eq!(
+        tokio::time::timeout(Duration::from_secs(8), writes.recv())
+            .await
+            .unwrap()
+            .unwrap(),
+        json!({"text":text,"label":"","sensitive":false})
+    );
+}
+
+fn direction(state: &Runtime, peer_id: &str, value: &str) {
+    state
+        .prefs
+        .set("clipboard_directions", json!({peer_id:value}))
+        .unwrap();
+    let _ = state
+        .events
+        .send(plain_rs::infrastructure::events::WsEvent::broadcast(
+            "PREFS_UPDATED",
+            String::new(),
+        ));
+}
+
+fn capture(state: &Runtime, text: &str, sensitive: bool) {
+    report(
         state,
-        _remote_state,
-        peer,
-        identity,
-        writes,
-        _succeeds,
-        responder,
-    ) = fixture().await;
-    let (cancel, canceled) = watch::channel(false);
-    let (access, accessed) = watch::channel(None);
-    let changed = tokio::sync::Notify::new();
-    let mut service = Box::pin(follow(
-        &state, &peer.id, &identity, &canceled, &changed, accessed,
-    ));
-    assert!(std::future::poll_fn(|cx| Poll::Ready(service.as_mut().poll(cx).is_pending())).await);
-    plain_rs::features::services::clipboard::report(
-        &state,
-        &json!({"text":"pending","sensitive":false}).to_string(),
+        &json!({"text":text,"sensitive":sensitive}).to_string(),
     )
     .unwrap();
-    assert!(std::future::poll_fn(|cx| Poll::Ready(service.as_mut().poll(cx).is_pending())).await);
-    access.send_replace(Some(false));
-    assert!(std::future::poll_fn(|cx| Poll::Ready(service.as_mut().poll(cx).is_pending())).await);
-    assert!(writes.borrow().is_empty());
-    cancel.send_replace(true);
-    service.await;
-    local.stop_core().await;
-    remote.stop_core().await;
-    responder.abort();
-    let _ = responder.await;
 }
 
 #[tokio::test]
-async fn automatic_push_coalesces_to_the_latest_local_fact_and_replaces_a_failed_candidate() {
-    use std::{future::Future, task::Poll};
-    let (
-        _directory,
-        local,
-        remote,
-        state,
-        remote_state,
-        peer,
-        identity,
-        mut writes,
-        succeeds,
-        responder,
-    ) = fixture().await;
-    let (cancel, canceled) = watch::channel(false);
-    let (_access, accessed) = watch::channel(Some(true));
-    let changed = tokio::sync::Notify::new();
-    let mut service = Box::pin(follow(
-        &state, &peer.id, &identity, &canceled, &changed, accessed,
-    ));
-    assert!(std::future::poll_fn(|cx| Poll::Ready(service.as_mut().poll(cx).is_pending())).await);
-    for text in ["superseded", "first attempt"] {
-        plain_rs::features::services::clipboard::report(
-            &state,
-            &json!({"text":text,"sensitive":false}).to_string(),
+async fn managed_encrypted_live_stream_syncs_only_when_both_local_directions_agree() {
+    let directory = plain_libs::temporary::tempdir().unwrap();
+    let (a, sender, sender_port) = device(&directory.path().join("sender")).await;
+    let (b, receiver, receiver_port) = device(&directory.path().join("receiver")).await;
+    let sender_id = sender.native_client_id().unwrap();
+    let receiver_id = receiver.native_client_id().unwrap();
+    let (mut sender_access, mut sender_writes, sender_host) = host(&sender);
+    let (_, mut receiver_writes, receiver_host) = host(&receiver);
+
+    let inbound = grant(&sender, &receiver_id, SessionType::Login, 31);
+    let reverse = grant(&receiver, &sender_id, SessionType::Login, 32);
+    direction(&sender, &receiver_id, "SEND");
+    direction(&receiver, &sender_id, "BOTH");
+
+    capture(&sender, "before connection", false);
+    peer(&receiver, &inbound, &sender_id, sender_port);
+    // Existing LOGIN by itself does not establish clipboard sync authority.
+    tokio::time::timeout(Duration::from_secs(8), sender_access.recv())
+        .await
+        .unwrap()
+        .unwrap();
+    capture(&sender, "one-way management only", false);
+    quiet(&mut receiver_writes).await;
+
+    let mut chat_only = reverse.clone();
+    chat_only.token.clear();
+    peer(&sender, &chat_only, &receiver_id, receiver_port);
+    capture(&sender, "chat only cannot receive", false);
+    quiet(&mut receiver_writes).await;
+    sender
+        .db
+        .with_conn(|db| {
+            db.execute(
+                "UPDATE peers SET status='UNPAIRED',token=?1 WHERE id=?2",
+                [&reverse.token, &receiver_id],
+            )
+        })
+        .unwrap();
+    capture(&sender, "unpaired with stale token cannot receive", false);
+    quiet(&mut receiver_writes).await;
+    sender
+        .db
+        .update_peer_status(&receiver_id, PeerStatus::Paired);
+    quiet(&mut receiver_writes).await;
+    capture(&sender, "live exact capture", false);
+    write(&mut receiver_writes, "live exact capture").await;
+    quiet(&mut receiver_writes).await;
+    quiet(&mut sender_writes).await;
+    let rows = receiver.db.clipboard_page("", 20, 0).unwrap();
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].text, "live exact capture");
+    assert_eq!(rows[0].source, sender_id);
+
+    direction(&receiver, &sender_id, "SEND");
+    quiet(&mut receiver_writes).await; // allow the existing WS complete to arrive
+    while sender_access.try_recv().is_ok() {}
+    capture(&sender, "receive disabled", false);
+    quiet(&mut receiver_writes).await;
+    assert!(
+        sender_access.try_recv().is_err(),
+        "receiver did not retain an active payload stream"
+    );
+    direction(&receiver, &sender_id, "BOTH");
+    tokio::time::timeout(Duration::from_secs(8), sender_access.recv())
+        .await
+        .unwrap()
+        .unwrap();
+    quiet(&mut receiver_writes).await; // no backfill on a fresh operation
+    capture(&sender, "fresh after subscribe", false);
+    write(&mut receiver_writes, "fresh after subscribe").await;
+
+    sender
+        .prefs
+        .set(
+            "clipboard_directions",
+            json!({receiver_id.clone():"RECEIVE"}),
         )
         .unwrap();
-    }
-    tokio::select! {
-        _ = &mut service => panic!("Clipboard worker stopped before sending"),
-        result = tokio::time::timeout(Duration::from_secs(3),writes.changed()) => {result.unwrap().unwrap();},
-    }
-    assert_eq!(*writes.borrow(), vec!["first attempt"]);
-    succeeds.store(true, Ordering::SeqCst);
-    plain_rs::features::services::clipboard::report(
-        &state,
-        &json!({"text":"latest attempt","sensitive":false}).to_string(),
-    )
-    .unwrap();
-    tokio::select! {
-        _ = &mut service => panic!("Clipboard worker stopped before replacing a failed candidate"),
-        result = tokio::time::timeout(Duration::from_secs(3),writes.changed()) => {result.unwrap().unwrap();},
-    }
-    assert_eq!(*writes.borrow(), vec!["first attempt", "latest attempt"]);
-    cancel.send_replace(true);
-    tokio::time::timeout(Duration::from_secs(3), service)
-        .await
-        .unwrap();
-    assert_eq!(
-        remote_state.db.clipboard_latest().unwrap().unwrap().text,
-        "latest attempt"
-    );
-    local.stop_core().await;
-    remote.stop_core().await;
-    responder.abort();
-    let _ = responder.await;
-}
+    capture(&sender, "send disabled", false);
+    quiet(&mut receiver_writes).await;
+    direction(&sender, &receiver_id, "SEND");
+    capture(&sender, "private capture", true);
+    quiet(&mut receiver_writes).await;
+    capture(&sender, "reject OS write", false);
+    write(&mut receiver_writes, "reject OS write").await;
+    quiet(&mut receiver_writes).await;
+    assert_eq!(receiver.db.clipboard_count_rows().unwrap(), 2);
 
-#[tokio::test]
-async fn an_incoming_write_invalidates_a_local_send_while_identity_lookup_is_waiting() {
-    use std::{future::Future, task::Poll};
-    let (
-        _directory,
-        local,
-        remote,
-        state,
-        _remote_state,
-        peer,
-        identity,
-        writes,
-        _succeeds,
-        responder,
-    ) = fixture().await;
-    let db = state.db.clone();
-    let (locked, acquired) = tokio::sync::oneshot::channel();
-    let (release, released) = std::sync::mpsc::channel();
-    let holder = tokio::task::spawn_blocking(move || {
-        db.with_conn(|_| {
-            locked.send(()).unwrap();
-            released.recv().unwrap();
-        })
-    });
-    acquired.await.unwrap();
-    let (_cancel, canceled) = watch::channel(false);
-    let (_access, accessed) = watch::channel(Some(true));
-    let mut sending = Box::pin(send(
-        &state,
-        &peer.id,
-        &identity,
-        &canceled,
-        "Fixture 🌍",
-        &accessed,
-    ));
-    assert!(std::future::poll_fn(|cx| Poll::Ready(sending.as_mut().poll(cx).is_pending())).await);
-    state.clipboard_changes.received("Fixture 🌍");
-    release.send(()).unwrap();
-    assert!(!sending.await.unwrap());
-    holder.await.unwrap();
-    assert!(writes.borrow().is_empty());
-    local.stop_core().await;
-    remote.stop_core().await;
-    responder.abort();
-    let _ = responder.await;
+    direction(&sender, &receiver_id, "OFF");
+    let explicit = plain_rs::features::services::peers::management_http::query(
+        &receiver,
+        &plain_libs::protocols::http_client::Url::parse(&format!("https://127.0.0.1:{sender_port}")).unwrap(),
+        &receiver_id,
+        &plain_libs::utils::base64::base64_decode(&inbound.token),
+        json!({"query":r#"mutation {setClipboard(text:"explicit manual write",label:"Manual",sensitive:true)}"#}),
+        65536,
+    ).await.unwrap();
+    assert_eq!(explicit["setClipboard"], true);
+    assert_eq!(
+        tokio::time::timeout(Duration::from_secs(8), sender_writes.recv())
+            .await
+            .unwrap()
+            .unwrap(),
+        json!({"text":"explicit manual write","label":"Manual","sensitive":true})
+    );
+    let explicit_row = sender
+        .db
+        .clipboard_page("explicit manual write", 1, 0)
+        .unwrap()
+        .pop()
+        .unwrap();
+    assert_eq!(explicit_row.source, receiver_id);
+    assert_eq!(explicit_row.label, "Manual");
+    assert!(explicit_row.sensitive);
+    quiet(&mut receiver_writes).await;
+
+    direction(&sender, &receiver_id, "SEND");
+    let mut invalid = inbound.clone();
+    invalid.r#type = SessionType::ApiToken;
+    sender.db.session_save(&invalid).unwrap();
+    capture(
+        &sender,
+        "API token cannot receive automatic clipboard",
+        false,
+    );
+    quiet(&mut receiver_writes).await;
+    let mut rotated = inbound.clone();
+    rotated.token = plain_libs::utils::base64::base64_encode(&[33; 32]);
+    sender.db.session_save(&rotated).unwrap();
+    capture(
+        &sender,
+        "stale authenticated socket after rotation cannot receive",
+        false,
+    );
+    quiet(&mut receiver_writes).await;
+    sender.db.session_delete(&receiver_id).unwrap();
+    capture(
+        &sender,
+        "revoked login cannot receive automatic clipboard",
+        false,
+    );
+    quiet(&mut receiver_writes).await;
+
+    b.stop_core().await;
+    a.stop_core().await;
+    receiver_host.abort();
+    sender_host.abort();
 }

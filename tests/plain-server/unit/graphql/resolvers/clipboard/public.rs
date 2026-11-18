@@ -1,7 +1,7 @@
 use super::*;
 use crate::test_support::schema::SchemaFixture as PublicSchema;
-use plain_rs::infrastructure::db::Db;
 use plain_libs::serde_json::{Value, json};
+use plain_rs::infrastructure::db::Db;
 
 fn fixture(permissions: Value) -> (plain_libs::temporary::TempDir, PublicSchema, Arc<Db>) {
     let dir = plain_libs::temporary::tempdir().unwrap();
@@ -134,10 +134,12 @@ async fn write_request(state: &crate::server::ServerState, text: &str) -> plain_
     .await
 }
 
+type HostWrite = (Value, Option<plain_rs::infrastructure::db::ClipboardRow>);
+
 fn write_host(
     state: &crate::server::ServerState,
     result: Value,
-) -> Arc<std::sync::Mutex<Vec<Option<plain_rs::infrastructure::db::ClipboardRow>>>> {
+) -> Arc<std::sync::Mutex<Vec<HostWrite>>> {
     let observations = Arc::new(std::sync::Mutex::new(Vec::new()));
     let seen = observations.clone();
     let db = state.db.clone();
@@ -156,11 +158,13 @@ fn write_host(
                         .unwrap()
                         .into_iter()
                         .find(|item| item.text == text);
-                    seen.lock().unwrap().push(item);
+                    seen.lock().unwrap().push((request["params"].clone(), item));
+                    let sensitive = request["params"]["sensitive"].as_bool().unwrap();
+                    assert!(request["params"]["label"].is_string());
                     if result.get("result").and_then(Value::as_bool) == Some(true) {
                         plain_rs::features::services::clipboard::report(
                             &state,
-                            &json!({"text":text,"sensitive":false}).to_string(),
+                            &json!({"text":text,"sensitive":sensitive}).to_string(),
                         )
                         .unwrap();
                     }
@@ -190,8 +194,11 @@ async fn set_clipboard_records_after_platform_success_and_suppresses_early_and_l
     }
     let observations = seen.lock().unwrap();
     assert_eq!(observations.len(), 2);
-    assert!(observations[0].is_none(), "history must follow platform success");
-    let item = observations[1].as_ref().unwrap();
+    assert!(
+        observations[0].1.is_none(),
+        "history must follow platform success"
+    );
+    let item = observations[1].1.as_ref().unwrap();
     assert_eq!(item.source, "fixture-client");
     assert_eq!(item.label, "");
     assert!(!item.sensitive);
@@ -225,6 +232,61 @@ async fn set_clipboard_records_after_platform_success_and_suppresses_early_and_l
 }
 
 #[tokio::test]
+async fn set_clipboard_preserves_explicit_metadata_for_repeated_text_without_echoes() {
+    let (_dir, server) = write_fixture();
+    let state = server.runtime_state();
+    let seen = write_host(&state, json!({"result":true}));
+    let mut events = state.events.subscribe();
+    for (label, sensitive) in [("first", false), ("private", true), ("private", true)] {
+        let response = crate::graphql::executor::execute_graphql(
+            &state.public,
+            plain_graphql::Request::new(
+                r#"mutation($label:String!,$sensitive:Boolean!){setClipboard(text:"repeat",label:$label,sensitive:$sensitive)}"#,
+            )
+            .variables(plain_graphql::Variables::from_json(json!({
+                "label": label,
+                "sensitive": sensitive
+            }))),
+            crate::graphql::executor::RequestContext::authenticated_remote(
+                state.clone(),
+                "fixture-client".into(),
+            ),
+        )
+        .await;
+        assert!(response.errors.is_empty(), "{:?}", response.errors);
+        assert_eq!(response.data.into_json().unwrap()["setClipboard"], true);
+    }
+    let observed = seen.lock().unwrap();
+    let params: Vec<_> = observed.iter().map(|(params, _)| params.clone()).collect();
+    assert_eq!(
+        params,
+        [
+            json!({"text":"repeat","label":"first","sensitive":false}),
+            json!({"text":"repeat","label":"private","sensitive":true}),
+            json!({"text":"repeat","label":"private","sensitive":true}),
+        ]
+    );
+    drop(observed);
+    let mut rows = state.db.clipboard_page("repeat", 10, 0).unwrap();
+    rows.sort_by(|a, b| a.label.cmp(&b.label));
+    assert_eq!(rows.len(), 2);
+    assert_eq!(
+        (rows[0].label.as_str(), rows[0].sensitive),
+        ("first", false)
+    );
+    assert_eq!(
+        (rows[1].label.as_str(), rows[1].sensitive),
+        ("private", true)
+    );
+    assert!(rows.iter().all(|row| row.source == "fixture-client"));
+    assert!(
+        events.try_recv().is_err(),
+        "platform writes must not be sent back"
+    );
+    server.shutdown().await;
+}
+
+#[tokio::test]
 async fn set_clipboard_rejects_invalid_text_without_history_or_platform_writes() {
     let (_dir, server) = write_fixture();
     let state = server.runtime_state();
@@ -254,7 +316,7 @@ async fn set_clipboard_keeps_the_utf16_boundary_and_platform_failure_semantics()
     let text = "🌍".repeat(128 * 1024);
     let response = write_request(&state, &text).await;
     assert_eq!(response.errors[0].message, "fixture platform failure");
-    assert!(seen.lock().unwrap()[0].is_none());
+    assert!(seen.lock().unwrap()[0].1.is_none());
     assert_eq!(state.db.clipboard_count_rows().unwrap(), 0);
     let seen = write_host(&state, json!({"result":false}));
     let response = write_request(&state, &text).await;
@@ -266,7 +328,7 @@ async fn set_clipboard_keeps_the_utf16_boundary_and_platform_failure_semantics()
     let response = write_request(&state, &text).await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     assert_eq!(response.data.into_json().unwrap()["setClipboard"], true);
-    assert!(seen.lock().unwrap()[0].is_none());
+    assert!(seen.lock().unwrap()[0].1.is_none());
     assert_eq!(state.db.clipboard_latest().unwrap().unwrap().text, text);
     assert_eq!(state.db.clipboard_count_rows().unwrap(), 1);
     server.shutdown().await;
@@ -287,7 +349,61 @@ async fn set_clipboard_reports_history_storage_failure_after_the_platform_write(
             .contains("fixture storage failure")
     );
     assert_eq!(seen.lock().unwrap().len(), 1);
-    assert!(seen.lock().unwrap()[0].is_none());
+    assert!(seen.lock().unwrap()[0].1.is_none());
     assert_eq!(state.db.clipboard_count_rows().unwrap(), 0);
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn concurrent_platform_writes_cannot_republish_an_early_callback() {
+    let (_dir, server) = write_fixture();
+    let state = server.runtime_state();
+    let (generation, mut requests) = state.host.connect();
+    let mut writes = Vec::new();
+    for text in ["first concurrent write", "second concurrent write"] {
+        let request_state = state.clone();
+        let pending = tokio::spawn(async move { write_request(&request_state, text).await });
+        let id = loop {
+            let request = tokio::time::timeout(std::time::Duration::from_secs(2), requests.recv())
+                .await
+                .unwrap()
+                .unwrap();
+            if request["method"] == "systemSetClipboard" {
+                assert_eq!(request["params"]["text"], text);
+                break request["id"].clone();
+            }
+            state
+                .host
+                .reply(generation, json!({"id":request["id"],"result":null}))
+                .unwrap();
+        };
+        writes.push((text, id, pending));
+    }
+    let mut events = state.events.subscribe();
+    for (text, _, _) in &writes {
+        plain_rs::features::services::clipboard::report(
+            &state,
+            &json!({"text":text,"sensitive":false}).to_string(),
+        )
+        .unwrap();
+    }
+    assert_eq!(
+        state.db.clipboard_count_rows().unwrap(),
+        0,
+        "history must wait for both platform results"
+    );
+    while let Ok(event) = events.try_recv() {
+        assert_ne!(event.event_type, "CLIPBOARD_CHANGED");
+    }
+    for (_, id, pending) in writes {
+        state
+            .host
+            .reply(generation, json!({"id":id,"result":true}))
+            .unwrap();
+        let response = pending.await.unwrap();
+        assert!(response.errors.is_empty(), "{:?}", response.errors);
+        assert_eq!(response.data.into_json().unwrap()["setClipboard"], true);
+    }
+    assert_eq!(state.db.clipboard_count_rows().unwrap(), 2);
     server.shutdown().await;
 }

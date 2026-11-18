@@ -277,7 +277,7 @@ fn public_schema_exposes_the_contract_it_has_to_serve() {
         "replyNotification(id: ID!, actionIndex: Int!, text: String!): Boolean!",
         "clipboardItems(query: String!, offset: Int!, limit: Int!): [ClipboardItem!]!",
         "clipboardItemCount(query: String!): Int!",
-        "setClipboard(text: String!): Boolean!",
+        r#"setClipboard(text: String!, label: String! = "", sensitive: Boolean! = false): Boolean!"#,
         "deleteClipboardItems(query: String!): ActionResult!",
         "contacts(query: String!, offset: Int!, limit: Int!): [Contact!]!",
         "contactCount(query: String!): Int!",

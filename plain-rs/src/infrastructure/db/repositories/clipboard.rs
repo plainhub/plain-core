@@ -18,19 +18,19 @@ fn clipboard_from_row(row: &plain_libs::rusqlite::Row<'_>) -> plain_libs::rusqli
 }
 
 impl Db {
-    pub fn clipboard_record(&self, row: &ClipboardRow) -> plain_libs::rusqlite::Result<(ClipboardRow, bool)> {
+    pub fn clipboard_record(&self, row: &ClipboardRow, distinguish_metadata: bool) -> plain_libs::rusqlite::Result<(ClipboardRow, bool)> {
         self.with_conn(|c| {
             let tx = c.unchecked_transaction()?;
             let inserted = tx.execute(
                 "INSERT INTO clipboards (id,text,hash,source,label,sensitive,created_at)
                  SELECT ?1,?2,?3,?4,?5,?6,?7
-                 WHERE NOT EXISTS (SELECT 1 FROM clipboards WHERE hash=?3)",
-                params![row.id, row.text, row.hash, row.source, row.label, row.sensitive, plain_libs::utils::dbtime::normalize(&row.created_at)?],
+                 WHERE NOT EXISTS (SELECT 1 FROM clipboards WHERE hash=?3 AND (NOT ?8 OR (label=?5 AND sensitive=?6)))",
+                params![row.id, row.text, row.hash, row.source, row.label, row.sensitive, plain_libs::utils::dbtime::normalize(&row.created_at)?, distinguish_metadata],
             )? != 0;
             let item = if inserted {
                 tx.query_row(&format!("SELECT {CLIPBOARD_COLUMNS} FROM clipboards WHERE id=?1"),[&row.id],clipboard_from_row)?
             } else {
-                tx.query_row(&format!("SELECT {CLIPBOARD_COLUMNS} FROM clipboards WHERE hash=?1 ORDER BY {CLIPBOARD_ORDER} LIMIT 1"), [&row.hash], clipboard_from_row)?
+                tx.query_row(&format!("SELECT {CLIPBOARD_COLUMNS} FROM clipboards WHERE hash=?1 AND (NOT ?2 OR (label=?3 AND sensitive=?4)) ORDER BY {CLIPBOARD_ORDER} LIMIT 1"), params![row.hash, distinguish_metadata, row.label, row.sensitive], clipboard_from_row)?
             };
             tx.commit()?;
             Ok((item, inserted))

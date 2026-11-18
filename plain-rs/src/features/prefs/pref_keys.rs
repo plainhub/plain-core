@@ -27,7 +27,6 @@ pref_keys! {
         AI_IMAGE_SEARCH_MODEL = "ai_image_search_model",
         DLNA_ALLOWED_SENDERS = "dlna_allowed_senders",
         DLNA_DENIED_SENDERS = "dlna_denied_senders",
-        CLIPBOARD_DIRECTIONS = "clipboard_directions",
         DARK_THEME = "dark_theme",
         AMOLED_DARK_THEME = "amoled_dark_theme",
         PDF_FOLLOW_DARK_THEME = "pdf_follow_dark_theme",
@@ -53,6 +52,7 @@ pref_keys! {
         SCREEN_MIRROR_QUALITY = "screen_mirror_quality",
     }
     LocalOnly {
+        CLIPBOARD_DIRECTIONS = "clipboard_directions",
         HTTP_PORT = "http_port",
         HTTPS_PORT = "https_port",
         BACKGROUND_SERVICE_ENABLED = "background_service_enabled",

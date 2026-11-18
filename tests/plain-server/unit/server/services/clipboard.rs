@@ -62,7 +62,6 @@ async fn platform_callbacks_before_write_reply_do_not_republish_received_text() 
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     assert_eq!(response.data.into_json().unwrap()["setClipboard"], true);
     assert_eq!(state.db.clipboard_count_rows().unwrap(), 1);
-    assert!(!state.clipboard_changes.can_send("remote callback fixture"));
     while let Ok(event) = events.try_recv() {
         assert_ne!(event.event_type, "CLIPBOARD_CHANGED");
     }

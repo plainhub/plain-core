@@ -70,83 +70,29 @@ async fn repeated_local_captures_are_not_treated_as_received_echoes_after_histor
     let mut events = state.events.subscribe();
     report(&state, &payload).unwrap();
     assert_eq!(state.db.clipboard_count_rows().unwrap(), 1);
-    assert!(state.clipboard_changes.can_send("local fixture"));
     assert_eq!(events.try_recv().unwrap().event_type, "CLIPBOARD_CHANGED");
     server.shutdown().await;
 }
 
 #[tokio::test]
-async fn local_captures_coalesce_duplicates_and_sensitive_or_historical_changes_invalidate_pending_pushes()
- {
+async fn sensitive_reports_are_stored_but_scoped_platform_echoes_are_not() {
     let directory = plain_libs::temporary::tempdir().unwrap();
-    let (server, _, prefs) = start(&directory);
+    let (server, _, _) = start(&directory);
     let state = server.runtime_state();
-    let mut changes = state.clipboard_changes.subscribe();
-    prefs.set("api_permissions", json!(["CLIPBOARD"])).unwrap();
-    report(
-        &state,
-        &json!({"text":"first","sensitive":false}).to_string(),
-    )
-    .unwrap();
-    assert!(changes.has_changed().unwrap());
-    let first = changes.borrow_and_update().clone().unwrap();
-    assert!(first.eligible);
-    report(
-        &state,
-        &json!({"text":"first","sensitive":false}).to_string(),
-    )
-    .unwrap();
-    assert!(!changes.has_changed().unwrap());
-    report(
-        &state,
-        &json!({"text":"first","sensitive":true}).to_string(),
-    )
-    .unwrap();
-    let secret = changes.borrow_and_update().clone().unwrap();
-    assert!(!secret.eligible && secret.sensitive);
-    report(
-        &state,
-        &json!({"text":"second","sensitive":false}).to_string(),
-    )
-    .unwrap();
-    assert!(changes.borrow_and_update().as_ref().unwrap().eligible);
-    report(
-        &state,
-        &json!({"text":"first","sensitive":false}).to_string(),
-    )
-    .unwrap();
-    assert!(!changes.borrow_and_update().as_ref().unwrap().eligible);
-    prefs.set("api_permissions", json!([])).unwrap();
-    report(
-        &state,
-        &json!({"text":"disabled","sensitive":false}).to_string(),
-    )
-    .unwrap();
-    assert!(!changes.has_changed().unwrap());
-    assert_eq!(state.db.clipboard_count_rows().unwrap(), 2);
-    prefs.set("api_permissions", json!(["CLIPBOARD"])).unwrap();
-    report(
-        &state,
-        &json!({"text":"third","sensitive":false}).to_string(),
-    )
-    .unwrap();
-    assert!(changes.borrow_and_update().as_ref().unwrap().eligible);
-    state.clipboard_changes.received("third");
-    assert!(changes.has_changed().unwrap());
-    assert!(!changes.borrow_and_update().as_ref().unwrap().eligible);
-    report(
-        &state,
-        &json!({"text":"third","sensitive":false}).to_string(),
-    )
-    .unwrap();
-    assert!(!changes.has_changed().unwrap());
-    state.db.clipboard_delete_query("all:true").unwrap();
-    report(
-        &state,
-        &json!({"text":"third","sensitive":false}).to_string(),
-    )
-    .unwrap();
-    assert!(changes.has_changed().unwrap());
-    assert!(changes.borrow_and_update().as_ref().unwrap().eligible);
+    let mut events = state.events.subscribe();
+    let text = "sensitive fixture";
+    let payload = json!({"text":text,"sensitive":true}).to_string();
+    let first = state.clipboard_writes.begin(text);
+    let second = state.clipboard_writes.begin(text);
+    drop(first);
+    report(&state, &payload).unwrap();
+    assert_eq!(state.db.clipboard_count_rows().unwrap(), 0);
+    assert!(events.try_recv().is_err());
+    drop(second);
+    report(&state, &payload).unwrap();
+    let item = state.db.clipboard_latest().unwrap().unwrap();
+    assert_eq!(item.text, text);
+    assert!(item.sensitive);
+    assert!(events.try_recv().is_err());
     server.shutdown().await;
 }

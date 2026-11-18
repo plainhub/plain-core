@@ -19,6 +19,13 @@ pub(super) fn operations() -> impl Iterator<Item = &'static EventSpec> {
         )
     })
 }
+pub(super) fn subscribe(spec: &EventSpec, id: String) -> ClientMessage {
+    ClientMessage::Subscribe {
+        id,
+        payload: plain_graphql::Request::new(registry::document(spec)),
+    }
+}
+
 pub(super) fn encode(
     message: &ClientMessage,
     key: &[u8],
@@ -30,6 +37,8 @@ pub(super) fn encode(
 }
 pub(super) enum Incoming {
     Event(&'static str),
+    Clipboard(String, super::clipboard::Change),
+    ClipboardComplete(String),
     Pong,
     Ready,
     Rejected(String),
@@ -42,7 +51,10 @@ pub(super) fn event(frame: &[u8], key: &[u8], stream: &mut websocket::Stream) ->
         ServerMessage::Pong { .. } => Ok(Incoming::Pong),
         ServerMessage::Next { id, payload } => {
             let spec = operations()
-                .find(|spec| spec.field == id)
+                .find(|spec| {
+                    spec.field == id
+                        || (spec.field == "clipboardChanged" && id.starts_with("clipboardChanged:"))
+                })
                 .ok_or_else(|| anyhow!("Unknown management operation"))?;
             ensure!(
                 payload.errors.is_empty(),
@@ -55,10 +67,16 @@ pub(super) fn event(frame: &[u8], key: &[u8], stream: &mut websocket::Stream) ->
                 return Ok(Incoming::Ready);
             }
             let mut data = plain_libs::serde_json::to_value(payload.data)?;
-            let _value = data
+            let value = data
                 .as_object_mut()
                 .and_then(|data| data.remove(spec.field))
                 .ok_or_else(|| anyhow!("Missing management subscription data"))?;
+            if spec.event == "CLIPBOARD_CHANGED" {
+                return Ok(Incoming::Clipboard(
+                    id,
+                    plain_libs::serde_json::from_value(value)?,
+                ));
+            }
             Ok(Incoming::Event(spec.event))
         }
         ServerMessage::Error { id, payload } => Ok(Incoming::Rejected(format!(
@@ -69,6 +87,9 @@ pub(super) fn event(frame: &[u8], key: &[u8], stream: &mut websocket::Stream) ->
                 .collect::<Vec<_>>()
                 .join(", ")
         ))),
+        ServerMessage::Complete { id } if id.starts_with("clipboardChanged:") => {
+            Ok(Incoming::ClipboardComplete(id))
+        }
         ServerMessage::Complete { id } => Err(anyhow!("Management subscription completed: {id}")),
     }
 }

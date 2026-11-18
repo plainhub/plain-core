@@ -62,21 +62,7 @@ impl CallbackReceiver {
             }
         }
     }
-    async fn recv_clipboard(&mut self) -> Option<plain_libs::serde_json::Value> {
-        loop {
-            let request = self.requests.recv().await?;
-            self.host
-                .reply(self.generation, json!({"id":request["id"],"result":null}))
-                .unwrap();
-            match request["method"].as_str() {
-                Some("peerClipboardChanged") => return Some(request["params"].clone()),
-                Some("peerNotificationsChanged") => {
-                    self.buffered.push_back(request["params"].clone())
-                }
-                _ => {}
-            }
-        }
-    }
+
 }
 
 async fn refresh(
@@ -86,7 +72,7 @@ async fn refresh(
     canceled: &tokio::sync::watch::Receiver<bool>,
 ) -> plain_libs::anyhow::Result<()> {
     plain_rs::features::services::peers::management::refresh_data(
-        state, id, identity, canceled, None,
+        state, id, identity, canceled,
     )
     .await
 }
@@ -229,7 +215,7 @@ async fn encrypted_snapshots_keep_socket_delivery_live_and_discard_revoked_crede
                             })
                             .collect();
                         // Subscription authorization follows receiver registration; metadata samples multiple features.
-                        if request["params"]["features"] == json!(["CLIPBOARD"]) {
+                        if request["params"]["features"] == json!(["NOTIFICATIONS"]) {
                             sdk_ready.notify_one();
                         }
                         json!({"granted":granted})
@@ -319,18 +305,6 @@ async fn encrypted_snapshots_keep_socket_delivery_live_and_discard_revoked_crede
         .events
         .send(WsEvent::broadcast("NOTIFICATION_REFRESHED", String::new()))
         .unwrap();
-    remote_state
-        .events
-        .send(WsEvent::broadcast(
-            "CLIPBOARD_CHANGED",
-            json!({"text":"hint", "sensitive":false, "time":1}).to_string(),
-        ))
-        .unwrap();
-    let clipboard = tokio::time::timeout(Duration::from_secs(3), callbacks.recv_clipboard())
-        .await
-        .unwrap()
-        .unwrap();
-    assert_eq!(clipboard, json!({"peerIds":["remote"],"refreshAll":false}));
     release.notify_one();
     let baseline = tokio::time::timeout(Duration::from_secs(10), async {
         loop {

@@ -14,6 +14,27 @@ pub fn record(
     label: &str,
     sensitive: bool,
 ) -> DomainResult<(ClipboardRow, bool)> {
+    record_item(db, text, source, label, sensitive, false)
+}
+
+pub(crate) fn record_write(
+    db: &Db,
+    text: &str,
+    source: &str,
+    label: &str,
+    sensitive: bool,
+) -> DomainResult<(ClipboardRow, bool)> {
+    record_item(db, text, source, label, sensitive, true)
+}
+
+fn record_item(
+    db: &Db,
+    text: &str,
+    source: &str,
+    label: &str,
+    sensitive: bool,
+    distinguish_metadata: bool,
+) -> DomainResult<(ClipboardRow, bool)> {
     validate_text(text)?;
     let row = ClipboardRow {
         id: crate::features::record_id::generate(),
@@ -24,7 +45,7 @@ pub fn record(
         sensitive,
         created_at: plain_libs::chrono::Utc::now().to_rfc3339_opts(plain_libs::chrono::SecondsFormat::Millis, true),
     };
-    db.clipboard_record(&row).map_err(DomainError::from)
+    db.clipboard_record(&row, distinguish_metadata).map_err(DomainError::from)
 }
 
 pub fn validate_text(text: &str) -> Result<(), ClipboardErrorCode> {

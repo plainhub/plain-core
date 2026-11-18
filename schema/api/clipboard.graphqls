@@ -20,7 +20,7 @@ extend type Mutation {
 	"""
 	Record caller-attributed history only after a successful system write; suppress watcher echoes.
 	"""
-	setClipboard(text: String!): Boolean!
+	setClipboard(text: String!, label: String! = "", sensitive: Boolean! = false): Boolean!
 }
 
 extend type Query {

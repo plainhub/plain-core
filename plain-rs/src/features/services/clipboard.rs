@@ -1,89 +1,32 @@
 use crate::features::access::AccessFeature;
 use crate::infrastructure::events::WsEvent;
 use crate::runtime::Runtime as CoreRuntime;
-use std::sync::Arc;
-use tokio::sync::watch;
-
-#[derive(Clone)]
-pub struct Capture {
-    pub text: String,
-    pub sensitive: bool,
-    pub eligible: bool,
-    received: bool,
-}
-
-pub struct Changes(watch::Sender<Option<Arc<Capture>>>);
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
+#[derive(Default)]
+pub struct ActiveWrites(Mutex<HashMap<String, usize>>);
 
 pub struct Receipt<'a> {
-    changes: &'a Changes,
+    writes: &'a ActiveWrites,
     text: &'a str,
 }
 
 impl Drop for Receipt<'_> {
     fn drop(&mut self) {
-        self.changes.0.send_if_modified(|current| {
-            if let Some(capture) = current.as_mut().filter(|capture| capture.text == self.text) {
-                Arc::make_mut(capture).received = false;
+        let mut writes = self.writes.0.lock().unwrap();
+        if let Some(count) = writes.get_mut(self.text) {
+            *count -= 1;
+            if *count == 0 {
+                writes.remove(self.text);
             }
-            false
-        });
+        }
     }
 }
 
-impl Default for Changes {
-    fn default() -> Self {
-        Self(watch::channel(None).0)
-    }
-}
-
-impl Changes {
-    pub fn subscribe(&self) -> watch::Receiver<Option<Arc<Capture>>> {
-        self.0.subscribe()
-    }
-
-    pub fn can_send(&self, text: &str) -> bool {
-        self.0
-            .borrow()
-            .as_ref()
-            .is_some_and(|capture| capture.eligible && !capture.sensitive && capture.text == text)
-    }
-
-    pub fn received<'a>(&'a self, text: &'a str) -> Receipt<'a> {
-        self.0.send_if_modified(|current| {
-            if current
-                .as_ref()
-                .is_some_and(|old| old.text == text && old.received)
-            {
-                return false;
-            }
-            *current = Some(Arc::new(Capture {
-                text: text.into(),
-                sensitive: false,
-                eligible: false,
-                received: true,
-            }));
-            true
-        });
-        Receipt { changes: self, text }
-    }
-
-    fn observe(&self, text: &str, sensitive: bool, inserted: bool) {
-        self.0.send_if_modified(|current| {
-            if !inserted
-                && current
-                    .as_ref()
-                    .is_some_and(|old| old.text == text && old.sensitive == sensitive)
-            {
-                return false;
-            }
-            *current = Some(Arc::new(Capture {
-                text: text.into(),
-                sensitive,
-                eligible: inserted && !sensitive,
-                received: false,
-            }));
-            true
-        });
+impl ActiveWrites {
+    pub fn begin<'a>(&'a self, text: &'a str) -> Receipt<'a> {
+        *self.0.lock().unwrap().entry(text.to_owned()).or_default() += 1;
+        Receipt { writes: self, text }
     }
 }
 
@@ -108,23 +51,31 @@ pub fn record_history(
     Ok(result)
 }
 
+pub fn record_write(
+    db: &crate::infrastructure::db::Db,
+    host: &Arc<crate::infrastructure::host::bridge::Host>,
+    text: &str,
+    source: &str,
+    label: &str,
+    sensitive: bool,
+) -> crate::infrastructure::error::DomainResult<()> {
+    let (_, inserted) = crate::features::clipboard::record_write(db, text, source, label, sensitive)?;
+    if inserted {
+        host.invalidate("clipboardHistoryRefresh");
+    }
+    Ok(())
+}
+
 pub fn report(state: &CoreRuntime, payload: &str) -> Result<(), String> {
     let value: Report = plain_libs::serde_json::from_str(payload).map_err(|error| error.to_string())?;
     if !crate::features::services::device::access::is_enabled(&state.prefs, &[AccessFeature::Clipboard]) {
         return Ok(());
     }
-    if !value.sensitive
-        && state.clipboard_changes.0.borrow().as_ref().is_some_and(|capture| {
-            capture.received && capture.text == value.text
-        })
-    {
+    if state.clipboard_writes.0.lock().unwrap().contains_key(&value.text) {
         return Ok(());
     }
     let (item, inserted) =
         record_history(&state.db, &state.host, &value.text, "", value.sensitive).map_err(|error| error.to_string())?;
-    state
-        .clipboard_changes
-        .observe(&value.text, value.sensitive, inserted);
     if !inserted {
         return Ok(());
     }

@@ -32,7 +32,7 @@ fn subscription_messages_authenticate_and_reject_replays() {
     let frame = sender.encode(next, &key).unwrap();
     assert!(matches!(
         event(&frame, &key, &mut receiver).unwrap(),
-        Incoming::Event("CLIPBOARD_CHANGED")
+        Incoming::Clipboard(id, change) if id == "clipboardChanged" && change.text == "text" && !change.sensitive
     ));
 }
 

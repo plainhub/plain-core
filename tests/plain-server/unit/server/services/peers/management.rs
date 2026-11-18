@@ -1,29 +1,12 @@
-use plain_libs::protocols::http_client;
 use futures_util::SinkExt;
 use futures_util::StreamExt;
-use plain_rs::features::chat::enums::DeviceType;
-use plain_rs::features::services::peers::clipboard::receive as synchronize_clipboard;
-use plain_rs::features::services::peers::management::*;
+use plain_libs::serde_json::json;
+use plain_rs::features::chat::enums::{DeviceType, PeerStatus};
 use plain_rs::infrastructure::db::DPeer;
 use plain_rs::infrastructure::db::chat_store::SaveMode;
 use plain_rs::infrastructure::db::chat_store::peers;
 use plain_rs::infrastructure::events::WsEvent;
-use plain_rs::runtime::Runtime as ServerState;
-use plain_libs::serde_json::json;
 use std::time::Duration;
-use tokio::sync::watch;
-
-async fn fixture() -> (plain_libs::temporary::TempDir, crate::server::ContentServer, ServerState) {
-    let directory = plain_libs::temporary::tempdir().unwrap();
-    let core = crate::server::ContentServer::open_with_cache(
-        &directory.path().join("data"),
-        &directory.path().join("cache"),
-    )
-    .unwrap();
-    let state = core.runtime_state().core;
-    state.management.shutdown().await;
-    (directory, core, state)
-}
 
 #[cfg(feature = "http_transport")]
 #[tokio::test]
@@ -89,6 +72,10 @@ async fn actual_management_socket_authenticates_and_relays_only_decrypted_native
         crate::server::ContentServer::open_with_cache(&data, &directory.path().join("cache"))
             .unwrap();
     let state = manager.runtime_state().core;
+    state
+        .prefs
+        .set("api_permissions", json!(["CLIPBOARD"]))
+        .unwrap();
     let (host_generation, mut requests) = state.host.connect();
     let mut peer = DPeer::new(
         &remote_state.native_client_id().unwrap(),
@@ -97,7 +84,29 @@ async fn actual_management_socket_authenticates_and_relays_only_decrypted_native
         Some(tls_port),
         DeviceType::Computer,
     );
-    peer.token = session.token;
+    peer.status = PeerStatus::Paired;
+    peer.token = session.token.clone();
+    let mut login = remote_state
+        .db
+        .session_get(&session.client_id)
+        .unwrap()
+        .unwrap();
+    login.r#type = plain_rs::features::sessions::SessionType::Login;
+    remote_state.db.session_save(&login).unwrap();
+    let mut reverse = DPeer::new(
+        &session.client_id,
+        "Fixture manager",
+        "127.0.0.1",
+        Some(tls_port),
+        DeviceType::Computer,
+    );
+    reverse.status = PeerStatus::Paired;
+    reverse.token = plain_libs::utils::base64::base64_encode(&[3; 32]);
+    peers::save(&remote_state.db, &[reverse], SaveMode::Insert).unwrap();
+    remote_state
+        .prefs
+        .set("clipboard_directions", json!({session.client_id:"SEND"}))
+        .unwrap();
     peers::save(&state.db, &[peer.clone()], SaveMode::Insert).unwrap();
     tokio::time::timeout(Duration::from_secs(10), ready_rx.recv())
         .await
@@ -126,218 +135,5 @@ async fn actual_management_socket_authenticates_and_relays_only_decrypted_native
     state.host.disconnect(host_generation);
     manager.stop_core().await;
     responder.abort();
-    remote.stop_core().await;
-}
-
-#[cfg(feature = "http_transport")]
-#[tokio::test]
-async fn encrypted_clipboard_sync_seeds_baseline_retries_failed_writes_and_rechecks_grants() {
-    use std::sync::{
-        Arc,
-        atomic::{AtomicBool, AtomicUsize, Ordering},
-    };
-    fn seed(db: &plain_rs::infrastructure::db::Db, text: &str, sensitive: bool, sequence: u8) {
-        let (item, _) = plain_rs::features::clipboard::record(db, text, "", "", sensitive).unwrap();
-        let time = format!("2026-01-01T00:00:{sequence:02}.000Z");
-        db.with_conn(|connection| {
-            connection
-                .execute(
-                    "UPDATE clipboards SET created_at=?1 WHERE id=?2",
-                    [&time, &item.id],
-                )
-                .unwrap()
-        });
-    }
-    let remote_directory = plain_libs::temporary::tempdir().unwrap();
-    let remote = crate::server::ContentServer::open_with_cache(
-        &remote_directory.path().join("data"),
-        &remote_directory.path().join("cache"),
-    )
-    .unwrap();
-    let remote_state = remote.runtime_state().core;
-    remote_state
-        .prefs
-        .set("api_permissions", json!(["CLIPBOARD"]))
-        .unwrap();
-    let session = remote
-        .native_management()
-        .unwrap()
-        .create_session("Fixture sync".into())
-        .unwrap();
-    remote_state.prefs.set("http_port", 0).unwrap();
-    remote_state.prefs.set("https_port", 0).unwrap();
-    let (_, port) = remote.start_configured_public().await.unwrap();
-    let (_directory, manager, state) = fixture().await;
-    state.prefs.set("client_id", &session.client_id).unwrap();
-    let mut peer = DPeer::new(
-        "remote-clipboard",
-        "Fixture",
-        "127.0.0.1",
-        Some(port),
-        DeviceType::Computer,
-    );
-    peer.token = session.token;
-    peers::save(&state.db, &[peer.clone()], SaveMode::Insert).unwrap();
-    let expected = identity(
-        &peer,
-        &session.client_id,
-        &format!("https://127.0.0.1:{port}"),
-    )
-    .unwrap();
-    let (cancel, canceled) = watch::channel(false);
-    let (generation, mut requests) = crate::test_support::HostRequests::connect(&state.host);
-    let writes = Arc::new(AtomicUsize::new(0));
-    let succeeds = Arc::new(AtomicBool::new(false));
-    let supports = Arc::new(AtomicBool::new(true));
-    let (count, success, support, host) = (
-        writes.clone(),
-        succeeds.clone(),
-        supports.clone(),
-        state.host.clone(),
-    );
-    let responder = tokio::spawn(async move {
-        while let Some(request) = requests.recv().await {
-            let result = match request["method"].as_str().unwrap() {
-                "systemCapabilities" => {
-                    if support.load(Ordering::SeqCst) {
-                        json!(["CLIPBOARD"])
-                    } else {
-                        json!([])
-                    }
-                }
-                "systemSetClipboard" => {
-                    count.fetch_add(1, Ordering::SeqCst);
-                    assert_eq!(request["params"]["text"], "new clipboard");
-                    json!(success.load(Ordering::SeqCst))
-                }
-                "mdnsMulticast" => json!(false),
-                method => panic!("Unexpected host primitive {method}"),
-            };
-            host.reply(generation, json!({"id":request["id"],"result":result}))
-                .unwrap();
-        }
-    });
-    seed(&remote_state.db, "old clipboard", false, 1);
-    synchronize_clipboard(&state, &peer.id, &expected, &canceled)
-        .await
-        .unwrap();
-    assert_eq!(writes.load(Ordering::SeqCst), 0);
-    seed(&remote_state.db, "new clipboard", false, 2);
-    assert!(
-        synchronize_clipboard(&state, &peer.id, &expected, &canceled)
-            .await
-            .is_err()
-    );
-    assert_eq!(writes.load(Ordering::SeqCst), 1);
-    succeeds.store(true, Ordering::SeqCst);
-    synchronize_clipboard(&state, &peer.id, &expected, &canceled)
-        .await
-        .unwrap();
-    synchronize_clipboard(&state, &peer.id, &expected, &canceled)
-        .await
-        .unwrap();
-    assert_eq!(writes.load(Ordering::SeqCst), 2);
-    let history = state.db.clipboard_page("", 10, 0).unwrap();
-    assert_eq!(history.len(), 1);
-    assert_eq!(history[0].text, "new clipboard");
-    assert_eq!(history[0].source, peer.id);
-    state
-        .prefs
-        .set("api_permissions", json!(["CLIPBOARD"]))
-        .unwrap();
-    let mut echoes = state.events.subscribe();
-    plain_rs::features::services::clipboard::report(
-        &state,
-        &json!({"text":"new clipboard","sensitive":false}).to_string(),
-    )
-    .unwrap();
-    assert!(echoes.try_recv().is_err());
-    seed(&remote_state.db, "private clipboard", true, 3);
-    synchronize_clipboard(&state, &peer.id, &expected, &canceled)
-        .await
-        .unwrap();
-    assert_eq!(writes.load(Ordering::SeqCst), 2);
-    seed(&remote_state.db, "must not apply", false, 4);
-    supports.store(false, Ordering::SeqCst);
-    synchronize_clipboard(&state, &peer.id, &expected, &canceled)
-        .await
-        .unwrap();
-    supports.store(true, Ordering::SeqCst);
-    state
-        .prefs
-        .set("clipboard_directions", json!({peer.id.clone():"off"}))
-        .unwrap();
-    synchronize_clipboard(&state, &peer.id, &expected, &canceled)
-        .await
-        .unwrap();
-    state.prefs.set("clipboard_directions", json!({})).unwrap();
-    cancel.send_replace(true);
-    synchronize_clipboard(&state, &peer.id, &expected, &canceled)
-        .await
-        .unwrap();
-    cancel.send_replace(false);
-    state.db.with_conn(|connection| {
-        connection
-            .execute("UPDATE peers SET token='' WHERE id=?1", [&peer.id])
-            .unwrap()
-    });
-    synchronize_clipboard(&state, &peer.id, &expected, &canceled)
-        .await
-        .unwrap();
-    assert_eq!(writes.load(Ordering::SeqCst), 2);
-    assert_eq!(state.db.clipboard_count_rows().unwrap(), 1);
-    let (remote_generation, mut remote_requests) =
-        crate::test_support::HostRequests::connect(&remote_state.host);
-    let (remote_host, remote_db) = (remote_state.host.clone(), remote_state.db.clone());
-    let remote_responder = tokio::spawn(async move {
-        while let Some(request) = remote_requests.recv().await {
-            let result = match request["method"].as_str().unwrap() {
-                "systemCapabilities" => json!(["CLIPBOARD"]),
-                "systemSetClipboard" => {
-                    assert_eq!(request["params"]["text"], "encrypted fixture write");
-                    let item = remote_db
-                        .clipboard_page("encrypted fixture write", 1, 0)
-                        .unwrap();
-                    assert!(item.is_empty());
-                    json!(true)
-                }
-                "mdnsMulticast" => json!(false),
-                method => panic!("Unexpected remote host primitive {method}"),
-            };
-            remote_host
-                .reply(
-                    remote_generation,
-                    json!({"id":request["id"],"result":result}),
-                )
-                .unwrap();
-        }
-    });
-    let result = plain_rs::features::services::peers::management_http::query(
-        &state,
-        &http_client::Url::parse(&format!("https://127.0.0.1:{port}")).unwrap(),
-        &session.client_id,
-        &plain_libs::utils::base64::base64_decode(&peer.token),
-        json!({"query":"mutation($text:String!){setClipboard(text:$text)}", "variables":{"text":"encrypted fixture write"}}),
-        4 * 1024 * 1024,
-    ).await.unwrap();
-    assert_eq!(result["setClipboard"], true);
-    let recorded = remote_state
-        .db
-        .clipboard_page("encrypted fixture write", 1, 0)
-        .unwrap();
-    assert_eq!(recorded.len(), 1);
-    assert_eq!(recorded[0].source, session.client_id);
-    let mut remote_echoes = remote_state.events.subscribe();
-    plain_rs::features::services::clipboard::report(
-        &remote_state,
-        &json!({"text":"encrypted fixture write","sensitive":false}).to_string(),
-    )
-    .unwrap();
-    assert!(remote_echoes.try_recv().is_err());
-    remote_state.host.disconnect(remote_generation);
-    remote_responder.abort();
-    state.host.disconnect(generation);
-    responder.abort();
-    manager.stop_core().await;
     remote.stop_core().await;
 }

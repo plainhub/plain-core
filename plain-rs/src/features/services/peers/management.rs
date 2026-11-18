@@ -1,4 +1,3 @@
-use crate::features::capability::Capability;
 use crate::infrastructure::db::DPeer;
 use crate::infrastructure::db::chat_store::peers;
 use crate::runtime::Runtime as CoreRuntime;
@@ -328,30 +327,15 @@ pub async fn refresh_data(
     id: &str,
     identity: &Identity,
     canceled: &watch::Receiver<bool>,
-    clipboard_access: Option<&watch::Sender<Option<bool>>>,
 ) -> Result<()> {
     let app =
         match crate::features::services::peers::metadata::refresh(state, id, identity, canceled)
             .await
         {
             Ok(Some(app)) => Ok(app),
-            Ok(None) => {
-                if let Some(access) = clipboard_access {
-                    access.send_replace(None);
-                }
-                return Ok(());
-            }
+            Ok(None) => return Ok(()),
             Err(error) => Err(error),
         };
-    let clipboard = app.as_ref().ok().map(|app| {
-        app.capabilities.contains(&Capability::Clipboard)
-            && app
-                .access
-                .contains(&crate::features::access::AccessFeature::Clipboard)
-    });
-    if let Some(access) = clipboard_access {
-        access.send_replace(clipboard);
-    }
     crate::features::services::peers::notifications::refresh_from_app(
         state, id, identity, canceled, app,
     )
@@ -364,7 +348,6 @@ async fn follow_data(
     identity: &Identity,
     canceled: &watch::Receiver<bool>,
     changed: &tokio::sync::Notify,
-    clipboard_access: watch::Sender<Option<bool>>,
 ) {
     let mut interval = tokio::time::interval_at(
         tokio::time::Instant::now() + Duration::from_secs(60),
@@ -372,9 +355,7 @@ async fn follow_data(
     );
     interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     loop {
-        if let Err(error) =
-            refresh_data(state, id, identity, canceled, Some(&clipboard_access)).await
-        {
+        if let Err(error) = refresh_data(state, id, identity, canceled).await {
             log::debug!("Peer data refresh failed: {error}");
         }
         tokio::select! {
@@ -391,17 +372,14 @@ async fn run(
     mut canceled: watch::Receiver<bool>,
 ) {
     let changed = tokio::sync::Notify::new();
-    let clipboard_changed = tokio::sync::Notify::new();
-    let (clipboard_access, access) = watch::channel(None);
     let mut stop = state.stop.clone();
     let publication_canceled = canceled.clone();
     tokio::select! {
         biased;
         _ = stop.wait_for(|stopped| *stopped) => {},
         _ = canceled.wait_for(|canceled| *canceled) => {},
-        _ = follow_data(&state, &id, &identity, &publication_canceled, &changed, clipboard_access) => {},
-        _ = connection_loop(state.clone(), id.clone(), identity.clone(), publication_canceled.clone(), &changed, &clipboard_changed) => {},
-        _ = crate::features::services::peers::clipboard::follow(&state, &id, &identity, &publication_canceled, &clipboard_changed, access) => {},
+        _ = follow_data(&state, &id, &identity, &publication_canceled, &changed) => {},
+        _ = connection_loop(state.clone(), id.clone(), identity.clone(), publication_canceled.clone(), &changed) => {},
     }
 }
 
@@ -411,7 +389,6 @@ async fn connection_loop(
     identity: Identity,
     mut canceled: watch::Receiver<bool>,
     data_changed: &tokio::sync::Notify,
-    clipboard_changed: &tokio::sync::Notify,
 ) {
     let key = plain_libs::utils::base64::base64_decode(&identity.token);
     let mut stop = state.stop.clone();
@@ -457,28 +434,64 @@ async fn connection_loop(
                     .encode(&[], &key)
                     .ok_or_else(|| anyhow!("Invalid management confirmation"))?;
                 socket.send(Message::Binary(confirmation.into())).await?;
-                for spec in management_wire::operations() {
-                    let message = ClientMessage::Subscribe {
-                        id: spec.field.into(),
-                        payload: plain_graphql::Request::new(
-                            crate::infrastructure::protocols::graphql::events::document(spec),
-                        ),
-                    };
+                let mut local_events = state.events.subscribe();
+                let clipboard_spec = management_wire::operations()
+                    .find(|spec| spec.event == "CLIPBOARD_CHANGED")
+                    .expect("registered clipboard event");
+                for spec in
+                    management_wire::operations().filter(|spec| spec.event != "CLIPBOARD_CHANGED")
+                {
+                    let message = management_wire::subscribe(spec, spec.field.into());
                     socket
                         .send(Message::Binary(
                             management_wire::encode(&message, &key, &mut stream)?.into(),
                         ))
                         .await?;
                 }
-                clipboard_changed.notify_one();
                 let messages = async {
+                    let mut clipboard_id = None;
+                    let mut clipboard_sequence = 0_u64;
+                    let mut clipboard_update = true;
                     let mut heartbeat = tokio::time::interval_at(
                         tokio::time::Instant::now() + Duration::from_secs(20),
                         Duration::from_secs(20),
                     );
                     let mut pong_deadline = None;
                     loop {
+                        if std::mem::take(&mut clipboard_update) {
+                            let permitted =
+                                super::clipboard::may_receive(&state, &id).unwrap_or(false);
+                            let command = match (permitted, clipboard_id.as_ref()) {
+                                (true, None) => {
+                                    clipboard_sequence += 1;
+                                    let operation =
+                                        format!("{}:{clipboard_sequence}", clipboard_spec.field);
+                                    clipboard_id = Some(operation.clone());
+                                    Some(management_wire::subscribe(clipboard_spec, operation))
+                                }
+                                (false, Some(_)) => Some(ClientMessage::Complete {
+                                    id: clipboard_id.take().unwrap(),
+                                }),
+                                _ => None,
+                            };
+                            if let Some(command) = command {
+                                socket
+                                    .send(Message::Binary(
+                                        management_wire::encode(&command, &key, &mut stream)?
+                                            .into(),
+                                    ))
+                                    .await?;
+                            }
+                        }
                         let message = tokio::select! {
+                            event = local_events.recv() => {
+                                clipboard_update = match event {
+                                    Ok(event) => matches!(event.event_type, "PREFS_UPDATED" | "ACCESS_UPDATED" | "PEER_UPDATED"),
+                                    Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => true,
+                                    Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+                                };
+                                continue;
+                            },
                             _ = heartbeat.tick() => {
                                 socket.send(Message::Binary(management_wire::encode(&ClientMessage::Ping { payload: None }, &key, &mut stream)?.into())).await?;
                                 pong_deadline = Some(tokio::time::Instant::now() + Duration::from_secs(10));
@@ -496,27 +509,48 @@ async fn connection_loop(
                                     Incoming::Pong => pong_deadline = None,
                                     Incoming::Ready => {
                                         data_changed.notify_one();
-                                        clipboard_changed.notify_one();
                                     }
                                     Incoming::Rejected(error) => {
                                         log::debug!("Management subscription rejected: {error}")
                                     }
-                                    Incoming::Event(kind) => {
-                                        if kind == "CLIPBOARD_CHANGED" {
-                                            if !publish_clipboard_change(
-                                                &state,
-                                                &id,
-                                                &identity,
-                                                &publication_canceled,
-                                            )
-                                            .await?
-                                            {
-                                                break;
-                                            }
-                                            clipboard_changed.notify_one();
-                                        } else {
-                                            data_changed.notify_one();
+                                    Incoming::Clipboard(operation, change) => {
+                                        if clipboard_id.as_ref() != Some(&operation) {
+                                            continue;
                                         }
+                                        if !publish_clipboard_change(
+                                            &state,
+                                            &id,
+                                            &identity,
+                                            &publication_canceled,
+                                        )
+                                        .await?
+                                        {
+                                            break;
+                                        }
+                                        if let Err(error) = super::clipboard::receive(
+                                            &state,
+                                            &id,
+                                            &identity,
+                                            &publication_canceled,
+                                            change,
+                                        )
+                                        .await
+                                        {
+                                            log::debug!(
+                                                "Managed clipboard receive failed: {error}"
+                                            );
+                                        }
+                                        delay = Duration::from_secs(1);
+                                    }
+                                    Incoming::ClipboardComplete(operation) => {
+                                        if clipboard_id.as_ref() == Some(&operation) {
+                                            return Err(anyhow!(
+                                                "Managed clipboard subscription completed"
+                                            ));
+                                        }
+                                    }
+                                    Incoming::Event(kind) => {
+                                        data_changed.notify_one();
                                         delay = Duration::from_secs(1);
                                         if kind == "ACCESS_UPDATED" {
                                             break;

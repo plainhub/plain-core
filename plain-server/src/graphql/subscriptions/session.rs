@@ -34,6 +34,7 @@ struct Queued {
     message: String,
     id: Option<String>,
     terminal: bool,
+    clipboard_payload: bool,
     spec: Option<&'static EventSpec>,
     scope: Option<NativeRequestScope>,
 }
@@ -355,6 +356,8 @@ impl Session {
             }
             ServerMessage::Pong { .. } => (None, false),
         };
+        let clipboard_payload = spec.is_some_and(|spec| spec.event == "CLIPBOARD_CHANGED")
+            && matches!(&message, ServerMessage::Next { payload, .. } if payload.data != plain_graphql::Value::Null);
         let mut encoded = plain_libs::serde_json::to_string(&message).map_err(|error| error.to_string())?;
         if encoded.len() > 1024 * 1024 - 48 {
             let Some(id) = &id else {
@@ -375,6 +378,7 @@ impl Session {
             message: encoded,
             id,
             terminal,
+            clipboard_payload,
             spec,
             scope,
         })
@@ -602,6 +606,12 @@ impl Session {
             if !self.valid() {
                 self.close();
                 return Err("Subscription session revoked".into());
+            }
+            if queued.clipboard_payload && !queued.terminal && self.origin == RequestOrigin::Remote
+                && !plain_rs::features::services::peers::clipboard::can_publish(&self.state, &self.client)
+                    .unwrap_or(false)
+            {
+                continue;
             }
             if queued.terminal {
                 if let Some(operation) = queued
