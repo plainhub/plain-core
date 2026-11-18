@@ -177,7 +177,7 @@ async fn remote_requests_cannot_access_or_change_local_login_sessions() {
         .unwrap();
     for document in [
         "{peers{token}}",
-        r#"mutation{pairPeer(input:{peerId:"peer",mode:MANAGE})}"#,
+        r#"mutation{pairPeer(peerId:"peer",input:{ mode:MANAGE})}"#,
     ] {
         let response = crate::graphql::executor::execute_graphql(
             &state.public,

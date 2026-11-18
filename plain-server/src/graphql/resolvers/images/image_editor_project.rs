@@ -102,7 +102,8 @@ impl ImageEditorProjectMutation {
         id: ID,
         input: ImageEditorProjectInput,
     ) -> plain_graphql::Result<ImageEditorProject> {
-        if input.canvas_width < 0
+        if id.as_str().trim().is_empty()
+            || input.canvas_width < 0
             || input.canvas_height < 0
             || input.state_b64.len() > plain_rs::features::media::images::editor::MAX_STATE_BYTES
             || input
@@ -114,14 +115,9 @@ impl ImageEditorProjectMutation {
         }
         plain_rs::features::media::images::editor::decode(&input.state_b64)
             .map_err(plain_graphql::Error::new)?;
-        let id = if id.is_empty() {
-            plain_rs::features::record_id::generate()
-        } else {
-            id.to_string()
-        };
         let row = store::save(
             ctx.data::<Arc<Db>>()?,
-            &id,
+            id.as_str(),
             &input.state_b64,
             input.thumbnail.as_deref(),
             input.canvas_width,

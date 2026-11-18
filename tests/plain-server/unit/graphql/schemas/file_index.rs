@@ -8,7 +8,7 @@ fn file_index_contract_uses_volume_controls_and_one_configuration_input() {
         "stopFileIndex(volumeId: ID): Boolean!",
         "fileIndexScanProgress(volumeId: ID): FileIndexScanProgress!",
         "fileIndexScanProgressUpdated: FileIndexScanProgress!",
-        "setFileIndexVolume(input: FileIndexVolumeInput!): Boolean!",
+        "setFileIndexVolume(volumeId: ID!, input: FileIndexVolumeInput!): Boolean!",
         "state: FileIndexScanState!",
         "lastScanAt: Instant",
         "lastScanStatus: FileIndexScanStatus",
@@ -85,7 +85,7 @@ fn volume_scan_fields_are_nullable_with_named_scalar_and_enum_types() {
 }
 
 #[test]
-fn volume_configuration_input_has_one_required_volume_id_and_explicit_lists() {
+fn volume_configuration_input_has_configuration_only_and_explicit_lists() {
     let sdl = super::sdl();
     let fields = sdl
         .split("input FileIndexVolumeInput {")
@@ -94,8 +94,11 @@ fn volume_configuration_input_has_one_required_volume_id_and_explicit_lists() {
         .split('}')
         .next()
         .unwrap();
+    assert!(
+        !fields.contains("volumeId"),
+        "target belongs to the mutation"
+    );
     for field in [
-        "volumeId: ID!",
         "indexMode: FileIndexMode!",
         "includedDirs: [String!]!",
         "excludedDirs: [String!]!",

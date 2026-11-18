@@ -74,7 +74,6 @@ type FileIndexVolume {
 }
 
 input FileIndexVolumeInput {
-	volumeId: ID!
 	indexMode: FileIndexMode!
 	includedDirs: [String!]!
 	excludedDirs: [String!]!
@@ -118,7 +117,7 @@ extend type Mutation {
 	recordMediaPlay(mediaId: ID!, type: PlaybackType!, positionMs: Long!): Boolean!
 	resumeFileIndex(volumeId: ID): Boolean!
 	saveMediaPlayProgress(mediaId: ID!, type: PlaybackType!, positionMs: Long!): Boolean!
-	setFileIndexVolume(input: FileIndexVolumeInput!): Boolean!
+	setFileIndexVolume(volumeId: ID!, input: FileIndexVolumeInput!): Boolean!
 	stopFileIndex(volumeId: ID): Boolean!
 }
 

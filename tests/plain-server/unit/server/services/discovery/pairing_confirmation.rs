@@ -96,7 +96,7 @@ async fn scanner_sends_only_the_response_and_both_tls_peers_save_the_same_key() 
     assert_eq!(parsed.data.into_json().unwrap()["parsePairingQrCode"]["id"], "706c6169-f9bd-8908-9bd5-f02ea4f40dea");
     for _ in 0..2 {
         let mut notices = remote.events.subscribe();
-        let response = native.execute(plain_graphql::Request::new(r#"mutation{pairPeer(input:{peerId:"706c6169-f9bd-8908-9bd5-f02ea4f40dea",mode:CHAT})}"#)).await;
+        let response = native.execute(plain_graphql::Request::new(r#"mutation{pairPeer(peerId:"706c6169-f9bd-8908-9bd5-f02ea4f40dea",input:{ mode:CHAT})}"#)).await;
         assert!(response.errors.is_empty(), "{:?}", response.errors);
         assert_eq!(response.data.into_json().unwrap()["pairPeer"], true);
         tokio::time::timeout(std::time::Duration::from_secs(5), async {

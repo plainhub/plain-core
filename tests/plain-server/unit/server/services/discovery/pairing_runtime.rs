@@ -438,7 +438,7 @@ async fn first_nearby_chat_pairing_waits_for_matching_code_approval_without_qr()
     let mut a_events = a_state.events.subscribe();
     let mut b_events = b_state.events.subscribe();
     let response = a.native_graphql().unwrap().execute(format!(
-        r#"mutation {{ pairPeer(input: {{peerId:"{b_id}",mode:CHAT}}) }}"#
+        r#"mutation {{ pairPeer(peerId:"{b_id}",input:{{ mode:CHAT}}) }}"#
     ).into()).await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     assert_eq!(response.data.into_json().unwrap()["pairPeer"], true);

@@ -54,7 +54,6 @@ impl Peer {
 
 #[derive(InputObject, Clone)]
 pub struct PairPeerInput {
-    pub peer_id: plain_graphql::ID,
     pub mode: PairingMode,
     pub password: Option<String>,
 }
@@ -105,13 +104,14 @@ impl PeersMutation {
     async fn pair_peer(
         &self,
         ctx: &Context<'_>,
+        peer_id: plain_graphql::ID,
         input: PairPeerInput,
     ) -> plain_graphql::Result<bool> {
         let core = ctx.data::<crate::server::ServerState>()?;
         if input.mode == PairingMode::Manage && !crate::http::auth::public_gate::is_local(ctx) {
             if core
                 .native_client_id()
-                .is_ok_and(|local| input.peer_id.as_str() == local)
+                .is_ok_and(|local| peer_id.as_str() == local)
             {
                 return Err(plain_graphql::Error::from(AccessErrorCode::NoPermission));
             }
@@ -119,7 +119,7 @@ impl PeersMutation {
         }
         plain_rs::features::services::discovery::pairing_attempts::start(
             core,
-            input.peer_id.to_string(),
+            peer_id.to_string(),
             input.mode,
             input.password,
             ctx.data_opt::<plain_rs::infrastructure::host::request_scope::NativeRequestScope>()

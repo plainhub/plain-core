@@ -1,5 +1,4 @@
 input PairPeerInput {
-	peerId: ID!
 	mode: PairingMode!
 	password: String
 }
@@ -28,7 +27,7 @@ type Peer {
 extend type Mutation {
 	cancelPairing(peerId: ID!): Boolean!
 	deletePeer(peerId: ID!): Boolean!
-	pairPeer(input: PairPeerInput!): Boolean!
+	pairPeer(peerId: ID!, input: PairPeerInput!): Boolean!
 	respondToPairing(peerId: ID!, accepted: Boolean!): Boolean!
 	unpairPeer(peerId: ID!): Boolean!
 }

@@ -140,7 +140,7 @@ async fn chat_pairing_rejects_a_peer_without_a_nearby_or_saved_identity() {
     let (_dir, schema) = fixture();
     let paired = query(
         &schema,
-        r#"mutation { pairPeer(input: { peerId: "peer-9", mode: CHAT }) }"#,
+        r#"mutation { pairPeer(peerId:"peer-9",input:{ mode: CHAT }) }"#,
     )
     .await;
     assert!(
@@ -205,7 +205,7 @@ async fn unsupported_transport_does_not_call_native_pairing() {
     let mut events = schema.state.events.subscribe();
     let paired = query(
         &schema,
-        r#"mutation { pairPeer(input: { peerId: "no-route", mode: CHAT }) }"#,
+        r#"mutation { pairPeer(peerId:"no-route",input:{ mode: CHAT }) }"#,
     )
     .await;
     assert!(
@@ -229,7 +229,7 @@ async fn pairing_rejects_caller_supplied_discovery_metadata() {
     let (_dir, schema) = fixture();
     let result = query(
         &schema,
-        r#"mutation { pairPeer(input: { peerId: "peer-invalid", mode: CHAT, lastSeen: "invalid-time" }) }"#,
+        r#"mutation { pairPeer(peerId:"peer-invalid",input:{ mode: CHAT, lastSeen: "invalid-time" }) }"#,
     )
     .await;
     assert!(

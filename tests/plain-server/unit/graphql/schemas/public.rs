@@ -245,7 +245,7 @@ fn public_schema_exposes_the_contract_it_has_to_serve() {
         .split('}')
         .next()
         .unwrap();
-    for field in ["peerId: ID!", "mode: PairingMode!", "password: String"] {
+    for field in ["mode: PairingMode!", "password: String"] {
         assert!(pairing_input.contains(field));
     }
     for obsolete in [
@@ -420,7 +420,7 @@ fn public_schema_exposes_the_contract_it_has_to_serve() {
         "declineChatChannelInvite(id: ID!): Boolean!",
         "peers: [Peer!]!",
         "sims: [Sim!]!",
-        "pairPeer(input: PairPeerInput!): Boolean!",
+        "pairPeer(peerId: ID!, input: PairPeerInput!): Boolean!",
         "cancelPairing(peerId: ID!): Boolean!",
         "respondToPairing(peerId: ID!, accepted: Boolean!): Boolean!",
         "deletePeer(peerId: ID!): Boolean!",
@@ -1004,10 +1004,10 @@ fn pairing_commands_have_no_public_ui_state_or_client_record_snapshots() {
         .split('}')
         .next()
         .unwrap();
-    assert!(input.contains("peerId: ID!"));
+    assert!(!input.contains("peerId"));
     assert!(input.contains("mode: PairingMode!"));
     assert!(input.contains("password: String"));
-    assert_eq!(input.lines().filter(|line| line.contains(':')).count(), 3);
+    assert_eq!(input.lines().filter(|line| line.contains(':')).count(), 2);
     assert!(sdl.contains("peerFileUrl(peerId: ID!, fileId: String!): String!"));
 }
 

@@ -22,12 +22,29 @@ async fn projects_persist_project_summaries_and_validate_state() {
         })
         .unwrap();
     assert_eq!(layer_count_column, 0);
-    let save = r#"mutation {saveImageEditorProject(id:"",input:{stateB64:"AQID",thumbnail:"data:image/jpeg;base64,AQID",canvasWidth:100,canvasHeight:200}) {id stateB64 thumbnail createdAt updatedAt}}"#;
+    for id in ["", "   "] {
+        let result = call(
+            server.port,
+            &token,
+            &format!(r#"mutation {{saveImageEditorProject(id:"{id}",input:{{stateB64:"AQID",canvasWidth:1,canvasHeight:1}}) {{id}}}}"#),
+        )
+        .await;
+        assert_eq!(
+            result["errors"][0]["message"], "invalid image editor project",
+            "{result}"
+        );
+    }
+    let empty = call(server.port, &token, "{imageEditorProjects {id}}").await;
+    assert_eq!(
+        empty["data"]["imageEditorProjects"],
+        plain_libs::serde_json::json!([])
+    );
+    let save = r#"mutation {saveImageEditorProject(id:"client-project-id",input:{stateB64:"AQID",thumbnail:"data:image/jpeg;base64,AQID",canvasWidth:100,canvasHeight:200}) {id stateB64 thumbnail createdAt updatedAt}}"#;
     let result = call(server.port, &token, save).await;
     assert!(result.get("errors").is_none(), "{result}");
     let saved = &result["data"]["saveImageEditorProject"];
     let id = saved["id"].as_str().unwrap();
-    assert!(!id.is_empty());
+    assert_eq!(id, "client-project-id");
     let update = format!(
         r#"mutation {{saveImageEditorProject(id:"{id}",input:{{stateB64:"BAU",canvasWidth:300,canvasHeight:200}}) {{id stateB64 createdAt}}}}"#
     );

@@ -142,11 +142,12 @@ impl FileIndexScanMutation {
     async fn set_file_index_volume(
         &self,
         ctx: &Context<'_>,
+        volume_id: ID,
         input: FileIndexVolumeInput,
     ) -> Result<bool> {
         plain_rs::features::services::files::indexing::set(
             index_state(ctx).await?,
-            input.volume_id.as_ref(),
+            volume_id.as_ref(),
             input.index_mode,
             input.included_dirs,
             input.excluded_dirs,
@@ -196,7 +197,6 @@ pub struct FileIndexProfileDir {
 
 #[derive(InputObject)]
 pub struct FileIndexVolumeInput {
-    pub volume_id: ID,
     pub index_mode: FileIndexMode,
     pub included_dirs: Vec<String>,
     pub excluded_dirs: Vec<String>,

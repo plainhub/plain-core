@@ -152,7 +152,7 @@ async fn native_media_controls_share_the_main_contract_and_remote_permissions() 
         .with_conn(|conn| conn.execute("UPDATE volumes SET index_mode='DISABLED'", []))
         .unwrap();
     let set = native.execute(Request::new(
-        "mutation($id:ID!,$dirs:[String!]!){setFileIndexVolume(input:{volumeId:$id,indexMode:DISABLED,includedDirs:$dirs,excludedDirs:[]})}"
+        "mutation($id:ID!,$dirs:[String!]!){setFileIndexVolume(volumeId:$id,input:{indexMode:DISABLED,includedDirs:$dirs,excludedDirs:[]})}"
     ).variables(plain_graphql::Variables::from_json(plain_libs::serde_json::json!({"id":id,"dirs":[source_path.to_str().unwrap()]})))).await;
     assert!(set.errors.is_empty(), "{:?}", set.errors);
     state.media_scans.wait_background().await.unwrap();
@@ -271,7 +271,7 @@ async fn native_media_controls_share_the_main_contract_and_remote_permissions() 
     )
     .unwrap();
     let configured = native.execute(Request::new(
-        "mutation($id:ID!,$dirs:[String!]!,$excluded:[String!]!){setFileIndexVolume(input:{volumeId:$id,indexMode:ALLOWLIST,includedDirs:$dirs,excludedDirs:$excluded})}"
+        "mutation($id:ID!,$dirs:[String!]!,$excluded:[String!]!){setFileIndexVolume(volumeId:$id,input:{indexMode:ALLOWLIST,includedDirs:$dirs,excludedDirs:$excluded})}"
     ).variables(plain_graphql::Variables::from_json(plain_libs::serde_json::json!({
         "id":id,"dirs":[source_path.join("included").to_str().unwrap()],
         "excluded":[source_path.join("excluded").to_str().unwrap()]

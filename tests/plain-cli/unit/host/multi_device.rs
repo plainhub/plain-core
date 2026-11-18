@@ -144,7 +144,7 @@ async fn native_password_and_approval_pairing_enables_actual_chat_and_preserves_
         .unwrap();
     let started = query(
         &first.native,
-        r#"mutation($peerId:ID!){pairPeer(input:{peerId:$peerId,mode:MANAGE,password:"fixture-password"})}"#,
+        r#"mutation($peerId:ID!){pairPeer(peerId:$peerId,input:{ mode:MANAGE,password:"fixture-password"})}"#,
         json!({"peerId":second_id}),
     )
     .await;
