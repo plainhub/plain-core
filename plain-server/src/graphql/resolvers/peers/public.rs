@@ -1,12 +1,13 @@
 //! Public peer and pairing roots.
 use plain_rs::features::access_error::AccessErrorCode;
 
-use plain_graphql::{Context, Enum, InputObject, Object, SimpleObject};
+use plain_graphql::{Context, InputObject, Object, SimpleObject};
 
 use plain_libs::serde_json::Value;
 use plain_rs::features::services::device::types::DeviceType;
 
 pub use plain_rs::features::chat::enums::PeerStatus;
+pub use plain_rs::features::services::discovery::pairing_attempts::Mode as PairingMode;
 
 #[derive(SimpleObject, Clone, Debug)]
 pub struct Peer {
@@ -42,11 +43,7 @@ impl Peer {
             id: row.id.into(),
             name: row.name,
             ip: row.ip,
-            status: match row.status {
-                plain_rs::features::chat::enums::PeerStatus::Paired => PeerStatus::Paired,
-                plain_rs::features::chat::enums::PeerStatus::Unpaired => PeerStatus::Unpaired,
-                plain_rs::features::chat::enums::PeerStatus::Channel => PeerStatus::Channel,
-            },
+            status: row.status,
             port: row.port.map(i32::from),
             device_type: row.device_type.into(),
             created_at: crate::graphql::types::facts::stored_instant(&row.created_at),
@@ -62,20 +59,6 @@ pub struct PairPeerInput {
     pub password: Option<String>,
 }
 
-#[derive(Enum, Copy, Clone, Eq, PartialEq, Debug, serde::Deserialize)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum PairingMode {
-    Chat,
-    Manage,
-}
-impl From<PairingMode> for plain_rs::features::services::discovery::pairing_attempts::Mode {
-    fn from(mode: PairingMode) -> Self {
-        match mode {
-            PairingMode::Chat => Self::Chat,
-            PairingMode::Manage => Self::Manage,
-        }
-    }
-}
 #[derive(Default)]
 pub struct PeersQuery;
 
@@ -137,7 +120,7 @@ impl PeersMutation {
         plain_rs::features::services::discovery::pairing_attempts::start(
             core,
             input.peer_id.to_string(),
-            input.mode.into(),
+            input.mode,
             input.password,
             ctx.data_opt::<plain_rs::infrastructure::host::request_scope::NativeRequestScope>()
                 .cloned(),
@@ -152,13 +135,7 @@ impl PeersMutation {
         peer_id: plain_graphql::ID,
     ) -> plain_graphql::Result<bool> {
         let state = ctx.data::<crate::server::ServerState>()?;
-        if state
-            .pairing_runtime
-            .attempts
-            .mode(peer_id.as_str())
-            .is_some_and(|mode| {
-                mode == plain_rs::features::services::discovery::pairing_attempts::Mode::Manage
-            })
+        if state.pairing_runtime.attempts.mode(peer_id.as_str()) == Some(PairingMode::Manage)
             && !crate::http::auth::public_gate::is_local(ctx)
         {
             management_login(ctx, state)?;
@@ -179,8 +156,7 @@ impl PeersMutation {
         accepted: bool,
     ) -> plain_graphql::Result<bool> {
         let state = ctx.data::<crate::server::ServerState>()?;
-        if state.pairing_runtime.attempts.mode(peer_id.as_str())
-            == Some(plain_rs::features::services::discovery::pairing_attempts::Mode::Manage)
+        if state.pairing_runtime.attempts.mode(peer_id.as_str()) == Some(PairingMode::Manage)
             && !crate::http::auth::public_gate::is_local(ctx)
         {
             management_login(ctx, state)?;

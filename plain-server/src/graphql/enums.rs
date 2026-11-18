@@ -1,96 +1,9 @@
-//! GraphQL-facing enums. The chat-domain enums mirror the wire enums in
-//! `plain_rs::features::chat::enums` (which own the SQLite/wire representation);
-//! the `From` impls below convert what the shared store returns into
-//! these GraphQL types. The remaining enums are desktop-only surfaces.
+//! GraphQL-facing enums for desktop surfaces.
 
 use std::fmt;
 use std::str::FromStr;
 
 use plain_graphql::Enum;
-
-macro_rules! wire_enum {
-    ($(#[$meta:meta])* $name:ident { $($variant:ident => $wire:expr),+ $(,)? }) => {
-        #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize, Enum)]
-        $(#[$meta])*
-        #[graphql(rename_items = "SCREAMING_SNAKE_CASE")]
-        #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-        pub enum $name {
-            $($variant,)+
-        }
-
-        impl fmt::Display for $name {
-            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                match self {
-                    $(Self::$variant => f.write_str($wire),)+
-                }
-            }
-        }
-
-        impl FromStr for $name {
-            type Err = String;
-            fn from_str(s: &str) -> Result<Self, Self::Err> {
-                match s {
-                    $($wire => Ok(Self::$variant),)+
-                    _ => Err(format!("Unknown {}: {s}", stringify!($name))),
-                }
-            }
-        }
-
-        impl From<plain_rs::features::chat::enums::$name> for $name {
-            fn from(v: plain_rs::features::chat::enums::$name) -> Self {
-                match v {
-                    $(plain_rs::features::chat::enums::$name::$variant => Self::$variant,)+
-                }
-            }
-        }
-
-        impl From<$name> for plain_rs::features::chat::enums::$name {
-            fn from(v: $name) -> Self {
-                match v {
-                    $($name::$variant => plain_rs::features::chat::enums::$name::$variant,)+
-                }
-            }
-        }
-    };
-}
-
-// Pairing state of a stored peer.
-wire_enum! {
-    PeerStatus {
-        Paired => "PAIRED",
-        Unpaired => "UNPAIRED",
-        Channel => "CHANNEL",
-    }
-}
-
-// Delivery state of a chat item.
-wire_enum! {
-    ChatStatus {
-        Sent => "SENT",
-        Failed => "FAILED",
-        Partial => "PARTIAL",
-        Pending => "PENDING",
-    }
-}
-
-// Membership state of the local device in a channel.
-wire_enum! {
-    #[graphql(name = "ChatChannelStatus")]
-    ChannelStatus {
-        Joined => "JOINED",
-        Left => "LEFT",
-        Kicked => "KICKED",
-    }
-}
-
-// Membership state of a channel member.
-wire_enum! {
-    #[graphql(name = "ChannelMemberStatus")]
-    MemberStatus {
-        Joined => "JOINED",
-        Pending => "PENDING",
-    }
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize, Enum)]
 #[graphql(rename_items = "SCREAMING_SNAKE_CASE")]
@@ -153,41 +66,6 @@ impl From<DeviceType> for plain_rs::features::chat::enums::DeviceType {
     }
 }
 
-// Channel system-message wire types.
-wire_enum! {
-    ChannelSystemMessageType {
-        Invite => "INVITE",
-        InviteAccept => "INVITE_ACCEPT",
-        InviteDecline => "INVITE_DECLINE",
-        Update => "UPDATE",
-        Kick => "KICK",
-        Leave => "LEAVE",
-    }
-}
-
-// Channel system-message actions.
-wire_enum! {
-    ChannelSystemMessageAction {
-        Invite => "INVITE",
-        Update => "UPDATE",
-        Kick => "KICK",
-    }
-}
-
-#[allow(clippy::derivable_impls)]
-impl Default for ChannelStatus {
-    fn default() -> Self {
-        Self::Joined
-    }
-}
-
-#[allow(clippy::derivable_impls)]
-impl Default for MemberStatus {
-    fn default() -> Self {
-        Self::Joined
-    }
-}
-
 #[allow(clippy::derivable_impls)]
 impl Default for DeviceType {
     fn default() -> Self {
@@ -204,29 +82,6 @@ impl DeviceType {
             Self::Tv => "TV",
             Self::Nas => "NAS",
             Self::Other => "OTHER",
-        }
-    }
-}
-
-impl ChannelSystemMessageType {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Self::Invite => "INVITE",
-            Self::InviteAccept => "INVITE_ACCEPT",
-            Self::InviteDecline => "INVITE_DECLINE",
-            Self::Update => "UPDATE",
-            Self::Kick => "KICK",
-            Self::Leave => "LEAVE",
-        }
-    }
-}
-
-impl ChannelSystemMessageAction {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Self::Invite => "INVITE",
-            Self::Update => "UPDATE",
-            Self::Kick => "KICK",
         }
     }
 }

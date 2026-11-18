@@ -10,6 +10,8 @@ use tokio::sync::watch;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[cfg_attr(feature = "graphql", derive(plain_graphql::Enum))]
+#[cfg_attr(feature = "graphql", graphql(name = "PairingMode"))]
 pub enum Mode {
     Chat,
     Manage,
