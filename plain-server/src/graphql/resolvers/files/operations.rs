@@ -447,7 +447,13 @@ async fn media_action(
         MediaDataType::DOC => plain_rs::features::enums::DataType::Doc,
     };
     ctx.data::<Arc<plain_rs::features::services::files::media_actions::MediaActions>>()?
-        .run_query(data_type, action, query, dest.as_str().unwrap_or_default())
+        .run_query(
+            data_type,
+            action,
+            query,
+            dest.as_str().unwrap_or_default(),
+            public_gate::is_local(ctx),
+        )
         .await
         .map_err(Into::into)
 }

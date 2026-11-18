@@ -258,6 +258,7 @@ fn wrong_media_type_and_corrupt_catalog_rows_never_delete_source_files() {
         &[id.clone()],
         false,
         "",
+        None,
     )
     .unwrap();
     assert_eq!(outcome.failed_ids, vec![id.clone()]);

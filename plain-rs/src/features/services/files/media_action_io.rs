@@ -1,5 +1,6 @@
 use crate::features::capability::Capability;
 use crate::features::enums::DataType;
+use crate::features::files::trash::Trash;
 use crate::features::media::actions::Action;
 use crate::features::media::actions::Item;
 use crate::features::media::actions::Outcome;
@@ -44,6 +45,7 @@ enum Backend {
     Files {
         from_trash: bool,
         destination: String,
+        trash: Option<Trash>,
         #[cfg(feature = "runtime-media")]
         scans: Arc<crate::features::services::files::media_scans::MediaScans>,
     },
@@ -63,6 +65,7 @@ impl Operation {
         action: Action,
         ids: Vec<String>,
         from_trash: bool,
+        gallery_trash: bool,
         destination: String,
         #[cfg(feature = "runtime-media")] scans: Arc<
             crate::features::services::files::media_scans::MediaScans,
@@ -85,6 +88,7 @@ impl Operation {
             Backend::Files {
                 from_trash,
                 destination,
+                trash: gallery_trash.then(|| Trash::new(platform.db.clone())),
                 #[cfg(feature = "runtime-media")]
                 scans,
             }
@@ -111,6 +115,7 @@ impl Operation {
             Backend::Files {
                 from_trash,
                 destination,
+                trash,
                 #[cfg(feature = "runtime-media")]
                 scans,
             } => {
@@ -122,6 +127,7 @@ impl Operation {
                         &self.ids,
                         from_trash,
                         &destination,
+                        trash.as_ref(),
                     )?)
                 };
                 #[cfg(feature = "runtime-media")]
@@ -146,8 +152,9 @@ fn files(
     ids: &[String],
     from_trash: bool,
     destination: &str,
+    trash: Option<&Trash>,
 ) -> DomainResult<Outcome> {
-    if !matches!(action, Action::Delete | Action::Move) {
+    if !matches!(action, Action::Delete | Action::Move) && trash.is_none() {
         return Err(DomainError::Other(
             "Unsupported filesystem media operation".into(),
         ));
@@ -232,7 +239,34 @@ fn files(
                         }
                     }
                 }
-                _ => return Err("Unsupported filesystem media operation".into()),
+                Action::Trash => {
+                    if trashed {
+                        return Err("Media is already in trash".into());
+                    }
+                    let store = trash.ok_or("Unsupported filesystem media operation")?;
+                    tokio::runtime::Handle::current()
+                        .block_on(store.trash_paths(vec![path.clone()]))
+                        .map_err(|error| error.to_string())?
+                        .pop()
+                        .ok_or("Missing trash destination")?
+                }
+                Action::Restore => {
+                    if !trashed {
+                        return Err("Media is not in trash".into());
+                    }
+                    let store = trash.ok_or("Unsupported filesystem media operation")?;
+                    let item = store.load_item(id)
+                        .map_err(|error| error.to_string())?
+                        .ok_or("Media trash item not found")?;
+                    crate::features::services::files::platform::authorize_native(
+                        Path::new(&item.original_path), true,
+                    ).map_err(|error| error.to_string())?;
+                    tokio::runtime::Handle::current()
+                        .block_on(store.restore_paths(vec![id.clone()]))
+                        .map_err(|error| error.to_string())?
+                        .pop()
+                        .ok_or("Missing restore destination")?
+                }
             };
             Ok(Item {
                 id: id.clone(),

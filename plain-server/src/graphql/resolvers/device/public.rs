@@ -101,7 +101,14 @@ impl App {
         ))
     }
     async fn capabilities(&self, ctx: &Context<'_>) -> plain_graphql::Result<Vec<Capability>> {
-        Ok(self.capability_sample(ctx).await?.clone())
+        let mut capabilities = self.capability_sample(ctx).await?.clone();
+        if !cfg!(any(target_os = "android", target_os = "ios"))
+            && !crate::http::auth::public_gate::is_local(ctx)
+            && !ctx.data::<Arc<Host>>()?.uses_system_media_catalog()
+        {
+            capabilities.retain(|capability| *capability != Capability::MediaTrash);
+        }
+        Ok(capabilities)
     }
     fn build_channel(&self, ctx: &Context<'_>) -> plain_graphql::Result<AppChannelType> {
         Ok(app_channel(

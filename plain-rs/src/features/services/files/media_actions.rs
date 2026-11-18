@@ -61,11 +61,23 @@ impl MediaActions {
         action: Action,
         query: &str,
         dest_dir: &str,
+        local: bool,
     ) -> Result<i32> {
-        let capabilities =
+        let mut capabilities =
             crate::features::services::files::media_action_io::capability_list(&self.host)
                 .await
                 .map_err(plain_libs::anyhow::Error::msg)?;
+        let gallery_trash = local
+            && kind == DataType::Image
+            && action != Action::Move
+            && !cfg!(any(target_os = "android", target_os = "ios"))
+            && !self.host.uses_system_media_catalog()
+            && crate::features::services::capabilities::snapshot(&self.host)
+                .await?
+                .contains(&Capability::MediaTrash);
+        if gallery_trash {
+            capabilities.push(Capability::MediaTrash);
+        }
         crate::features::services::capabilities::require_list(
             &capabilities,
             crate::features::services::files::media_action_io::action_capability(action),
@@ -88,7 +100,7 @@ impl MediaActions {
         .await
         .map_err(plain_libs::anyhow::Error::msg)?;
         let result = self
-            .run_batches(kind, action, ids, from_trash, dest_dir.to_owned())
+            .run_batches(kind, action, ids, from_trash, gallery_trash, dest_dir.to_owned())
             .await?;
         let affected = result.affected_count;
         let failed = result.failed_ids.len();
@@ -106,6 +118,7 @@ impl MediaActions {
         action: Action,
         requested: Vec<String>,
         from_trash: bool,
+        gallery_trash: bool,
         dest_dir: String,
     ) -> Result<Completed> {
         if !matches!(
@@ -128,7 +141,7 @@ impl MediaActions {
         };
         for batch in ids.chunks(500) {
             let result = self
-                .apply(kind, action, batch.to_vec(), from_trash, dest_dir.clone())
+                .apply(kind, action, batch.to_vec(), from_trash, gallery_trash, dest_dir.clone())
                 .await?;
             completed.affected_count = completed
                 .affected_count
@@ -145,6 +158,7 @@ impl MediaActions {
         action: Action,
         requested: Vec<String>,
         from_trash: bool,
+        gallery_trash: bool,
         dest_dir: String,
     ) -> Result<Completed> {
         let invalid = Outcome {
@@ -168,6 +182,7 @@ impl MediaActions {
             action,
             requested,
             from_trash,
+            gallery_trash,
             dest_dir,
             #[cfg(feature = "runtime-media")]
             self.scans.clone(),
