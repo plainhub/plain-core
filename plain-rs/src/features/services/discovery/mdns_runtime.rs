@@ -103,7 +103,10 @@ impl Session {
             Some(active),
             None,
             if active {
-                crate::infrastructure::db::chat_store::nearby::all(&self.context.db)?
+                crate::infrastructure::db::chat_store::nearby::recent(
+                    &self.context.db,
+                    plain_libs::chrono::Utc::now(),
+                )?
             } else {
                 vec![]
             },

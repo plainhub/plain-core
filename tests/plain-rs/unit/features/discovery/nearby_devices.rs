@@ -15,6 +15,51 @@ fn device(id: &str, method: DiscoveryMethod) -> Device {
     }
 }
 #[test]
+fn scanning_restores_cached_remote_access_and_pairing_key() {
+    let directory = plain_libs::temporary::tempdir().unwrap();
+    let path = directory.path().join("nearby.db");
+    let db = crate::infrastructure::db::Db::open(&path).unwrap();
+    let cases = [("disabled", Some(false)), ("enabled", Some(true)), ("unknown", None)];
+    for (id, remote_access) in cases {
+        let mut observed = device(id, DiscoveryMethod::Lan);
+        observed.remote_access = remote_access;
+        observed.signature_public_key = format!("{id}-public-key");
+        crate::infrastructure::db::chat_store::nearby::save(&db, &observed.cache()).unwrap();
+    }
+    drop(db);
+    let db = crate::infrastructure::db::Db::open(&path).unwrap();
+    let cached = crate::infrastructure::db::chat_store::nearby::all(&db).unwrap();
+    let devices = Devices::default();
+    devices.scanning(true, false, cached).unwrap();
+    let snapshot = devices.snapshot();
+    assert_eq!(snapshot.devices.len(), cases.len());
+    for (id, remote_access) in cases {
+        let restored = snapshot.devices.iter().find(|device| device.id == id).unwrap();
+        assert_eq!(restored.remote_access, remote_access);
+        assert_eq!(restored.signature_public_key, format!("{id}-public-key"));
+        assert_eq!(restored.discovery_methods, [DiscoveryMethod::Lan]);
+    }
+}
+
+#[test]
+fn successful_address_probe_does_not_update_the_discovery_timestamp() {
+    let directory = plain_libs::temporary::tempdir().unwrap();
+    let db = crate::infrastructure::db::Db::open(&directory.path().join("nearby.db")).unwrap();
+    let devices = Devices::default();
+    devices.scanning(true, false, vec![]).unwrap();
+    let mut observed = device("probe", DiscoveryMethod::Lan);
+    observed.last_seen_at = "2000-01-01T00:00:00.000Z".into();
+    crate::infrastructure::db::chat_store::nearby::save(&db, &observed.cache()).unwrap();
+    let now = Instant::now();
+    devices.seen_at(observed.clone(), now).unwrap();
+    let probes = devices.stale_at(&db, now + Duration::from_secs(61)).unwrap();
+    assert!(devices.verified(&db, &probes[0], true).unwrap());
+    let cached = crate::infrastructure::db::chat_store::nearby::all(&db).unwrap();
+    assert_eq!(cached[0].last_seen_at, observed.last_seen_at);
+    assert_eq!(devices.snapshot().devices[0].last_seen_at, observed.last_seen_at);
+}
+
+#[test]
 fn merges_methods_and_ips_across_repeated_observations() {
     let devices = Devices::default();
     let t = Instant::now();
@@ -168,7 +213,6 @@ fn device_types_preserve_wire_names_and_cache_values() {
             crate::infrastructure::db::chat_store::nearby::all(&db).unwrap()[0].device_type,
             kind
         );
-        assert_eq!(db.get_cached_nearby_devices().unwrap()[0].device_type, kind);
     }
     let mut wire = plain_libs::serde_json::to_value(device("invalid", DiscoveryMethod::Lan)).unwrap();
     wire["deviceType"] = plain_libs::serde_json::json!("FUTURE_DEVICE");

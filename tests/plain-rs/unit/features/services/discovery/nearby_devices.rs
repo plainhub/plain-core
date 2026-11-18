@@ -2,6 +2,43 @@ use super::*;
 use crate::features::discovery::nearby_devices::Device;
 use plain_libs::serde_json::json;
 
+#[test]
+fn nearby_snapshot_keeps_only_recent_devices_and_latest_per_endpoint() {
+    let directory = plain_libs::temporary::tempdir().unwrap();
+    let db = crate::infrastructure::db::Db::open(&directory.path().join("nearby.db")).unwrap();
+    let devices = crate::features::discovery::nearby_devices::Devices::default();
+    let now = plain_libs::chrono::Utc::now();
+    for (id, ip, port, hours_ago) in [
+        ("older-id", "192.0.2.1", 8443, 4),
+        ("latest-id", "192.0.2.1", 8443, 1),
+        ("other-port", "192.0.2.1", 9443, 3),
+        ("other-ip", "192.0.2.2", 8443, 2),
+        ("expired", "192.0.2.3", 8443, 25),
+        ("no-ip-first", "", 8443, 5),
+        ("no-ip-second", "", 8443, 6),
+    ] {
+        devices.observe(Device {
+            id: id.into(),
+            name: "Fixture".into(),
+            ips: if ip.is_empty() { vec![] } else { vec![ip.into()] },
+            port,
+            device_type: crate::features::chat::enums::DeviceType::Computer,
+            version: "1".into(),
+            platform: "test".into(),
+            last_seen_at: (now - plain_libs::chrono::Duration::hours(hours_ago)).to_rfc3339(),
+            remote_access: Some(id == "latest-id"),
+            signature_public_key: String::new(),
+            discovery_methods: vec![crate::features::discovery::nearby_devices::DiscoveryMethod::Lan],
+        }).unwrap();
+    }
+    let visible = snapshot(&db, &devices).unwrap();
+    let rows = visible["devices"].as_array().unwrap();
+    let ids: std::collections::HashSet<_> = rows.iter().map(|row| row["id"].as_str().unwrap()).collect();
+    assert_eq!(ids, ["latest-id", "other-port", "other-ip", "no-ip-first", "no-ip-second"].into());
+    assert_eq!(rows.iter().find(|row| row["id"] == "latest-id").unwrap()["remoteAccess"], true);
+    assert!(devices.contains("older-id"));
+}
+
 #[tokio::test]
 async fn nearby_rows_are_polled_without_discovery_events() {
     let dir = plain_libs::temporary::tempdir().unwrap();
@@ -24,7 +61,7 @@ async fn nearby_rows_are_polled_without_discovery_events() {
         device_type: crate::features::chat::enums::DeviceType::Phone,
         version: "1".into(),
         platform: "test".into(),
-        last_seen_at: "2026-10-10T00:00:00.000Z".into(),
+        last_seen_at: crate::infrastructure::db::now_iso(),
         remote_access: None,
         signature_public_key: String::new(),
         discovery_methods: vec![crate::features::discovery::nearby_devices::DiscoveryMethod::Ble],

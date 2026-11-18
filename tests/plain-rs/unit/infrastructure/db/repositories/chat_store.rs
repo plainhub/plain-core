@@ -144,6 +144,8 @@ fn nearby_cache_keeps_newest_facts_and_all_records_survive_reopening() {
         name: "new".into(),
         ips: vec!["::1".into(), "127.0.0.1".into()],
         port: 443,
+        remote_access: Some(true),
+        signature_public_key: "fixture-key".into(),
         device_type: crate::features::chat::enums::DeviceType::Phone,
         version: "1".into(),
         platform: "Android".into(),
@@ -151,6 +153,8 @@ fn nearby_cache_keeps_newest_facts_and_all_records_survive_reopening() {
     };
     nearby::save(&db, &item).unwrap();
     item.name = "stale".into();
+    item.remote_access = Some(false);
+    item.signature_public_key = "stale-key".into();
     item.last_seen_at = "2026-10-04T00:00:01.000Z".into();
     nearby::save(&db, &item).unwrap();
     drop(db);
@@ -158,8 +162,13 @@ fn nearby_cache_keeps_newest_facts_and_all_records_survive_reopening() {
     let rows = nearby::all(&db).unwrap();
     assert_eq!(rows[0].name, "new");
     assert_eq!(rows[0].ips.len(), 2);
-    assert!(!nearby::touch(&db, "absent").unwrap());
-    assert!(nearby::touch(&db, "nearby").unwrap());
+    assert_eq!(rows[0].remote_access, Some(true));
+    assert_eq!(rows[0].signature_public_key, "fixture-key");
+    let now = |time: &str| plain_libs::chrono::DateTime::parse_from_rfc3339(time)
+        .unwrap()
+        .with_timezone(&plain_libs::chrono::Utc);
+    assert_eq!(nearby::recent(&db, now("2026-10-05T00:00:02.000Z")).unwrap(), rows);
+    assert!(nearby::recent(&db, now("2026-10-05T00:00:02.001Z")).unwrap().is_empty());
     assert!(nearby::delete(&db, "nearby").unwrap());
     assert!(nearby::all(&db).unwrap().is_empty());
 }

@@ -1,6 +1,7 @@
 use super::types::NearbyDevice;
 use crate::server::ServerState;
 use plain_graphql::{Context, Object};
+use plain_rs::infrastructure::transport::lan;
 
 use std::collections::HashSet;
 
@@ -11,7 +12,10 @@ pub struct DiscoveryHostQuery;
 impl DiscoveryHostQuery {
     fn parse_pairing_qr_code(&self, ctx: &Context<'_>, code: String) -> Option<NearbyDevice> {
         ctx.data::<ServerState>().ok()?.pairing_runtime.qr.remember(&code)
-            .ok().map(NearbyDevice::from_snapshot_device)
+            .ok().map(|device| {
+                let best_ip = lan::best(&device.ips, &lan::local_interfaces());
+                NearbyDevice::from_snapshot_device(device, best_ip)
+            })
     }
     fn nearby_devices(&self, ctx: &Context<'_>) -> plain_graphql::Result<Vec<NearbyDevice>> {
         let state = ctx.data::<ServerState>()?;
@@ -28,10 +32,10 @@ fn nearby_snapshot(state: &ServerState) -> plain_graphql::Result<Vec<NearbyDevic
     Ok(state
         .nearby_devices
         .snapshot()
-        .devices
+        .visible_devices(&lan::local_interfaces())
         .into_iter()
-        .map(|device| {
-            let mut model = NearbyDevice::from_snapshot_device(device);
+        .map(|(device, best_ip)| {
+            let mut model = NearbyDevice::from_snapshot_device(device, best_ip);
             if paired.contains(model.id.as_str()) {
                 model.status = plain_rs::features::chat::enums::PeerStatus::Paired;
             }

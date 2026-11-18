@@ -1,10 +1,16 @@
+use crate::infrastructure::transport::lan::{self, Interface};
 use plain_libs::anyhow::{Result, ensure};
+use plain_libs::chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::HashMap,
+    cmp::Reverse,
+    collections::{HashMap, HashSet},
+    net::IpAddr,
     sync::Mutex,
     time::{Duration, Instant},
 };
+
+pub(crate) const MAX_AGE: plain_libs::chrono::Duration = plain_libs::chrono::Duration::hours(24);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
@@ -62,6 +68,8 @@ impl Device {
             name: self.name.clone(),
             ips: self.ips.clone(),
             port: self.port,
+            remote_access: self.remote_access,
+            signature_public_key: self.signature_public_key.clone(),
             device_type: self.device_type,
             version: self.version.clone(),
             platform: self.platform.clone(),
@@ -74,6 +82,35 @@ impl Device {
 pub struct Snapshot {
     pub revision: u64,
     pub devices: Vec<Device>,
+}
+impl Snapshot {
+    pub fn visible_devices(self, interfaces: &[Interface]) -> Vec<(Device, String)> {
+        let cutoff = Utc::now() - MAX_AGE;
+        let mut recent: Vec<_> = self
+            .devices
+            .into_iter()
+            .filter_map(|device| {
+                let last_seen = DateTime::parse_from_rfc3339(&device.last_seen_at).ok()?;
+                (last_seen >= cutoff).then_some((last_seen, device))
+            })
+            .collect();
+        recent.sort_by(|(left_time, left), (right_time, right)| {
+            (Reverse(left_time), &left.id).cmp(&(Reverse(right_time), &right.id))
+        });
+        let mut seen = HashSet::new();
+        recent
+            .into_iter()
+            .filter_map(|(_, device)| {
+                let best_ip = lan::best(&device.ips, interfaces);
+                if let Ok(ip) = best_ip.parse::<IpAddr>()
+                    && !seen.insert((ip, device.port))
+                {
+                    return None;
+                }
+                Some((device, best_ip))
+            })
+            .collect()
+    }
 }
 #[derive(Clone)]
 pub struct Probe {
@@ -155,8 +192,8 @@ impl Devices {
                     version: d.version,
                     platform: d.platform,
                     last_seen_at: d.last_seen_at,
-                    remote_access: None,
-                    signature_public_key: String::new(),
+                    remote_access: d.remote_access,
+                    signature_public_key: d.signature_public_key,
                     discovery_methods: vec![DiscoveryMethod::Lan],
                 };
                 s.order.push(device.id.clone());
@@ -292,19 +329,9 @@ impl Devices {
             return Ok(false);
         }
         if alive {
-            let now = crate::infrastructure::db::now_iso();
-            let updated = db.refresh_cached_nearby_device_if_last_seen_matches(
-                &probe.device.id,
-                probe.cache_seen.as_deref().unwrap_or(""),
-                &now,
-            )?;
-            if cached.is_some() && !updated {
-                return Ok(false);
-            }
             let e = s.entries.get_mut(&probe.device.id).unwrap();
             e.seen = Instant::now();
             e.age = Duration::ZERO;
-            e.device.last_seen_at = now;
             e.generation = plain_libs::utils::uuid::Uuid::new_v4().into_string();
         } else {
             let updated = db.delete_cached_nearby_device_if_last_seen_matches(

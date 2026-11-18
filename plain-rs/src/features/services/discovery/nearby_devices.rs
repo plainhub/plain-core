@@ -76,21 +76,22 @@ pub fn snapshot(
         .filter(|p| p.is_paired())
         .map(|p| p.id)
         .collect();
-    let mut snapshot = plain_libs::serde_json::to_value(devices.snapshot())?;
+    let snapshot = devices.snapshot();
+    let revision = snapshot.revision;
     let interfaces = crate::infrastructure::transport::lan::local_interfaces();
-    for device in snapshot["devices"].as_array_mut().unwrap() {
-        let ips: Vec<String> = plain_libs::serde_json::from_value(device["ips"].clone())?;
-        device["bestIp"] = json!(crate::infrastructure::transport::lan::best(
-            &ips,
-            &interfaces
-        ));
-        device["status"] = json!(if paired.contains(device["id"].as_str().unwrap()) {
+    let mut rows = Vec::new();
+    for (device, best_ip) in snapshot.visible_devices(&interfaces) {
+        let status = if paired.contains(&device.id) {
             crate::features::chat::enums::PeerStatus::Paired
         } else {
             crate::features::chat::enums::PeerStatus::Unpaired
-        });
+        };
+        let mut row = plain_libs::serde_json::to_value(device)?;
+        row["bestIp"] = json!(best_ip);
+        row["status"] = json!(status);
+        rows.push(row);
     }
-    Ok(snapshot)
+    Ok(json!({"revision": revision, "devices": rows}))
 }
 pub async fn sweep(state: &CoreRuntime) -> plain_libs::anyhow::Result<()> {
     let mut stale = state.nearby_devices.stale(&state.db)?;

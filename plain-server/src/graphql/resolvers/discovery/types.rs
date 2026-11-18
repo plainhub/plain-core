@@ -24,9 +24,8 @@ pub struct NearbyDevice {
 impl NearbyDevice {
     pub fn from_snapshot_device(
         device: plain_rs::features::discovery::nearby_devices::Device,
+        best_ip: String,
     ) -> Self {
-        let interfaces = plain_rs::infrastructure::transport::lan::local_interfaces();
-        let best_ip = plain_rs::infrastructure::transport::lan::best(&device.ips, &interfaces);
         Self {
             id: device.id.into(),
             name: device.name,
