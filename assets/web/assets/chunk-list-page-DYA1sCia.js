@@ -1,1 +1,0 @@
-function e(e,t,n){return n?{offset:0,limit:e*t}:{offset:(e-1)*t,limit:t}}export{e as t};
