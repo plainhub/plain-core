@@ -1,7 +1,7 @@
 use super::*;
 
 #[test]
-fn manual_add_validates_the_whole_batch_before_writing_and_keeps_valid_duplicates() {
+fn manual_add_validates_the_batch_and_skips_duplicate_urls() {
     let dir = plain_libs::temporary::tempdir().unwrap();
     let db = Db::open(&dir.path().join("plain.db")).unwrap();
     for invalid in ["http://", "javascript:alert(1)", "file:///owned.txt"] {
@@ -21,13 +21,24 @@ fn manual_add_validates_the_whole_batch_before_writing_and_keeps_valid_duplicate
             " https://example.com/ ".into(),
             " ".into(),
             "https://example.com/".into(),
+            "https://example.com/another".into(),
         ],
         "",
     )
     .unwrap();
     assert_eq!(added.len(), 2);
-    assert_ne!(added[0].id, added[1].id);
-    assert!(added.iter().all(|row| row.url == "https://example.com/"));
+    assert_eq!(added[0].url, "https://example.com/");
+    assert_eq!(added[1].url, "https://example.com/another");
+    assert!(
+        add_bookmarks(&db, vec![added[0].url.clone()], "other")
+            .unwrap()
+            .is_empty()
+    );
+    let stored = bookmark::get_bookmarks(&db);
+    assert_eq!(stored.len(), 2);
+    let original = stored.iter().find(|row| row.url == added[0].url).unwrap();
+    assert_eq!(original.id, added[0].id);
+    assert_eq!(original.group_id, None);
 }
 
 #[test]

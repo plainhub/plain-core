@@ -198,21 +198,35 @@ async fn bookmark_http_lifecycle_metadata_and_reference_counts() {
     assert_eq!(icon, created_icon);
     assert!(icon_path.exists());
     assert_eq!(db.get_app_file(file_id).unwrap().ref_count, 1);
+    let duplicate = call_variables(
+        server.port,
+        &token,
+        "mutation($url: String!) {addBookmarks(urls:[$url],groupId:\"\") {id}}",
+        plain_libs::serde_json::json!({"url": format!("{origin}/page")}),
+    )
+    .await;
+    assert_eq!(
+        duplicate["data"]["addBookmarks"],
+        plain_libs::serde_json::json!([])
+    );
+    let second_url = format!("{origin}/page?second");
     let second = call_variables(
         server.port,
         &token,
         "mutation($url: String!, $group: ID!) {addBookmarks(urls:[$url],groupId:$group) {id}}",
-        plain_libs::serde_json::json!({"url": format!("{origin}/page"), "group": gid}),
+        plain_libs::serde_json::json!({"url": second_url, "group": gid}),
     )
     .await;
     let second_id = second["data"]["addBookmarks"][0]["id"].as_str().unwrap();
     metadata_updated(&mut events, second_id).await;
     assert_eq!(db.get_app_file(file_id).unwrap().ref_count, 2);
+    let mut second_input = input.clone();
+    second_input["url"] = plain_libs::serde_json::json!(second_url);
     let saved_second = call_variables(
         server.port,
         &token,
         update_query,
-        plain_libs::serde_json::json!({"id": second_id, "input": input}),
+        plain_libs::serde_json::json!({"id": second_id, "input": second_input}),
     )
     .await;
     assert!(saved_second.get("errors").is_none(), "{saved_second}");
@@ -236,7 +250,7 @@ async fn bookmark_http_lifecycle_metadata_and_reference_counts() {
         "Chosen title"
     );
     assert_eq!(db.get_app_file(file_id).unwrap().ref_count, 2);
-    let mut clear_input = input.clone();
+    let mut clear_input = second_input.clone();
     clear_input["faviconUrl"] = plain_libs::serde_json::json!("");
     let cleared = call_variables(
         server.port,
@@ -251,7 +265,7 @@ async fn bookmark_http_lifecycle_metadata_and_reference_counts() {
         server.port,
         &token,
         update_query,
-        plain_libs::serde_json::json!({"id": second_id, "input": input}),
+        plain_libs::serde_json::json!({"id": second_id, "input": second_input}),
     )
     .await;
     assert!(restored.get("errors").is_none(), "{restored}");

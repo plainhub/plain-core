@@ -28,13 +28,28 @@ pub fn add_bookmarks(
     for url in &urls {
         parse_bookmark_url(url)?;
     }
-    urls.into_iter()
-        .map(|url| {
+    db.with_conn(|conn| {
+        let tx = conn.unchecked_transaction()?;
+        let mut existing_urls = bookmark_urls(&tx)?;
+        let mut added = Vec::new();
+        for url in urls {
+            if !existing_urls.insert(url.clone()) {
+                continue;
+            }
             let row = bookmark::DBookmark::new(&url, group_id);
-            bookmark::insert_bookmark(db, &row)?;
-            Ok(row)
-        })
-        .collect()
+            bookmark::insert_bookmark_with_conn(&tx, &row)?;
+            added.push(row);
+        }
+        tx.commit()?;
+        Ok(added)
+    })
+}
+
+fn bookmark_urls(
+    conn: &plain_libs::rusqlite::Connection,
+) -> plain_libs::rusqlite::Result<HashSet<String>> {
+    let mut stmt = conn.prepare("SELECT url FROM bookmarks")?;
+    stmt.query_map([], |row| row.get(0))?.collect()
 }
 
 pub fn import_bookmarks(db: &Db, html: &str) -> Result<i32> {
@@ -65,13 +80,7 @@ pub fn import_bookmarks(db: &Db, html: &str) -> Result<i32> {
     }
     db.with_conn(|conn| {
         let tx = conn.unchecked_transaction()?;
-        let mut urls = {
-            let mut stmt = tx.prepare("SELECT url FROM bookmarks")?;
-            let rows = stmt
-                .query_map([], |row| row.get::<_, String>(0))?
-                .collect::<plain_libs::rusqlite::Result<HashSet<_>>>()?;
-            rows
-        };
+        let mut urls = bookmark_urls(&tx)?;
         let mut groups = HashMap::new();
         {
             let mut stmt = tx.prepare("SELECT name,id FROM bookmark_groups ORDER BY id")?;
