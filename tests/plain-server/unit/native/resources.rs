@@ -79,8 +79,7 @@ async fn thumbnails_use_shared_content_output_and_not_original_file_bytes() {
         .unwrap();
     assert_eq!(thumbnail.mime, content::thumbnail_mime(&bytes));
     let image = plain_libs::image::load_from_memory(&bytes).unwrap();
-    assert!(image.width() <= 256);
-    assert!(image.height() <= 256);
+    assert_eq!((image.width(), image.height()), (341, 256));
     let prepared = core.runtime_state().cache.root().join("native_resources");
     assert_eq!(std::fs::read_dir(&prepared).unwrap().count(), 1);
     registry.close_owner(scope.id());

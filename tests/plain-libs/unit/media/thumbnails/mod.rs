@@ -21,11 +21,11 @@ async fn render_keeps_the_encoded_cache_allocation() {
     let dir = crate::temporary::tempdir().unwrap();
     let path = dir.path().join("shared.jpg");
     write_jpeg(&path, 640, 480);
-    let first = render(path.to_str().unwrap(), 128, 128, true, dir.path())
+    let first = render(path.to_str().unwrap(), 128, 128, true, None, dir.path())
         .await
         .unwrap()
         .unwrap();
-    let second = render(path.to_str().unwrap(), 128, 128, false, dir.path())
+    let second = render(path.to_str().unwrap(), 128, 128, false, None, dir.path())
         .await
         .unwrap()
         .unwrap();
@@ -681,7 +681,7 @@ async fn render_fit_cache_changes_when_source_changes_within_the_same_second() {
                     .set_modified(base + std::time::Duration::from_nanos(nanos)),
             )
             .unwrap();
-        let bytes = render(path.to_str().unwrap(), 128, 128, true, directory.path())
+        let bytes = render(path.to_str().unwrap(), 128, 128, true, None, directory.path())
             .await
             .unwrap()
             .unwrap();
@@ -707,14 +707,14 @@ async fn thumbnail_latency_benchmark() {
     for index in 0..20 {
         let cache = directory.path().join(format!("cache-{index}"));
         let start = std::time::Instant::now();
-        let bytes = render(path.to_str().unwrap(), 512, 512, true, &cache)
+        let bytes = render(path.to_str().unwrap(), 512, 512, true, None, &cache)
             .await
             .unwrap()
             .unwrap();
         cold.push(start.elapsed().as_secs_f64() * 1000.0);
         assert_eq!(crate::image::load_from_memory(&bytes).unwrap().width(), 512);
         let start = std::time::Instant::now();
-        let cached = render(path.to_str().unwrap(), 512, 512, true, &cache)
+        let cached = render(path.to_str().unwrap(), 512, 512, true, None, &cache)
             .await
             .unwrap()
             .unwrap();
@@ -769,7 +769,7 @@ async fn sufficiently_large_embedded_preview_is_used_without_decoding_the_origin
         .save(&path)
         .unwrap();
     jpeg_with_preview(&path, [10, 240, 10]);
-    let bytes = render(path.to_str().unwrap(), 128, 128, true, directory.path())
+    let bytes = render(path.to_str().unwrap(), 128, 128, true, None, directory.path())
         .await
         .unwrap()
         .unwrap();
@@ -826,7 +826,7 @@ async fn fit_disk_cache_contains_the_final_output_without_a_second_encode() {
         .save(&legacy)
         .unwrap();
     let legacy_bytes = std::fs::read(&legacy).unwrap();
-    let bytes = render(path.to_str().unwrap(), 128, 128, true, directory.path())
+    let bytes = render(path.to_str().unwrap(), 128, 128, true, None, directory.path())
         .await
         .unwrap()
         .unwrap();
@@ -845,7 +845,7 @@ async fn decoded_pixels_and_output_buffers_are_admitted_before_allocating_them()
     bytes[16..20].copy_from_slice(&30000u32.to_be_bytes());
     bytes[20..24].copy_from_slice(&10000u32.to_be_bytes());
     std::fs::write(&path, bytes).unwrap();
-    let error = render(path.to_str().unwrap(), 512, 512, true, directory.path())
+    let error = render(path.to_str().unwrap(), 512, 512, true, None, directory.path())
         .await
         .unwrap_err();
     assert!(error.contains("exceeds memory budget"), "{error}");
@@ -1095,7 +1095,7 @@ async fn transparent_webp_uses_the_shared_aspect_fit_and_alpha_output() {
         .write_to(&mut input, crate::image::ImageFormat::WebP)
         .unwrap();
     std::fs::write(&path, input.into_inner()).unwrap();
-    let bytes = render(path.to_str().unwrap(), 256, 256, true, directory.path())
+    let bytes = render(path.to_str().unwrap(), 256, 256, true, None, directory.path())
         .await
         .unwrap()
         .unwrap();

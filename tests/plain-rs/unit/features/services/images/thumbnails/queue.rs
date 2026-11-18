@@ -8,6 +8,7 @@ fn job(key: impl Into<String>) -> Generation {
             width: 256,
             height: 256,
             center_crop: true,
+            short_edge: None,
             file_id: String::new(),
             file_name: String::new(),
             access_order: None,

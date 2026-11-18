@@ -257,9 +257,13 @@ pub async fn read(
         };
         if !animated {
             if let Some(size) = options.size {
-                let pixels = match size {
-                    Size::Small => crate::features::services::images::thumbnails::THUMBNAIL_SIZE,
-                    Size::Large => 1024,
+                let small = size == Size::Small;
+                let image = mime.starts_with("image/");
+                let thumbnail_size = crate::features::services::images::thumbnails::THUMBNAIL_SIZE;
+                let pixels = if small && !image {
+                    thumbnail_size
+                } else {
+                    1024
                 };
                 let bytes = state
                     .thumbnails
@@ -270,7 +274,8 @@ pub async fn read(
                             path: path.clone(),
                             width: pixels,
                             height: pixels,
-                            center_crop: !mime.starts_with("image/") && size == Size::Small,
+                            center_crop: small && !image,
+                            short_edge: (small && image).then_some(thumbnail_size),
                             file_id: media_id,
                             file_name: plain_libs::utils::query::url_encode(filename),
                         },

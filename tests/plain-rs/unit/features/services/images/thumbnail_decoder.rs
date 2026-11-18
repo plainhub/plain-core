@@ -1,5 +1,34 @@
 use super::*;
 
+#[test]
+fn sdk_thumbnail_bytes_use_shared_short_edge_sizing_and_preserve_png_alpha() {
+    use plain_libs::image::{self, DynamicImage, ImageFormat, Rgba, RgbaImage};
+    use std::io::Cursor;
+
+    for (source, expected) in [((341, 1024), (256, 768)), ((100, 300), (100, 300))] {
+        let mut input = Cursor::new(Vec::new());
+        DynamicImage::ImageRgba8(RgbaImage::from_pixel(
+            source.0,
+            source.1,
+            Rgba([20, 40, 80, 128]),
+        ))
+        .write_to(&mut input, ImageFormat::Png)
+        .unwrap();
+        let input = input.into_inner();
+        let bytes =
+            plain_libs::media::image_io::limit_thumbnail_short_edge(input.clone(), 256, 1024)
+                .unwrap();
+        if source == expected {
+            assert_eq!(bytes, input);
+        }
+        let image = image::load_from_memory_with_format(&bytes, ImageFormat::Png)
+            .unwrap()
+            .into_rgba8();
+        assert_eq!(image.dimensions(), expected);
+        assert_eq!(image.get_pixel(0, 0)[3], 128);
+    }
+}
+
 #[cfg(feature = "media")]
 #[test]
 fn local_still_formats_use_shared_rust_decoding_and_the_shared_cache_on_every_host() {
@@ -11,6 +40,7 @@ fn local_still_formats_use_shared_rust_decoding_and_the_shared_cache_on_every_ho
         width: 256,
         height: 256,
         center_crop: true,
+        short_edge: None,
         file_id: "catalog-id".into(),
         access_order: None,
         file_name: "image.BMP".into(),
@@ -50,6 +80,7 @@ fn native_catalog_ids_do_not_select_the_sdk_thumbnail_route() {
         width: 80,
         height: 60,
         center_crop: true,
+        short_edge: None,
         file_id: "catalog-id".into(),
         access_order: None,
         file_name: "image.jpg".into(),
@@ -76,6 +107,7 @@ async fn core_only_thumbnail_preserves_aspect_without_host_requests_or_output_to
         width: 2,
         height: 2,
         center_crop: true,
+        short_edge: None,
         file_id: "catalog-id".into(),
         access_order: None,
         file_name: "image.png".into(),
@@ -114,6 +146,7 @@ async fn core_only_thumbnail_applies_exif_orientation_before_sizing() {
         width: 2,
         height: 3,
         center_crop: false,
+        short_edge: None,
         file_id: String::new(),
         access_order: None,
         file_name: "rotated.jpg".into(),
@@ -138,6 +171,7 @@ async fn native_png_thumbnail_retains_transparent_and_partial_alpha() {
         width: 256,
         height: 256,
         center_crop: true,
+        short_edge: None,
         file_id: String::new(),
         access_order: None,
         file_name: "transparent.png".into(),
@@ -165,6 +199,7 @@ async fn native_image_fit_preserves_aspect_without_enlarging_small_images() {
                 width,
                 height,
                 center_crop,
+                short_edge: None,
                 file_id: String::new(),
                 access_order: None,
                 file_name: "small.png".into(),

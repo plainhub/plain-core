@@ -1064,6 +1064,7 @@ async fn indexing_does_not_generate_thumbnails_or_delete_disk_cache() {
         width: 256,
         height: 256,
         center_crop: true,
+        short_edge: None,
         file_id: String::new(),
         access_order: None,
         file_name: "photo.png".into(),

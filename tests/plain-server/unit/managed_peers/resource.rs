@@ -302,7 +302,7 @@ async fn peer_generated_thumbnails_preserve_seekable_bytes_when_http_uses_a_full
     let bytes = resource.read_range(0, info.size).await.unwrap();
     assert_eq!(resource.read_range(3, 11).await.unwrap(), bytes[3..14]);
     let decoded = plain_libs::image::load_from_memory(&bytes).unwrap();
-    assert!(decoded.width() <= 256 && decoded.height() <= 256);
+    assert_eq!((decoded.width(), decoded.height()), (341, 256));
     let prepared = fixture
         .local
         .runtime_state()

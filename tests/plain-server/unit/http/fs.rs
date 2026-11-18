@@ -442,11 +442,50 @@ async fn fs_typed_image_reference_returns_decodable_thumbnail() {
     assert_eq!(response.status(), StatusCode::OK);
     let body = body_bytes(response).await;
     let thumbnail = plain_libs::image::load_from_memory(&body).unwrap();
-    assert!(thumbnail.width() > 0 && thumbnail.width() <= 256);
-    assert!(thumbnail.height() > 0 && thumbnail.height() <= 256);
-    let full_size = call_fs(&state, &format!("id={id}&action=PREVIEW&size=SM"), &[]).await;
-    assert_eq!(full_size.status(), StatusCode::OK);
-    assert_eq!(body, body_bytes(full_size).await);
+    assert_eq!((thumbnail.width(), thumbnail.height()), (160, 120));
+    let repeated = call_fs(&state, &format!("id={id}&action=PREVIEW&size=SM"), &[]).await;
+    assert_eq!(repeated.status(), StatusCode::OK);
+    assert_eq!(body, body_bytes(repeated).await);
+}
+
+#[tokio::test]
+async fn fs_small_images_target_short_edge_without_cropping() {
+    let (_root, core, state, _key) = test_state();
+    let files = plain_libs::temporary::tempdir().unwrap();
+    for (source, small, large) in [
+        ((400, 1200), (256, 768), (341, 1024)),
+        ((1200, 400), (768, 256), (1024, 341)),
+        ((200, 1600), (128, 1024), (128, 1024)),
+        ((100, 300), (100, 300), (100, 300)),
+        ((400, 400), (256, 256), (400, 400)),
+    ] {
+        let path = files.path().join(format!("{}x{}.png", source.0, source.1));
+        plain_libs::image::RgbImage::from_fn(source.0, source.1, |column, row| {
+            plain_libs::image::Rgb([
+                u8::from(column < source.0 / 8) * 255,
+                u8::from(row < source.1 / 8) * 255,
+                0,
+            ])
+        })
+        .save(&path)
+        .unwrap();
+        let id = file_id(&state, path.to_str().unwrap());
+        for (size, expected) in [("SM", small), ("LG", large), ("SM", small)] {
+            let response = call_fs(&state, &format!("id={id}&action=PREVIEW&size={size}"), &[])
+                .await;
+            assert_eq!(response.status(), StatusCode::OK);
+            let image = plain_libs::image::load_from_memory(&body_bytes(response).await)
+                .unwrap()
+                .into_rgb8();
+            assert_eq!((image.width(), image.height()), expected, "{source:?} {size}");
+            assert_eq!(image.get_pixel(0, 0).0, [255, 255, 0]);
+            assert_eq!(
+                image.get_pixel(image.width() - 1, image.height() - 1).0,
+                [0, 0, 0]
+            );
+        }
+    }
+    core.stop_core().await;
 }
 
 #[tokio::test]
@@ -908,7 +947,7 @@ async fn fs_thumbnail_latency_benchmark() {
             let bytes = response.bytes().await.unwrap();
             cold.push(started.elapsed().as_secs_f64() * 1000.0);
             let image = plain_libs::image::load_from_memory(&bytes).unwrap();
-            assert_eq!((image.width(), image.height()), (256, 192));
+            assert_eq!((image.width(), image.height()), (341, 256));
             let started = std::time::Instant::now();
             let response = http
                 .get(format!("{origin}/fs"))
@@ -1074,7 +1113,7 @@ async fn fs_named_sizes_preserve_preview_quality_original_bytes_and_reject_inval
     .save(&path)
     .unwrap();
     let id = file_id(&state, path.to_str().unwrap());
-    for (size, dimensions) in [("SM", (256, 192)), ("LG", (1024, 768))] {
+    for (size, dimensions) in [("SM", (341, 256)), ("LG", (1024, 768))] {
         let response = call_fs(&state, &format!("id={id}&action=PREVIEW&size={size}"), &[]).await;
         assert_eq!(response.status(), StatusCode::OK);
         let bytes = body_bytes(response).await;
@@ -1104,7 +1143,7 @@ async fn fs_png_previews_preserve_alpha_mime_and_conditional_cache_responses() {
     .save(&path)
     .unwrap();
     let id = file_id(&state, path.to_str().unwrap());
-    for (size, dimensions) in [("SM", (256, 192)), ("LG", (1024, 768))] {
+    for (size, dimensions) in [("SM", (341, 256)), ("LG", (1024, 768))] {
         let query = format!("id={id}&action=PREVIEW&size={size}");
         let first = call_fs(&state, &query, &[]).await;
         assert_eq!(first.status(), StatusCode::OK);
@@ -1256,7 +1295,7 @@ async fn fs_large_still_formats_preserve_aspect_ratio_for_both_preview_sizes() {
         )
         .unwrap();
         let id = file_id(&state, path.to_str().unwrap());
-        for (size, expected) in [("SM", (256, 192)), ("LG", (1024, 768))] {
+        for (size, expected) in [("SM", (341, 256)), ("LG", (1024, 768))] {
             let response =
                 call_fs(&state, &format!("id={id}&action=PREVIEW&size={size}"), &[]).await;
             assert_eq!(response.status(), StatusCode::OK, "{extension} {size}");

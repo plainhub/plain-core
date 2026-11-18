@@ -228,7 +228,7 @@ async fn bmp_preview_cache_preserves_formats_alpha_and_real_file_extensions() {
             .join(name);
         let original = decode(fixture(name)).unwrap();
         let first =
-            crate::media::thumbnails::render(path.to_str().unwrap(), 96, 96, false, cache.path())
+            crate::media::thumbnails::render(path.to_str().unwrap(), 96, 96, false, None, cache.path())
                 .await
                 .unwrap()
                 .unwrap();
@@ -245,7 +245,7 @@ async fn bmp_preview_cache_preserves_formats_alpha_and_real_file_extensions() {
             assert!(first.starts_with(&[0xff, 0xd8]), "{name}");
         }
         let second =
-            crate::media::thumbnails::render(path.to_str().unwrap(), 96, 96, false, cache.path())
+            crate::media::thumbnails::render(path.to_str().unwrap(), 96, 96, false, None, cache.path())
                 .await
                 .unwrap()
                 .unwrap();

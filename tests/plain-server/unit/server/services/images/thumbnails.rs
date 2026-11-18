@@ -10,6 +10,7 @@ fn request_for(path: &std::path::Path) -> Request {
         width: 256,
         height: 256,
         center_crop: false,
+        short_edge: None,
         file_id: String::new(),
         access_order: None,
         file_name: String::new(),

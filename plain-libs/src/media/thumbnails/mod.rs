@@ -82,6 +82,7 @@ pub struct ThumbSpec {
     pub mod_unix: i64,
     pub file_size: i64,
     pub center_crop: bool,
+    pub short_edge: Option<u32>,
     pub modified_nanos: u32,
 }
 
@@ -96,6 +97,7 @@ impl ThumbSpec {
             mod_unix,
             file_size: size,
             center_crop: false,
+            short_edge: None,
             modified_nanos: 0,
         }
     }
@@ -143,7 +145,7 @@ pub fn read_original_thumbnail(
     path: &std::path::Path,
     width: u32,
     height: u32,
-    center_crop: bool,
+    short_edge: Option<u32>,
 ) -> std::io::Result<Option<Vec<u8>>> {
     use std::io::Read;
     let file = std::fs::File::open(path)?;
@@ -173,14 +175,13 @@ pub fn read_original_thumbnail(
     } else {
         (sniffed.width, sniffed.height)
     };
-    if !original_fits(
-        source_width,
-        source_height,
-        width,
-        height,
-        center_crop,
-        size as i64,
-    ) {
+    let (width, height) = match short_edge {
+        Some(short) => crate::media::thumbnail_limits::short_edge_size(
+            source_width, source_height, short, width,
+        ),
+        None => (width, height),
+    };
+    if !original_fits(source_width, source_height, width, height, false, size as i64) {
         return Ok(None);
     }
     Ok(Some(bytes))
@@ -191,9 +192,13 @@ pub async fn get_thumbnail(spec: ThumbSpec, cache: &std::path::Path) -> Result<T
 
     match sniffed {
         Some(s) => {
+            let policy = match spec.short_edge {
+                Some(short) => format!("short-{short}"),
+                None => "fit-v1".to_owned(),
+            };
             let cache = cache
                 .join("thumbs")
-                .join(format!("fit-v1-{}", spec.modified_nanos));
+                .join(format!("{policy}-{}", spec.modified_nanos));
             get_image_thumbnail(&spec, head, s, &cache).await
         }
         None => {
@@ -232,11 +237,14 @@ async fn get_image_thumbnail(
     } else {
         (s.width, s.height)
     };
-    let (tw, th) = compute_target_size(uw, uh, spec.w, spec.h);
+    let (tw, th) = match spec.short_edge {
+        Some(short) => crate::media::thumbnail_limits::short_edge_size(uw, uh, short, spec.w),
+        None => compute_target_size(uw, uh, spec.w, spec.h),
+    };
 
     // Passthrough: already thumbnail-sized, browser-renderable, small.
     if s.kind.can_passthrough()
-        && original_fits(uw, uh, spec.w, spec.h, spec.center_crop, spec.file_size)
+        && original_fits(uw, uh, tw, th, spec.center_crop, spec.file_size)
     {
         let data = tokio::fs::read(&spec.path).await?;
         return Ok(ThumbOutcome::Original {
@@ -301,11 +309,15 @@ async fn generate_and_cache(
     if !scaled_jpeg && u64::from(s.width) * u64::from(s.height) > admission::MAX_SOURCE_PIXELS {
         bail!("source {}x{} exceeds pixel guard", s.width, s.height);
     }
-    let preview = crate::utils::image_metadata::thumbnail(&head).and_then(|bytes| {
-        let dimensions = sniff::sniff_header(bytes).ok()?;
-        (dimensions.kind == ImageKind::Jpeg && dimensions.width >= rw && dimensions.height >= rh)
-            .then(|| (bytes.to_vec(), dimensions))
-    });
+    let preview = if spec.short_edge.is_none() {
+        crate::utils::image_metadata::thumbnail(&head).and_then(|bytes| {
+            let dimensions = sniff::sniff_header(bytes).ok()?;
+            (dimensions.kind == ImageKind::Jpeg && dimensions.width >= rw && dimensions.height >= rh)
+                .then(|| (bytes.to_vec(), dimensions))
+        })
+    } else {
+        None
+    };
     let est = estimated_decoded_bytes(s, rw, rh).max(estimated_decoded_bytes(
         preview.as_ref().map_or(s, |(_, dimensions)| *dimensions),
         rw,
@@ -655,6 +667,7 @@ pub async fn render(
     width: u32,
     height: u32,
     center_crop: bool,
+    short_edge: Option<u32>,
     cache: &std::path::Path,
 ) -> Result<Option<Bytes>, String> {
     let meta = tokio::fs::metadata(path)
@@ -675,6 +688,7 @@ pub async fn render(
         meta.len() as i64,
     );
     spec.center_crop = center_crop;
+    spec.short_edge = short_edge;
     spec.modified_nanos = meta
         .modified()
         .map_err(|error| error.to_string())?

@@ -22,6 +22,8 @@ pub struct Request {
     pub width: u32,
     pub height: u32,
     pub center_crop: bool,
+    #[serde(skip)]
+    pub short_edge: Option<u32>,
     #[serde(rename = "mediaId")]
     pub file_id: String,
     pub file_name: String,
@@ -109,7 +111,10 @@ fn source_fingerprint(request: &Request) -> Result<Option<String>, String> {
         request.center_crop,
         if system { &request.file_id } else { "" },
         if system { &request.file_name } else { "" },
-        "thumbnail-v3"
+        match request.short_edge {
+            Some(short) => format!("thumbnail-short-v1-{short}"),
+            None => "thumbnail-v3".to_owned(),
+        }
     ])
     .to_string();
     Ok(Some(plain_libs::utils::hex::bytes_to_hex(&Sha256::digest(
@@ -152,6 +157,7 @@ async fn decode(
             request.width,
             request.height,
             request.center_crop,
+            request.short_edge,
             cache,
         )
         .await?;
@@ -164,9 +170,20 @@ async fn decode(
         }
         return Ok(bytes);
     }
-    decode_sdk(state, request, system)
-        .await
-        .map(|bytes| bytes.map(Bytes::from))
+    let bytes = decode_sdk(state, request, system).await?;
+    match (request.short_edge, bytes) {
+        (Some(short), Some(bytes)) => {
+            validate_output(&bytes)?;
+            let long = request.width;
+            tokio::task::spawn_blocking(move || {
+                plain_libs::media::image_io::limit_thumbnail_short_edge(bytes, short, long)
+                    .map(|bytes| Some(Bytes::from(bytes)))
+            })
+            .await
+            .map_err(|error| error.to_string())?
+        }
+        (_, bytes) => Ok(bytes.map(Bytes::from)),
+    }
 }
 
 async fn decode_sdk(
@@ -321,7 +338,7 @@ impl Thumbnails {
                     Path::new(&request.path),
                     request.width,
                     request.height,
-                    request.center_crop,
+                    request.short_edge,
                 )
                 .map_err(|error| error.to_string())?
                 .map(Bytes::from)

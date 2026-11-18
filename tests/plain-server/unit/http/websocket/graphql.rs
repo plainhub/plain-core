@@ -278,7 +278,7 @@ async fn fs_burst_and_page_cancellation(
         .unwrap();
     assert_eq!(next.status(), StatusCode::OK);
     let image = plain_libs::image::load_from_memory(&next.bytes().await.unwrap()).unwrap();
-    assert_eq!((image.width(), image.height()), (256, 192));
+    assert_eq!((image.width(), image.height()), (341, 256));
     assert_eq!(
         state.thumbnails.native_decodes.load(Ordering::SeqCst),
         workers + 1
@@ -296,7 +296,7 @@ async fn fs_burst_and_page_cancellation(
             assert_eq!(response.version(), http_client::Version::HTTP_11);
             let bytes = response.bytes().await.unwrap();
             let image = plain_libs::image::load_from_memory(&bytes).unwrap();
-            assert_eq!((image.width(), image.height()), (256, 192));
+            assert_eq!((image.width(), image.height()), (341, 256));
         });
     }
     while let Some(result) = complete.join_next().await {

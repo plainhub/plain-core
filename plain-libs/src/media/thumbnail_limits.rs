@@ -33,6 +33,24 @@ pub fn compute_target_size(src_w: u32, src_h: u32, w: u32, h: u32) -> (u32, u32)
     (tw.max(1), th.max(1))
 }
 
+pub fn short_edge_size(width: u32, height: u32, short_limit: u32, long_limit: u32) -> (u32, u32) {
+    let short = u64::from(width.min(height));
+    let long = u64::from(width.max(height));
+    let short_limit = short.min(u64::from(short_limit));
+    let long_limit = long.min(u64::from(long_limit));
+    let (short, long) = if short_limit * long <= long_limit * short {
+        (short_limit, short_limit * long / short.max(1))
+    } else {
+        (long_limit * short / long.max(1), long_limit)
+    };
+    let (short, long) = (short.max(1) as u32, long.max(1) as u32);
+    if width <= height {
+        (short, long)
+    } else {
+        (long, short)
+    }
+}
+
 #[cfg(test)]
 #[path = "../../../tests/plain-libs/unit/media/thumbnail_limits.rs"]
 mod tests;

@@ -101,7 +101,7 @@ fn dimension_body(source: &str) -> String {
 
 use plain_libs::{serde_json::Value, utils::source_reader::SourceReader};
 fn thumbnail(path: String, width: u32, height: u32) -> Result<Option<Vec<u8>>, String> {
-    plain_libs::media::image_io::thumbnail(std::path::Path::new(&path), width, height)
+    plain_libs::media::image_io::thumbnail(std::path::Path::new(&path), width, height, None)
 }
 fn convert(path: String, output: String) -> Result<Value, String> {
     plain_libs::media::image_io::convert_to_png(

@@ -312,6 +312,7 @@ async fn thumbnails_and_regular_file_probes_use_the_shared_media_engine() {
                 width: 256,
                 height: 256,
                 center_crop: true,
+                short_edge: None,
                 file_id: String::new(),
                 access_order: None,
                 file_name: "photo.png".into(),

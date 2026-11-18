@@ -48,6 +48,7 @@ fn request_for(path: &std::path::Path) -> Request {
         width: 80,
         height: 60,
         center_crop: true,
+        short_edge: None,
         file_id: String::new(),
         access_order: None,
         file_name: String::new(),
@@ -558,7 +559,7 @@ async fn thumbnail_sizes_share_256_bytes_and_preserve_large_previews() {
     .save(&path)
     .unwrap();
     let expected =
-        plain_libs::media::thumbnails::render(path.to_str().unwrap(), 256, 256, true, &cache)
+        plain_libs::media::thumbnails::render(path.to_str().unwrap(), 256, 256, true, None, &cache)
             .await
             .unwrap()
             .unwrap();
@@ -586,6 +587,7 @@ async fn thumbnail_sizes_share_256_bytes_and_preserve_large_previews() {
                 width: 256,
                 height: 256,
                 center_crop: false,
+                short_edge: None,
                 ..request_for(&path)
             },
         )
@@ -612,6 +614,7 @@ async fn thumbnail_sizes_share_256_bytes_and_preserve_large_previews() {
             width,
             height,
             center_crop: crop,
+            short_edge: None,
             ..request_for(&path)
         };
         let bytes = state
@@ -687,6 +690,7 @@ async fn real_image_extensions_skip_legacy_white_thumbnails_and_use_current_cach
             width: 256,
             height: 256,
             center_crop: false,
+            short_edge: None,
             ..request_for(&source)
         })
         .unwrap()

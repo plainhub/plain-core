@@ -3,7 +3,12 @@ use std::path::Path;
 use plain_libs::serde_json::Value;
 use plain_libs::utils::source_reader::SourceReader;
 #[unsafe(no_mangle)]
-pub fn thumbnail(path: String, width: u32, height: u32) -> Result<Option<Vec<u8>>, String> {
+pub fn thumbnail(
+    path: String,
+    width: u32,
+    height: u32,
+    short_edge: Option<u32>,
+) -> Result<Option<Vec<u8>>, String> {
     THUMBNAIL_BODY
 }
 #[unsafe(no_mangle)]
