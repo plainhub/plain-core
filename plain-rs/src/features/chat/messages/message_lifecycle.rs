@@ -36,7 +36,12 @@ pub fn create_many(db: &Db, targets: &[(String, String)], content: &str) -> Resu
         Ok(rows)
     })
 }
-pub fn forward_many(db: &Db, id: &str, targets: &[(String, String)]) -> Result<Vec<DChat>> {
+pub fn forward_many(
+    db: &Db,
+    id: &str,
+    targets: &[(String, String)],
+    note: Option<&str>,
+) -> Result<Vec<(DChat, Option<DChat>)>> {
     if targets.is_empty() {
         return Ok(vec![]);
     }
@@ -49,9 +54,20 @@ pub fn forward_many(db: &Db, id: &str, targets: &[(String, String)]) -> Result<V
             })
             .optional()?
             .ok_or_else(|| plain_libs::anyhow::anyhow!("Message unavailable"))?;
-        let rows = create_in_transaction(&tx, targets, &content)?;
+        let originals = create_in_transaction(&tx, targets, &content)?;
+        let mut notes = match note.map(str::trim).filter(|note| !note.is_empty()) {
+            Some(text) => {
+                let note = plain_libs::serde_json::json!({
+                    "type": "MESSAGE",
+                    "value": {"text": text, "format": "PLAIN", "items": []}
+                });
+                create_in_transaction(&tx, targets, &note.to_string())?
+            }
+            None => vec![],
+        }
+        .into_iter();
         tx.commit()?;
-        Ok(rows)
+        Ok(originals.into_iter().map(|row| (row, notes.next())).collect())
     })
 }
 fn create_in_transaction(

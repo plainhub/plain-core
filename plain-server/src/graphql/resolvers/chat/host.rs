@@ -130,9 +130,10 @@ impl ChatHostMutation {
         ctx: &Context<'_>,
         id: ID,
         targets: Vec<String>,
+        note: Option<String>,
     ) -> plain_graphql::Result<Vec<ChatItem>> {
         Ok(
-            chat_actions::forward_many(ctx.data::<ServerState>()?, id.as_str(), targets)
+            chat_actions::forward_many(ctx.data::<ServerState>()?, id.as_str(), targets, note.as_deref())
                 .await?
                 .iter()
                 .map(item)

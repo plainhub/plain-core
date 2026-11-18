@@ -159,7 +159,7 @@ extend type Mutation {
 	deleteChatItem(id: ID!): Boolean!
 	deleteChatItems(query: String!): ActionResult!
 	editChatText(id: ID!, text: String!): ChatTextEdit!
-	forwardChatItems(id: ID!, targets: [String!]!): [ChatItem!]!
+	forwardChatItems(id: ID!, targets: [String!]!, note: String): [ChatItem!]!
 	retryChatItem(id: ID!, recipientIds: [ID!]): ChatItem!
 	sendChatItems(targets: [String!]!, content: ChatContentInput!): [ChatItem!]!
 	sendFolderShare(targets: [String!]!, path: String!, name: String!, expiresAt: Instant): [ChatItem!]!

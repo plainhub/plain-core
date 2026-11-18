@@ -46,11 +46,49 @@ pub async fn forward_many(
     state: &CoreRuntime,
     id: &str,
     targets: Vec<String>,
+    note: Option<&str>,
 ) -> Result<Vec<DChat>> {
     let targets = validate_targets(&targets)?;
-    let rows =
-        crate::features::chat::messages::message_lifecycle::forward_many(&state.db, id, &targets)?;
-    deliver_many(state, rows).await
+    let rows = crate::features::chat::messages::message_lifecycle::forward_many(
+        &state.db, id, &targets, note,
+    )?;
+    for (original, note) in &rows {
+        committed(state, original, events::WS_MESSAGE_CREATED);
+        if let Some(note) = note {
+            committed(state, note, events::WS_MESSAGE_CREATED);
+        }
+    }
+
+    Ok(
+        futures_util::future::join_all(rows.into_iter().map(|(original, note)| async move {
+            let original = deliver_committed_forward(state, original).await;
+            let note = match note {
+                Some(note) => Some(deliver_committed_forward(state, note).await),
+                None => None,
+            };
+            [Some(original), note]
+        }))
+        .await
+        .into_iter()
+        .flatten()
+        .flatten()
+        .collect(),
+    )
+}
+
+async fn deliver_committed_forward(state: &CoreRuntime, row: DChat) -> DChat {
+    match deliver(state, row.clone()).await {
+        Ok(delivered) => delivered,
+        Err(error) => {
+            // This request already created the outgoing rows. Reporting a
+            // mutation-wide error would invite the client to forward twice.
+            log::warn!("Committed forward did not reach a final delivery state: {error}");
+            crate::infrastructure::db::chat_store::messages::get(&state.db, &row.id)
+                .ok()
+                .flatten()
+                .unwrap_or(row)
+        }
+    }
 }
 
 pub(super) async fn deliver_many(state: &CoreRuntime, rows: Vec<DChat>) -> Result<Vec<DChat>> {
