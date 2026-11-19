@@ -86,19 +86,13 @@ async fn native_resets_keep_identity_and_publish_once_per_change() {
     let before = plain_rs::features::prefs::security::snapshot(&state.prefs).unwrap();
     let mut events = state.events.subscribe();
     let generated = management.generate_password().unwrap();
-    assert_eq!(
-        management.preferences().unwrap()["passwordConfigured"],
-        false
-    );
+    assert!(!management.password_configured().unwrap());
     assert!(events.try_recv().is_err());
     management
         .set_pref("password", plain_libs::serde_json::json!(&generated))
         .await
         .unwrap();
-    assert_eq!(
-        management.preferences().unwrap()["passwordConfigured"],
-        true
-    );
+    assert!(management.password_configured().unwrap());
     assert!(management.reset_adb_token().unwrap());
     let after = plain_rs::features::prefs::security::snapshot(&state.prefs).unwrap();
     assert!(before.password.is_empty() && after.password.is_empty());
@@ -478,10 +472,7 @@ async fn password_status_validates_private_storage_and_generation_never_saves() 
     let state = core.runtime_state();
     let management = core.native_management().unwrap();
     let before = state.prefs.entries_sorted();
-    assert_eq!(
-        management.preferences().unwrap()["passwordConfigured"],
-        false
-    );
+    assert!(!management.password_configured().unwrap());
     assert_eq!(management.generate_password().unwrap().len(), 6);
     assert_eq!(state.prefs.entries_sorted(), before);
     let approval = management.get_pref(keys::LOGIN_REQUIRE_APPROVAL).unwrap();
@@ -489,9 +480,9 @@ async fn password_status_validates_private_storage_and_generation_never_saves() 
         .set_pref(keys::PASSWORD, plain_libs::serde_json::json!("fixture-password"))
         .await
         .unwrap();
-    assert_eq!(
-        management.preferences().unwrap()["passwordConfigured"],
-        true
+    assert!(management.password_configured().unwrap());
+    assert!(
+        !management.preferences().unwrap().contains_key("passwordConfigured")
     );
     assert_eq!(management.get_pref(keys::PASSWORD).unwrap(), "");
     assert_eq!(
@@ -533,20 +524,11 @@ async fn password_status_validates_private_storage_and_generation_never_saves() 
     for key in [keys::OPAQUE_SERVER_SETUP, keys::OPAQUE_PASSWORD_RECORD] {
         let original = state.prefs.get::<String>(key).unwrap().unwrap();
         state.prefs.remove(key).unwrap();
-        assert_eq!(
-            management.preferences().unwrap()["passwordConfigured"],
-            false
-        );
+        assert!(!management.password_configured().unwrap());
         state.prefs.set(key, "invalid").unwrap();
-        assert_eq!(
-            management.preferences().unwrap()["passwordConfigured"],
-            false
-        );
+        assert!(!management.password_configured().unwrap());
         state.prefs.set(key, original).unwrap();
-        assert_eq!(
-            management.preferences().unwrap()["passwordConfigured"],
-            true
-        );
+        assert!(management.password_configured().unwrap());
     }
     let before = state.prefs.entries_sorted();
     let disk = std::fs::read(state.prefs.path()).unwrap();
@@ -571,17 +553,14 @@ async fn invalid_password_registration_does_not_block_startup_or_repair() {
     prefs.set(keys::OPAQUE_SERVER_SETUP, "broken").unwrap();
     let core = ContentServer::open(directory.path()).unwrap();
     let management = core.native_management().unwrap();
-    assert_eq!(
-        management.preferences().unwrap()["passwordConfigured"],
-        false
+    assert!(
+        !management.preferences().unwrap().contains_key("passwordConfigured")
     );
+    assert!(!management.password_configured().unwrap());
     management
         .set_pref(keys::PASSWORD, plain_libs::serde_json::json!("repaired-password"))
         .await
         .unwrap();
-    assert_eq!(
-        management.preferences().unwrap()["passwordConfigured"],
-        true
-    );
+    assert!(management.password_configured().unwrap());
     core.stop_core().await;
 }

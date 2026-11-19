@@ -85,13 +85,6 @@ impl NativeManagement {
         ] {
             values.insert(key.into(), self.get_pref(key)?);
         }
-        values.insert(
-            "passwordConfigured".into(),
-            json!(matches!(
-                plain_rs::features::prefs::security::password_credential(&self.state.prefs),
-                Ok(Some(_))
-            )),
-        );
         Ok(values)
     }
 
@@ -119,6 +112,14 @@ impl NativeManagement {
             events: Some(&self.state.events),
             server: Some(&self.state),
         })
+    }
+
+    pub fn password_configured(&self) -> Result<bool, String> {
+        self.state.native_client_id()?;
+        Ok(matches!(
+            plain_rs::features::prefs::security::password_credential(&self.state.prefs),
+            Ok(Some(_))
+        ))
     }
 
     pub fn generate_password(&self) -> Result<String, String> {
