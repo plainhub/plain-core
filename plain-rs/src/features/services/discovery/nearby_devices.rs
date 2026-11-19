@@ -94,38 +94,30 @@ pub fn snapshot(
     Ok(json!({"revision": revision, "devices": rows}))
 }
 pub async fn sweep(state: &CoreRuntime) -> plain_libs::anyhow::Result<()> {
-    let mut stale = state.nearby_devices.stale(&state.db)?;
-    if stale.is_empty() {
-        return Ok(());
-    }
-    let facts = state
-        .host
-        .call("nearbyScanFacts", json!({}))
-        .await
-        .map_err(plain_libs::anyhow::Error::msg)?;
-    if facts
-        .get("paused")
-        .and_then(plain_libs::serde_json::Value::as_bool)
-        != Some(false)
-    {
-        stale.retain(|probe| {
+    let (lan, non_lan): (Vec<_>, Vec<_>) = state
+        .nearby_devices
+        .stale(&state.db)?
+        .into_iter()
+        .partition(|probe| {
             probe
                 .device
                 .discovery_methods
                 .iter()
                 .any(|method| method.is_lan())
         });
-    }
-    let interfaces = crate::infrastructure::transport::lan::local_interfaces();
-    for chunk in stale.chunks(4) {
+    let interfaces = if lan.is_empty() {
+        Vec::new()
+    } else {
+        crate::infrastructure::transport::lan::local_interfaces()
+    };
+    for chunk in lan.chunks(4) {
         if !state.nearby_devices.active() {
-            break;
+            return Ok(());
         }
         let interfaces = &interfaces;
         let results = futures_util::future::join_all(chunk.iter().map(|p| async move {
-            let ip = crate::infrastructure::transport::lan::best(&p.device.ips, &interfaces);
-            let alive = p.device.discovery_methods.iter().any(|v| v.is_lan())
-                && !ip.is_empty()
+            let ip = crate::infrastructure::transport::lan::best(&p.device.ips, interfaces);
+            let alive = !ip.is_empty()
                 && crate::features::discovery::nearby_http::probe(&ip, p.device.port)
                     .await
                     .unwrap_or(false);
@@ -134,6 +126,18 @@ pub async fn sweep(state: &CoreRuntime) -> plain_libs::anyhow::Result<()> {
         .await;
         for (probe, alive) in results {
             state.nearby_devices.verified(&state.db, probe, alive)?;
+        }
+    }
+    if !non_lan.is_empty() && state.nearby_devices.active() {
+        let facts = state
+            .host
+            .call("nearbyScanFacts", json!({}))
+            .await
+            .map_err(plain_libs::anyhow::Error::msg)?;
+        if facts.get("paused").and_then(plain_libs::serde_json::Value::as_bool) == Some(false) {
+            for probe in &non_lan {
+                state.nearby_devices.verified(&state.db, probe, false)?;
+            }
         }
     }
     Ok(())

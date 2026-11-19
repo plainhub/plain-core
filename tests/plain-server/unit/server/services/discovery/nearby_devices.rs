@@ -4,7 +4,7 @@ use plain_rs::infrastructure::db::chat_store;
 use plain_libs::serde_json::json;
 
 #[tokio::test]
-async fn rust_sweep_keeps_lan_probes_independent_of_bluetooth_pause() {
+async fn rust_sweep_retires_unreachable_lan_records_without_a_host_bridge() {
     use std::sync::Arc;
     let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs =
@@ -27,6 +27,8 @@ async fn rust_sweep_keeps_lan_probes_independent_of_bluetooth_pause() {
     )
     .await
     .unwrap();
+    let last_seen_at =
+        (plain_libs::chrono::Utc::now() - plain_libs::chrono::Duration::minutes(2)).to_rfc3339();
     let fixture = |id: &str, port| Device {
         id: id.into(),
         name: "fixture".into(),
@@ -35,7 +37,7 @@ async fn rust_sweep_keeps_lan_probes_independent_of_bluetooth_pause() {
         device_type: plain_rs::features::chat::enums::DeviceType::Phone,
         version: "1".into(),
         platform: "test".into(),
-        last_seen_at: "1970-01-01T00:00:00.000Z".into(),
+        last_seen_at: last_seen_at.clone(),
         remote_access: None,
         signature_public_key: String::new(),
         discovery_methods: vec![
@@ -52,24 +54,17 @@ async fn rust_sweep_keeps_lan_probes_independent_of_bluetooth_pause() {
     state
         .nearby_devices
         .scanning_modes(
-            None,
             Some(true),
+            None,
             chat_store::nearby::all(&state.db).unwrap(),
         )
         .unwrap();
-    let (generation, mut requests) = state.host.connect();
-    let host = state.host.clone();
-    let facts = tokio::spawn(async move {
-        let request = requests.recv().await.unwrap();
-        assert_eq!(request["method"], "nearbyScanFacts");
-        host.reply(
-            generation,
-            json!({"id":request["id"],"result":{"paused":true,"interfaces":[]}}),
-        )
-        .unwrap();
-    });
+    let before = snapshot(&state.db, &state.nearby_devices).unwrap();
+    assert_eq!(before["devices"].as_array().unwrap().len(), 2);
     sweep(&state).await.unwrap();
-    facts.await.unwrap();
+    let after = snapshot(&state.db, &state.nearby_devices).unwrap();
+    assert_eq!(after["devices"].as_array().unwrap().len(), 1);
+    assert_eq!(after["devices"][0]["id"], "alive");
     assert_eq!(state.nearby_devices.snapshot().devices.len(), 1);
     assert_eq!(state.nearby_devices.snapshot().devices[0].id, "alive");
     assert_eq!(chat_store::nearby::all(&state.db).unwrap().len(), 1);
