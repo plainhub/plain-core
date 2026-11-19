@@ -95,8 +95,9 @@ pub(super) async fn run(
         !password_required || password.is_some(),
         PairingFailure::PasswordRequired
     );
-    let changed = saved.as_ref().is_some_and(|p| p.public_key != public_key);
-    if changed || (!password_required && saved.is_none()) {
+    if saved.as_ref().is_some_and(|peer| {
+        !peer.public_key.is_empty() && peer.public_key != public_key
+    }) {
         let digest: [u8; 32] = Sha256::digest(base64_decode(&public_key)).into();
         let code = super::super::confirmation_channel::verification_code(&digest);
         let mut trust = state
@@ -110,7 +111,7 @@ pub(super) async fn run(
             base.host_str().unwrap_or_default(),
             target.device_type,
             &code,
-            changed,
+            true,
         );
         while !*trust.borrow_and_update() {
             trust

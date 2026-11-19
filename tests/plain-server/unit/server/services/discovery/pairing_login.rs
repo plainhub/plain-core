@@ -96,6 +96,9 @@ async fn notice(
                 return plain_libs::serde_json::from_str(&event.payload).unwrap();
             }
             assert_ne!(event.event_type, "PAIRING_FAILED", "{}", event.payload);
+            if kind == "PAIRING_STARTED" {
+                assert_ne!(event.event_type, "PAIRING_REQUESTED", "Unexpected local trust prompt");
+            }
         }
         panic!("pairing notifications closed")
     })
@@ -144,20 +147,6 @@ async fn register_target(state: &ServerState, remote: &ServerState) -> String {
         .unwrap();
     id
 }
-async fn trust_identity(
-    state: &ServerState,
-    events: &mut tokio::sync::broadcast::Receiver<plain_rs::infrastructure::events::WsEvent>,
-    peer_id: &str,
-) {
-    let waiting = notice(events, "PAIRING_REQUESTED").await;
-    let verification_code = waiting.verification_code.unwrap();
-    assert_eq!(verification_code.len(), 8);
-    assert!(verification_code.bytes().all(|byte| byte.is_ascii_digit()));
-    plain_rs::features::services::discovery::pairing_confirmation::respond(state, peer_id, true)
-        .await
-        .unwrap();
-}
-
 #[cfg(feature = "http_transport")]
 async fn confirmation(events: &mut ConfirmationCallbacks) -> String {
     confirmation_request(events).await["requestId"]
@@ -198,7 +187,7 @@ async fn passwordless_native_management_displays_the_same_code_and_commits_only_
         .await
         .unwrap()
     );
-    trust_identity(&state, &mut notices, &peer_id).await;
+    let waiting = notice(&mut notices, "PAIRING_STARTED").await;
     let request = confirmation_request(&mut events).await;
     let client = state.host.startup();
     assert!(!client.os_name.is_empty());
@@ -212,7 +201,6 @@ async fn passwordless_native_management_displays_the_same_code_and_commits_only_
     assert_eq!(request["request"]["osVersion"], client.os_version);
     assert_eq!(request["request"]["appVersion"], client.app_version);
 
-    let waiting = notice(&mut notices, "PAIRING_STARTED").await;
     assert_eq!(
         waiting.verification_code.as_deref(),
         request["request"]["verificationCode"].as_str()
@@ -412,7 +400,6 @@ async fn no_password_still_requires_remote_approval_and_cancel_prevents_local_co
         .await
         .unwrap()
     );
-    trust_identity(&state, &mut notices, &peer_id).await;
     let request = confirmation(&mut events).await;
     notice(&mut notices, "PAIRING_STARTED").await;
     assert!(pairing_attempts::cancel(&state, &peer_id).await.unwrap());
@@ -547,7 +534,6 @@ async fn remote_rejection_and_native_scope_closure_do_not_save_credentials() {
         .await
         .unwrap()
     );
-    trust_identity(&state, &mut notices, &peer_id).await;
     let request = confirmation(&mut events).await;
     crate::http::auth::ws_login::Confirmation::new(other.clone())
         .decide(&request, false)
@@ -573,7 +559,7 @@ async fn remote_rejection_and_native_scope_closure_do_not_save_credentials() {
         .await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     assert_eq!(response.data.into_json().unwrap()["pairPeer"], true);
-    notice(&mut notices, "PAIRING_REQUESTED").await;
+    notice(&mut notices, "PAIRING_STARTED").await;
     scope.close();
     notice(&mut notices, "PAIRING_CANCELED").await;
     assert!(
@@ -726,19 +712,7 @@ async fn web_management_pairs_by_device_id_and_keeps_the_grant_on_a() {
     assert_eq!(denied["errors"][0]["message"], "NO_PERMISSION");
     let started = query(b_id.clone()).await;
     assert_eq!(started["data"]["pairPeer"], true, "{started}");
-    notice(&mut notices, "PAIRING_REQUESTED").await;
-    let body = json!({"query":"mutation($peerId:ID!){respondToPairing(peerId:$peerId,accepted:true)}", "variables":{"peerId":b_id}});
-    let trusted = management_http::exchange(
-        http.post(format!("https://localhost:{a_port}/graphql"))
-            .header("c-id", &browser.client_id),
-        &base64_decode(&browser.token),
-        &body.to_string(),
-        8192,
-    )
-    .await
-    .unwrap();
-    let trusted: Value = plain_libs::serde_json::from_slice(&trusted).unwrap();
-    assert!(trusted["errors"].is_null(), "{trusted}");
+    notice(&mut notices, "PAIRING_STARTED").await;
     let request = confirmation(&mut events).await;
     b.native_management()
         .unwrap()
