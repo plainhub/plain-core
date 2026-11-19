@@ -12,7 +12,7 @@ fn defaults_are_complete_and_partial_patch_does_not_reset_other_settings() {
     assert!(settings.remote_access);
     assert_eq!(
         settings.app_home_features,
-        "IMAGES|VIDEOS|AUDIO|DOCS|FILES|NOTES|FEEDS"
+        "IMAGES|VIDEOS|AUDIO|DOCS|FILES|NOTES|FEEDS|APPS|SOUND_METER|POMODORO_TIMER|IMAGE_EDITOR"
     );
     patch(
         &prefs,

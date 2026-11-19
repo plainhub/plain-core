@@ -395,7 +395,7 @@ async fn tools_preferences_with_variables_return_defaults_on_a_fresh_native_host
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     assert_eq!(
         response.data.into_json().unwrap()["prefs"]["app_home_features"],
-        "IMAGES|VIDEOS|AUDIO|DOCS|FILES|NOTES|FEEDS"
+        "IMAGES|VIDEOS|AUDIO|DOCS|FILES|NOTES|FEEDS|APPS|SOUND_METER|POMODORO_TIMER|IMAGE_EDITOR"
     );
     core.shutdown().await;
 }

@@ -243,7 +243,7 @@ async fn authenticated_developer_apis_follow_mode_changes_without_relogin() {
         assert!(result.get("errors").is_none(), "{result}");
         assert_eq!(
             result["data"]["prefs"]["app_home_features"],
-            "IMAGES|VIDEOS|AUDIO|DOCS|FILES|NOTES|FEEDS"
+            "IMAGES|VIDEOS|AUDIO|DOCS|FILES|NOTES|FEEDS|APPS|SOUND_METER|POMODORO_TIMER|IMAGE_EDITOR"
         );
     }
     server.shutdown().await;

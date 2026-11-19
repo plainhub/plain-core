@@ -80,7 +80,7 @@ impl Default for Settings {
             ai_image_search_enabled: false,
             notification_filter: plain_libs::serde_json::json!({"mode":"BLACKLIST","apps":[]}),
             pomodoro_settings: plain_libs::serde_json::json!({"workDurationMin":25,"shortBreakDurationMin":5,"longBreakDurationMin":15,"pomodorosBeforeLongBreak":4,"showNotification":true,"playSoundOnComplete":true,"soundPath":"","originalSoundName":""}),
-            app_home_features: "IMAGES|VIDEOS|AUDIO|DOCS|FILES|NOTES|FEEDS".into(),
+            app_home_features: "IMAGES|VIDEOS|AUDIO|DOCS|FILES|NOTES|FEEDS|APPS|SOUND_METER|POMODORO_TIMER|IMAGE_EDITOR".into(),
             launcher_shortcuts: "NOTES|DOCS|FEEDS|POMODORO_TIMER".into(),
             audio_sort_by: AudioSortBy::UpdatedAtDesc,
             video_sort_by: VideoSortBy::TakenAtDesc,

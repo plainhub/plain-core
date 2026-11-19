@@ -244,7 +244,7 @@ async fn remote_tools_receive_effective_app_home_features_without_local_settings
     let data = response.data.into_json().unwrap();
     assert_eq!(
         data["prefs"]["app_home_features"],
-        "IMAGES|VIDEOS|AUDIO|DOCS|FILES|NOTES|FEEDS"
+        "IMAGES|VIDEOS|AUDIO|DOCS|FILES|NOTES|FEEDS|APPS|SOUND_METER|POMODORO_TIMER|IMAGE_EDITOR"
     );
     assert!(data["prefs"].get("http_port").is_none());
     assert!(data["prefs"].get("password").is_none());
