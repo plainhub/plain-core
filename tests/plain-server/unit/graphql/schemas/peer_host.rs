@@ -54,7 +54,6 @@ async fn encrypted_public_and_ble_rpc_share_auth_executor_and_receipts() {
     let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs =
         Arc::new(plain_rs::features::prefs::Prefs::load(&dir.path().join("system.json")).unwrap());
-    prefs.set("background_service_enabled", true).unwrap();
     prefs.set("device_name", "fixture tablet").unwrap();
     prefs
         .set("client_id", "706c6169-0000-8000-8000-000000000001")
@@ -319,7 +318,6 @@ async fn encrypted_public_and_ble_rpc_share_auth_executor_and_receipts() {
         .await
         .unwrap()
         .unwrap();
-    prefs.set("background_service_enabled", false).unwrap();
     assert_eq!(
         client
             .post(&public_url)

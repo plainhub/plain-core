@@ -126,7 +126,6 @@ async fn shared_directory_download_preserves_empty_directories_and_excludes_outs
         let core = crate::server::ContentServer::open(&directory.path().join("core")).unwrap();
         let state = core.runtime_state();
         let (_generation, mut requests) = state.host.connect();
-        state.prefs.set("background_service_enabled", true).unwrap();
         let folder = directory.path().join("photos");
         std::fs::create_dir_all(folder.join("empty")).unwrap();
         if with_file {

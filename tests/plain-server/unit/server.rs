@@ -3,12 +3,11 @@ use plain_libs::protocols::http_client;
 
 #[cfg(feature = "http_transport")]
 #[tokio::test]
-async fn app_and_remote_access_share_listeners_without_background_service() {
+async fn app_and_remote_access_share_listeners() {
     let directory = plain_libs::temporary::tempdir().unwrap();
     let prefs = Arc::new(
         plain_rs::features::prefs::Prefs::load(&directory.path().join("prefs.json")).unwrap(),
     );
-    prefs.set("background_service_enabled", false).unwrap();
     prefs.set("remote_access", false).unwrap();
     let token = plain_libs::utils::base64::base64_encode(&[19; 32]);
     let (cert_pem, cert_key) = plain_libs::tls::generate_pem(&["localhost".into()]).unwrap();

@@ -8,7 +8,6 @@ fn fixture() -> (plain_libs::temporary::TempDir, ContentServer) {
     let directory = plain_libs::temporary::tempdir().unwrap();
     let server = ContentServer::open(directory.path()).unwrap();
     let state = server.runtime_state();
-    state.prefs.set("background_service_enabled", true).unwrap();
     state.prefs.set("remote_access", true).unwrap();
     state.prefs.set("device_name", "Fixture host").unwrap();
     for id in ["706c6169-7caa-8624-826a-f1e2faa59369", "706c6169-61a2-83b0-bf56-34d332e83e8f"] {

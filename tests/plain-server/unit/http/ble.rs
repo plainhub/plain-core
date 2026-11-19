@@ -5,7 +5,6 @@ fn fixture() -> (plain_libs::temporary::TempDir, crate::server::ContentServer) {
     let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs =
         Arc::new(plain_rs::features::prefs::Prefs::load(&dir.path().join("system.json")).unwrap());
-    prefs.set("background_service_enabled", true).unwrap();
     let server = crate::server::ContentServer::start(
         dir.path(),
         &plain_libs::utils::base64::base64_encode(&[3; 32]),

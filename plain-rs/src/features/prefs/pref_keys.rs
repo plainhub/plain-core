@@ -56,7 +56,6 @@ pref_keys! {
         CLIPBOARD_DIRECTIONS = "clipboard_directions",
         HTTP_PORT = "http_port",
         HTTPS_PORT = "https_port",
-        BACKGROUND_SERVICE_ENABLED = "background_service_enabled",
         REMOTE_ACCESS = "remote_access",
         DEVELOPER_MODE = "developer_mode",
         ALLOW_ANY_HOST = "allow_any_host",

@@ -18,7 +18,6 @@ fn fixture() -> (plain_libs::temporary::TempDir, ContentServer) {
     let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs =
         Arc::new(plain_rs::features::prefs::Prefs::load(&dir.path().join("prefs.json")).unwrap());
-    prefs.set("background_service_enabled", true).unwrap();
     prefs.set("remote_access", true).unwrap();
     prefs.set("login_require_approval", false).unwrap();
     plain_rs::features::prefs::security::set_entry(&prefs, "password", plain_libs::serde_json::json!("secret"))

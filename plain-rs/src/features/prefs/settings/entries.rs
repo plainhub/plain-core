@@ -40,7 +40,6 @@ settings_keys! {
     AMOLED_DARK_THEME => amoled_dark_theme,
     PDF_FOLLOW_DARK_THEME => pdf_follow_dark_theme,
     LOCALE => locale,
-    BACKGROUND_SERVICE_ENABLED => background_service_enabled,
     REMOTE_ACCESS => remote_access,
     DLNA => dlna,
     DEVELOPER_MODE => developer_mode,

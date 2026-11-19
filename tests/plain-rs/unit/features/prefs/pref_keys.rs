@@ -10,7 +10,7 @@ fn every_registered_key_has_the_expected_read_and_write_policy() {
             editor_font_size editor_status_bar desktop_home_features desktop_rail_features media_excluded_dirs desktop_upload_dirs audio_sort_by video_sort_by
             image_sort_by doc_sort_by file_sort_by pkg_sort_by audio_play_mode audio_playback_speed
             pomodoro_settings screen_mirror_quality"),
-        (PrefAccess::LocalOnly, "clipboard_directions http_port https_port background_service_enabled remote_access developer_mode
+        (PrefAccess::LocalOnly, "clipboard_directions http_port https_port remote_access developer_mode
             allow_any_host nearby_discoverable notification_filter launcher_shortcuts
             image_grid_cells_per_row video_grid_cells_per_row https web_address_bar_expanded
             password password_type login_require_approval
@@ -89,7 +89,6 @@ fn exported_constants_match_the_registered_keys() {
         CLIPBOARD_DIRECTIONS,
         HTTP_PORT,
         HTTPS_PORT,
-        BACKGROUND_SERVICE_ENABLED,
         REMOTE_ACCESS,
         DEVELOPER_MODE,
         ALLOW_ANY_HOST,
@@ -133,6 +132,7 @@ fn unknown_or_modified_keys_never_gain_access() {
     for key in [
         "",
         "unknown",
+        "background_service_enabled",
         "LOCALE",
         " locale",
         "locale ",

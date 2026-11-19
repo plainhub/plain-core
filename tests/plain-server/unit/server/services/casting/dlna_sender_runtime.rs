@@ -183,7 +183,6 @@ async fn sender_controls_use_soap_and_release_the_original_subscription() {
         !rows.iter().any(|row| row.1.contains("#Stop")),
         "Exit retains receiver playback"
     );
-    state.prefs.set("background_service_enabled", true).unwrap();
     state.cast.snapshot.lock().unwrap().items = vec![
         Item {
             path: "/video.mp4".into(),
@@ -340,7 +339,6 @@ async fn stop_during_pending_poll_does_not_advance_the_queue() {
     )
     .unwrap();
     let state = server.runtime_state();
-    state.prefs.set("background_service_enabled", true).unwrap();
     let device = DiscoveredDevice {
         udn: "uuid:poll-renderer".into(),
         location: format!("{base}/description.xml"),

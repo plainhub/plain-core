@@ -102,7 +102,6 @@ async fn auth_confirmation_uses_host_callbacks_and_returns_the_hosts_decision_to
     let prefs = std::sync::Arc::new(
         plain_rs::features::prefs::Prefs::load(&dir.path().join("prefs.json")).unwrap(),
     );
-    prefs.set("background_service_enabled", true).unwrap();
     prefs.set("remote_access", true).unwrap();
     prefs.set("login_require_approval", true).unwrap();
     prefs.set("password_type", "FIXED").unwrap();

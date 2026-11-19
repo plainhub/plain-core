@@ -11,7 +11,6 @@ pub struct SettingsPatch {
     pub amoled_dark_theme: Option<bool>,
     pub pdf_follow_dark_theme: Option<bool>,
     pub locale: Option<String>,
-    pub background_service_enabled: Option<bool>,
     pub remote_access: Option<bool>,
     pub dlna: Option<bool>,
     pub developer_mode: Option<bool>,

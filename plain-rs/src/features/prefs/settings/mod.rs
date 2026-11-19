@@ -42,10 +42,6 @@ pub fn snapshot(prefs: &Prefs) -> Result<Settings> {
     if let Some(value) = entries.get(keys::LOCALE) {
         settings.locale = plain_libs::serde_json::from_value(value.clone()).map_err(PrefsError::Decode)?;
     }
-    if let Some(value) = entries.get(keys::BACKGROUND_SERVICE_ENABLED) {
-        settings.background_service_enabled =
-            plain_libs::serde_json::from_value(value.clone()).map_err(PrefsError::Decode)?;
-    }
     if let Some(value) = entries.get(keys::REMOTE_ACCESS) {
         settings.remote_access =
             plain_libs::serde_json::from_value(value.clone()).map_err(PrefsError::Decode)?;
@@ -224,13 +220,6 @@ pub fn patch(prefs: &Prefs, patch: SettingsPatch) -> plain_libs::anyhow::Result<
             let value = plain_libs::serde_json::to_value(value).map_err(PrefsError::Encode)?;
             if entries.get(keys::LOCALE) != Some(&value) {
                 entries.insert(keys::LOCALE.into(), value);
-                changed = true;
-            }
-        }
-        if let Some(value) = patch.background_service_enabled {
-            let value = plain_libs::serde_json::to_value(value).map_err(PrefsError::Encode)?;
-            if entries.get(keys::BACKGROUND_SERVICE_ENABLED) != Some(&value) {
-                entries.insert(keys::BACKGROUND_SERVICE_ENABLED.into(), value);
                 changed = true;
             }
         }

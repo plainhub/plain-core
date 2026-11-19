@@ -105,7 +105,6 @@ async fn receiver_paths_answer_only_while_the_toggle_and_service_are_on() {
     // discoverable or answerable at all.
     assert_eq!(describe().await, 404);
 
-    state.prefs.set("background_service_enabled", true).unwrap();
     assert_eq!(describe().await, 404, "service alone is not enough");
 
     state.prefs.set("dlna", true).unwrap();
@@ -174,7 +173,6 @@ async fn a_forged_c_ip_header_cannot_impersonate_an_allowed_sender() {
     let client = http_client::builder().build().unwrap();
     let base = format!("http://127.0.0.1:{port}");
     let state = server.runtime_state();
-    state.prefs.set("background_service_enabled", true).unwrap();
     state.prefs.set("dlna", true).unwrap();
     // 10.0.0.9 is "trusted"; the request below actually arrives from loopback.
     plain_rs::features::prefs::dlna::add_sender(
@@ -360,7 +358,6 @@ async fn public_dlna_reads_the_native_players_reported_position() {
         .await;
     let (_dir, server, port) = public_fixture().await;
     let state = server.runtime_state();
-    state.prefs.set("background_service_enabled", true).unwrap();
     state.prefs.set("dlna", true).unwrap();
     state.dlna.state.write().await.media_uri = "http://example.test/owned.mp4".into();
     let controller = MainDlnaClient(server.native_graphql().unwrap(), server.runtime_state());
@@ -438,7 +435,6 @@ async fn an_oversized_control_request_never_reaches_the_protocol() {
         .await;
     let (dir, server, port) = public_fixture().await;
     let state = server.runtime_state();
-    state.prefs.set("background_service_enabled", true).unwrap();
     state.prefs.set("dlna", true).unwrap();
 
     let soap = format!(

@@ -425,22 +425,16 @@ fn token_matches_standard_hmac_vector() {
 }
 
 #[test]
-fn guest_access_uses_remote_access_without_requiring_background_service() {
+fn guest_access_follows_remote_access() {
     let (dir, service) = fixture();
     let root = dir.path().join("shared");
     std::fs::create_dir(&root).unwrap();
     let row = create(&service, vec![root]);
     assert!(service.active(&row.id, true).unwrap().is_some());
-    for background in [false, true] {
-        service
-            .prefs
-            .set("background_service_enabled", background)
-            .unwrap();
-        for enabled in [false, true] {
-            service.prefs.set("remote_access", enabled).unwrap();
-            assert_eq!(service.active(&row.id, true).unwrap().is_some(), enabled);
-            assert!(service.active(&row.id, false).unwrap().is_some());
-        }
+    for enabled in [false, true] {
+        service.prefs.set("remote_access", enabled).unwrap();
+        assert_eq!(service.active(&row.id, true).unwrap().is_some(), enabled);
+        assert!(service.active(&row.id, false).unwrap().is_some());
     }
     service.prefs.set("remote_access", "invalid").unwrap();
     assert!(service.active(&row.id, true).is_err());

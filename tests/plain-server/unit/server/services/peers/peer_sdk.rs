@@ -15,7 +15,6 @@ fn root(id: &str) -> (plain_libs::temporary::TempDir, ContentServer, Vec<u8>, St
     let prefs =
         Arc::new(plain_rs::features::prefs::Prefs::load(&dir.path().join("system.json")).unwrap());
     prefs.set("client_id", id).unwrap();
-    prefs.set("background_service_enabled", true).unwrap();
     prefs.set("wifi_aware_enabled", true).unwrap();
     let (kp, _pk) = plain_libs::crypto::ed25519_generate();
     prefs
