@@ -81,13 +81,6 @@ impl Mutation {
             }
         }
     }
-    async fn start_aware(&self, ctx: &Context<'_>) -> plain_graphql::Result<bool> {
-        let c = ctx.data_unchecked::<PeerContext>();
-        Ok(c.state
-            .aware
-            .subscribe(&c.state, &c.authenticated.peer.id)
-            .await?)
-    }
 }
 pub(crate) type PeerSchema = Schema<Query, Mutation, EmptySubscription>;
 pub(crate) fn schema() -> PeerSchema {

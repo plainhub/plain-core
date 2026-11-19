@@ -62,6 +62,7 @@ settings_keys! {
     EDITOR_FONT_SIZE => editor_font_size,
     EDITOR_STATUS_BAR => editor_status_bar,
     NEARBY_DISCOVERABLE => nearby_discoverable,
+    WIFI_AWARE_ENABLED => wifi_aware_enabled,
     AI_IMAGE_SEARCH_ENABLED => ai_image_search_enabled,
     NOTIFICATION_FILTER => notification_filter,
     POMODORO_SETTINGS => pomodoro_settings,

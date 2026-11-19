@@ -8,7 +8,6 @@ async fn peer_schema_preserves_required_arguments_and_empty_query() {
     for field in [
         "createChatItem(content: String!): [ChatItem!]!",
         "channelSystemMessage(type: ChannelSystemMessageType!, payload: String!): Boolean!",
-        "startAware: Boolean!",
         "createdAt: Instant!",
         "updatedAt: Instant!",
         "fromId: ID!",
@@ -17,6 +16,13 @@ async fn peer_schema_preserves_required_arguments_and_empty_query() {
         assert!(sdl.contains(field), "{field}: {sdl}");
     }
     assert!(!sdl.contains("_peerSchemaVersion"));
+    assert!(!sdl.contains("startAware"));
+    for operation in [
+        "mutation { startAware }",
+        r#"mutation { setPref(key:"wifi_aware_enabled", value:true) }"#,
+    ] {
+        assert!(!schema.execute(operation).await.errors.is_empty());
+    }
     let result = schema.execute("mutation { createChatItem { id } }").await;
     assert!(!result.errors.is_empty());
     let result = schema
@@ -223,30 +229,21 @@ async fn encrypted_public_and_ble_rpc_share_auth_executor_and_receipts() {
         plain_libs::serde_json::from_str::<Value>(&event.payload).unwrap(),
         json!([plain_rs::features::chat::service::chat_to_json(&stored)])
     );
-    for expected in [false, true] {
-        if expected {
-            let mut current = peers::get(&db, "706c6169-89f1-81c6-8bc7-6b67c2ffa178")
-                .unwrap()
-                .unwrap();
-            current.port = Some(5443);
-            peers::save(&db, &[current], SaveMode::Update).unwrap();
-        }
-        let body = wire(json!({"query":"mutation { startAware }"}));
-        let response = client
-            .post(&public_url)
-            .header("c-id", "706c6169-89f1-81c6-8bc7-6b67c2ffa178")
-            .body(body.clone())
-            .send()
-            .await
-            .unwrap();
-        let content: Value = plain_libs::serde_json::from_slice(
-            &plain_rs::infrastructure::transport::http_response::Context::new(&body)
-                .decrypt(&key, &response.bytes().await.unwrap())
-                .unwrap(),
-        )
+    let body = wire(json!({"query":"mutation { startAware }"}));
+    let response = client
+        .post(&public_url)
+        .header("c-id", "706c6169-89f1-81c6-8bc7-6b67c2ffa178")
+        .body(body.clone())
+        .send()
+        .await
         .unwrap();
-        assert_eq!(content["data"]["startAware"], expected);
-    }
+    let content: Value = plain_libs::serde_json::from_slice(
+        &plain_rs::infrastructure::transport::http_response::Context::new(&body)
+            .decrypt(&key, &response.bytes().await.unwrap())
+            .unwrap(),
+    )
+    .unwrap();
+    assert!(content["errors"].as_array().is_some_and(|errors| !errors.is_empty()));
     let body =
         wire(json!({"query":"mutation { channelSystemMessage(type:INVITE,payload:\"invalid\") }"}));
     let response = client

@@ -1,13 +1,5 @@
 use super::*;
 
-#[test]
-fn start_receipt_requires_actual_boolean_and_no_errors() {
-    assert!(!started(&json!({"data":{"startAware":false}})).unwrap());
-    assert!(started(&json!({"data":{"startAware":true},"errors":[]})).unwrap());
-    assert!(started(&json!({"data":{"startAware":true},"errors":[{"message":"FAILED"}]})).is_err());
-    assert!(started(&json!({"data":{}})).is_err());
-}
-
 #[tokio::test]
 async fn scan_reads_aware_flags_from_discover_and_checks_full_advertised_identity() {
     let id = "706c6169-2d74-8e53-9a16-f08b62c591d3";

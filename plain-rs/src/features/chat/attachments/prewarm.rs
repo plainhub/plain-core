@@ -14,7 +14,6 @@ use std::{
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Capabilities {
     pub ble_ready: bool,
-    pub aware_supported: bool,
 }
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -29,7 +28,6 @@ pub trait Driver: Send + Sync {
         &self,
         client_id: &str,
     ) -> impl Future<Output = Result<Option<Advertisement>>> + Send;
-    fn start_aware(&self, peer_id: &str) -> impl Future<Output = Result<bool>> + Send;
 }
 struct Entry {
     generation: u64,
@@ -140,7 +138,7 @@ pub async fn run<D: Driver>(
         return Ok(None);
     }
     let scan = tokio::time::timeout(Duration::from_secs(120), driver.discover(id)).await;
-    let Some(mut value) =
+    let Some(value) =
         scan.map_err(|_| plain_libs::anyhow::anyhow!("Peer prewarm discovery timed out"))??
     else {
         return Ok(None);
@@ -150,20 +148,6 @@ pub async fn run<D: Driver>(
     }
     if !unchanged(db, &claim, &peer)? {
         return Ok(None);
-    }
-    if caps.aware_supported && value.aware_supported && !value.aware_running {
-        if !unchanged(db, &claim, &peer)? {
-            return Ok(None);
-        }
-        let started = tokio::time::timeout(Duration::from_secs(20), driver.start_aware(id))
-            .await
-            .map_err(|_| plain_libs::anyhow::anyhow!("Peer prewarm start timed out"))??;
-        if !unchanged(db, &claim, &peer)? {
-            return Ok(None);
-        }
-        if started {
-            value.aware_running = true;
-        }
     }
     Ok(Some(value))
 }

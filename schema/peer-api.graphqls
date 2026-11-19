@@ -114,7 +114,6 @@ scalar Long
 type Mutation {
 	createChatItem(content: String!): [ChatItem!]!
 	channelSystemMessage(type: ChannelSystemMessageType!, payload: String!): Boolean!
-	startAware: Boolean!
 }
 
 enum PeerStatus {

@@ -124,6 +124,10 @@ pub fn snapshot(prefs: &Prefs) -> Result<Settings> {
             plain_libs::serde_json::from_value(value.clone()).map_err(PrefsError::Decode)?;
     }
 
+    if let Some(value) = entries.get(keys::WIFI_AWARE_ENABLED) {
+        settings.wifi_aware_enabled =
+            plain_libs::serde_json::from_value(value.clone()).map_err(PrefsError::Decode)?;
+    }
     if let Some(value) = entries.get(keys::NEARBY_DISCOVERABLE) {
         settings.nearby_discoverable =
             plain_libs::serde_json::from_value(value.clone()).map_err(PrefsError::Decode)?;
@@ -371,6 +375,13 @@ pub fn patch(prefs: &Prefs, patch: SettingsPatch) -> plain_libs::anyhow::Result<
             }
         }
 
+        if let Some(value) = patch.wifi_aware_enabled {
+            let value = plain_libs::serde_json::to_value(value).map_err(PrefsError::Encode)?;
+            if entries.get(keys::WIFI_AWARE_ENABLED) != Some(&value) {
+                entries.insert(keys::WIFI_AWARE_ENABLED.into(), value);
+                changed = true;
+            }
+        }
         if let Some(value) = patch.nearby_discoverable {
             let value = plain_libs::serde_json::to_value(value).map_err(PrefsError::Encode)?;
             if entries.get(keys::NEARBY_DISCOVERABLE) != Some(&value) {

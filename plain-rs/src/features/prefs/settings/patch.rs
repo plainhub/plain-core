@@ -34,6 +34,7 @@ pub struct SettingsPatch {
     pub editor_font_size: Option<i32>,
     pub editor_status_bar: Option<bool>,
     pub nearby_discoverable: Option<bool>,
+    pub wifi_aware_enabled: Option<bool>,
     pub ai_image_search_enabled: Option<bool>,
     pub notification_filter: Option<Value>,
     pub pomodoro_settings: Option<Value>,

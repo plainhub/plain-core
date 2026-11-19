@@ -43,7 +43,7 @@ async fn aware_flags(state: &CoreRuntime) -> Result<(bool, bool)> {
     let running = sample["wifiAwareRunning"]
         .as_bool()
         .ok_or_else(|| plain_libs::anyhow::anyhow!("Invalid Wi-Fi Aware state reading"))?;
-    Ok((true, running))
+    Ok((true, running && crate::features::prefs::settings::snapshot(&state.prefs)?.wifi_aware_enabled))
 }
 async fn facts(state: &CoreRuntime) -> Result<Facts> {
     let name = state.host.startup().name.clone();

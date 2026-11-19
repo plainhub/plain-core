@@ -3,7 +3,7 @@ use super::*;
 #[test]
 fn every_registered_key_has_the_expected_read_and_write_policy() {
     let groups = [
-        (PrefAccess::Default, "dlna device_name feed_auto_refresh feed_auto_refresh_interval feed_auto_refresh_only_wifi
+        (PrefAccess::Default, "wifi_aware_enabled dlna device_name feed_auto_refresh feed_auto_refresh_interval feed_auto_refresh_only_wifi
             ai_image_search_enabled ai_image_search_model dlna_allowed_senders dlna_denied_senders
             dark_theme amoled_dark_theme
             pdf_follow_dark_theme locale show_hidden_files feed_font_scale editor_wrap_content
@@ -53,6 +53,7 @@ fn every_registered_key_has_the_expected_read_and_write_policy() {
 #[test]
 fn exported_constants_match_the_registered_keys() {
     let constants = [
+        WIFI_AWARE_ENABLED,
         DLNA,
         DEVICE_NAME,
         FEED_AUTO_REFRESH,
@@ -62,7 +63,6 @@ fn exported_constants_match_the_registered_keys() {
         AI_IMAGE_SEARCH_MODEL,
         DLNA_ALLOWED_SENDERS,
         DLNA_DENIED_SENDERS,
-        CLIPBOARD_DIRECTIONS,
         DARK_THEME,
         AMOLED_DARK_THEME,
         PDF_FOLLOW_DARK_THEME,
@@ -86,6 +86,7 @@ fn exported_constants_match_the_registered_keys() {
         AUDIO_PLAYBACK_SPEED,
         POMODORO_SETTINGS,
         SCREEN_MIRROR_QUALITY,
+        CLIPBOARD_DIRECTIONS,
         HTTP_PORT,
         HTTPS_PORT,
         BACKGROUND_SERVICE_ENABLED,

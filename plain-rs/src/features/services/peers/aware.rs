@@ -94,10 +94,11 @@ impl Runtime {
             .collect();
         work.requested
             .retain(|id, status| rows.get(id).is_some_and(|peer| peer.status == *status));
+        let enabled = crate::features::prefs::settings::snapshot(&state.prefs)?.wifi_aware_enabled;
         let wanted: HashMap<_, _> = rows
             .into_iter()
             .filter(|(id, peer)| {
-                (work.enabled && peer.is_paired()) || work.requested.contains_key(id)
+                enabled && ((work.enabled && peer.is_paired()) || work.requested.contains_key(id))
             })
             .collect();
         work.rejected.retain(|id, _| wanted.contains_key(id));

@@ -16,6 +16,7 @@ fn server() -> (plain_libs::temporary::TempDir, ContentServer, CoreRuntime) {
         crate::features::prefs::Prefs::load(&directory.path().join("system.json")).unwrap(),
     );
     prefs.set("client_id", "706c6169-0001-8000-8000-000000000001").unwrap();
+    prefs.set("wifi_aware_enabled", true).unwrap();
     let server = ContentServer::start(
         directory.path(),
         &plain_libs::utils::base64::base64_encode(&[5; 32]),
@@ -59,6 +60,27 @@ fn host(state: &CoreRuntime) -> (Arc<Mutex<Vec<Value>>>, tokio::task::JoinHandle
         }
     });
     (received, task)
+}
+
+#[tokio::test]
+async fn preference_defaults_off_and_disabling_stops_applied_links() {
+    let (_directory, server, state) = server();
+    let (messages, task) = host(&state);
+    state.prefs.remove("wifi_aware_enabled").unwrap();
+    assert!(!crate::features::prefs::settings::snapshot(&state.prefs).unwrap().wifi_aware_enabled);
+    let runtime = Runtime::default();
+    assert!(!runtime.subscribe(&state, "706c6169-0001-8000-8000-000000000002").await.unwrap());
+    assert!(messages.lock().unwrap().is_empty());
+    crate::features::prefs::settings::set_entry(&state.prefs, "wifi_aware_enabled", json!(true)).unwrap();
+    runtime.refresh(&state).await.unwrap();
+    assert_eq!(messages.lock().unwrap().len(), 1);
+    crate::features::prefs::settings::set_entry(&state.prefs, "wifi_aware_enabled", json!(false)).unwrap();
+    runtime.refresh(&state).await.unwrap();
+    assert_eq!(messages.lock().unwrap()[1]["method"], "peerStopAware");
+    runtime.refresh(&state).await.unwrap();
+    assert_eq!(messages.lock().unwrap().len(), 2);
+    server.shutdown().await;
+    task.abort();
 }
 
 #[tokio::test]

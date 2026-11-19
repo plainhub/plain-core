@@ -1,7 +1,6 @@
 use super::*;
 use crate::features::chat::enums::DeviceType;
 use crate::features::chat::enums::PeerStatus;
-use std::sync::atomic::{AtomicUsize, Ordering};
 
 fn db() -> Db {
     let db = Db::open(std::path::Path::new(":memory:")).unwrap();
@@ -13,28 +12,20 @@ fn db() -> Db {
     db
 }
 struct Mock {
-    local_aware: bool,
     remote_aware: bool,
     running: bool,
-    starts: bool,
     wrong_id: bool,
     unpair_scan: Option<Db>,
-    unpair_start: Option<Db>,
     entered: Option<Arc<tokio::sync::Notify>>,
-    start_calls: AtomicUsize,
 }
 impl Default for Mock {
     fn default() -> Self {
         Self {
-            local_aware: true,
             remote_aware: true,
             running: false,
-            starts: true,
             wrong_id: false,
             unpair_scan: None,
-            unpair_start: None,
             entered: None,
-            start_calls: AtomicUsize::new(0),
         }
     }
 }
@@ -42,7 +33,6 @@ impl Driver for Mock {
     async fn capabilities(&self) -> Result<Capabilities> {
         Ok(Capabilities {
             ble_ready: true,
-            aware_supported: self.local_aware,
         })
     }
     async fn discover(&self, client_id: &str) -> Result<Option<Advertisement>> {
@@ -64,13 +54,7 @@ impl Driver for Mock {
             aware_running: self.running,
         }))
     }
-    async fn start_aware(&self, _: &str) -> Result<bool> {
-        self.start_calls.fetch_add(1, Ordering::SeqCst);
-        if let Some(db) = &self.unpair_start {
-            peers::unpair(db, "peer")?;
-        }
-        Ok(self.starts)
-    }
+
 }
 #[test]
 fn monotonic_throttle_capacity_and_old_claim_cannot_release_new_generation() {
@@ -113,33 +97,14 @@ fn monotonic_throttle_capacity_and_old_claim_cannot_release_new_generation() {
     );
 }
 #[tokio::test]
-async fn actual_false_receipt_never_marks_running_and_capability_gates_avoid_send() {
-    for (local, remote, running, starts, expected_calls, expected_running) in [
-        (true, true, false, false, 1, false),
-        (true, true, false, true, 1, true),
-        (false, true, false, true, 0, false),
-        (true, false, false, true, 0, false),
-        (true, true, true, true, 0, true),
-    ] {
+async fn discovery_preserves_remote_running_state_without_starting_the_peer() {
+    for running in [false, true] {
         let db = db();
         let registry = Arc::new(Prewarmer::default());
-        let driver = Mock {
-            local_aware: local,
-            remote_aware: remote,
-            running,
-            starts,
-            ..Mock::default()
-        };
+        let driver = Mock { running, ..Mock::default() };
         let result = run(&db, &registry, "peer", &driver).await.unwrap().unwrap();
-        assert_eq!(result.aware_running, expected_running);
-        assert_eq!(driver.start_calls.load(Ordering::SeqCst), expected_calls);
-        assert!(
-            run(&db, &registry, "peer", &driver)
-                .await
-                .unwrap()
-                .is_none()
-        );
-        assert_eq!(driver.start_calls.load(Ordering::SeqCst), expected_calls);
+        assert_eq!(result.aware_running, running);
+        assert!(run(&db, &registry, "peer", &driver).await.unwrap().is_none());
     }
 }
 #[tokio::test]
@@ -177,20 +142,7 @@ async fn unknown_unpaired_mismatched_and_deleted_peers_do_not_accept_late_scan_r
             .unwrap()
             .is_none()
     );
-    assert_eq!(driver.start_calls.load(Ordering::SeqCst), 0);
-    let db = self::db();
-    registry.forget("peer");
-    let driver = Mock {
-        unpair_start: Some(db.clone()),
-        ..Mock::default()
-    };
-    assert!(
-        run(&db, &registry, "peer", &driver)
-            .await
-            .unwrap()
-            .is_none()
-    );
-    assert_eq!(driver.start_calls.load(Ordering::SeqCst), 1);
+
 }
 #[tokio::test]
 async fn concurrent_requests_and_cancellation_release_only_the_active_claim() {

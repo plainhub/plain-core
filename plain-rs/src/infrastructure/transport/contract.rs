@@ -190,7 +190,6 @@ pub fn message_response(value: &plain_libs::serde_json::Value) -> Result<(), Str
 }
 
 pub const CREATE_CHAT_ITEM: &str = "mutation CreateChatItem($content: String!) { createChatItem(content: $content) { id fromId toId createdAt } }";
-pub const START_AWARE: &str = "mutation StartAware { startAware }";
 
 pub fn signed_request(
     kp_bytes: &[u8],

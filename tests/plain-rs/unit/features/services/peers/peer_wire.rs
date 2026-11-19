@@ -98,10 +98,10 @@ fn signing_current_peer_and_channel_keys_and_authenticated_crypto_roundtrip() {
     assert_eq!(group.channel_id, channel.id);
     peer.key = base64_encode(&[4; 32]);
     peers::save(&db, &[peer.clone()], SaveMode::Update).unwrap();
-    let aware = prepare(&db, &prefs, "peer", Operation::StartAware).unwrap();
-    assert_eq!(aware.key, peer.key);
-    assert_eq!(aware.channel_id, "");
-    assert!(prepare(&db, &prefs, "missing", Operation::StartAware).is_err());
+    let current = prepare(&db, &prefs, "peer", Operation::Chat { content: content.into(), channel_id: String::new() }).unwrap();
+    assert_eq!(current.key, peer.key);
+    assert_eq!(current.channel_id, "");
+    assert!(prepare(&db, &prefs, "missing", Operation::Chat { content: content.into(), channel_id: String::new() }).is_err());
     assert!(
         prepare(
             &db,

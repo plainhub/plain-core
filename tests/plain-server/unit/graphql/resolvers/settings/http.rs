@@ -112,6 +112,32 @@ async fn call(state: ServerState, headers: &HeaderMap, document: &str) -> (Statu
     )
 }
 #[tokio::test]
+async fn wifi_aware_preference_is_writable_over_authenticated_remote_access() {
+    let (_directory, server, headers) = device(false);
+    let state = server.runtime_state();
+    for (enabled, mutation) in [
+        (true, r#"mutation { setPref(key:"wifi_aware_enabled", value:true) }"#),
+        (false, r#"mutation { setPref(key:"wifi_aware_enabled", value:false) }"#),
+    ] {
+        assert_eq!(
+            call(state.clone(), &HeaderMap::new(), mutation).await.0,
+            StatusCode::UNAUTHORIZED,
+        );
+        let (status, response) = call(state.clone(), &headers, mutation).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(response["data"]["setPref"], true, "{response}");
+        let (_, response) = call(
+            state.clone(),
+            &headers,
+            r#"{ prefs(keys:["wifi_aware_enabled"]) }"#,
+        )
+        .await;
+        assert_eq!(response["data"]["prefs"]["wifi_aware_enabled"], enabled);
+    }
+    server.shutdown().await;
+}
+
+#[tokio::test]
 async fn remote_settings_authentication_device_isolation_and_disable_reply() {
     let (_a, first, headers) = device(false);
     let (_b, second, other) = device(false);

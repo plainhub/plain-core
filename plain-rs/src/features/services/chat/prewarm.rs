@@ -3,10 +3,9 @@ use crate::features::chat::attachments::prewarm::Advertisement;
 use crate::features::chat::attachments::prewarm::Capabilities;
 use crate::features::chat::attachments::prewarm::Driver;
 use crate::features::services::peers::peer_transport;
-use crate::features::services::peers::peer_wire;
 use crate::runtime::Runtime as CoreRuntime;
 use plain_libs::anyhow::{Result, bail};
-use plain_libs::serde_json::{Value, json};
+use plain_libs::serde_json::json;
 
 struct Native<'a>(&'a CoreRuntime);
 impl Driver for Native<'_> {
@@ -17,8 +16,6 @@ impl Driver for Native<'_> {
         Ok(Capabilities {
             ble_ready: supported
                 .contains(&crate::infrastructure::transport::router::TransportType::Ble),
-            aware_supported: supported
-                .contains(&crate::infrastructure::transport::router::TransportType::Aware),
         })
     }
     async fn discover(&self, client_id: &str) -> Result<Option<Advertisement>> {
@@ -56,38 +53,6 @@ impl Driver for Native<'_> {
             aware_running: reply.aware_running,
         }))
     }
-    async fn start_aware(&self, peer_id: &str) -> Result<bool> {
-        let prepared = peer_wire::prepare(
-            &self.0.db,
-            &self.0.prefs,
-            peer_id,
-            peer_wire::Operation::StartAware,
-        )?;
-        if !prepared.peer.is_paired() {
-            bail!("Peer no longer paired")
-        }
-        let response = peer_transport::send(
-            self.0,
-            &prepared.peer,
-            &prepared.channel_id,
-            &plain_libs::utils::base64::base64_decode(&prepared.key),
-            &prepared.body,
-        )
-        .await
-        .map_err(plain_libs::anyhow::Error::msg)?;
-        started(&response)
-    }
-}
-fn started(response: &Value) -> Result<bool> {
-    if response
-        .get("errors")
-        .is_some_and(|v| !v.is_null() && !v.as_array().is_some_and(Vec::is_empty))
-    {
-        bail!("Peer startAware returned GraphQL errors");
-    }
-    response["data"]["startAware"]
-        .as_bool()
-        .ok_or_else(|| plain_libs::anyhow::anyhow!("Invalid peer startAware receipt"))
 }
 fn conversation_peer(
     filter: &crate::infrastructure::db::chat_store::messages::Filter,

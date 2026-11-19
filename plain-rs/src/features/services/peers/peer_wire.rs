@@ -3,17 +3,13 @@ use crate::infrastructure::db::DPeer;
 use crate::infrastructure::db::Db;
 use crate::infrastructure::db::chat_store::channels;
 use crate::infrastructure::db::chat_store::peers;
-use crate::infrastructure::transport::contract::START_AWARE;
 use crate::infrastructure::transport::contract::chat_item_request;
-use crate::infrastructure::transport::contract::signed_request;
 use plain_libs::anyhow::{Result, bail};
-use plain_libs::serde_json::json;
 use serde::{Deserialize, Serialize};
 #[derive(Deserialize)]
 #[serde(tag = "kind", rename_all = "SCREAMING_SNAKE_CASE", deny_unknown_fields)]
 pub enum Operation {
     Chat { content: String, channel_id: String },
-    StartAware,
 }
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -44,12 +40,6 @@ pub fn prepare(db: &Db, prefs: &Prefs, id: &str, operation: Operation) -> Result
                 key,
             )
         }
-        Operation::StartAware => (
-            signed_request(&signing_keypair(prefs)?, START_AWARE, json!({}), "")
-                .map_err(plain_libs::anyhow::Error::msg)?,
-            String::new(),
-            peer.key.clone(),
-        ),
     };
     if plain_libs::utils::base64::base64_decode(&key).len() != 32 {
         bail!("Invalid peer transport key");

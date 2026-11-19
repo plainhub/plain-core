@@ -18,6 +18,7 @@ macro_rules! pref_keys {
 
 pref_keys! {
     Default {
+        WIFI_AWARE_ENABLED = "wifi_aware_enabled",
         DLNA = "dlna",
         DEVICE_NAME = "device_name",
         FEED_AUTO_REFRESH = "feed_auto_refresh",
