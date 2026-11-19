@@ -56,6 +56,7 @@ fn native_move_runs_one_commit_after_the_physical_move_and_preserves_collisions(
         action: Action::Move,
         ids: vec![id.clone()],
         backend: Backend::Files {
+            trash: None,
             from_trash: false,
             destination: target.to_string_lossy().into_owned(),
             #[cfg(feature = "runtime-media")]
@@ -131,6 +132,7 @@ fn a_closed_scanner_refuses_physical_work_and_commit() {
         action: Action::Delete,
         ids: vec![id],
         backend: Backend::Files {
+            trash: None,
             from_trash: false,
             destination: String::new(),
             scans,
@@ -197,6 +199,7 @@ fn physical_failure_preserves_queue_and_tag_references_for_only_the_failed_row()
         action: Action::Delete,
         ids: vec![good.clone(), bad.clone()],
         backend: Backend::Files {
+            trash: None,
             from_trash: false,
             destination: String::new(),
             #[cfg(feature = "runtime-media")]
