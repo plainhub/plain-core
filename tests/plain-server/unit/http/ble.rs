@@ -385,6 +385,51 @@ async fn nearby_pairing_preserves_signatures_and_the_actual_radio_return_address
 }
 
 #[tokio::test]
+async fn denying_an_expired_pairing_request_is_acknowledged() {
+    use plain_rs::features::discovery::nearby_wire::Message;
+    let (_dir, server) = fixture();
+    let state = server.runtime_state();
+    let (mut request, key) = signed_nearby_request();
+    request.to_id = state.native_client_id().unwrap();
+    request.target_public_key = plain_libs::utils::base64::base64_encode(
+        &plain_rs::features::services::peers::peer_wire::signing_keypair(&state.prefs).unwrap()
+            [32..],
+    );
+    request.payload.signature =
+        plain_libs::crypto::ed25519_sign(&key, request.signature_data().as_bytes());
+    let mut events = state.events.subscribe();
+    let body = Message::PairRequest(request.payload.clone()).wire().unwrap();
+    incoming_exchange(
+        &server,
+        ble::NEARBY_CHAR_UUID,
+        "radio-source",
+        ble::message(request.from_id.as_bytes(), body.as_bytes()).unwrap(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(events.try_recv().unwrap().event_type, "PAIRING_REQUESTED");
+    state.pairing.age_incoming_for_test(
+        &request.from_id,
+        plain_rs::features::peers::pairing::sessions::RESPONSE_TIMEOUT,
+    );
+    let native = server.native_graphql().unwrap();
+    for _ in 0..2 {
+        let response = native.execute(plain_graphql::Request::new(
+            r#"mutation { respondToPairing(peerId: "nearby-peer", accepted: false) }"#,
+        )).await;
+        assert!(response.errors.is_empty(), "{:?}", response.errors);
+        assert_eq!(response.data.into_json().unwrap()["respondToPairing"], true);
+    }
+    let response = native.execute(plain_graphql::Request::new(
+        r#"mutation { respondToPairing(peerId: "nearby-peer", accepted: true) }"#,
+    )).await;
+    assert!(response.errors.iter().any(|error| error.message == "Pairing expired"));
+    assert!(plain_rs::infrastructure::db::chat_store::peers::get(&state.db, &request.from_id)
+        .unwrap().is_none());
+    server.shutdown().await;
+}
+
+#[tokio::test]
 async fn nearby_cancel_requires_the_matching_signed_request() {
     use plain_rs::features::discovery::nearby_wire::Message;
     use plain_rs::features::peers::pairing::protocol::PairingCancel;

@@ -391,7 +391,7 @@ pub async fn respond(state: &CoreRuntime, peer_id: &str, accepted: bool) -> Resu
         return Ok(());
     }
     let request = state.pairing_runtime.confirmations.with(|entries| {
-        entries
+        Ok(entries
             .values()
             .find(|e| {
                 e.request.from_id == peer_id
@@ -401,11 +401,13 @@ pub async fn respond(state: &CoreRuntime, peer_id: &str, accepted: bool) -> Resu
                         .incoming_target(peer_id, &e.request.payload.signature)
                         .is_some()
             })
-            .map(|e| e.request.clone())
-            .ok_or_else(|| plain_libs::anyhow::anyhow!("Pairing expired"))
+            .map(|e| e.request.clone()))
     })?;
-    pairing_runtime::respond_device(state, request, accepted).await?;
-    Ok(())
+    match request {
+        Some(request) => pairing_runtime::respond_device(state, request, accepted).await.map(|_| ()),
+        None if !accepted => Ok(()),
+        None => plain_libs::anyhow::bail!("Pairing expired"),
+    }
 }
 
 pub fn publish_notice(
