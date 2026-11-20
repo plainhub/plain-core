@@ -47,15 +47,15 @@ fn the_web_clients_contact_and_call_fields_are_still_accepted() {
     let db = Db::open(&dir.path().join("db")).unwrap();
     let cases: &[(Provider, &[&str])] = &[
         // Mirrors the calls view, `buildNextCallsQ`.
-        (Provider::Call, &["text", "type", "duration", "start_time"]),
+        (Provider::Call, &["text:sample", "type:MISSED", "duration:>=60", "start_time:>2026-10-05"]),
         // The contacts view sends query:""; these two exist for other callers.
-        (Provider::Contact, &["text", "ids", "id"]),
+        (Provider::Contact, &["text:sample", "ids:1,2", "id:1"]),
     ];
-    for (provider, names) in cases {
-        for name in *names {
-            let parsed = fields(&db, &format!("{name}:__plain_probe__")).unwrap();
+    for (provider, queries) in cases {
+        for query in *queries {
+            let parsed = fields(&db, query).unwrap();
             plan_ok(*provider, &parsed, &Value::Null).unwrap_or_else(|error| {
-                panic!("{provider:?} must accept `{name}`, refused: {error}")
+                panic!("{provider:?} must accept `{query}`, refused: {error}")
             });
         }
     }
@@ -116,7 +116,7 @@ fn whole_table_sentinels_pass_on_every_provider() {
 #[test]
 fn call_plans_bind_text_ids_and_only_closed_comparisons() {
     let parsed = plain_libs::utils::search_dsl::parse(
-        "text:'50%_\\\\' ids:1,2 type:3 duration:>=60 start_time:>2026-10-05",
+        "text:'50%_\\\\' ids:1,2 type:MISSED duration:>=60 start_time:>2026-10-05",
     );
     let result = plan_ok(
         Provider::Call,
@@ -164,7 +164,7 @@ async fn call_and_contact_reach_a_mutation_with_nothing_selected() {
         );
     }
     for (provider, query) in [
-        (Provider::Call, "type:1"),
+        (Provider::Call, "type:INCOMING"),
         (Provider::Contact, "ids:1,2"),
         (Provider::Contact, "text:abc"),
     ] {
@@ -204,4 +204,12 @@ fn ignored_trash_filters_do_not_authorize_contact_or_call_deletion() {
         assert!(require_narrowing(&db, provider, "ids:1").is_ok());
         assert!(require_narrowing(&db, provider, "all:true").is_ok());
     }
+}
+
+#[test]
+fn phone_enum_filter_selects_calls_by_direction() {
+    let parsed = plain_libs::utils::search_dsl::parse("type:MISSED");
+    assert_eq!(plan(Provider::Call, &parsed, &Value::Null).unwrap().args, ["3"]);
+    let numeric = plain_libs::utils::search_dsl::parse("type:3");
+    assert!(plan(Provider::Call, &numeric, &Value::Null).is_err());
 }

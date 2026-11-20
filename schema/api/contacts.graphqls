@@ -30,7 +30,6 @@ type Contact {
 }
 
 type ContactAddress {
-	typeCode: Int!
 	value: String!
 	type: ContactPostalType!
 	label: String!
@@ -43,7 +42,6 @@ input ContactAddressInput {
 }
 
 type ContactEmail {
-	typeCode: Int!
 	value: String!
 	type: ContactEmailType!
 	label: String!
@@ -64,7 +62,6 @@ enum ContactEmailType {
 }
 
 type ContactEvent {
-	typeCode: Int!
 	value: String!
 	type: ContactEventType!
 	label: String!
@@ -90,7 +87,6 @@ type ContactGroup {
 }
 
 type ContactIm {
-	typeCode: Int!
 	value: String!
 	protocol: ContactImProtocol!
 	customProtocol: String!
@@ -152,7 +148,6 @@ input ContactPhoneInput {
 }
 
 type ContactPhoneNumber {
-	typeCode: Int!
 	value: String!
 	type: ContactPhoneType!
 	label: String!
@@ -195,7 +190,6 @@ type ContactSource {
 }
 
 type ContactWebsite {
-	typeCode: Int!
 	value: String!
 	type: ContactWebsiteType!
 	label: String!

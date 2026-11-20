@@ -7,10 +7,11 @@ use crate::graphql::types::facts::list;
 use crate::graphql::types::facts::strings;
 use crate::graphql::types::facts::text;
 use crate::http::auth::public_gate;
-use plain_graphql::{Context, Enum, ID, Object, SimpleObject};
+use plain_graphql::{Context, ID, Object, SimpleObject};
 use plain_rs::features::access::AccessFeature;
 
 use plain_libs::serde_json::Value;
+use plain_rs::features::services::phone_query::SmsType;
 use plain_rs::features::prefs::Prefs;
 use plain_rs::features::services::sms::query as sms_query;
 use plain_rs::features::services::sms::send as sms_send;
@@ -36,31 +37,6 @@ pub struct SmsSendReceipt {
 
 const SMS: AccessFeature = AccessFeature::Sms;
 
-#[derive(Enum, Copy, Clone, Eq, PartialEq, Debug, Default)]
-pub enum SmsType {
-    Inbox = 1,
-    Sent = 2,
-    Draft = 3,
-    Outbox = 4,
-    Failed = 5,
-    Queued = 6,
-    #[default]
-    Unknown,
-}
-
-impl SmsType {
-    fn from_android(value: i64) -> Self {
-        match value {
-            1 => Self::Inbox,
-            2 => Self::Sent,
-            3 => Self::Draft,
-            4 => Self::Outbox,
-            5 => Self::Failed,
-            6 => Self::Queued,
-            _ => Self::Unknown,
-        }
-    }
-}
 
 #[derive(SimpleObject, Clone, Debug)]
 pub struct SmsAttachment {
@@ -84,7 +60,6 @@ pub struct Sms {
     #[graphql(name = "threadId")]
     pub thread_id: ID,
     pub r#type: SmsType,
-    pub type_code: i32,
     #[graphql(name = "subscriptionId")]
     pub subscription_id: i32,
     #[graphql(name = "isMms")]
@@ -423,7 +398,6 @@ fn message(item: &Value) -> Sms {
         read: flag(item, "read"),
         thread_id: ID::from(text(item, "threadId")),
         r#type: SmsType::from_android(integer(item, "type")),
-        type_code: integer(item, "type") as i32,
         subscription_id: integer(item, "subscriptionId") as i32,
         is_mms: flag(item, "isMms"),
         attachments: list(item, "attachments", |attachment| SmsAttachment {

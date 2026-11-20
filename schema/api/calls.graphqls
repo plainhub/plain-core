@@ -1,5 +1,4 @@
 type Call {
-	typeCode: Int!
 	id: ID!
 	number: String!
 	name: String!

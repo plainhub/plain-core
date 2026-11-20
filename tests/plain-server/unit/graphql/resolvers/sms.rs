@@ -436,9 +436,8 @@ async fn send_sms_rejects_mms_sim_selection_and_blank_request_ids_before_effects
 }
 
 #[test]
-fn message_projection_preserves_raw_provider_type_for_app_clients() {
+fn message_projection_maps_unknown_provider_types() {
     let sms = message(&json!({"id":"7", "type":37, "date":"2026-10-01T00:00:00.000Z"}));
-    assert_eq!(sms.type_code, 37);
     assert_eq!(sms.r#type, SmsType::Unknown);
 }
 

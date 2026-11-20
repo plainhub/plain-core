@@ -109,9 +109,11 @@ fn plans(
                 }
             }
             "type" => {
-                sms.equal("type", &f.value);
+                let kind: crate::features::services::phone_query::SmsType =
+                    Deserialize::deserialize(Value::String(f.value.clone()))?;
+                kind.filter(&mut sms, "type");
                 if let Some(plan) = mms.as_mut() {
-                    plan.equal("msg_box", &f.value);
+                    kind.filter(plan, "msg_box");
                 }
             }
             "thread_id" => {
@@ -512,7 +514,7 @@ pub async fn execute(
             json!({"ids":ids.into_iter().collect::<std::collections::BTreeSet<_>>()})
         }
         Request::Counts => {
-            json!({"total":count(db,host,"",true).await?,"inbox":count(db,host,"type:1",true).await?,"sent":count(db,host,"type:2",true).await?,"drafts":count(db,host,"type:3",true).await?})
+            json!({"total":count(db,host,"",true).await?,"inbox":count(db,host,"type:INBOX",true).await?,"sent":count(db,host,"type:SENT",true).await?,"drafts":count(db,host,"type:DRAFT",true).await?})
         }
         Request::Conversations {
             query,

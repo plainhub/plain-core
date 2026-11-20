@@ -119,7 +119,7 @@ fn a_destructive_query_that_builds_no_clause_is_refused() {
     for query in [
         "ids:1,2",
         "text:hello",
-        "type:1",
+        "type:INBOX",
         "thread_id:7",
         "trashed:1",
     ] {
@@ -433,4 +433,15 @@ async fn filtered_conversation_rows_and_count_decode_the_actual_android_pair_obj
         ]
     );
     host.disconnect(generation);
+}
+
+#[test]
+fn phone_enum_filter_selects_sms_and_mms_by_mailbox() {
+    let db = Db::open(std::path::Path::new(":memory:")).unwrap();
+    let parsed = provider_plan::fields(&db, "type:SENT").unwrap();
+    let result = plans(&db, &parsed, true, None).unwrap();
+    assert_eq!(result.sms.args, ["2"]);
+    assert_eq!(result.mms.unwrap().args, ["2"]);
+    let numeric = provider_plan::fields(&db, "type:2").unwrap();
+    assert!(plans(&db, &numeric, true, None).is_err());
 }

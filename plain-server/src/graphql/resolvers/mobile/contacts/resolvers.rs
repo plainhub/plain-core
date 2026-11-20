@@ -344,38 +344,32 @@ fn contact(fact: &Value) -> Contact {
         nickname: text(fact, "nickname"),
         photo_id: text(fact, "photoId"),
         phone_numbers: list(fact, "phoneNumbers", |item| ContactPhoneNumber {
-            type_code: integer(item, "type") as i32,
             value: text(item, "value"),
             r#type: ContactPhoneType::from_android(integer(item, "type")),
             label: text(item, "label"),
             normalized_number: text(item, "normalizedNumber"),
         }),
         emails: list(fact, "emails", |item| ContactEmail {
-            type_code: integer(item, "type") as i32,
             value: text(item, "value"),
             r#type: ContactEmailType::from_android(integer(item, "type")),
             label: text(item, "label"),
         }),
         addresses: list(fact, "addresses", |item| ContactAddress {
-            type_code: integer(item, "type") as i32,
             value: text(item, "value"),
             r#type: ContactPostalType::from_android(integer(item, "type")),
             label: text(item, "label"),
         }),
         events: list(fact, "events", |item| ContactEvent {
-            type_code: integer(item, "type") as i32,
             value: text(item, "value"),
             r#type: ContactEventType::from_android(integer(item, "type")),
             label: text(item, "label"),
         }),
         websites: list(fact, "websites", |item| ContactWebsite {
-            type_code: integer(item, "type") as i32,
             value: text(item, "value"),
             r#type: ContactWebsiteType::from_android(integer(item, "type")),
             label: text(item, "label"),
         }),
         ims: list(fact, "ims", |item| ContactIm {
-            type_code: integer(item, "type") as i32,
             value: text(item, "value"),
             protocol: ContactImProtocol::from_android(integer(item, "type")),
             custom_protocol: text(item, "label"),

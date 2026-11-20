@@ -15,6 +15,7 @@ use plain_rs::features::access::AccessFeature;
 use plain_rs::features::capability::Capability;
 
 use plain_libs::serde_json::Value;
+use plain_rs::features::services::phone_query::CallType;
 use plain_rs::features::prefs::Prefs;
 use plain_rs::features::services::capabilities;
 use plain_rs::features::services::files::provider_query::Provider;
@@ -24,33 +25,6 @@ use std::sync::Arc;
 
 const FEATURE: AccessFeature = AccessFeature::Calls;
 
-#[derive(Enum, Copy, Clone, Eq, PartialEq, Debug, Default)]
-pub enum CallType {
-    Incoming = 1,
-    Outgoing = 2,
-    Missed = 3,
-    Voicemail = 4,
-    Rejected = 5,
-    Blocked = 6,
-    AnsweredExternally = 7,
-    #[default]
-    Unknown,
-}
-
-impl CallType {
-    fn from_android(value: i64) -> Self {
-        match value {
-            1 => Self::Incoming,
-            2 => Self::Outgoing,
-            3 => Self::Missed,
-            4 => Self::Voicemail,
-            5 => Self::Rejected,
-            6 => Self::Blocked,
-            7 => Self::AnsweredExternally,
-            _ => Self::Unknown,
-        }
-    }
-}
 
 #[derive(Enum, Copy, Clone, Eq, PartialEq, Debug)]
 pub enum PhoneNumberType {
@@ -97,7 +71,6 @@ pub struct PhoneGeo {
 #[derive(SimpleObject, Clone, Debug)]
 #[graphql(complex)]
 pub struct Call {
-    pub type_code: i32,
     pub id: ID,
     pub number: String,
     pub name: String,
@@ -314,7 +287,6 @@ fn call(fact: &Value) -> Call {
         started_at: instant(fact, "startedAt"),
         duration_sec: integer(fact, "durationSec") as i32,
         r#type: CallType::from_android(integer(fact, "type")),
-        type_code: integer(fact, "type") as i32,
         account_id: ID::from(text(fact, "accountId")),
         geo: None,
     }

@@ -229,12 +229,11 @@ async fn calls_without_geo_preserve_provider_values_without_phone_metadata_calls
         }
     });
     let response = schema
-        .execute(r#"{ calls(query:"", offset:0, limit:10) { id type typeCode photo } }"#)
+        .execute(r#"{ calls(query:"", offset:0, limit:10) { id type photo } }"#)
         .await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     let data = response.data.into_json().unwrap();
     assert_eq!(data["calls"][0]["type"], "UNKNOWN");
-    assert_eq!(data["calls"][0]["typeCode"], 37);
     assert_eq!(data["calls"][0]["photo"], "content://contacts/photo/1");
     assert_eq!(*calls.lock().unwrap(), ["systemCallFacts"]);
 }
