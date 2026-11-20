@@ -55,30 +55,24 @@ async fn missing_chunk_preserves_chunks_and_never_replaces_destination() {
     assert_eq!(tokio::fs::read(target).await.unwrap(), b"original");
 }
 #[tokio::test]
-async fn size_mismatch_discards_stale_chunks_without_changing_target() {
-    let temp = plain_libs::temporary::tempdir().unwrap();
-    let chunks = temp.path().join("chunks");
-    tokio::fs::create_dir(&chunks).await.unwrap();
-    tokio::fs::write(chunks.join("chunk_0"), b"abc")
-        .await
-        .unwrap();
-    let target = temp.path().join("file");
-    assert!(
-        merge(
-            None,
-            &chunks,
-            1,
-            4,
-            Kind::File {
-                path: target.clone(),
-                replace: true
-            }
-        )
-        .await
-        .is_err()
-    );
-    assert!(!chunks.exists());
-    assert!(!target.exists());
+async fn incorrect_merge_declarations_preserve_all_chunks_and_allow_retry() {
+    for (count, size) in [(1, 3), (2, 7)] {
+        let temp = plain_libs::temporary::tempdir().unwrap();
+        let chunks = temp.path().join("chunks");
+        std::fs::create_dir(&chunks).unwrap();
+        std::fs::write(chunks.join("chunk_0"), b"abc").unwrap();
+        std::fs::write(chunks.join("chunk_1"), b"def").unwrap();
+        let target = temp.path().join("file");
+        std::fs::write(&target, b"original").unwrap();
+        let destination = || Kind::File { path: target.clone(), replace: true };
+        assert!(merge(None, &chunks, count, size, destination()).await.is_err());
+        assert_eq!(std::fs::read(&target).unwrap(), b"original");
+        assert_eq!(std::fs::read(chunks.join("chunk_0")).unwrap(), b"abc");
+        assert_eq!(std::fs::read(chunks.join("chunk_1")).unwrap(), b"def");
+        merge(None, &chunks, 2, 6, destination()).await.unwrap();
+        assert_eq!(std::fs::read(&target).unwrap(), b"abcdef");
+        assert!(!chunks.exists());
+    }
 }
 #[test]
 fn chunk_ids_cannot_escape_the_upload_directory() {

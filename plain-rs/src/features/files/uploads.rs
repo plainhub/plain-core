@@ -49,7 +49,10 @@ pub struct UploadedChunk {
 }
 
 pub async fn list(base: &Path, id: &str) -> plain_libs::anyhow::Result<Vec<UploadedChunk>> {
-    let dir = chunk_dir(base, id)?;
+    list_directory(&chunk_dir(base, id)?).await
+}
+
+async fn list_directory(dir: &Path) -> plain_libs::anyhow::Result<Vec<UploadedChunk>> {
     let mut reader = match tokio::fs::read_dir(dir).await {
         Ok(reader) => reader,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(vec![]),
@@ -232,21 +235,25 @@ pub async fn merge(
     kind: Kind,
 ) -> plain_libs::anyhow::Result<(String, u64)> {
     plain_libs::anyhow::ensure!(count > 0, "Invalid totalChunks");
+    let chunks = list_directory(dir).await?;
     let mut expected = 0u64;
-    for index in 0..count {
-        let metadata = tokio::fs::metadata(dir.join(format!("chunk_{index}")))
-            .await
-            .map_err(|error| plain_libs::anyhow::anyhow!("Missing chunk {index}: {error}"))?;
-        plain_libs::anyhow::ensure!(metadata.is_file(), "Invalid chunk {index}");
+    for index in 0..count as usize {
+        let chunk = chunks
+            .get(index)
+            .filter(|chunk| chunk.index as usize == index)
+            .ok_or_else(|| plain_libs::anyhow::anyhow!("Missing chunk {index}"))?;
         expected = expected
-            .checked_add(metadata.len())
+            .checked_add(chunk.size_bytes)
             .ok_or_else(|| plain_libs::anyhow::anyhow!("Chunk size overflow"))?;
     }
-    if expected != size as u64 {
-        // A stale chunk set must be discarded, matching the mobile upload contract.
-        let _ = tokio::fs::remove_dir_all(dir).await;
-        plain_libs::anyhow::bail!("Chunk total size {expected} != file size {size}");
-    }
+    plain_libs::anyhow::ensure!(
+        chunks.len() == count as usize,
+        "Unexpected additional chunks"
+    );
+    plain_libs::anyhow::ensure!(
+        expected == size as u64,
+        "Chunk total size {expected} != file size {size}"
+    );
     let temp = Temp(dir.join(format!(".merge_{}", plain_libs::utils::uuid::Uuid::new_v4())));
     let written = concatenate(dir, count, &temp.0).await?;
     plain_libs::anyhow::ensure!(
