@@ -449,13 +449,31 @@ async fn fs_typed_image_reference_returns_decodable_thumbnail() {
 }
 
 #[tokio::test]
+async fn fs_empty_png_has_no_thumbnail_and_remains_downloadable() {
+    let (_root, core, state, _key) = test_state();
+    let directory = plain_libs::temporary::tempdir().unwrap();
+    let path = directory.path().join("empty.png");
+    std::fs::write(&path, []).unwrap();
+    let id = file_id(&state, path.to_str().unwrap());
+    for size in ["SM", "LG"] {
+        let response = call_fs(&state, &format!("id={id}&action=PREVIEW&size={size}"), &[]).await;
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+        assert!(body_bytes(response).await.is_empty());
+    }
+    let response = call_fs(&state, &format!("id={id}&action=DOWNLOAD"), &[]).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    assert!(body_bytes(response).await.is_empty());
+    core.stop_core().await;
+}
+
+#[tokio::test]
 async fn fs_small_images_target_short_edge_without_cropping() {
     let (_root, core, state, _key) = test_state();
     let files = plain_libs::temporary::tempdir().unwrap();
     for (source, small, large) in [
-        ((400, 1200), (256, 768), (341, 1024)),
-        ((1200, 400), (768, 256), (1024, 341)),
-        ((200, 1600), (128, 1024), (128, 1024)),
+        ((400, 1200), (170, 512), (341, 1024)),
+        ((1200, 400), (512, 170), (1024, 341)),
+        ((200, 1600), (64, 512), (128, 1024)),
         ((100, 300), (100, 300), (100, 300)),
         ((400, 400), (256, 256), (400, 400)),
     ] {

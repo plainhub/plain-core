@@ -260,10 +260,10 @@ pub async fn read(
                 let small = size == Size::Small;
                 let image = mime.starts_with("image/");
                 let thumbnail_size = crate::features::services::images::thumbnails::THUMBNAIL_SIZE;
-                let pixels = if small && !image {
-                    thumbnail_size
-                } else {
-                    1024
+                let pixels = match (small, image) {
+                    (true, true) => 512,
+                    (true, false) => thumbnail_size,
+                    (false, _) => 1024,
                 };
                 let bytes = state
                     .thumbnails

@@ -72,15 +72,12 @@ pub fn compute_image_parallel(
         let upsampler = Upsampler::new(components, output_size.width, output_size.height)?;
         let line_size = output_size.width as usize * components.len();
         let mut image = vec![0u8; line_size * output_size.height as usize];
-        for (row, line) in image.chunks_mut(line_size).enumerate() {
-            upsampler.upsample_and_interleave_row(
-                &data,
-                row,
-                output_size.width as usize,
-                line,
-                color_convert_func,
-            );
-        }
+        upsampler.upsample_and_interleave(
+            &data,
+            output_size.width as usize,
+            &mut image,
+            color_convert_func,
+        );
         Ok(image)
     }
 }

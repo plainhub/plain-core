@@ -8,13 +8,14 @@ pub fn uses_system_thumbnail(request: &Request) -> bool {
 }
 
 pub(super) fn uses_rust_still_decoder(request: &Request) -> bool {
-    cfg!(feature = "media")
-        && std::path::Path::new(&request.path).is_absolute()
-        && (request.short_edge.is_some()
-            || matches!(
-                plain_libs::utils::mime::mime_from_ext(&request.path),
-                "image/bmp" | "image/tiff" | "image/avif" | "image/heic"
-            ))
+    if !std::path::Path::new(&request.path).is_absolute() {
+        return false;
+    }
+    match plain_libs::utils::mime::mime_from_ext(&request.path) {
+        "image/jpeg" | "image/png" | "image/webp" | "image/gif" | "image/apng" => true,
+        "image/bmp" | "image/tiff" | "image/avif" | "image/heic" => cfg!(feature = "media"),
+        _ => cfg!(feature = "media") && request.short_edge.is_some(),
+    }
 }
 
 pub async fn native(

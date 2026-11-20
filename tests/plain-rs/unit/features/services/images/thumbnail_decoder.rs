@@ -29,6 +29,26 @@ fn sdk_thumbnail_bytes_use_shared_short_edge_sizing_and_preserve_png_alpha() {
     }
 }
 
+#[test]
+fn local_photos_use_rust_for_both_preview_sizes_even_with_a_media_id() {
+    for name in ["a.jpg", "a.png", "a.gif", "a.webp"] {
+        for (width, short_edge) in [(512, Some(256)), (1024, None)] {
+            let request = Request {
+                path: std::env::temp_dir().join(name).to_string_lossy().into_owned(),
+                width,
+                height: width,
+                center_crop: false,
+                short_edge,
+                file_id: "catalog-id".into(),
+                access_order: None,
+                file_name: name.into(),
+            };
+            assert!(uses_rust_still_decoder(&request));
+            assert!(!uses_system_thumbnail(&request));
+        }
+    }
+}
+
 #[cfg(feature = "media")]
 #[test]
 fn local_still_formats_use_shared_rust_decoding_and_the_shared_cache_on_every_host() {

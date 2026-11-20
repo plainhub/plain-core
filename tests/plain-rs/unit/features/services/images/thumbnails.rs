@@ -550,7 +550,9 @@ async fn concurrent_generation_delivers_one_shared_allocation_to_300_readers() {
 #[tokio::test]
 async fn thumbnail_sizes_share_256_bytes_and_preserve_large_previews() {
     use std::sync::atomic::Ordering;
-    let (directory, core, cache) = server_with_cache();
+    let directory = plain_libs::temporary::tempdir().unwrap();
+    let cache = directory.path().join("cache");
+    let core = ContentServer::open_with_cache(&directory.path().join("data"), &cache).unwrap();
     let state = core.runtime_state();
     let path = directory.path().join("sizes.jpg");
     plain_libs::image::RgbImage::from_fn(1600, 1200, |x, y| {
@@ -559,7 +561,7 @@ async fn thumbnail_sizes_share_256_bytes_and_preserve_large_previews() {
     .save(&path)
     .unwrap();
     let expected =
-        plain_libs::media::thumbnails::render(path.to_str().unwrap(), 256, 256, true, None, &cache)
+        plain_libs::media::thumbnails::render(path.to_str().unwrap(), 256, 256, true, None, &directory.path().join("reference"))
             .await
             .unwrap()
             .unwrap();
@@ -600,6 +602,12 @@ async fn thumbnail_sizes_share_256_bytes_and_preserve_large_previews() {
         state.thumbnails.cache_bytes_written.load(Ordering::Relaxed),
         expected.len() as u64
     );
+    let entries: Vec<_> = std::fs::read_dir(cache.join("thumbs"))
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .collect();
+    assert_eq!(entries.len(), 1, "{entries:?}");
+    assert!(entries[0].is_file());
     for (width, height, crop, dimensions) in [
         (96, 96, false, (256, 192)),
         (96, 96, true, (256, 192)),

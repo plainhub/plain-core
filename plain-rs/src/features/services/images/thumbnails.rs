@@ -152,15 +152,23 @@ async fn decode(
             }
         }
         #[cfg(feature = "media")]
-        let bytes = plain_libs::media::thumbnails::render(
-            &request.path,
-            request.width,
-            request.height,
-            request.center_crop,
-            request.short_edge,
-            cache,
-        )
-        .await?;
+        let bytes = if rust_still {
+            plain_libs::media::thumbnails::generate_still(
+                &request.path, request.width, request.height, request.short_edge,
+            )
+            .await
+            .map_err(|error| error.to_string())?
+        } else {
+            plain_libs::media::thumbnails::render(
+                &request.path,
+                request.width,
+                request.height,
+                request.center_crop,
+                request.short_edge,
+                cache,
+            )
+            .await?
+        };
         #[cfg(not(feature = "media"))]
         let bytes = crate::features::services::images::thumbnail_decoder::native(request, cache)
             .await?
@@ -289,7 +297,7 @@ impl Thumbnails {
         if plain_libs::utils::mime::mime_from_ext(&request.path).starts_with("image/") {
             request.center_crop = false;
         }
-        if request.width < 1024 && request.height < 1024 {
+        if request.short_edge.is_none() && request.width < 1024 && request.height < 1024 {
             request.width = THUMBNAIL_SIZE;
             request.height = THUMBNAIL_SIZE;
         }

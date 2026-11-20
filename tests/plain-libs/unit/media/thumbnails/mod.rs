@@ -17,6 +17,20 @@ async fn thumbnail(spec: ThumbSpec) -> Result<ThumbOutcome> {
 }
 
 #[tokio::test]
+async fn png_inspection_reads_only_the_header() {
+    let directory = crate::temporary::tempdir().unwrap();
+    let path = directory.path().join("image.png");
+    crate::image::RgbImage::from_pixel(600, 480, crate::image::Rgb([5, 10, 30]))
+        .save(&path)
+        .unwrap();
+    assert!(path.metadata().unwrap().len() > 64);
+    let (head, image) = inspect_image(path.to_str().unwrap()).await.unwrap();
+    assert_eq!(head.len(), 64);
+    let image = image.unwrap();
+    assert_eq!((image.width, image.height), (600, 480));
+}
+
+#[tokio::test]
 async fn render_keeps_the_encoded_cache_allocation() {
     let dir = crate::temporary::tempdir().unwrap();
     let path = dir.path().join("shared.jpg");

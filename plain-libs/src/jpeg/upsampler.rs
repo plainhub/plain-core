@@ -54,29 +54,33 @@ impl Upsampler {
             line_buffer_size: buffer_size,
         })
     }
-    pub fn upsample_and_interleave_row(
+    pub fn upsample_and_interleave(
         &self,
         component_data: &[Vec<u8>],
-        row: usize,
         output_width: usize,
-        output: &mut [u8],
+        image: &mut [u8],
         color_convert: fn(&[Vec<u8>], &mut [u8]),
     ) {
         let component_count = component_data.len();
+        #[cfg(test)]
+        tests::ROW_BUFFER_SETS.set(tests::ROW_BUFFER_SETS.get() + 1);
         let mut line_buffers = vec![vec![0u8; self.line_buffer_size]; component_count];
         debug_assert_eq!(component_count, self.components.len());
-        for (i, component) in self.components.iter().enumerate() {
-            component.upsampler.upsample_row(
-                &component_data[i],
-                component.width,
-                component.height,
-                component.row_stride,
-                row,
-                output_width,
-                &mut line_buffers[i],
-            );
+        let line_size = output_width * component_count;
+        for (row, output) in image.chunks_mut(line_size).enumerate() {
+            for (i, component) in self.components.iter().enumerate() {
+                component.upsampler.upsample_row(
+                    &component_data[i],
+                    component.width,
+                    component.height,
+                    component.row_stride,
+                    row,
+                    output_width,
+                    &mut line_buffers[i],
+                );
+            }
+            color_convert(&line_buffers, output);
         }
-        color_convert(&line_buffers, output);
     }
 }
 struct UpsamplerH1V1;
@@ -251,3 +255,7 @@ impl Upsample for UpsamplerGeneric {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "../../../tests/plain-libs/unit/jpeg/upsampler.rs"]
+mod tests;

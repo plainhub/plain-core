@@ -153,8 +153,23 @@ pub fn read_original_thumbnail(
     if size > PASSTHROUGH_MAX_BYTES {
         return Ok(None);
     }
+    let mut reader = std::io::BufReader::new(file);
+    use std::io::BufRead;
+    let head = reader.fill_buf()?;
+    if let Ok(source) = sniff::sniff_header(head) {
+        if !source.kind.can_passthrough() {
+            return Ok(None);
+        }
+        // A square bounding box and a short-edge limit are independent of EXIF orientation.
+        if width != 0 && width == height
+            && (source.width.max(source.height) > width
+                || short_edge.is_some_and(|limit| source.width.min(source.height) > limit))
+        {
+            return Ok(None);
+        }
+    }
     let mut bytes = Vec::new();
-    file.take(PASSTHROUGH_MAX_BYTES + 1)
+    reader.take(PASSTHROUGH_MAX_BYTES + 1)
         .read_to_end(&mut bytes)?;
     if bytes.len() as u64 > PASSTHROUGH_MAX_BYTES {
         return Ok(None);
@@ -219,16 +234,11 @@ pub async fn get_thumbnail(spec: ThumbSpec, cache: &std::path::Path) -> Result<T
     }
 }
 
-async fn get_image_thumbnail(
-    spec: &ThumbSpec,
-    head: Vec<u8>,
-    s: Sniffed,
-    cache: &std::path::Path,
-) -> Result<ThumbOutcome> {
+fn image_dimensions(spec: &ThumbSpec, head: &[u8], s: Sniffed) -> (u8, u32, u32, u32, u32) {
     // EXIF orientation first: the *upright* dimensions decide the target box
     // so rotated photos produce correctly-proportioned thumbnails.
     let orientation = if s.kind == ImageKind::Jpeg {
-        exif::orientation(&head).unwrap_or(1)
+        exif::orientation(head).unwrap_or(1)
     } else {
         s.orientation
     };
@@ -241,6 +251,17 @@ async fn get_image_thumbnail(
         Some(short) => crate::media::thumbnail_limits::short_edge_size(uw, uh, short, spec.w),
         None => compute_target_size(uw, uh, spec.w, spec.h),
     };
+
+    (orientation, uw, uh, tw, th)
+}
+
+async fn get_image_thumbnail(
+    spec: &ThumbSpec,
+    head: Vec<u8>,
+    s: Sniffed,
+    cache: &std::path::Path,
+) -> Result<ThumbOutcome> {
+    let (orientation, uw, uh, tw, th) = image_dimensions(spec, &head, s);
 
     // Passthrough: already thumbnail-sized, browser-renderable, small.
     if s.kind.can_passthrough()
@@ -283,20 +304,20 @@ async fn get_image_thumbnail(
                 lru::global().put(cache_path.clone(), d.clone());
                 return Ok(ThumbOutcome::Generated(d));
             }
-            generate_and_cache(spec, s, orientation, tw, th, cache_path, head).await
+            let bytes = generate_image(spec, s, orientation, tw, th, head).await?;
+            tokio::task::spawn_blocking(move || finish_generated(&cache_path, bytes)).await?
         })
         .await
 }
 
-async fn generate_and_cache(
+async fn generate_image(
     spec: &ThumbSpec,
     s: Sniffed,
     orientation: u8,
     tw: u32,
     th: u32,
-    cache_path: std::path::PathBuf,
     head: Vec<u8>,
-) -> Result<ThumbOutcome> {
+) -> Result<Vec<u8>> {
     let swaps = Orientation(orientation).swaps_axes();
     // The stored bitmap must be resized to the swapped target so the
     // post-resize rotation lands exactly on (tw, th).
@@ -334,31 +355,19 @@ async fn generate_and_cache(
 
     let path = spec.path.clone();
     let quality = spec.quality;
-    let cp = cache_path.clone();
-    let jpg = admission::global()
+    admission::global()
         .run(est, move || -> Result<Vec<u8>> {
             let preview = preview.as_ref().map(|(bytes, _)| bytes.as_slice());
             let bm = decode_to_target(&path, &head, s, rw, rh, preview)?;
             let bm = scale::resize_to(bm, rw, rh);
             let bm = bm.apply_orientation(Orientation(orientation));
-            let jpg = if s.preserve_alpha {
-                encode::encode_png(bm)?
+            if s.preserve_alpha {
+                encode::encode_png(bm)
             } else {
-                encode::encode_jpeg(bm, quality)?
-            };
-            let _ = write_thumb_cache(&cp, &jpg);
-            Ok(jpg)
+                encode::encode_jpeg(bm, quality)
+            }
         })
-        .await??;
-
-    #[cfg(test)]
-    {
-        let key = cache_path.to_string_lossy().into_owned();
-        bump_generations(&key);
-    }
-    let data = Bytes::from(jpg);
-    lru::global().put(cache_path, data.clone());
-    Ok(ThumbOutcome::Generated(data))
+        .await?
 }
 
 fn decode_to_target(
@@ -523,7 +532,6 @@ async fn generate_non_image(
     bail!("unsupported file type for thumbnail")
 }
 
-/// Cache + return a generated non-image thumbnail (cover art / video frame).
 fn finish_generated(cache_path: &std::path::Path, jpg: Vec<u8>) -> Result<ThumbOutcome> {
     let data = Bytes::from(jpg);
     let _ = write_thumb_cache(cache_path, &data);
@@ -631,6 +639,11 @@ async fn inspect_image(path: &str) -> Result<(Vec<u8>, Option<Sniffed>)> {
         if let Some(kind) = still::kind(&head) {
             return Ok((head, Some(still::probe(std::path::Path::new(&path), kind)?)));
         }
+        if let Ok(source) = sniff::sniff_header(&head)
+            && matches!(source.kind, ImageKind::Png | ImageKind::Gif | ImageKind::WebP)
+        {
+            return Ok((head, Some(source)));
+        }
         head.reserve(HEAD_READ - length);
         if file
             .take((HEAD_READ - length) as u64)
@@ -661,6 +674,25 @@ pub fn initialize(settings: Settings) {
 #[cfg(test)]
 #[path = "../../../../tests/plain-libs/unit/media/thumbnails/mod.rs"]
 mod tests;
+
+pub async fn generate_still(
+    path: &str,
+    width: u32,
+    height: u32,
+    short_edge: Option<u32>,
+) -> Result<Option<Bytes>> {
+    let size = tokio::fs::metadata(path).await?.len();
+    if size == 0 {
+        return Ok(None);
+    }
+    let (head, source) = inspect_image(path).await?;
+    let source = source.ok_or_else(|| crate::anyhow::anyhow!("unsupported file type for thumbnail"))?;
+    let mut spec = ThumbSpec::sanitize(path, width.try_into()?, height.try_into()?, 85, 0, size.try_into()?);
+    spec.short_edge = short_edge;
+    let (orientation, _, _, tw, th) = image_dimensions(&spec, &head, source);
+    let bytes = generate_image(&spec, source, orientation, tw, th, head).await?;
+    Ok(Some(Bytes::from(bytes)))
+}
 
 pub async fn render(
     path: &str,
