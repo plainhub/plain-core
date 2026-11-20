@@ -99,3 +99,41 @@ fn non_block_mounts_keep_session_identity_without_udev() {
     let result = volume(entry, &root.path().join("absent-by-uuid"), &boot).unwrap();
     assert_eq!(result.identity, "SESSION:generated-boot:42");
 }
+
+#[test]
+fn android_shared_storage_keeps_distinct_identities_across_remounts() {
+    for (mount_point, root, expected) in [
+        (
+            "/storage/emulated",
+            "/storage/emulated/0",
+            "ANDROID:EMULATED:0",
+        ),
+        (
+            "/storage/emulated",
+            "/storage/emulated/10",
+            "ANDROID:EMULATED:10",
+        ),
+        ("/storage/abcd-5642", "/storage/abcd-5642", "UUID:ABCD-5642"),
+    ] {
+        for id in ["12", "60"] {
+            let mut entry = mount("/dev/fuse");
+            entry.id = id.into();
+            entry.path = mount_point.into();
+            let path = Path::new(root).join("Music/generated.wav");
+            assert_eq!(
+                android_storage_volume(entry, &path).unwrap(),
+                Volume {
+                    identity: expected.into(),
+                    path: root.into(),
+                }
+            );
+        }
+    }
+    let mut entry = mount("/dev/fuse");
+    entry.path = "/storage/self".into();
+    assert!(
+        android_storage_volume(entry, Path::new("/storage/self"))
+            .unwrap_err()
+            .is::<Unavailable>()
+    );
+}

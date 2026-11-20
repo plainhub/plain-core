@@ -92,7 +92,7 @@ pub(crate) fn locate(path: &str) -> plain_libs::rusqlite::Result<Location> {
     volumes::locate(Path::new(path)).map_err(|error| sql_error(error.into_boxed_dyn_error()))
 }
 
-fn available_location(path: &Path) -> plain_libs::rusqlite::Result<Option<Location>> {
+pub(crate) fn available_location(path: &Path) -> plain_libs::rusqlite::Result<Option<Location>> {
     match volumes::locate(path) {
         Ok(location) => Ok(Some(location)),
         Err(error) if error.is::<volumes::Unavailable>() => Ok(None),

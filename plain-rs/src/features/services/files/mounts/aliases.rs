@@ -22,24 +22,20 @@ fn mounted_path(mount: &Value) -> Option<&Path> {
 
 pub fn apply_aliases(db: &Db, mut facts: Value) -> Result<Value, String> {
     let mounts = facts.as_array_mut().ok_or("Invalid storage volume facts")?;
-    let ids = mounts
-        .iter()
-        .map(|mount| {
-            mounted_path(mount)
-                .map(|path| db.register_volume(path))
-                .transpose()
-                .map(Option::flatten)
-                .map_err(|error| error.to_string())
-        })
-        .collect::<Result<Vec<_>, _>>()?;
     let aliases = db
         .volumes()
         .map_err(|error| error.to_string())?
         .into_iter()
-        .map(|volume| (volume.id, volume.alias))
+        .map(|volume| (volume.identity, volume.alias))
         .collect::<std::collections::HashMap<_, _>>();
-    for (mount, id) in mounts.iter_mut().zip(ids) {
-        mount["alias"] = Value::String(id.map_or_else(String::new, |id| aliases[&id].clone()));
+    for mount in mounts {
+        let location = mounted_path(mount)
+            .map(crate::infrastructure::db::files::available_location)
+            .transpose()
+            .map_err(|error| error.to_string())?
+            .flatten();
+        let alias = location.and_then(|location| aliases.get(&location.volume.identity));
+        mount["alias"] = Value::String(alias.cloned().unwrap_or_default());
     }
     Ok(facts)
 }

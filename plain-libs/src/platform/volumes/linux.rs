@@ -67,7 +67,48 @@ pub(super) fn containing_from_mounts(
         .filter(|mount| path.starts_with(&mount.path))
         .max_by_key(|mount| mount.path.components().count())
         .context("No containing filesystem mount")?;
+    #[cfg(target_os = "android")]
+    if mount.path.starts_with("/storage") && matches!(mount.fs_type.as_str(), "fuse" | "sdcardfs" | "esdfs") {
+        return android_storage_volume(mount, path);
+    }
     volume(mount, uuid_directory, boot_id)
+}
+
+#[cfg(any(target_os = "android", test))]
+fn android_storage_volume(mount: Mount, path: &Path) -> Result<Volume> {
+    if mount.path.parent() != Some(Path::new("/storage")) || mount.root != "/" {
+        return Err(Unavailable.into());
+    }
+    let name = mount
+        .path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or(Unavailable)?;
+    if name == "emulated" {
+        let user = path
+            .strip_prefix(&mount.path)?
+            .iter()
+            .next()
+            .and_then(|part| part.to_str())
+            .filter(|part| part.bytes().all(|byte| byte.is_ascii_digit()))
+            .ok_or(Unavailable)?;
+        return Ok(Volume {
+            identity: format!("ANDROID:EMULATED:{user}"),
+            path: mount.path.join(user),
+        });
+    }
+    let fat_id = name.split_once('-').is_some_and(|(high, low)| {
+        [high, low]
+            .iter()
+            .all(|part| part.len() == 4 && part.bytes().all(|byte| byte.is_ascii_hexdigit()))
+    });
+    if !fat_id && crate::utils::uuid::Uuid::parse_str(name).is_err() {
+        return Err(Unavailable.into());
+    }
+    Ok(Volume {
+        identity: format!("UUID:{}", name.to_ascii_uppercase()),
+        path: mount.path,
+    })
 }
 
 fn volume(mount: Mount, uuid_directory: &Path, boot_id: &Path) -> Result<Volume> {

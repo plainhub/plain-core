@@ -9,6 +9,7 @@ fn aliases_persist_in_the_volume_row_and_a_fresh_database_has_no_alias() {
     let path = fixture.path().join("plain.db");
     let db = Db::open(&path).unwrap();
     assert_eq!(apply_aliases(&db, facts.clone()).unwrap()[0]["alias"], "");
+    assert!(db.volumes().unwrap().is_empty());
     set_alias(&db, &facts, "fixture-mount", " Archive ").unwrap();
     assert_eq!(
         apply_aliases(&db, facts.clone()).unwrap()[0]["alias"],
