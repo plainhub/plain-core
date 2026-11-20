@@ -54,7 +54,7 @@ async fn native_catalog_reads_rows_counts_ids_and_buckets_without_a_host() {
 }
 
 #[tokio::test]
-async fn platform_catalog_reads_os_facts_without_a_local_catalogue() {
+async fn platform_catalog_queries_media_independently_of_file_index_volumes() {
     let host = Arc::new(
         Host::with_startup_config(crate::infrastructure::host::startup::StartupConfig {
             system_media_catalog: true,
@@ -82,8 +82,12 @@ async fn platform_catalog_reads_os_facts_without_a_local_catalogue() {
                     assert_eq!(request["params"]["sortBy"], "NAME_ASC");
                     json!([{"id":"42","path":"content://media/images/42"}])
                 }
-                "systemMediaCount" => json!(1),
+                "systemMediaCount" => {
+                    assert_eq!(request["params"]["plan"]["args"], json!([]));
+                    json!(1)
+                }
                 "systemMediaIdsFacts" => {
+                    assert_eq!(request["params"]["plan"]["args"], json!([]));
                     assert_eq!(request["params"]["plan"]["trash"], true);
                     json!(["42"])
                 }
@@ -106,6 +110,7 @@ async fn platform_catalog_reads_os_facts_without_a_local_catalogue() {
     });
     let dir = plain_libs::temporary::tempdir().unwrap();
     let db = Arc::new(Db::open(&dir.path().join("data.db")).unwrap());
+    db.register_volume(dir.path()).unwrap().unwrap();
     let catalog = MediaCatalog::new(db, host, Arc::new(crate::features::prefs::Prefs::in_memory()));
     let rows = catalog
         .rows(DataType::Image, "text:picture", MediaSortBy::NameAsc, 8, 4)
@@ -150,6 +155,7 @@ fn sampled_media_revisions_are_canonical_and_reject_malformed_volumes() {
 async fn semantic_image_candidates_intersect_platform_ids_and_keep_non_text_filters() {
     let dir = plain_libs::temporary::tempdir().unwrap();
     let db = Arc::new(Db::open(&dir.path().join("data.db")).unwrap());
+    db.register_volume(dir.path()).unwrap().unwrap();
     let tag = crate::features::tags::create_tag(&db, DataType::Image, "selected").unwrap();
     crate::features::tags::add_relations(&db, &[(tag.id.clone(), "2".into())]).unwrap();
     let host = Arc::new(Host::default());

@@ -140,11 +140,9 @@ impl MediaCatalog {
         }
         let limit = plan.ids.len() as u32;
         match self {
-            Self::Platform { db, host, prefs } => {
+            Self::Platform { host, prefs, .. } => {
                 let mut plan = plan;
                 plan.exclude_media_directories(prefs).map_err(|error| error.to_string())?;
-                crate::features::services::files::provider_query::index_scope(&mut plan, db)
-                    .map_err(|error| error.to_string())?;
                 let facts = host.call(
                     "systemMediaRows",
                     json!({"dataType":DataType::Image,"sortBy":"NAME_ASC","limit":limit,"offset":0,"plan":plan}),
@@ -270,12 +268,10 @@ impl MediaCatalog {
         kind: DataType,
     ) -> Result<Vec<super::media_buckets::Bucket>, String> {
         match self {
-            Self::Platform { db, host, prefs } => {
+            Self::Platform { host, prefs, .. } => {
                 let mut plan = crate::features::services::files::media_buckets::platform_plan(kind)
                     .map_err(|error| error.to_string())?;
                 plan.exclude_media_directories(prefs).map_err(|error| error.to_string())?;
-                crate::features::services::files::provider_query::index_scope(&mut plan, db)
-                    .map_err(|error| error.to_string())?;
                 let facts = host
                     .call(
                         "systemMediaBucketItemFacts",
@@ -350,7 +346,6 @@ fn platform_params(
     )
     .map_err(|error| error.to_string())?;
     plan.exclude_media_directories(prefs).map_err(|error| error.to_string())?;
-    query::index_scope(&mut plan, db).map_err(|error| error.to_string())?;
     params["plan"] = plain_libs::serde_json::to_value(plan).map_err(|error| error.to_string())?;
     Ok(params)
 }

@@ -60,64 +60,6 @@ impl Plan {
         }
     }
 }
-pub fn index_scope(plan: &mut Plan, db: &Db) -> plain_libs::anyhow::Result<()> {
-    use crate::features::files::index_scope::{absolute_directory, under};
-    use crate::infrastructure::db::FileIndexMode;
-    fn within(root: &str, args: &mut Vec<String>) -> String {
-        let prefix = format!("{}/", root.trim_end_matches('/'));
-        args.extend([root.to_owned(), prefix.clone(), prefix]);
-        "(_data = ? OR substr(_data,1,length(?)) = ?)".into()
-    }
-    let volumes = db
-        .volumes()?
-        .into_iter()
-        .filter(|volume| !volume.path.contains("://"))
-        .collect::<Vec<_>>();
-    if volumes.is_empty() {
-        return Ok(());
-    }
-    let mut args = Vec::new();
-    let outside = volumes
-        .iter()
-        .map(|volume| within(&volume.path, &mut args))
-        .collect::<Vec<_>>()
-        .join(" OR ");
-    let mut branches = vec![format!("NOT ({outside})")];
-    for volume in &volumes {
-        if !volume.is_available {
-            continue;
-        }
-        let (dirs, allowlist) = match volume.index_mode {
-            FileIndexMode::Allowlist => (&volume.included_dirs, true),
-            FileIndexMode::Blocklist => (&volume.excluded_dirs, false),
-            FileIndexMode::Unconfigured | FileIndexMode::Disabled => continue,
-        };
-        let mut clauses = vec![within(&volume.path, &mut args)];
-        for child in volumes.iter().filter(|other| {
-            other.path.len() > volume.path.len() && under(&other.path, &volume.path)
-        }) {
-            clauses.push(format!("NOT {}", within(&child.path, &mut args)));
-        }
-        let listed = dirs
-            .iter()
-            .map(|dir| within(&absolute_directory(&volume.path, dir), &mut args))
-            .collect::<Vec<_>>()
-            .join(" OR ");
-        if allowlist {
-            clauses.push(if listed.is_empty() {
-                "0=1".into()
-            } else {
-                format!("({listed})")
-            });
-        } else if !listed.is_empty() {
-            clauses.push(format!("NOT ({listed})"));
-        }
-        branches.push(format!("({})", clauses.join(" AND ")));
-    }
-    plan.add(format!("({})", branches.join(" OR ")), args);
-    Ok(())
-}
-
 pub fn fields(db: &Db, query: &str) -> plain_libs::anyhow::Result<Vec<FilterField>> {
     let mut fields = search_dsl::parse(query);
     let tag_ids = fields

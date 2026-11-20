@@ -68,6 +68,7 @@ fn native_search_uses_indexed_names_literal_filters_parent_and_matching_counts()
 async fn platform_query_passes_prepared_conditions_and_only_resolves_parent_when_present() {
     let dir = plain_libs::temporary::tempdir().unwrap();
     let db = Db::open(&dir.path().join("plain.db")).unwrap();
+    db.register_volume(dir.path()).unwrap().unwrap();
     let host = Arc::new(Host::default());
     let (generation, mut requests) = host.connect();
     let reply = host.clone();

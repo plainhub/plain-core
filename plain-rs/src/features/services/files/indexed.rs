@@ -34,14 +34,13 @@ pub async fn platform(
     } else {
         None
     };
-    let mut plan = query::plan(
+    let plan = query::plan(
         Provider::File,
         &fields,
         &Value::Null,
         parent_id.as_deref(),
         query.is_empty(),
     )?;
-    query::index_scope(&mut plan, db)?;
     host.call(
         if count_only {
             "systemFileIndexCount"
