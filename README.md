@@ -108,7 +108,12 @@ plain-server/
 
 ## Build
 
-Requires Rust 1.99+ and a C compiler. Building ONNX Runtime from source requires Python 3.10+.
+Requires Rust 1.99+ and a C compiler. Standard workspace builds and tests do
+not enable AI image search or build ONNX Runtime. Enable it explicitly with
+`cargo test --workspace --locked --features plainapp/ai-image-search` or the AI
+option in the manually dispatched CI workflow.
+
+Building ONNX Runtime from source requires Python 3.10+.
 
 For builds with prepared ONNX Runtime artifacts, set `PLAIN_ONNX_RUNTIME_MANIFEST`
 to the absolute path of a trusted JSON file mapping Rust target triples to
@@ -201,7 +206,7 @@ No management TCP port or shared secret is added.
 ### Install manually
 
 ```sh
-cargo build --release --locked -p plainapp
+cargo build --release --locked -p plainapp --features ai-image-search
 install -m 0755 target/release/plainapp /usr/local/bin/plainapp
 sudo plainapp install                     # admin password, ffmpeg and Avahi
 sudo systemctl enable --now plainapp

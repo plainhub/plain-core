@@ -3,12 +3,18 @@ name: Build and unit tests
 on:
   push:
   pull_request:
+  workflow_dispatch:
+    inputs:
+      ai_image_search:
+        description: Include the native AI image search engine and tests
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
 concurrency:
-  group: rust-tests-${{ github.ref }}
+  group: rust-tests-${{ github.ref }}-${{ inputs.ai_image_search && 'ai' || 'standard' }}
   cancel-in-progress: true
 
 env:
@@ -21,6 +27,7 @@ jobs:
     env:
       CC: gcc-14
       CXX: g++-14
+      AI_FEATURE: ${{ inputs.ai_image_search && 'plainapp/ai-image-search' || '' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -35,8 +42,17 @@ jobs:
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
 
+      - name: Check standard builds do not enable ONNX Runtime
+        if: ${{ !inputs.ai_image_search }}
+        run: |
+          features=$(cargo tree --workspace --locked -e features -i plain-libs --prefix none)
+          if grep -Fq -e 'plain-libs feature "onnx-runtime"' -e 'plain-rs feature "ai-image-search"' <<< "$features"; then
+            echo "ONNX Runtime must not be enabled in standard CI"
+            exit 1
+          fi
+
       - name: Compile all packages
-        run: cargo build --workspace --locked
+        run: cargo build --workspace --locked --features "$AI_FEATURE"
 
       - name: Run Rust unit tests
-        run: cargo test --workspace --locked --no-fail-fast
+        run: cargo test --workspace --locked --no-fail-fast --features "$AI_FEATURE"

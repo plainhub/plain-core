@@ -1,6 +1,7 @@
 use super::*;
 use crate::infrastructure::db::Db;
 
+#[cfg(feature = "ai-image-search")]
 async fn settled(runtime: &Runtime) {
     tokio::time::timeout(Duration::from_secs(10), async {
         loop {
@@ -19,6 +20,7 @@ async fn settled(runtime: &Runtime) {
     .await
     .unwrap();
 }
+#[cfg(feature = "ai-image-search")]
 #[tokio::test]
 async fn failed_replacement_preserves_active_package_index_and_search() {
     let directory = plain_libs::temporary::tempdir().unwrap();
@@ -200,6 +202,7 @@ async fn catalog_changes_share_one_cancellable_timer_and_do_not_retain_the_runti
     host.disconnect(generation);
 }
 
+#[cfg(feature = "ai-image-search")]
 #[tokio::test]
 async fn core_start_restores_enabled_local_model_without_a_client_mutation_or_download() {
     let directory = plain_libs::temporary::tempdir().unwrap();
@@ -275,6 +278,7 @@ async fn core_start_restores_enabled_local_model_without_a_client_mutation_or_do
     task.abort();
 }
 
+#[cfg(feature = "ai-image-search")]
 #[tokio::test]
 async fn native_model_restore_and_shutdown_do_not_request_sdk_observers_or_catalogs() {
     let directory = plain_libs::temporary::tempdir().unwrap();
@@ -347,6 +351,32 @@ fn projection_runtime() -> (
         events,
     );
     (directory, runtime, updates)
+}
+
+#[cfg(not(feature = "ai-image-search"))]
+#[tokio::test]
+async fn model_runtime_without_ai_never_activates_or_removes_models() {
+    let (directory, runtime, _) = projection_runtime();
+    let incoming = directory.path().join("ai_models/incoming");
+    let installed = directory.path().join("ai_models/imported");
+    for folder in [&incoming, &installed] {
+        plain_libs::ai_image_search::models::test_fixture::fixture(folder);
+    }
+    runtime.prefs.set(AI_IMAGE_SEARCH_MODEL, "imported").unwrap();
+    runtime.prefs.set("ai_image_search_enabled", true).unwrap();
+
+    assert!(runtime.enable(true).await.is_ok());
+    assert!(runtime.enable(false).await.is_err());
+    assert!(runtime.import().await.is_err());
+    assert!(runtime.cancel(true).await.is_err());
+    assert!(runtime.task.lock().unwrap().is_none());
+    assert_eq!(
+        runtime.snapshot().status.status,
+        ImageSearchStatusType::Unavailable
+    );
+    assert!(incoming.join("manifest.json").is_file());
+    assert!(installed.join("manifest.json").is_file());
+    assert!(runtime.prefs.get_or("ai_image_search_enabled", false));
 }
 
 #[tokio::test]
@@ -429,6 +459,7 @@ async fn initial_snapshot_is_published_before_the_core_is_returned_to_consumers(
     core.stop_core().await;
 }
 
+#[cfg(feature = "ai-image-search")]
 #[tokio::test]
 async fn semantic_search_pages_all_matches_and_filters_before_pagination() {
     use crate::features::enums::DataType;

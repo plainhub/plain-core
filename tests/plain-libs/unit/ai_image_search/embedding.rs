@@ -4,6 +4,7 @@ use crate::ai_image_search::models::test_fixture;
 use crate::ai_image_search::models::test_fixture::fixture;
 use crate::ai_image_search::preprocess;
 
+#[cfg(feature = "onnx-runtime")]
 #[test]
 fn real_runtime_executes_paired_encoders_and_reloads_released_sessions() {
     let directory = crate::temporary::tempdir().unwrap();
@@ -31,6 +32,7 @@ fn real_runtime_executes_paired_encoders_and_reloads_released_sessions() {
     assert_eq!(engine.text("image").unwrap()[0], 1.0);
     assert_eq!(engine.image(&path).unwrap().unwrap()[0], 1.0);
 }
+#[cfg(feature = "onnx-runtime")]
 #[test]
 fn encoder_context_lives_until_the_last_session_and_can_be_reopened() {
     let directory = crate::temporary::tempdir().unwrap();
@@ -46,6 +48,7 @@ fn encoder_context_lives_until_the_last_session_and_can_be_reopened() {
     assert_eq!(reopened.text("cat").unwrap(), vec![1.0, 0.0, 0.0, 0.0]);
 }
 
+#[cfg(feature = "onnx-runtime")]
 #[test]
 fn packages_reject_corruption_wrong_shapes_and_path_traversal() {
     let directory = crate::temporary::tempdir().unwrap();

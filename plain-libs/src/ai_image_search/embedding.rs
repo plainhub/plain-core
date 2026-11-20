@@ -2,7 +2,7 @@ use crate::ai_image_search::models::manifest::Layout;
 use crate::ai_image_search::models::manifest::Manifest;
 use crate::ai_image_search::models::manifest::TextRole;
 use crate::ai_image_search::session::Context;
-use crate::ai_image_search::session::Input;
+use super::Input;
 use crate::ai_image_search::session::Session;
 use sha2::{Digest, Sha256};
 use std::{

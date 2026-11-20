@@ -39,10 +39,10 @@ description = "Shared Plain protocol, crypto, persistence and domain primitives"
 "linux-platform" = ["linux-system", "filesystem", "storage-platform", "unix-platform", "tokio/process", "tokio/macros", "tokio/io-util", "plain-libs/linux-platform"]
 
 "image-metadata" = ["library", "plain-libs/image"]
-"runtime" = ["plain-libs/websocket", "dep:undoc", "ble", "graphql", "services", "phone", "trash", "feeds", "tls", "linux-system", "dep:parking_lot", "dep:futures-util", "dep:rustls", "plain-libs/zip", "dep:tokio-rustls", "plain-libs/image", "ai-image-search", "plain-libs/disk-metrics", "plain-libs/system-metrics", "tokio/net", "tokio/rt-multi-thread", "tokio/fs", "tokio/sync", "tokio/time", "tokio/macros", "plain-libs/apk", "plain-libs/dlna", "plain-libs/phone-batch", "plain-libs/watch", "dep:objc2", "dep:objc2-foundation", "dep:objc2-av-foundation", "dep:objc2-core-foundation", "dep:objc2-core-media", "dep:objc2-core-video", "dep:block2", "dep:dispatch2", "plain-libs/windows-video"]
+"runtime" = ["plain-libs/websocket", "dep:undoc", "ble", "graphql", "services", "phone", "trash", "feeds", "tls", "linux-system", "dep:parking_lot", "dep:futures-util", "dep:rustls", "plain-libs/zip", "dep:tokio-rustls", "plain-libs/ai-image-search", "plain-libs/disk-metrics", "plain-libs/system-metrics", "tokio/net", "tokio/rt-multi-thread", "tokio/fs", "tokio/sync", "tokio/time", "tokio/macros", "plain-libs/apk", "plain-libs/dlna", "plain-libs/phone-batch", "plain-libs/watch", "dep:objc2", "dep:objc2-foundation", "dep:objc2-av-foundation", "dep:objc2-core-foundation", "dep:objc2-core-media", "dep:objc2-core-video", "dep:block2", "dep:dispatch2", "plain-libs/windows-video"]
 "runtime-media" = ["runtime", "media", "plain-libs/native-watch", "tokio/process"]
 
-"ai-image-search" = ["plain-libs/ai-image-search"]
+"ai-image-search" = ["plain-libs/onnx-runtime"]
 "media" = ["image-metadata", "plain-libs/thumbnails"]
 
 [dependencies]

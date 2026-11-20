@@ -55,7 +55,7 @@ jobs:
           key: ${{ matrix.target }}
 
       - name: Build plainapp with the embedded UI
-        run: cargo build --release --locked --target ${{ matrix.target }} -p plainapp
+        run: cargo build --release --locked --target ${{ matrix.target }} -p plainapp --features ai-image-search
 
       - name: Package
         run: tar -czf plainapp-linux-${{ matrix.arch }}.tar.gz -C target/${{ matrix.target }}/release plainapp

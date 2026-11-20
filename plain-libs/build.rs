@@ -1,10 +1,10 @@
-#[cfg(feature = "ai-image-search")]
+#[cfg(feature = "onnx-runtime")]
 use std::{
     env,
     path::{Path, PathBuf},
     process::Command,
 };
-#[cfg(feature = "ai-image-search")]
+#[cfg(feature = "onnx-runtime")]
 fn main() {
     println!("cargo:rerun-if-changed=native/ai_image_search");
     for name in [
@@ -120,7 +120,7 @@ fn main() {
     native.compile("plain_onnx_session");
 }
 
-#[cfg(feature = "ai-image-search")]
+#[cfg(feature = "onnx-runtime")]
 fn prepare_runtime(target: &str, runtime: &Path) {
     let candidates = env::var("PLAIN_ONNX_PYTHON")
         .map(|name| vec![name])
@@ -167,7 +167,7 @@ fn prepare_runtime(target: &str, runtime: &Path) {
     );
 }
 
-#[cfg(not(feature = "ai-image-search"))]
+#[cfg(not(feature = "onnx-runtime"))]
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
 }

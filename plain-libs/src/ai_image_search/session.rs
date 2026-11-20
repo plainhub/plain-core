@@ -1,17 +1,9 @@
+use super::Input;
 use std::{
     ffi::{CStr, CString, c_char, c_void},
     ptr::NonNull,
     sync::{Arc, Mutex},
 };
-#[repr(C)]
-pub struct Input {
-    pub name: *const c_char,
-    pub data: *mut c_void,
-    pub bytes: usize,
-    pub shape: *const i64,
-    pub rank: usize,
-    pub element_type: i32,
-}
 unsafe extern "C" {
     fn plain_onnx_context(
         library: *const c_char,
