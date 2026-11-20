@@ -138,24 +138,35 @@ async fn managed_proxy_keeps_the_browser_session_and_streams_a_peer_range() {
         }
     }
     let key = decode_key(&browser.token).unwrap();
-    let body =
-        http_request::encrypt(&key, "/graphql", r#"{"query":"{ app { clientId } }"}"#).unwrap();
-    let response = http
-        .post(format!("{proxy}/graphql"))
-        .header("c-id", &browser.client_id)
-        .header(header::ORIGIN, &origin)
-        .body(body.clone())
-        .send()
-        .await
+    let http_origin = format!("http://localhost:{a_http}");
+    for browser_origin in [&origin, &http_origin] {
+        let body = http_request::encrypt(
+            &key,
+            "/graphql",
+            r#"{"query":"{ app { clientId } }"}"#,
+        )
         .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
-    let response =
-        http_request::decrypt_response(&key, &body, &response.bytes().await.unwrap()).unwrap();
-    assert_eq!(
-        plain_libs::serde_json::from_slice::<plain_libs::serde_json::Value>(&response).unwrap()["data"]
-            ["app"]["clientId"],
-        b_id
-    );
+        let request = |origin: &str| {
+            http.post(format!("{browser_origin}/proxy/{b_id}/graphql"))
+                .header("c-id", &browser.client_id)
+                .header(header::ORIGIN, origin)
+                .body(body.clone())
+        };
+        let other_scheme = if browser_origin == &origin { "http" } else { "https" };
+        let host = browser_origin.split_once("://").unwrap().1;
+        for foreign_origin in [format!("{other_scheme}://{host}"), "http://other.example.test".into()] {
+            assert_eq!(request(&foreign_origin).send().await.unwrap().status(), StatusCode::FORBIDDEN);
+        }
+        let response = request(browser_origin).send().await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK, "{browser_origin}");
+        let response =
+            http_request::decrypt_response(&key, &body, &response.bytes().await.unwrap()).unwrap();
+        assert_eq!(
+            plain_libs::serde_json::from_slice::<plain_libs::serde_json::Value>(&response).unwrap()["data"]
+                ["app"]["clientId"],
+            b_id
+        );
+    }
     let first = a_state
         .managed_resources
         .route(&a_state, &b_id)
@@ -233,9 +244,13 @@ async fn managed_proxy_keeps_the_browser_session_and_streams_a_peer_range() {
     assert_eq!(response.headers()[header::CONTENT_RANGE], "bytes 2-5/10");
     assert!(!response.headers().contains_key(MANAGED_RESOURCE));
     assert_eq!(&response.bytes().await.unwrap()[..], b"2345");
-    let download = get("DOWNLOAD").send().await.unwrap();
-    assert_eq!(download.status(), StatusCode::OK);
-    assert_eq!(&download.bytes().await.unwrap()[..], b"0123456789");
+    for browser_origin in [&origin, &http_origin] {
+        let download = http.get(format!("{browser_origin}/proxy/{b_id}/fs"))
+            .query(&[("id", id.as_str()), ("action", "DOWNLOAD")])
+            .send().await.unwrap();
+        assert_eq!(download.status(), StatusCode::OK);
+        assert_eq!(&download.bytes().await.unwrap()[..], b"0123456789");
+    }
     assert_eq!(
         get("PREVIEW")
             .header(header::ORIGIN, "https://other.example.test")
@@ -311,8 +326,9 @@ async fn managed_proxy_keeps_the_browser_session_and_streams_a_peer_range() {
     let data = b"managed upload fixture";
     let upload = |path, metadata: String| {
         let metadata = http_request::encrypt(&key, &format!("/{path}"), &metadata).unwrap();
-        http.post(format!("{proxy}/{path}"))
+        http.post(format!("{http_origin}/proxy/{b_id}/{path}"))
             .header("c-id", &browser.client_id)
+            .header(header::ORIGIN, &http_origin)
             .header(
                 header::CONTENT_TYPE,
                 "multipart/form-data; boundary=browser",
@@ -406,7 +422,17 @@ async fn managed_proxy_keeps_the_browser_session_and_streams_a_peer_range() {
     }
     tokio::time::timeout(
         Duration::from_secs(12),
-        subscription(&socket, &browser.client_id, &key, pin),
+        subscription(&socket, &origin, &browser.client_id, &key, Some(pin)),
+    )
+    .await
+    .unwrap();
+    let http_socket = format!(
+        "ws://localhost:{a_http}/proxy/{b_id}/graphql?cid={}",
+        browser.client_id
+    );
+    tokio::time::timeout(
+        Duration::from_secs(12),
+        subscription(&http_socket, &http_origin, &browser.client_id, &key, None),
     )
     .await
     .unwrap();
@@ -1106,16 +1132,17 @@ async fn rejected_subscription_confirmation(
     assert_eq!(u16::from(close.code), 1008);
 }
 
-async fn subscription(url: &str, client: &str, key: &[u8], pin: [u8; 32]) {
-    let request = url.into_client_request().unwrap();
-    let tls = http_client::pinned_tls_config(pin).unwrap();
+async fn subscription(url: &str, origin: &str, client: &str, key: &[u8], pin: Option<[u8; 32]>) {
+    let mut request = url.into_client_request().unwrap();
+    request.headers_mut().insert(header::ORIGIN, origin.parse().unwrap());
+    let connector = pin.map(|pin| plain_libs::tokio_tungstenite::Connector::Rustls(
+        Arc::new(http_client::pinned_tls_config(pin).unwrap())
+    ));
     let (mut socket, _) = plain_libs::tokio_tungstenite::connect_async_tls_with_config(
         request,
         None,
         false,
-        Some(plain_libs::tokio_tungstenite::Connector::Rustls(Arc::new(
-            tls,
-        ))),
+        connector,
     )
     .await
     .unwrap();

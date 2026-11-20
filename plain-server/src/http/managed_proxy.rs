@@ -119,14 +119,11 @@ pub(super) fn native_loopback(state: &ServerState, request: &Request) -> bool {
 }
 
 fn same_origin(request: &Request) -> bool {
-    if request
-        .extensions()
-        .get::<ConnectionScheme>()
-        .map(|scheme| scheme.0)
-        != Some("https")
-    {
+    let Some(ConnectionScheme(scheme @ ("http" | "https"))) =
+        request.extensions().get::<ConnectionScheme>()
+    else {
         return false;
-    }
+    };
     let Some(origin) = request.headers().get(header::ORIGIN) else {
         return true;
     };
@@ -144,7 +141,7 @@ fn same_origin(request: &Request) -> bool {
                 .get(header::HOST)
                 .and_then(|value| value.to_str().ok())
         });
-    let expected = host.and_then(|host| http_client::Url::parse(&format!("https://{host}")).ok());
+    let expected = host.and_then(|host| http_client::Url::parse(&format!("{scheme}://{host}")).ok());
     origin
         .zip(expected)
         .is_some_and(|(actual, expected)| actual.origin() == expected.origin())
