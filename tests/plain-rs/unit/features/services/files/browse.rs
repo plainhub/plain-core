@@ -94,7 +94,7 @@ async fn app_data_listing_filters_current_private_files_before_paging_and_search
     }
     let nested_prefs = directory.join("uploads/prefs.json");
     std::fs::write(&nested_prefs, b"user file").unwrap();
-    for name in ["plain.db-journal", "tls-identity.json", "tls.key"] {
+    for name in ["plain.db-journal", "prefs.json.tmp", "tls-identity.json", "tls-identity.tmp", "tls.key", "tls.tmp"] {
         let path = directory.join(name);
         if !path.exists() {
             std::fs::write(path, b"private fixture").unwrap();
@@ -117,7 +117,7 @@ async fn app_data_listing_filters_current_private_files_before_paging_and_search
     assert!(platform.authorize(staged.to_str().unwrap(), false).await.is_err());
     assert!(platform.authorize(staged.to_str().unwrap(), true).await.is_err());
     assert!(state.files.delete(directory.to_string_lossy().into_owned()).await.is_err());
-    for name in ["plain.db", "plain.db-wal", "plain.db-shm", "plain.db-journal", "prefs.json", "tls-identity.json", "tls.key"] {
+    for name in ["plain.db", "plain.db-wal", "plain.db-shm", "plain.db-journal", "prefs.json", "prefs.json.tmp", "tls-identity.json", "tls-identity.tmp", "tls.key", "tls.tmp"] {
         assert!(!names.contains(&name), "{name} appeared in App Data");
         let path = directory.join(name);
         assert!(platform.authorize(path.to_str().unwrap(), true).await.is_err());

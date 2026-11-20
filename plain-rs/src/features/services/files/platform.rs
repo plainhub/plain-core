@@ -47,12 +47,21 @@ impl FilePlatform {
                 .map_err(|error| error.to_string());
         let data = crate::infrastructure::data_paths::DataPaths::new(&directory);
         let database = data.database();
+        let prefs = data.prefs();
+        let tls_identity = data.tls_identity();
+        let default_key = directory.join("tls.key");
+        let configured_key =
+            crate::infrastructure::platform::system::consts::AppPaths::tls_key_for(&directory);
         let mut protected_files = vec![
             database.clone(),
-            data.prefs(),
-            data.tls_identity(),
-            directory.join("tls.key"),
-            crate::infrastructure::platform::system::consts::AppPaths::tls_key_for(&directory),
+            prefs.with_extension("json.tmp"),
+            prefs,
+            tls_identity.with_extension("tmp"),
+            tls_identity,
+            default_key.with_extension("tmp"),
+            default_key,
+            configured_key.with_extension("tmp"),
+            configured_key,
         ];
         for suffix in ["-wal", "-shm", "-journal"] {
             let mut path = database.clone().into_os_string();
