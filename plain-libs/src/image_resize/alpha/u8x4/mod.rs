@@ -37,6 +37,18 @@ impl AlphaMulDiv for P {
     }
 }
 
+pub(crate) fn multiply_alpha_inplace(view: &mut impl ImageViewMut<Pixel = P>) {
+    process_one_images! { premultiply(view); }
+}
+
+fn premultiply(view: &mut impl ImageViewMut<Pixel = P>) {
+    for row in view.iter_rows_mut(0) {
+        for pixel in row {
+            *pixel = native::multiply_alpha_pixel(*pixel);
+        }
+    }
+}
+
 fn multiple(
     src_view: &impl ImageView<Pixel = P>,
     dst_view: &mut impl ImageViewMut<Pixel = P>,

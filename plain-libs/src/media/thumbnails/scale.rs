@@ -363,7 +363,7 @@ pub(super) fn fir_resize(bm: Bitmap, tw: u32, th: u32) -> Bitmap {
         crate::image_resize::FilterType::Lanczos3
     };
     resizer
-        .resize(&src, &mut dst, filter)
+        .resize_owned(src, &mut dst, filter)
         .expect("fast_image_resize never fails on valid buffers");
     let out = dst.into_vec();
     if ch == 4 {

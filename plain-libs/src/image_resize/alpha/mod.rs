@@ -4,6 +4,7 @@ use crate::image_resize::{CpuExtensions, ImageError, ImageView, ImageViewMut, pi
 mod common;
 
 mod u8x4;
+pub(super) use u8x4::multiply_alpha_inplace;
 
 pub(crate) trait AlphaMulDiv: pixels::InnerPixel {
     fn multiply_alpha(

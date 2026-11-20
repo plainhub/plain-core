@@ -1,5 +1,6 @@
+use crate::image_resize::alpha::{AlphaMulDiv, multiply_alpha_inplace};
 use crate::image_resize::convolution::{self, FilterType};
-use crate::image_resize::images::TypedImage;
+use crate::image_resize::images::{Image, TypedImage};
 use crate::image_resize::pixels::{self, InnerPixel};
 use crate::image_resize::{
     CpuExtensions, ImageView, ImageViewMut, IntoImageView, IntoImageViewMut, PixelTrait, PixelType,
@@ -15,6 +16,28 @@ pub struct Resizer {
 impl Resizer {
     pub fn new() -> Self {
         Self::default()
+    }
+    pub(crate) fn resize_owned(
+        &mut self,
+        mut src: Image,
+        dst: &mut Image,
+        filter: FilterType,
+    ) -> Result<(), ResizeError> {
+        if src.width() == 0 || src.height() == 0 || dst.width() == 0 || dst.height() == 0 {
+            return self.resize(&src, dst, filter);
+        }
+        if (src.width(), src.height()) != (dst.width(), dst.height())
+            && let (Some(mut rgba), Some(mut target)) = (
+                src.typed_image_mut::<pixels::U8x4>(),
+                dst.typed_image_mut::<pixels::U8x4>(),
+            )
+        {
+            multiply_alpha_inplace(&mut rgba);
+            self.do_convolution(&rgba, &mut target, filter);
+            pixels::U8x4::divide_alpha_inplace(&mut target, self.cpu_extensions)?;
+            return Ok(());
+        }
+        self.resize(&src, dst, filter)
     }
     pub fn resize(
         &mut self,
@@ -155,9 +178,15 @@ fn get_temp_image_from_buffer<P: PixelTrait>(
 ) -> TypedImage<'_, P> {
     let size = crate::image_resize::utils::image_size(width, height, P::size())
         .expect("Temporary image dimensions exceed address space");
+    #[cfg(test)]
+    tests::LARGEST_TEMP.set(tests::LARGEST_TEMP.get().max(size));
     if buffer.len() < size {
         buffer.resize(size, 0);
     }
     TypedImage::from_buffer(width, height, &mut buffer[..size])
         .expect("Temporary image buffer has the required pixel layout")
 }
+
+#[cfg(test)]
+#[path = "../../../tests/plain-libs/unit/image_resize/resizer.rs"]
+mod tests;

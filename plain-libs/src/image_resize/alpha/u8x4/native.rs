@@ -25,7 +25,7 @@ pub(crate) fn multiply_alpha_row(src_row: &[U8x4], dst_row: &mut [U8x4]) {
 }
 
 #[inline(always)]
-fn multiply_alpha_pixel(mut pixel: U8x4) -> U8x4 {
+pub(super) fn multiply_alpha_pixel(mut pixel: U8x4) -> U8x4 {
     let alpha = pixel.0[3];
     pixel.0 = [
         mul_div_255(pixel.0[0], alpha),

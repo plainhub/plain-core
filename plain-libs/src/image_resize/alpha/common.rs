@@ -48,7 +48,7 @@ macro_rules! process_two_images {
 }
 
 macro_rules! process_one_images {
-    {$op: ident($image_view: ident, $($arg: ident),+);} => {
+    {$op: ident($image_view: ident $(, $arg: ident)*);} => {
 
         'block: {
             #[cfg(feature = "thumbnails")]
@@ -58,12 +58,12 @@ macro_rules! process_one_images {
 
                 if let Some(iter) = split_h_one_image_for_threading($image_view) {
                     for_each_part(iter, |mut img| {
-                        $op(&mut img, $($arg),+);
+                        $op(&mut img $(, $arg)*);
                     });
                     break 'block;
                 }
             }
-            $op($image_view, $($arg),+);
+            $op($image_view $(, $arg)*);
         }
     };
 }
