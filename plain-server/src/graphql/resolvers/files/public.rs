@@ -68,6 +68,11 @@ impl FilesQuery {
     }
 
     async fn mounts(&self, ctx: &Context<'_>) -> plain_graphql::Result<Vec<Mount>> {
+        if !public_gate::is_local(ctx)
+            && !plain_rs::features::services::device::access::is_enabled(prefs(ctx), &[STORAGE])
+        {
+            return Ok(Vec::new());
+        }
         let facts = ctx
             .data::<Arc<plain_rs::features::services::files::platform::FilePlatform>>()?
             .mounts()

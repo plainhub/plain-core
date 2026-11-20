@@ -391,11 +391,37 @@ async fn a_denied_path_is_never_probed_for_media() {
     assert!(response.data.into_json().unwrap()["fileInfo"].is_null());
 }
 
-/// These two carry no permission gate: enumerating volumes and reading the
-/// bookmarks table is not a storage read of user content.
 #[tokio::test]
-async fn mounts_and_favorites_need_no_storage_grant() {
-    let (_dir, schema) = fixture_with("[]", |method, _| match method {
+async fn remote_home_stats_without_files_permission_skip_mount_reads() {
+    let (_dir, schema) = fixture("[]");
+    schema
+        .data::<Arc<plain_rs::features::services::files::platform::FilePlatform>>()
+        .unwrap()
+        .use_sdk_for_test();
+    let host = schema_host(&schema);
+    let (generation, mut requests) = host.connect();
+    let calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let observed = calls.clone();
+    tokio::spawn(async move {
+        while let Some(request) = requests.recv().await {
+            observed.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            host.reply(generation, json!({
+                "id": request["id"], "error": "Permission denied (os error 13)"
+            })).unwrap();
+        }
+    });
+    let response = schema.execute(
+        plain_graphql::Request::new(r#"query homeStats { noteCount(query: "") mounts { id } }"#)
+            .data(crate::graphql::executor::RequestOrigin::Remote),
+    ).await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    assert_eq!(response.data.into_json().unwrap(), json!({"noteCount":0, "mounts":[]}));
+    assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn remote_mounts_with_files_permission_return_volume_facts() {
+    let (_dir, schema) = fixture_with(GRANTED, |method, _| match method {
         "systemMountFacts" => json!([
             {"id":"path:/storage","name":"Internal","path":"/storage","mountPoint":"/storage",
              "fsType":"ext4","totalBytes":100,"usedBytes":40,"freeBytes":60,"remote":false,
@@ -949,7 +975,8 @@ async fn native_mounts_do_not_request_a_host_or_storage_permission() {
         json!([])
     });
     let response = schema
-        .execute("{ mounts { id path mountPoint totalBytes freeBytes } }")
+        .execute(plain_graphql::Request::new("{ mounts { id path mountPoint totalBytes freeBytes } }")
+            .data(crate::graphql::executor::RequestOrigin::Local))
         .await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     assert!(response.data.into_json().unwrap()["mounts"].is_array());
