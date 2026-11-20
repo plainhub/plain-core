@@ -31,7 +31,7 @@ impl Drop for Publication {
     }
 }
 
-pub(super) fn reserved(name: &str) -> bool {
+pub(in crate::features::services) fn reserved(name: &str) -> bool {
     name == ".core.lock" || name.starts_with(".restore-")
 }
 fn component(value: &str) -> Result<(), String> {

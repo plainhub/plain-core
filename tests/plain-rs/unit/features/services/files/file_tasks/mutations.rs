@@ -223,3 +223,24 @@ async fn public_rename_rejects_traversal_and_keeps_the_original_file() {
     );
     core.stop_core().await;
 }
+
+#[tokio::test]
+async fn renaming_app_data_is_rejected_before_a_move_but_children_can_be_renamed() {
+    let fixture = plain_libs::temporary::tempdir().unwrap();
+    let parent = fixture.path().canonicalize().unwrap();
+    let root = parent.join("data");
+    let core = ContentServer::open(&root).unwrap();
+    let state = core.runtime_state();
+    let child = root.join("upload");
+    std::fs::write(&child, b"fixture").unwrap();
+    let rejected = state.files.rename("test-client", root.to_string_lossy().into_owned(), "moved".into()).await;
+    assert!(rejected.is_err());
+    assert!(!parent.join("moved").exists());
+    let renamed = root.join("renamed");
+    assert_eq!(
+        state.files.rename("test-client", child.to_string_lossy().into_owned(), "renamed".into()).await.unwrap().as_deref(),
+        renamed.to_str(),
+    );
+    assert_eq!(std::fs::read(renamed).unwrap(), b"fixture");
+    core.stop_core().await;
+}

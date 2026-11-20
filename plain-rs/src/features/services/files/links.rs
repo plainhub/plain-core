@@ -180,6 +180,10 @@ pub fn authorize_path(state: &CoreRuntime, reference: &str) -> plain_libs::anyho
         .map_or(reference, |(archive, _)| archive);
     let path = Path::new(path);
     let candidate = super::platform::paths::canonical(path)?;
+    plain_libs::anyhow::ensure!(
+        !state.file_platform.is_protected_file(path) && !state.file_platform.is_protected_file(&candidate),
+        "Private application file"
+    );
     let [directory, cache] = state
         .file_platform
         .private_roots

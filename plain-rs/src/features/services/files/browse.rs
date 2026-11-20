@@ -8,7 +8,7 @@ pub async fn execute(
     platform: &crate::features::services::files::platform::FilePlatform,
     request: Request,
 ) -> Result<Value, String> {
-    let plan = request.plan().map_err(|e| e.to_string())?;
+    let mut plan = request.plan().map_err(|e| e.to_string())?;
     let page = if let Some(archive) = plan.archive_path() {
         authorize(platform, archive).await?;
         let reference = plan.root.clone();
@@ -21,6 +21,7 @@ pub async fn execute(
         plan.archive_page(entries).map_err(|e| e.to_string())?
     } else {
         authorize(platform, &plan.root).await?;
+        plan.exclude_paths(platform.protected_files());
         tokio::task::spawn_blocking(move || plan.execute())
             .await
             .map_err(|e| e.to_string())?
@@ -42,11 +43,12 @@ pub async fn search(
             .unwrap_or(SEARCH_RESULT_LIMIT)
             .min(SEARCH_RESULT_LIMIT),
     );
-    let plan = request.plan().map_err(|error| error.to_string())?;
+    let mut plan = request.plan().map_err(|error| error.to_string())?;
     if plan.archive_path().is_some() {
         return Err("Directory search requires a filesystem directory".into());
     }
     authorize(platform, &plan.root).await?;
+    plan.exclude_paths(platform.protected_files());
     let (sender, receiver) = tokio::sync::mpsc::channel(1);
     tokio::task::spawn_blocking(move || {
         let result = plan.walk(

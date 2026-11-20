@@ -6,6 +6,7 @@ use crate::features::files::tasks::{FileTaskOp, FileTaskType};
 use crate::infrastructure::db::Db;
 use crate::infrastructure::host::bridge::Host;
 use plain_libs::anyhow::{Result, anyhow, bail};
+use plain_libs::filesystem::browse::ExcludedPaths;
 use plain_libs::serde_json::json;
 use std::{
     path::{Path, PathBuf},
@@ -18,6 +19,7 @@ pub struct FilePlatform {
     pub(super) db: Arc<Db>,
     pub recent_files: Arc<crate::features::recent_files::RecentFiles>,
     directory: PathBuf,
+    protected_files: ExcludedPaths,
     cache: PathBuf,
     pub(super) private_roots: std::result::Result<[PathBuf; 2], String>,
     #[cfg(not(feature = "runtime-media"))]
@@ -43,7 +45,39 @@ impl FilePlatform {
         let private_roots =
             (|| -> std::io::Result<_> { Ok([directory.canonicalize()?, cache.canonicalize()?]) })()
                 .map_err(|error| error.to_string());
+        let data = crate::infrastructure::data_paths::DataPaths::new(&directory);
+        let database = data.database();
+        let mut protected_files = vec![
+            database.clone(),
+            data.prefs(),
+            data.tls_identity(),
+            directory.join("tls.key"),
+            crate::infrastructure::platform::system::consts::AppPaths::tls_key_for(&directory),
+        ];
+        for suffix in ["-wal", "-shm", "-journal"] {
+            let mut path = database.clone().into_os_string();
+            path.push(suffix);
+            protected_files.push(path.into());
+        }
+        // Keep both the configured location and the filesystem's resolved path.
+        for path in protected_files.clone() {
+            if let Ok(path) = std::path::absolute(path)
+                && let Ok(path) = paths::canonical(&path)
+            {
+                protected_files.push(path);
+            }
+        }
+        protected_files.sort_unstable();
+        protected_files.dedup();
         Self {
+            protected_files: ExcludedPaths::new(
+                protected_files.into(),
+                private_roots
+                    .as_ref()
+                    .map(|[root, _]| root.clone())
+                    .unwrap_or_else(|_| directory.clone()),
+                crate::features::services::backups::restore::reserved,
+            ),
             photos: super::photo_catalog::PhotoCatalog::default(),
             recent_files: Arc::new(crate::features::recent_files::RecentFiles::new(
                 db.key_values(),
@@ -130,9 +164,18 @@ impl FilePlatform {
                 .await
                 .map_err(plain_libs::anyhow::Error::msg);
         }
-        tokio::task::spawn_blocking(crate::features::services::files::mounts::native_facts)
+        let mut facts = tokio::task::spawn_blocking(super::mounts::native_facts)
             .await?
-            .map_err(plain_libs::anyhow::Error::msg)
+            .map_err(plain_libs::anyhow::Error::msg)?;
+        let path = self
+            .directory
+            .to_str()
+            .ok_or_else(|| anyhow!("Invalid App Data path"))?;
+        facts
+            .as_array_mut()
+            .ok_or_else(|| anyhow!("Invalid storage volume facts"))?
+            .push(json!({"path": path, "mountPoint": path, "driveType": "APP"}));
+        Ok(facts)
     }
 
     pub async fn mounts(&self) -> Result<plain_libs::serde_json::Value> {
@@ -308,7 +351,54 @@ impl FilePlatform {
         }
         Ok(())
     }
+    pub(super) fn protected_files(&self) -> ExcludedPaths {
+        self.protected_files.clone()
+    }
+
+    pub(super) fn is_protected_file(&self, path: &Path) -> bool {
+        self.protected_files.contains(path)
+    }
+
+    fn check_protected_path(
+        files: &ExcludedPaths,
+        root: &Path,
+        path: &Path,
+        write: bool,
+        recursive: bool,
+    ) -> Result<()> {
+        let resolved = paths::canonical(path)?;
+        if files.contains(path)
+            || files.contains(&resolved)
+            || (recursive && files.contains_files_under(&resolved))
+        {
+            bail!("Private application file");
+        }
+        if write && (resolved == root || (recursive && root.starts_with(&resolved))) {
+            bail!("App Data cannot be moved or deleted");
+        }
+        Ok(())
+    }
+
+    pub(super) async fn protect_tree(&self, path: &str, write: bool) -> Result<()> {
+        let [root, _] = self
+            .private_roots
+            .as_ref()
+            .map_err(|error| anyhow!("{error}"))?;
+        let root = root.clone();
+        let path = PathBuf::from(path);
+        let files = self.protected_files();
+        tokio::task::spawn_blocking(move || {
+            Self::check_protected_path(&files, &root, &path, write, true)
+        })
+        .await?
+    }
+
     pub async fn authorize_task(&self, kind: FileTaskType, ops: &[FileTaskOp]) -> Result<()> {
+        for op in ops {
+            self.protect_tree(&op.src, kind == FileTaskType::Move)
+                .await?;
+            self.protect_tree(&op.dst, true).await?;
+        }
         if self.uses_sdk() {
             let sources = ops.iter().map(|op| op.src.clone()).collect::<Vec<_>>();
             let destinations = ops.iter().map(|op| op.dst.clone()).collect::<Vec<_>>();
@@ -332,30 +422,43 @@ impl FilePlatform {
         self.authorize_paths(&[path.to_owned()], write).await
     }
     pub async fn authorize_paths(&self, paths: &[String], write: bool) -> Result<()> {
-        if paths.iter().any(|path| !Path::new(path).is_absolute()) {
-            bail!("absolute file path required");
-        }
-        if self.uses_sdk() {
+        let sdk = self.uses_sdk();
+        self.check_paths(paths, write, !sdk).await?;
+        if sdk {
             let external = self.external_paths(paths, write).await?;
-            return self.require_external_permission(!external.is_empty()).await;
+            self.require_external_permission(!external.is_empty())
+                .await?;
         }
+        Ok(())
+    }
+
+    pub async fn authorize_metadata_paths(&self, paths: &[String]) -> Result<()> {
+        if self.uses_sdk() {
+            self.authorize_paths(paths, false).await
+        } else {
+            self.check_paths(paths, false, false).await
+        }
+    }
+
+    async fn check_paths(&self, paths: &[String], write: bool, native_access: bool) -> Result<()> {
+        let [root, _] = self
+            .private_roots
+            .as_ref()
+            .map_err(|error| anyhow!("{error}"))?;
+        let root = root.clone();
         let paths = paths.to_vec();
+        let files = self.protected_files();
         tokio::task::spawn_blocking(move || {
-            for path in paths {
-                authorize_native(Path::new(&path), write)?;
+            for path in &paths {
+                let path = Path::new(path);
+                Self::check_protected_path(&files, &root, path, write, false)?;
+                if native_access {
+                    authorize_native(path, write)?;
+                }
             }
             Ok(())
         })
         .await?
-    }
-    pub async fn authorize_metadata_paths(&self, paths: &[String]) -> Result<()> {
-        if paths.iter().any(|path| !Path::new(path).is_absolute()) {
-            bail!("absolute file path required");
-        }
-        if self.uses_sdk() {
-            self.authorize_paths(paths, false).await?;
-        }
-        Ok(())
     }
 
     async fn require_external_permission(&self, needed: bool) -> Result<()> {

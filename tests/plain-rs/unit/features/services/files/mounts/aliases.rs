@@ -49,3 +49,20 @@ fn mount_ids_stay_stable_and_unmounted_partitions_do_not_acquire_aliases() {
         "fsuuid:fixture"
     );
 }
+
+#[test]
+fn app_data_can_neither_inherit_nor_change_its_disks_alias() {
+    let fixture = plain_libs::temporary::tempdir().unwrap();
+    let root = fixture.path();
+    let app = root.join("data");
+    std::fs::create_dir(&app).unwrap();
+    let facts = plain_libs::serde_json::json!([
+        {"id":"fixture-disk","mountPoint":root,"driveType":"INTERNAL_STORAGE"},
+        {"id":"fixture-app","mountPoint":app,"driveType":"APP","alias":"Stale alias"},
+    ]);
+    let db = Db::open(Path::new(":memory:")).unwrap();
+    set_alias(&db, &facts, "fixture-disk", "Archive").unwrap();
+    assert_eq!(apply_aliases(&db, facts.clone()).unwrap()[1]["alias"], "");
+    assert!(set_alias(&db, &facts, "fixture-app", "Rejected").is_err());
+    assert_eq!(apply_aliases(&db, facts).unwrap()[0]["alias"], "Archive");
+}

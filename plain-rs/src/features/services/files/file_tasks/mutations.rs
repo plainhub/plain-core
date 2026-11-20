@@ -73,6 +73,7 @@ impl FileTasks {
     pub async fn delete(&self, path: String) -> Result<Outcome> {
         let _guard = self.deletion_lock.lock().await;
         plain_libs::filesystem::deletion::validate(std::path::Path::new(&path))?;
+        self.hooks.platform.protect_tree(&path, true).await?;
         self.hooks.platform.authorize(&path, true).await?;
         self.delete_prepared(path).await
     }
@@ -88,6 +89,9 @@ impl FileTasks {
         }
         if paths.is_empty() {
             return Ok(0);
+        }
+        for path in &paths {
+            self.hooks.platform.protect_tree(path, true).await?;
         }
         self.hooks.platform.authorize_paths(&paths, true).await?;
         let mut deleted = 0i32;

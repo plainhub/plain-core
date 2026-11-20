@@ -45,10 +45,13 @@ impl AppPaths {
             cache_dir,
             tls_cert: configured_path("PLAINAPP_TLS_CERT")
                 .unwrap_or_else(|| data_dir.join("tls.pem")),
-            tls_key: configured_path("PLAINAPP_TLS_KEY")
-                .unwrap_or_else(|| data_dir.join("tls.key")),
+            tls_key: Self::tls_key_for(&data_dir),
             data_dir,
         })
+    }
+
+    pub(crate) fn tls_key_for(data_dir: &std::path::Path) -> PathBuf {
+        configured_path("PLAINAPP_TLS_KEY").unwrap_or_else(|| data_dir.join("tls.key"))
     }
 }
 

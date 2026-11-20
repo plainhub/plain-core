@@ -7,7 +7,8 @@ use std::{
     cmp::Reverse,
     collections::BTreeMap,
     fs, io,
-    path::Path,
+    path::{Path, PathBuf},
+    sync::Arc,
     time::{Duration, Instant, SystemTime},
 };
 
@@ -34,6 +35,7 @@ pub struct Plan {
     limit: Option<usize>,
     count_only: bool,
     count_children: bool,
+    excluded: ExcludedPaths,
 }
 #[derive(Clone, Serialize)]
 pub struct Page {
@@ -83,10 +85,113 @@ impl Request {
             limit: self.limit,
             count_only: self.count_only,
             count_children: self.count_children,
+            excluded: ExcludedPaths::default(),
         })
     }
 }
+type ReservedName = fn(&str) -> bool;
+
+#[derive(Clone, Default)]
+pub struct ExcludedPaths {
+    files: Arc<[PathBuf]>,
+    reserved: Option<(PathBuf, ReservedName)>,
+}
+
+impl ExcludedPaths {
+    pub fn new(files: Arc<[PathBuf]>, root: PathBuf, reserved: ReservedName) -> Self {
+        Self {
+            files,
+            reserved: Some((root, reserved)),
+        }
+    }
+
+    pub fn contains(&self, path: &Path) -> bool {
+        self.files.iter().any(|file| file == path)
+            || self.reserved.as_ref().is_some_and(|(root, reserved)| {
+                path.strip_prefix(root)
+                    .ok()
+                    .and_then(|relative| relative.iter().next())
+                    .and_then(|name| name.to_str())
+                    .is_some_and(reserved)
+            })
+    }
+
+    pub fn contains_files_under(&self, path: &Path) -> bool {
+        self.files.iter().any(|file| file.starts_with(path))
+            || self
+                .reserved
+                .as_ref()
+                .is_some_and(|(root, _)| root.starts_with(path))
+    }
+
+    fn matches_entry(&self, path: &Path, symlink: bool) -> bool {
+        if self.contains(path) {
+            return true;
+        }
+        let name_matches = path.file_name().is_some_and(|name| {
+            self.files.iter().any(|entry| {
+                entry
+                    .file_name()
+                    .is_some_and(|excluded| name.eq_ignore_ascii_case(excluded))
+            }) || self
+                .reserved
+                .as_ref()
+                .is_some_and(|(_, reserved)| name.to_str().is_some_and(reserved))
+        });
+        (name_matches || (symlink && self.reserved.is_some()))
+            && path
+                .canonicalize()
+                .is_ok_and(|resolved| self.contains(&resolved))
+    }
+
+    fn may_affect_child_count(&self, directory: &Path) -> bool {
+        let matched = |directory: &Path| {
+            self.files
+                .iter()
+                .any(|path| path.parent() == Some(directory))
+                || self
+                    .reserved
+                    .as_ref()
+                    .is_some_and(|(root, _)| root == directory)
+        };
+        matched(directory)
+            || (self.reserved.is_some()
+                && directory.canonicalize().is_ok_and(|path| matched(&path)))
+    }
+}
+
 impl Plan {
+    pub fn exclude_paths(&mut self, paths: ExcludedPaths) {
+        self.excluded = paths;
+    }
+
+    fn count_children(
+        &self,
+        directory: &Path,
+        mut count_entries: impl FnMut(&Path, bool) -> io::Result<usize>,
+    ) -> io::Result<usize> {
+        if !self.excluded.may_affect_child_count(directory) {
+            return count_entries(directory, self.show_hidden);
+        }
+        fs::read_dir(directory)?.try_fold(0, |count, entry| {
+            let entry = entry?;
+            if !self.show_hidden && entry.file_name().to_string_lossy().starts_with('.') {
+                return Ok(count);
+            }
+            let metadata = fs::symlink_metadata(entry.path())?;
+            #[cfg(any(target_os = "macos", windows))]
+            if !self.show_hidden && super::hidden(&metadata) {
+                return Ok(count);
+            }
+            Ok(count
+                + usize::from(
+                    !self
+                        .excluded
+                        .matches_entry(&entry.path(), metadata.is_symlink()),
+                ))
+        })
+    }
+
     pub fn archive_path(&self) -> Option<&str> {
         self.root.split_once("!zip!/").map(|(path, _)| path)
     }
@@ -281,6 +386,9 @@ impl Plan {
             if !self.show_hidden && super::hidden(&meta) {
                 continue;
             }
+            if self.excluded.matches_entry(&path, meta.is_symlink()) {
+                continue;
+            }
             if self.recursive && meta.is_dir() {
                 match fs::read_dir(&path) {
                     Ok(directory) => directories.push(directory),
@@ -342,18 +450,19 @@ impl Plan {
                 ));
             }
             if self.count_children && item.is_dir {
-                item.child_count = match count_entries(Path::new(&item.path), self.show_hidden) {
-                    Ok(count) => i32::try_from(count).unwrap_or(i32::MAX),
-                    Err(e)
-                        if matches!(
-                            e.kind(),
-                            io::ErrorKind::PermissionDenied | io::ErrorKind::NotFound
-                        ) =>
-                    {
-                        0
-                    }
-                    Err(e) => return Err(e),
-                };
+                item.child_count =
+                    match self.count_children(Path::new(&item.path), &mut count_entries) {
+                        Ok(count) => i32::try_from(count).unwrap_or(i32::MAX),
+                        Err(e)
+                            if matches!(
+                                e.kind(),
+                                io::ErrorKind::PermissionDenied | io::ErrorKind::NotFound
+                            ) =>
+                        {
+                            0
+                        }
+                        Err(e) => return Err(e),
+                    };
             }
         }
         Ok(page)

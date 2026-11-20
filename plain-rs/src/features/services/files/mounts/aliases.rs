@@ -29,6 +29,10 @@ pub fn apply_aliases(db: &Db, mut facts: Value) -> Result<Value, String> {
         .map(|volume| (volume.identity, volume.alias))
         .collect::<std::collections::HashMap<_, _>>();
     for mount in mounts {
+        if mount["driveType"] == "APP" {
+            mount["alias"] = Value::String(String::new());
+            continue;
+        }
         let location = mounted_path(mount)
             .map(crate::infrastructure::db::files::available_location)
             .transpose()
@@ -47,6 +51,9 @@ pub fn set_alias(db: &Db, facts: &Value, id: &str, alias: &str) -> Result<(), St
         .iter()
         .find(|mount| mount_id(mount) == id)
         .ok_or("Mount not found")?;
+    if mount["driveType"] == "APP" {
+        return Err("App Data cannot be renamed".into());
+    }
     let path = mounted_path(mount).ok_or("Mounted filesystem volume required")?;
     let volume_id = db
         .register_volume(path)
