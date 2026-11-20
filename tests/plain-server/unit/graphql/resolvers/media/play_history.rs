@@ -6,13 +6,17 @@ use plain_rs::infrastructure::host::bridge::Host;
 use plain_libs::serde_json::{Value, json};
 
 fn fixture(permissions: &[&str]) -> (plain_libs::temporary::TempDir, Arc<Db>, PublicSchema) {
+    fixture_with_host(permissions, Arc::new(Host::default()))
+}
+
+fn fixture_with_host(permissions: &[&str], host: Arc<Host>) -> (plain_libs::temporary::TempDir, Arc<Db>, PublicSchema) {
     let directory = plain_libs::temporary::tempdir().unwrap();
     let prefs = Arc::new(Prefs::load(&directory.path().join("prefs.json")).unwrap());
     prefs.set("api_permissions", permissions).unwrap();
     let db = Arc::new(Db::open(&directory.path().join("db")).unwrap());
     let (events, _) = tokio::sync::broadcast::channel(16);
     let schema = crate::test_support::schema::build(
-        Arc::new(Host::default()),
+        host,
         events,
         prefs,
         db.clone(),
@@ -119,4 +123,30 @@ async fn history_only_exposes_authorized_media_categories() {
         assert_eq!(items.len(), 1);
         assert_eq!(items[0]["mediaId"], expected);
     }
+}
+
+#[tokio::test]
+async fn audio_history_uses_a_supported_system_catalog_sort() {
+    let host = Arc::new(Host::with_startup_config(plain_rs::infrastructure::host::startup::StartupConfig {
+        system_media_catalog: true,
+        ..plain_rs::infrastructure::platform::startup::config()
+    }).unwrap());
+    let (_dir, db, schema) = fixture_with_host(&["AUDIO"], host.clone());
+    play_history::save(&db, DataType::Audio, "17", 375).unwrap();
+    let (generation, mut requests) = host.connect();
+    tokio::spawn(async move {
+        while let Some(request) = requests.recv().await {
+            let params = &request["params"];
+            let sort = plain_libs::serde_json::from_value::<plain_rs::features::prefs::settings::AudioSortBy>(params["sortBy"].clone());
+            let reply = if request["method"] == "systemMediaRows" && params["dataType"] == "AUDIO" && sort.is_ok() {
+                json!({"id": request["id"], "result": [{"id":"17","title":"Generated audio","durationMs":1000}]})
+            } else {
+                json!({"id": request["id"], "error":"Unsupported audio catalog request"})
+            };
+            host.reply(generation, reply).unwrap();
+        }
+    });
+    let result = query(&schema, "type:AUDIO ids:17", 0, 1).await;
+    assert!(result["errors"].is_null(), "{result}");
+    assert_eq!(result["data"]["mediaPlayHistory"][0]["positionMs"], 375);
 }

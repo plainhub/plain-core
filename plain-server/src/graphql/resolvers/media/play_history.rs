@@ -99,7 +99,7 @@ impl MediaPlayHistoryQuery {
                     ctx,
                     kind.data_type(),
                     query,
-                    MediaSortBy::NameAsc,
+                    MediaSortBy::UpdatedAtAsc,
                     0,
                     ids.len() as u32,
                 )
