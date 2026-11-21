@@ -4,6 +4,7 @@ use crate::features::enums::DataType;
 use crate::features::files::trash::{TrashItem, is_trashed_path};
 use crate::features::media::actions::Action;
 use serde::Deserialize;
+use std::collections::HashMap;
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -16,7 +17,6 @@ struct Row {
     mime_type: Option<String>,
 }
 
-pub(super) const PREFIX: &str = "mediastore:";
 
 impl FileTasks {
     pub(super) async fn has_provider_trash(&self) -> Result<bool> {
@@ -27,7 +27,7 @@ impl FileTasks {
                 .contains(&Capability::MediaTrash))
     }
 
-    pub(super) async fn provider_trash(&self) -> Result<Vec<TrashItem>> {
+    pub(super) async fn provider_trash(&self) -> Result<Vec<(TrashItem, DataType)>> {
         if !self.has_provider_trash().await? {
             return Ok(Vec::new());
         }
@@ -64,8 +64,8 @@ impl FileTasks {
                 bail!("Invalid provider trash entry");
             }
             row.path.strip_prefix(&row.volume_root)?;
-            items.push(TrashItem {
-                id: format!("{PREFIX}{}:{}:{path}", kind.kind(), row.id),
+            items.push((TrashItem {
+                id: row.id,
                 original_path: row
                     .path
                     .with_file_name(&row.display_name)
@@ -73,52 +73,41 @@ impl FileTasks {
                     .into_owned(),
                 disk: row.volume_root.to_string_lossy().into_owned(),
                 path: row.path,
-            });
+            }, kind));
         }
         Ok(items)
     }
 
     pub(super) async fn selected_provider_trash(
         &self,
-        references: &[String],
-    ) -> Result<Vec<TrashItem>> {
-        if references
-            .iter()
-            .any(|reference| reference.starts_with(PREFIX))
-        {
-            self.provider_trash().await
-        } else {
-            Ok(Vec::new())
+        paths: &[String],
+    ) -> Result<HashMap<PathBuf, (String, DataType)>> {
+        for path in paths {
+            if !Path::new(path).is_absolute() {
+                bail!("Absolute trash path required");
+            }
         }
+        if paths.iter().all(|path| is_trashed_path(path)) {
+            return Ok(HashMap::new());
+        }
+        Ok(self.provider_trash().await?.into_iter()
+            .map(|(row, kind)| (row.path, (row.id, kind))).collect())
     }
 
-    pub(super) async fn apply_provider_reference(
+    pub(super) async fn apply_provider_path(
         &self,
-        reference: &str,
+        path: &str,
         action: Action,
-        current: &[TrashItem],
+        current: &mut HashMap<PathBuf, (String, DataType)>,
     ) -> Result<Option<bool>> {
-        let Some(parts) = reference.strip_prefix(PREFIX) else {
+        if is_trashed_path(path) {
             return Ok(None);
-        };
-        let mut parts = parts.splitn(3, ':');
-        let kind = parts
-            .next()
-            .and_then(|kind| kind.parse().ok())
-            .and_then(DataType::from_kind)
-            .filter(|kind| kind.media_type_str().is_some())
-            .ok_or_else(|| anyhow!("Invalid media trash type"))?;
-        let id = parts
-            .next()
-            .ok_or_else(|| anyhow!("Missing media identity"))?;
-        let path = parts.next().ok_or_else(|| anyhow!("Missing media path"))?;
-        if !current.iter().any(|row| row.id == reference) {
-            return Ok(Some(false));
         }
+        let Some((id, kind)) = current.remove(Path::new(path)) else {
+            return Ok(Some(false));
+        };
         self.hooks.platform.authorize(path, true).await?;
-        self.media_actions
-            .apply_file(kind, action, id.into(), path.into())
-            .await?;
+        self.media_actions.apply_file(kind, action, id, path.into()).await?;
         Ok(Some(true))
     }
 }

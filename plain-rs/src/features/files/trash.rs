@@ -179,7 +179,7 @@ impl Trash {
             .query_map([],trash_item)?.collect::<plain_libs::rusqlite::Result<Vec<_>>>())?;
         items.extend(local);
         items.retain(|item| item.original_path.to_lowercase().contains(&needle));
-        items.sort_by_cached_key(|item| (item.name().to_lowercase(), item.id.clone()));
+        items.sort_by_cached_key(|item| (item.name().to_lowercase(), item.path.clone()));
         Ok(items.into_iter().skip(offset).take(limit).collect())
     }
 

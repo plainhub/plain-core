@@ -1,0 +1,1 @@
+import{i as e,n as t,r as n}from"./chunk-file-DpqjuO-Z.js";function r(r){let{items:i,getName:a,openTextFile:o,openBrowserFile:s,viewMedia:c,download:l}=r;function u(r){let u=a(r);n(u)&&o?o(r):t(u)?s(r):e(u)?c(i.value,r):l(r)}return{openFile:u}}export{r as t};

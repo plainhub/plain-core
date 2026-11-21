@@ -126,7 +126,7 @@ async fn trash_count_matches_filtered_list_before_pagination() {
     for (query, expected) in [(" ALPHA.TXT ", 1_i32), ("missing-name", 0), ("", 2)] {
         let response = schema
             .execute(&format!(
-                "query {{ trashedFileCount(query: {query:?}) trashedFiles(query: {query:?}, offset: 0, limit: 1) {{ id }} }}"
+                "query {{ trashedFileCount(query: {query:?}) trashedFiles(query: {query:?}, offset: 0, limit: 1) {{ name }} }}"
             ))
             .await;
         assert!(response.errors.is_empty(), "{:?}", response.errors);
@@ -1137,7 +1137,7 @@ async fn trash_file_rows_match_directory_rows_before_the_move() {
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     for (hidden, before) in [false, true].into_iter().zip(expected) {
         let q = format!(
-            "{{trashedFiles(query:\"\",offset:0,limit:20,showHidden:{hidden}){{file{{{fields}}}}}}}"
+            "{{trashedFiles(query:\"\",offset:0,limit:20,showHidden:{hidden}){{{fields}}}}}"
         );
         let response = schema.execute(&q).await;
         assert!(response.errors.is_empty(), "{:?}", response.errors);
@@ -1146,7 +1146,7 @@ async fn trash_file_rows_match_directory_rows_before_the_move() {
         assert_eq!(rows.len(), before.as_array().unwrap().len());
         for item in before.as_array().unwrap() {
             assert!(
-                rows.iter().any(|row| row["file"] == *item),
+                rows.iter().any(|row| row == item),
                 "{item}: {rows:?}"
             );
         }
@@ -1154,7 +1154,7 @@ async fn trash_file_rows_match_directory_rows_before_the_move() {
 }
 
 #[tokio::test]
-async fn trash_pages_include_hidden_names_and_order_duplicates_by_id() {
+async fn trash_pages_include_hidden_names_and_order_duplicates_by_path() {
     let (dir, schema) = fixture(GRANTED);
     let root = sample_tree(dir.path());
     let paths = [root.join("nested/twin"), root.join(".hidden"), root.join("twin")];
@@ -1166,16 +1166,16 @@ async fn trash_pages_include_hidden_names_and_order_duplicates_by_id() {
         plain_libs::serde_json::to_string(&paths).unwrap()
     )).await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
-    let mut ids = Vec::new();
+    let mut paths = Vec::new();
     for (offset, name) in [".hidden", "twin", "twin"].into_iter().enumerate() {
         let response = schema.execute(&format!(
-            "{{trashedFiles(query:\"\",offset:{offset},limit:1){{id file{{name}}}}}}"
+            "{{trashedFiles(query:\"\",offset:{offset},limit:1){{name path}}}}"
         )).await;
         assert!(response.errors.is_empty(), "{:?}", response.errors);
         let data = response.data.into_json().unwrap();
         let row = &data["trashedFiles"][0];
-        assert_eq!(row["file"]["name"], name);
-        ids.push(row["id"].as_str().unwrap().to_owned());
+        assert_eq!(row["name"], name);
+        paths.push(row["path"].as_str().unwrap().to_owned());
     }
-    assert!(ids[1] < ids[2]);
+    assert!(paths[1] < paths[2]);
 }

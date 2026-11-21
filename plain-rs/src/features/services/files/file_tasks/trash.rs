@@ -1,4 +1,4 @@
-use crate::features::files::trash::{Trash, TrashItem};
+use crate::features::files::trash::Trash;
 use crate::features::services::files::file_tasks::*;
 use plain_libs::rusqlite::OptionalExtension;
 
@@ -87,13 +87,13 @@ impl FileTasks {
         let _guard = self.deletion_lock.lock().await;
         let trash = Trash::new(self.hooks.platform.db.clone());
         let mut count = 0;
-        let current = self.selected_provider_trash(&references).await?;
+        let mut current = self.selected_provider_trash(&references).await?;
         for reference in references {
             if let Some(restored) = self
-                .apply_provider_reference(
+                .apply_provider_path(
                     &reference,
                     crate::features::media::actions::Action::Restore,
-                    &current,
+                    &mut current,
                 )
                 .await?
             {
@@ -132,15 +132,15 @@ impl FileTasks {
     }
     pub async fn delete_trashed(&self, references: Vec<String>) -> Result<usize> {
         let _guard = self.deletion_lock.lock().await;
-        let current = self.selected_provider_trash(&references).await?;
+        let mut current = self.selected_provider_trash(&references).await?;
         let trash = Trash::new(self.hooks.platform.db.clone());
         let mut count = 0;
         for reference in references {
             if let Some(deleted) = self
-                .apply_provider_reference(
+                .apply_provider_path(
                     &reference,
                     crate::features::media::actions::Action::Delete,
-                    &current,
+                    &mut current,
                 )
                 .await?
             {
@@ -167,14 +167,22 @@ impl FileTasks {
         offset: usize,
         limit: usize,
         query: String,
-    ) -> Result<Vec<TrashItem>> {
+        show_hidden: bool,
+    ) -> Result<Vec<plain_libs::filesystem::record::FileRecord>> {
         let db = self.hooks.platform.db.clone();
-        let provider = self.provider_trash().await?;
-        tokio::task::spawn_blocking(move || {
+        let provider = self.provider_trash().await?.into_iter().map(|(row, _)| row).collect();
+        let rows = tokio::task::spawn_blocking(move || {
             let trash = Trash::new(db);
             trash.list_with(provider, offset, limit, &query)
         })
-        .await?
+        .await??;
+        let platform = &self.hooks.platform;
+        let paths = rows.iter().map(|row| row.path.to_string_lossy().into_owned()).collect::<Vec<_>>();
+        platform.authorize_metadata_paths(&paths).await?;
+        let excluded = platform.protected_files();
+        tokio::task::spawn_blocking(move || rows.into_iter().map(|row| {
+            Ok(excluded.file_row(&row.path, row.name().to_owned(), show_hidden)?)
+        }).collect()).await?
     }
     pub async fn trash_count(&self, query: String) -> Result<usize> {
         let db = self.hooks.platform.db.clone();
@@ -183,7 +191,7 @@ impl FileTasks {
             .provider_trash()
             .await?
             .into_iter()
-            .filter(|row| row.original_path.to_lowercase().contains(&needle))
+            .filter(|(row, _)| row.original_path.to_lowercase().contains(&needle))
             .count();
         Ok(provider
             + tokio::task::spawn_blocking(move || Trash::new(db).trash_count(&query)).await??)

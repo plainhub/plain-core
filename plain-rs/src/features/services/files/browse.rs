@@ -75,16 +75,6 @@ async fn authorize(
         .map_err(|error| error.to_string())
 }
 
-pub async fn file_row(
-    platform: &crate::features::services::files::platform::FilePlatform,
-    path: std::path::PathBuf,
-    name: String,
-    show_hidden: bool,
-) -> plain_libs::anyhow::Result<FileRecord> {
-    let excluded = platform.protected_files();
-    Ok(tokio::task::spawn_blocking(move || excluded.file_row(&path, name, show_hidden)).await??)
-}
-
 pub async fn stat_record(
     platform: &crate::features::services::files::platform::FilePlatform,
     path: &str,

@@ -1,30 +1,10 @@
 use plain_rs::features::access::AccessFeature;
 use crate::graphql::types::ActionResult;
 use crate::http::auth::public_gate;
-use plain_graphql::{Context, ID, Object, Result};
+use plain_graphql::{Context, Object, Result};
 
-use plain_rs::features::files::trash::TrashItem;
 use plain_rs::features::services::files::file_tasks::FileTasks;
 use std::sync::Arc;
-
-struct TrashedFile {
-    item: TrashItem,
-    show_hidden: bool,
-}
-
-#[Object]
-impl TrashedFile {
-    async fn id(&self) -> ID {
-        ID::from(self.item.id.as_str())
-    }
-
-    async fn file(&self, ctx: &Context<'_>) -> Result<super::types::File> {
-        let platform = ctx.data::<Arc<plain_rs::features::services::files::platform::FilePlatform>>()?;
-        Ok(plain_rs::features::services::files::browse::file_row(
-            platform, self.item.path.clone(), self.item.name().to_owned(), self.show_hidden,
-        ).await?.into())
-    }
-}
 
 fn tasks<'a>(ctx: &'a Context<'_>) -> Result<&'a Arc<FileTasks>> {
     public_gate::require(
@@ -45,14 +25,9 @@ impl TrashQuery {
         offset: i32,
         limit: i32,
         #[graphql(default)] show_hidden: bool,
-    ) -> Result<Vec<TrashedFile>> {
-        let rows = tasks(ctx)?.trashed(offset.try_into()?, limit.try_into()?, query).await?;
-        if ctx.look_ahead().field("file").exists() && !rows.is_empty() {
-            let paths = rows.iter().map(|row| row.path.to_string_lossy().into_owned()).collect::<Vec<_>>();
-            ctx.data::<Arc<plain_rs::features::services::files::platform::FilePlatform>>()?
-                .authorize_metadata_paths(&paths).await?;
-        }
-        Ok(rows.into_iter().map(|item| TrashedFile { item, show_hidden }).collect())
+    ) -> Result<Vec<super::types::File>> {
+        let rows = tasks(ctx)?.trashed(offset.try_into()?, limit.try_into()?, query, show_hidden).await?;
+        Ok(rows.into_iter().map(Into::into).collect())
     }
     async fn trashed_file_count(&self, ctx: &Context<'_>, query: String) -> Result<i32> {
         Ok(tasks(ctx)?.trash_count(query).await?.try_into()?)

@@ -334,13 +334,12 @@ async fn local_desktop_image_trash_is_reversible_and_not_exposed_to_remote_clien
     assert!(physical.components().any(|part| part.as_os_str()==".plain-trash"));
     assert_eq!(std::fs::read(physical).unwrap(), b"original image bytes");
     let file_trash = native.execute(Request::new(
-        r#"{ trashedFiles(query:"photo.jpg",offset:0,limit:10) { id file { name path } } }"#
+        r#"{ trashedFiles(query:"photo.jpg",offset:0,limit:10) { name path } }"#
     )).await;
     assert!(file_trash.errors.is_empty(), "{:?}", file_trash.errors);
     let listed = file_trash.data.into_json().unwrap();
-    assert_eq!(listed["trashedFiles"][0]["id"], id);
-    assert_eq!(listed["trashedFiles"][0]["file"]["path"], physical.to_string_lossy().as_ref());
-    assert_eq!(listed["trashedFiles"][0]["file"]["name"], "photo.jpg");
+    assert_eq!(listed["trashedFiles"][0]["path"], physical.to_string_lossy().as_ref());
+    assert_eq!(listed["trashedFiles"][0]["name"], "photo.jpg");
     let active = native.execute(list(false)).await;
     assert!(active.errors.is_empty(), "{:?}", active.errors);
     assert_eq!(active.data.into_json().unwrap()["images"], json!([]));
