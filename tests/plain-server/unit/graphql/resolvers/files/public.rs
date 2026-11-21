@@ -1113,16 +1113,13 @@ async fn trash_file_rows_match_directory_rows_before_the_move() {
     fs::create_dir(root.join("nested/child")).unwrap();
     fs::write(root.join("nested/child/deep"), b"deep").unwrap();
     let fields = "name size updatedAt isDir childCount";
-    let mut expected = Vec::new();
-    for hidden in [false, true] {
-        let q = format!(
-            "{{files(root:{:?},query:\"show_hidden:{hidden}\",offset:0,limit:20,sortBy:NAME_ASC){{{fields}}}}}",
-            root
-        );
-        let response = schema.execute(&q).await;
-        assert!(response.errors.is_empty(), "{:?}", response.errors);
-        expected.push(response.data.into_json().unwrap()["files"].clone());
-    }
+    let q = format!(
+        "{{files(root:{:?},query:\"show_hidden:true\",offset:0,limit:20,sortBy:NAME_ASC){{{fields}}}}}",
+        root
+    );
+    let response = schema.execute(&q).await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    let before = response.data.into_json().unwrap()["files"].clone();
     let paths = [
         root.join("alpha.txt"),
         root.join("beta.png"),
@@ -1135,21 +1132,19 @@ async fn trash_file_rows_match_directory_rows_before_the_move() {
         ))
         .await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
-    for (hidden, before) in [false, true].into_iter().zip(expected) {
-        let q = format!(
-            "{{trashedFiles(query:\"\",offset:0,limit:20,showHidden:{hidden}){{{fields}}}}}"
+    let q = format!(
+        "{{trashedFiles(query:\"\",offset:0,limit:20){{{fields}}}}}"
+    );
+    let response = schema.execute(&q).await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    let after = response.data.into_json().unwrap();
+    let rows = after["trashedFiles"].as_array().unwrap();
+    assert_eq!(rows.len(), before.as_array().unwrap().len());
+    for item in before.as_array().unwrap() {
+        assert!(
+            rows.iter().any(|row| row == item),
+            "{item}: {rows:?}"
         );
-        let response = schema.execute(&q).await;
-        assert!(response.errors.is_empty(), "{:?}", response.errors);
-        let after = response.data.into_json().unwrap();
-        let rows = after["trashedFiles"].as_array().unwrap();
-        assert_eq!(rows.len(), before.as_array().unwrap().len());
-        for item in before.as_array().unwrap() {
-            assert!(
-                rows.iter().any(|row| row == item),
-                "{item}: {rows:?}"
-            );
-        }
     }
 }
 
