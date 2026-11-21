@@ -193,7 +193,6 @@ extend type Mutation {
 	accident — it is refused before the platform is asked.
 	"""
 	deleteMediaItems(type: MediaDataType!, query: String!): ActionResult!
-	deleteTrashedFile(path: String!): Boolean!
 	deleteTrashedFiles(paths: [String!]!): ActionResult!
 	extractZipArchive(path: String!, target: String!): String!
 	mergeAppFileChunks(fileId: String!, totalChunks: Int!, fileName: String!, totalSize: Long!): MergeTask!
