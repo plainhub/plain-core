@@ -62,16 +62,35 @@ pub(super) fn containing_from_mounts(
     uuid_directory: &Path,
     boot_id: &Path,
 ) -> Result<Volume> {
-    let mount = mounts
-        .into_iter()
-        .filter(|mount| path.starts_with(&mount.path))
-        .max_by_key(|mount| mount.path.components().count())
-        .context("No containing filesystem mount")?;
+    let mount = containing_mount(path, mounts)?;
     #[cfg(target_os = "android")]
-    if mount.path.starts_with("/storage") && matches!(mount.fs_type.as_str(), "fuse" | "sdcardfs" | "esdfs") {
+    if android_shared_mount(&mount) {
         return android_storage_volume(mount, path);
     }
     volume(mount, uuid_directory, boot_id)
+}
+
+fn containing_mount(path: &Path, mounts: Vec<Mount>) -> Result<Mount> {
+    mounts
+        .into_iter()
+        .filter(|mount| path.starts_with(&mount.path))
+        .max_by_key(|mount| mount.path.components().count())
+        .context("No containing filesystem mount")
+}
+
+#[cfg(any(target_os = "android", test))]
+fn android_shared_mount(mount: &Mount) -> bool {
+    mount.path.starts_with("/storage") && matches!(mount.fs_type.as_str(), "fuse" | "sdcardfs" | "esdfs")
+}
+
+#[cfg(target_os = "android")]
+pub fn has_synthesized_permissions(path: &Path) -> Result<bool> {
+    let mount = containing_mount(path, mounts()?)?;
+    if !android_shared_mount(&mount) {
+        return Ok(false);
+    }
+    android_storage_volume(mount, path)?;
+    Ok(true)
 }
 
 #[cfg(any(target_os = "android", test))]

@@ -30,7 +30,7 @@ struct TrashedFile {
     original_path: String,
     disk: String,
     trash_rel_path: String,
-    deleted_at: Instant,
+    deleted_at: Option<Instant>,
     uid: i32,
     gid: i32,
     mode: i32,
@@ -58,10 +58,10 @@ impl TryFrom<TrashItem> for TrashedFile {
             original_path: row.original_path,
             disk: row.disk,
             trash_rel_path: row.trash_rel_path,
-            deleted_at: Instant(
-                plain_libs::chrono::DateTime::from_timestamp(row.deleted_at, 0)
-                    .ok_or("invalid trash timestamp")?,
-            ),
+            deleted_at: row.deleted_at.map(|time| {
+                plain_libs::chrono::DateTime::from_timestamp(time, 0)
+                    .map(Instant).ok_or("invalid trash timestamp")
+            }).transpose()?,
             uid: row.uid.try_into()?,
             gid: row.gid.try_into()?,
             mode: row.mode.try_into()?,
@@ -124,7 +124,10 @@ impl TrashMutation {
             affected_count: tasks(ctx)?.restore_paths(paths).await?.try_into()?,
         })
     }
+    async fn delete_trashed_files(&self, ctx: &Context<'_>, paths: Vec<String>) -> Result<ActionResult> {
+        Ok(ActionResult { affected_count: tasks(ctx)?.delete_trashed(paths).await?.try_into()? })
+    }
     async fn delete_trashed_file(&self, ctx: &Context<'_>, path: String) -> Result<bool> {
-        Ok(tasks(ctx)?.delete_trashed(path).await?)
+        Ok(tasks(ctx)?.delete_trashed(vec![path]).await? != 0)
     }
 }

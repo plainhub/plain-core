@@ -225,8 +225,23 @@ impl Runtime {
                 media_scans.clone(),
             ),
         );
+        let media_actions = Arc::new(
+            crate::features::services::files::media_actions::MediaActions::new(
+                #[cfg(feature = "runtime-media")]
+                media_scans.clone(),
+                file_platform.clone(),
+                db.clone(),
+                host.clone(),
+                audio.clone(),
+                index.clone(),
+                prefs.clone(),
+                events.clone(),
+                duration_cache.clone(),
+            ),
+        );
         let files = Arc::new(
             crate::features::services::files::file_tasks::FileTasks::new(
+                media_actions.clone(),
                 file_platform.clone(),
                 events.clone(),
                 audio.clone(),
@@ -287,20 +302,6 @@ impl Runtime {
             directory.clone(),
             &host,
         ));
-        let media_actions = Arc::new(
-            crate::features::services::files::media_actions::MediaActions::new(
-                #[cfg(feature = "runtime-media")]
-                media_scans.clone(),
-                file_platform.clone(),
-                db.clone(),
-                host.clone(),
-                audio.clone(),
-                index.clone(),
-                prefs.clone(),
-                events.clone(),
-                duration_cache.clone(),
-            ),
-        );
         device.fixed_info()?;
         let mms = crate::features::services::sms::mms::Runtime::new(
             host.clone(),

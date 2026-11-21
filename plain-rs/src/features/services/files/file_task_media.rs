@@ -19,7 +19,7 @@ struct Snapshot {
     root: String,
     items: Vec<Identity>,
 }
-async fn lookup(platform: &FilePlatform, paths: &[String]) -> Result<Vec<Identity>> {
+pub(super) async fn lookup(platform: &FilePlatform, paths: &[String]) -> Result<Vec<Identity>> {
     let rows = platform.identities(paths).await?;
     validate(&rows, paths)?;
     Ok(rows)

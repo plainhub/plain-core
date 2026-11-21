@@ -1,5 +1,5 @@
 use crate::features::access::AccessFeature;
-mod media_rows;
+pub(super) mod media_rows;
 pub(super) mod paths;
 
 use crate::features::files::tasks::{FileTaskOp, FileTaskType};

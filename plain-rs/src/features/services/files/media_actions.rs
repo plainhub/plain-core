@@ -141,7 +141,7 @@ impl MediaActions {
         };
         for batch in ids.chunks(500) {
             let result = self
-                .apply(kind, action, batch.to_vec(), from_trash, gallery_trash, dest_dir.clone())
+                .apply(kind, action, batch.to_vec(), from_trash, gallery_trash, dest_dir.clone(), None)
                 .await?;
             completed.affected_count = completed
                 .affected_count
@@ -152,6 +152,21 @@ impl MediaActions {
         Ok(completed)
     }
 
+    pub(super) async fn apply_file(
+        &self,
+        kind: DataType,
+        action: Action,
+        id: String,
+        expected_path: String,
+    ) -> Result<()> {
+        let from_trash = matches!(action, Action::Restore | Action::Delete);
+        let result = self.apply(kind, action, vec![id], from_trash, false, String::new(), Some(expected_path)).await?;
+        if result.affected_count != 1 {
+            plain_libs::anyhow::bail!("Media provider did not complete the selected file operation");
+        }
+        Ok(())
+    }
+
     async fn apply(
         &self,
         r#type: DataType,
@@ -160,6 +175,7 @@ impl MediaActions {
         from_trash: bool,
         gallery_trash: bool,
         dest_dir: String,
+        expected_path: Option<String>,
     ) -> Result<Completed> {
         let invalid = Outcome {
             successful: Vec::new(),
@@ -184,6 +200,7 @@ impl MediaActions {
             from_trash,
             gallery_trash,
             dest_dir,
+            expected_path,
             #[cfg(feature = "runtime-media")]
             self.scans.clone(),
         )

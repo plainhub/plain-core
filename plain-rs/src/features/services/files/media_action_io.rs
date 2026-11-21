@@ -67,6 +67,7 @@ impl Operation {
         from_trash: bool,
         gallery_trash: bool,
         destination: String,
+        expected_path: Option<String>,
         #[cfg(feature = "runtime-media")] scans: Arc<
             crate::features::services::files::media_scans::MediaScans,
         >,
@@ -81,6 +82,7 @@ impl Operation {
                     &ids,
                     from_trash,
                     &destination,
+                    expected_path.as_deref(),
                 )
                 .await?,
             )

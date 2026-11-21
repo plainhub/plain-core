@@ -11,24 +11,22 @@ struct Row {
     mime_type: Option<String>,
 }
 
+pub(in crate::features::services::files) fn kind(provider_type: i32, mime: Option<&str>) -> Option<DataType> {
+    match provider_type {
+        1 => Some(DataType::Image),
+        2 => Some(DataType::Audio),
+        3 => Some(DataType::Video),
+        _ if mime.is_some_and(plain_libs::media::documents::is_document_mime) => Some(DataType::Doc),
+        _ => None,
+    }
+}
+
 pub(super) fn identities(facts: plain_libs::serde_json::Value) -> plain_libs::anyhow::Result<Vec<Identity>> {
     let rows: Vec<Row> = plain_libs::serde_json::from_value(facts)?;
     Ok(rows
         .into_iter()
         .filter_map(|row| {
-            let kind = match row.provider_type {
-                1 => DataType::Image,
-                2 => DataType::Audio,
-                3 => DataType::Video,
-                _ if row
-                    .mime_type
-                    .as_deref()
-                    .is_some_and(plain_libs::media::documents::is_document_mime) =>
-                {
-                    DataType::Doc
-                }
-                _ => return None,
-            };
+            let kind = kind(row.provider_type, row.mime_type.as_deref())?;
             Some(Identity {
                 media_type: kind.kind(),
                 file_id: row.id,

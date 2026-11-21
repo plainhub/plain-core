@@ -8,7 +8,7 @@ use plain_libs::rusqlite::OptionalExtension;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 #[cfg(unix)]
-use std::os::unix::fs::{MetadataExt, PermissionsExt};
+use std::os::unix::fs::{DirBuilderExt, MetadataExt};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, LazyLock as Lazy, Mutex};
 
@@ -29,7 +29,8 @@ pub struct TrashItem {
     pub original_path: String,
     pub disk: String,
     pub trash_rel_path: String,
-    pub deleted_at: i64,
+    pub path: PathBuf,
+    pub deleted_at: Option<i64>,
     pub uid: u32,
     pub gid: u32,
     pub mode: u32,
@@ -79,7 +80,8 @@ fn trash_item(row: &plain_libs::rusqlite::Row<'_>) -> plain_libs::rusqlite::Resu
         original_path: row.get(2)?,
         disk,
         trash_rel_path: relative,
-        deleted_at,
+        path: absolute.to_owned(),
+        deleted_at: Some(deleted_at),
         uid,
         gid,
         mode,
@@ -207,7 +209,7 @@ impl Trash {
     }
 
     pub fn physical_path(item: &TrashItem) -> PathBuf {
-        abs_trash_path(&item.disk, &item.trash_rel_path)
+        item.path.clone()
     }
 
     pub fn list_trash(
@@ -217,9 +219,14 @@ impl Trash {
         text: &str,
         order: SortOrder,
     ) -> Result<Vec<TrashItem>> {
+        self.list_with(Vec::new(), offset, limit, text, order)
+    }
+
+    pub fn list_with(&self, mut items: Vec<TrashItem>, offset: usize, limit: usize, text: &str, order: SortOrder) -> Result<Vec<TrashItem>> {
         let needle = text.trim().to_lowercase();
-        let mut items=self.db.with_conn(|conn|conn.prepare(&format!("SELECT id,path,original_path,kind,trashed_at,size_bytes FROM file_catalog WHERE {TOP_LEVEL}"))?
+        let local=self.db.with_conn(|conn|conn.prepare(&format!("SELECT id,path,original_path,kind,trashed_at,size_bytes FROM file_catalog WHERE {TOP_LEVEL}"))?
             .query_map([],trash_item)?.collect::<plain_libs::rusqlite::Result<Vec<_>>>())?;
+        items.extend(local);
         items.retain(|item| item.original_path.to_lowercase().contains(&needle));
         let name = |item: &TrashItem| {
             Path::new(&item.original_path)
@@ -234,7 +241,7 @@ impl Trash {
             let directories = (b.kind == "dir").cmp(&(a.kind == "dir"));
             let order = match order {
                 SortOrder::DeletedAtNewest => b.deleted_at.cmp(&a.deleted_at),
-                SortOrder::DeletedAtOldest => a.deleted_at.cmp(&b.deleted_at),
+                SortOrder::DeletedAtOldest => a.deleted_at.is_none().cmp(&b.deleted_at.is_none()).then(a.deleted_at.cmp(&b.deleted_at)),
                 SortOrder::NameAsc => directories.then_with(|| name(a).cmp(&name(b))),
                 SortOrder::NameDesc => directories.then_with(|| name(b).cmp(&name(a))),
                 SortOrder::SizeAsc => {
@@ -290,11 +297,11 @@ fn abs_trash_path(disk: &str, rel: &str) -> PathBuf {
 
 fn prepare_trash_parent(disk: &str, relative: &str) -> std::io::Result<()> {
     let root = trash_root(disk);
-    match std::fs::create_dir(&root) {
-        Ok(()) => {
-            #[cfg(unix)]
-            std::fs::set_permissions(&root, std::fs::Permissions::from_mode(0o700))?;
-        }
+    let mut builder = std::fs::DirBuilder::new();
+    #[cfg(unix)]
+    builder.mode(0o700);
+    match builder.create(&root) {
+        Ok(()) => {}
         Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
         Err(error) => return Err(error),
     }
@@ -307,10 +314,17 @@ fn prepare_trash_parent(disk: &str, relative: &str) -> std::io::Result<()> {
     }
     #[cfg(unix)]
     if metadata.uid() != unsafe { libc::geteuid() } || metadata.mode() & 0o077 != 0 {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::InvalidInput,
-            "Trash root must be private and owned by the current user",
-        ));
+        #[cfg(target_os = "android")]
+        let synthesized = plain_libs::platform::volumes::linux::has_synthesized_permissions(&root)
+            .map_err(std::io::Error::other)?;
+        #[cfg(not(target_os = "android"))]
+        let synthesized = false;
+        if !synthesized {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "Trash root must be private and owned by the current user",
+            ));
+        }
     }
     let mut parent = root;
     for component in Path::new(relative)
@@ -454,7 +468,7 @@ pub enum SortOrder {
 }
 
 pub fn fill_stats(it: &mut TrashItem) -> Result<()> {
-    let abs = abs_trash_path(&it.disk, &it.trash_rel_path);
+    let abs = &it.path;
     if it.kind == "dir" {
         if abs.exists() {
             it.size = Some(dir_size(&abs));
@@ -463,10 +477,9 @@ pub fn fill_stats(it: &mut TrashItem) -> Result<()> {
             it.size = Some(0);
             it.entry_count = Some(0);
         }
-    } else if abs.exists() {
-        if let Ok(m) = std::fs::symlink_metadata(&abs) {
-            it.size = Some(m.len() as i64);
-        }
+    } else if let Ok(m) = std::fs::symlink_metadata(abs) {
+        it.size = Some(m.len() as i64);
+        (it.uid, it.gid, it.mode) = owner_mode(&m);
     }
     Ok(())
 }

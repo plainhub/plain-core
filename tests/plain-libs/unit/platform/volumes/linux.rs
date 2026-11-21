@@ -137,3 +137,19 @@ fn android_shared_storage_keeps_distinct_identities_across_remounts() {
             .is::<Unavailable>()
     );
 }
+
+#[test]
+fn synthesized_android_permissions_require_a_shared_storage_mount() {
+    for (path, filesystem, expected) in [
+        ("/storage/emulated", "fuse", true),
+        ("/storage/ABCD-1234", "sdcardfs", true),
+        ("/storage/ABCD-1234", "esdfs", true),
+        ("/storage/emulated", "ext4", false),
+        ("/mnt/private", "fuse", false),
+    ] {
+        let mut entry = mount("/dev/test-drive");
+        entry.path = path.into();
+        entry.fs_type = filesystem.into();
+        assert_eq!(android_shared_mount(&entry), expected);
+    }
+}

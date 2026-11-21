@@ -1,4 +1,6 @@
 use super::*;
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
 use plain_libs::chrono::TimeZone;
 
 fn store(directory: &Path) -> Trash {
@@ -232,4 +234,16 @@ fn nested_trash_symlinks_are_rejected_before_creating_any_outside_directories() 
         prepare_trash_parent(directory.path().to_str().unwrap(), "data/2026/01/file").unwrap_err();
     assert_eq!(error.kind(), std::io::ErrorKind::InvalidInput);
     assert!(!outside.join("2026").exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn a_shared_trash_root_on_a_posix_volume_is_rejected() {
+    let directory = plain_libs::temporary::tempdir().unwrap();
+    let root = directory.path().join(".plain-trash");
+    std::fs::create_dir(&root).unwrap();
+    std::fs::set_permissions(&root, std::fs::Permissions::from_mode(0o770)).unwrap();
+    let error = prepare_trash_parent(directory.path().to_str().unwrap(), "data/file").unwrap_err();
+    assert_eq!(error.kind(), std::io::ErrorKind::InvalidInput);
+    assert!(!root.join("data").exists());
 }

@@ -193,7 +193,9 @@ async fn provider_delete_uses_two_batch_exchanges_and_no_business_action_on_host
                 assert!(write.get("action").is_none());
             }
             host.reply(generation, json!({"id":request["id"],"result":[{"id":"1","count":1,"row":null},{"id":"2","count":0,"row":null}]})).unwrap();
-            assert!(requests.try_recv().is_err());
+            let stale = requests.recv().await.unwrap();
+            assert_eq!(stale["method"], "mediaProviderRows");
+            host.reply(generation, json!({"id":stale["id"],"result":[{"id":"2","path":"/moved","trashed":true,"mimeType":"text/plain","volumeRoot":null}]})).unwrap();
         })
     };
     let outcome = run(
@@ -204,10 +206,13 @@ async fn provider_delete_uses_two_batch_exchanges_and_no_business_action_on_host
         &["1".into(), "2".into()],
         false,
         "",
+        None,
     )
     .await
     .unwrap();
     assert_eq!(outcome.successful.len(), 1);
     assert_eq!(outcome.failed_ids, vec!["2"]);
+    let stale = run(&host, &platform, DataType::Doc, Action::Delete, &["2".into()], true, "", Some("/two")).await;
+    assert!(matches!(stale, Err(error) if error == "Selected media path changed"));
     worker.await.unwrap();
 }

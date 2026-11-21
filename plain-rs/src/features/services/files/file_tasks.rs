@@ -19,6 +19,7 @@ use std::{
 };
 use tokio::sync::broadcast;
 pub struct FileTasks {
+    media_actions: Arc<super::media_actions::MediaActions>,
     completion: Arc<tokio::sync::Notify>,
     deletion_lock: tokio::sync::Mutex<()>,
     events: broadcast::Sender<WsEvent>,
@@ -27,6 +28,7 @@ pub struct FileTasks {
 }
 impl FileTasks {
     pub fn new(
+        media_actions: Arc<super::media_actions::MediaActions>,
         platform: Arc<FilePlatform>,
         events: broadcast::Sender<WsEvent>,
         audio: Arc<crate::features::services::audio::host::Audio>,
@@ -35,6 +37,7 @@ impl FileTasks {
         duration_cache: Arc<crate::features::media::duration_cache::DurationCache>,
     ) -> Self {
         Self {
+            media_actions,
             completion: Arc::new(tokio::sync::Notify::new()),
             hooks: Arc::new(NativeHooks {
                 platform,
@@ -522,6 +525,7 @@ impl NativeHooks {
 
 pub mod mutations;
 
+mod provider_trash;
 mod trash;
 
 #[cfg(test)]

@@ -52,6 +52,7 @@ pub async fn run(
     ids: &[String],
     from_trash: bool,
     destination: &str,
+    expected_path: Option<&str>,
 ) -> Result<Outcome, String> {
     let rows: Vec<Row> = plain_libs::serde_json::from_value(
         host.call(
@@ -61,6 +62,11 @@ pub async fn run(
         .await?,
     )
     .map_err(|error| error.to_string())?;
+    if let Some(path) = expected_path {
+        if rows.len() != 1 || rows[0].path != path {
+            return Err("Selected media path changed".into());
+        }
+    }
     let destination = if action == Action::Move {
         platform
             .authorize(destination, true)
