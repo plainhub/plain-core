@@ -24,6 +24,7 @@ pub enum TrashedFileType {
     Dir,
 }
 #[derive(SimpleObject)]
+#[graphql(complex)]
 struct TrashedFile {
     id: ID,
     r#type: TrashedFileType,
@@ -39,6 +40,16 @@ struct TrashedFile {
     display_name: String,
     trashed_path: String,
 }
+#[plain_graphql::ComplexObject]
+impl TrashedFile {
+    async fn file(&self, ctx: &Context<'_>, show_hidden: bool) -> Result<super::types::File> {
+        let platform = ctx.data::<Arc<plain_rs::features::services::files::platform::FilePlatform>>()?;
+        Ok(plain_rs::features::services::files::browse::file_row(
+            platform, self.trashed_path.clone().into(), self.display_name.clone(), show_hidden,
+        ).await?.into())
+    }
+}
+
 impl TryFrom<TrashItem> for TrashedFile {
     type Error = plain_graphql::Error;
     fn try_from(row: TrashItem) -> Result<Self> {
@@ -99,12 +110,17 @@ impl TrashQuery {
             TrashedFileSortBy::NameAsc => SortOrder::NameAsc,
             TrashedFileSortBy::NameDesc => SortOrder::NameDesc,
         };
-        tasks(ctx)?
-            .trashed(offset.try_into()?, limit.try_into()?, query, order)
-            .await?
-            .into_iter()
-            .map(TryInto::try_into)
-            .collect()
+        let fields = ctx.look_ahead();
+        let rows = tasks(ctx)?.trashed(
+            offset.try_into()?, limit.try_into()?, query, order,
+            ["sizeBytes", "entryCount", "uid", "gid", "mode"].iter().any(|field| fields.field(field).exists()),
+        ).await?;
+        if fields.field("file").exists() && !rows.is_empty() {
+            let paths = rows.iter().map(|row| row.path.to_string_lossy().into_owned()).collect::<Vec<_>>();
+            ctx.data::<Arc<plain_rs::features::services::files::platform::FilePlatform>>()?
+                .authorize_metadata_paths(&paths).await?;
+        }
+        rows.into_iter().map(TryInto::try_into).collect()
     }
     async fn trashed_file_count(&self, ctx: &Context<'_>, query: String) -> Result<i32> {
         Ok(tasks(ctx)?.trash_count(query).await?.try_into()?)

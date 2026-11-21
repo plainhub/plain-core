@@ -71,6 +71,29 @@ pub struct File {
     pub child_count: i32,
 }
 
+impl From<plain_libs::filesystem::record::FileRecord> for File {
+    fn from(record: plain_libs::filesystem::record::FileRecord) -> Self {
+        Self {
+            resource_url: None,
+            permission: record.permission,
+            file_id: (!record.file_id.is_empty()).then(|| record.file_id.into()),
+            name: record.name,
+            path: record.path,
+            created_at: record
+                .created_at
+                .and_then(plain_libs::chrono::DateTime::from_timestamp_millis)
+                .map(plain_rs::infrastructure::types::Instant),
+            updated_at: plain_rs::infrastructure::types::Instant(
+                plain_libs::chrono::DateTime::from_timestamp_millis(record.updated_at)
+                    .unwrap_or_default(),
+            ),
+            size: Long(record.size),
+            is_dir: record.is_dir,
+            child_count: record.child_count,
+        }
+    }
+}
+
 #[plain_graphql::ComplexObject]
 impl File {
     fn url(&self, ctx: &plain_graphql::Context<'_>) -> plain_graphql::Result<String> {

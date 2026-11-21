@@ -168,6 +168,7 @@ type TrashedFile {
 	entryCount: Int
 	displayName: String!
 	trashedPath: String!
+	file(showHidden: Boolean!): File!
 }
 
 enum TrashedFileSortBy {

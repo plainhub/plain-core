@@ -1104,3 +1104,51 @@ async fn mount_labels_and_disk_models_are_available_in_the_main_schema() {
         json!({"mounts":[{"name":"usb1","label":"Photos","diskModel":"Example Drive"}]})
     );
 }
+
+#[tokio::test]
+async fn trash_file_rows_match_directory_rows_before_the_move() {
+    let (dir, schema) = fixture(GRANTED);
+    let root = sample_tree(dir.path());
+    fs::write(root.join("nested/.hidden"), b"hidden").unwrap();
+    fs::create_dir(root.join("nested/child")).unwrap();
+    fs::write(root.join("nested/child/deep"), b"deep").unwrap();
+    let fields = "name size updatedAt isDir childCount";
+    let mut expected = Vec::new();
+    for hidden in [false, true] {
+        let q = format!(
+            "{{files(root:{:?},query:\"show_hidden:{hidden}\",offset:0,limit:20,sortBy:NAME_ASC){{{fields}}}}}",
+            root
+        );
+        let response = schema.execute(&q).await;
+        assert!(response.errors.is_empty(), "{:?}", response.errors);
+        expected.push(response.data.into_json().unwrap()["files"].clone());
+    }
+    let paths = [
+        root.join("alpha.txt"),
+        root.join("beta.png"),
+        root.join("nested"),
+    ];
+    let response = schema
+        .execute(&format!(
+            "mutation {{trashFiles(paths:{}){{affectedCount}}}}",
+            plain_libs::serde_json::to_string(&paths).unwrap()
+        ))
+        .await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    for (hidden, before) in [false, true].into_iter().zip(expected) {
+        let q = format!(
+            "{{trashedFiles(query:\"\",offset:0,limit:20,sortBy:NAME_ASC){{file(showHidden:{hidden}){{{fields}}}}}}}"
+        );
+        let response = schema.execute(&q).await;
+        assert!(response.errors.is_empty(), "{:?}", response.errors);
+        let after = response.data.into_json().unwrap();
+        let rows = after["trashedFiles"].as_array().unwrap();
+        assert_eq!(rows.len(), before.as_array().unwrap().len());
+        for item in before.as_array().unwrap() {
+            assert!(
+                rows.iter().any(|row| row["file"] == *item),
+                "{item}: {rows:?}"
+            );
+        }
+    }
+}

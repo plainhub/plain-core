@@ -158,38 +158,62 @@ impl ExcludedPaths {
             || (self.reserved.is_some()
                 && directory.canonicalize().is_ok_and(|path| matched(&path)))
     }
-}
+    pub fn file_row(&self, path: &Path, name: String, show_hidden: bool) -> io::Result<FileRecord> {
+        let mut file = listing_record(path, name, &fs::symlink_metadata(path)?)?;
+        if file.is_dir {
+            file.child_count =
+                self.child_count(path, show_hidden, crate::filesystem::count_dir_entries)?;
+        }
+        Ok(file)
+    }
 
-impl Plan {
-    pub fn exclude_paths(&mut self, paths: ExcludedPaths) {
-        self.excluded = paths;
+    fn child_count(
+        &self,
+        path: &Path,
+        show_hidden: bool,
+        count_entries: impl FnMut(&Path, bool) -> io::Result<usize>,
+    ) -> io::Result<i32> {
+        match self.count_children(path, show_hidden, count_entries) {
+            Ok(count) => Ok(i32::try_from(count).unwrap_or(i32::MAX)),
+            Err(e)
+                if matches!(
+                    e.kind(),
+                    io::ErrorKind::PermissionDenied | io::ErrorKind::NotFound
+                ) =>
+            {
+                Ok(0)
+            }
+            Err(e) => Err(e),
+        }
     }
 
     fn count_children(
         &self,
         directory: &Path,
+        show_hidden: bool,
         mut count_entries: impl FnMut(&Path, bool) -> io::Result<usize>,
     ) -> io::Result<usize> {
-        if !self.excluded.may_affect_child_count(directory) {
-            return count_entries(directory, self.show_hidden);
+        if !self.may_affect_child_count(directory) {
+            return count_entries(directory, show_hidden);
         }
         fs::read_dir(directory)?.try_fold(0, |count, entry| {
             let entry = entry?;
-            if !self.show_hidden && entry.file_name().to_string_lossy().starts_with('.') {
+            if !show_hidden && entry.file_name().to_string_lossy().starts_with('.') {
                 return Ok(count);
             }
             let metadata = fs::symlink_metadata(entry.path())?;
             #[cfg(any(target_os = "macos", windows))]
-            if !self.show_hidden && super::hidden(&metadata) {
+            if !show_hidden && super::hidden(&metadata) {
                 return Ok(count);
             }
-            Ok(count
-                + usize::from(
-                    !self
-                        .excluded
-                        .matches_entry(&entry.path(), metadata.is_symlink()),
-                ))
+            Ok(count + usize::from(!self.matches_entry(&entry.path(), metadata.is_symlink())))
         })
+    }
+}
+
+impl Plan {
+    pub fn exclude_paths(&mut self, paths: ExcludedPaths) {
+        self.excluded = paths;
     }
 
     pub fn archive_path(&self) -> Option<&str> {
@@ -400,21 +424,7 @@ impl Plan {
                     Err(e) => return Err(e),
                 }
             }
-            let record = FileRecord {
-                name,
-                path: path.to_string_lossy().into_owned(),
-                permission: String::new(),
-                created_at: meta.created().ok().map(millis),
-                updated_at: millis(meta.modified()?),
-                size: if meta.is_dir() {
-                    0
-                } else {
-                    i64::try_from(meta.len()).map_err(io::Error::other)?
-                },
-                is_dir: meta.is_dir(),
-                child_count: 0,
-                file_id: String::new(),
-            };
+            let record = listing_record(&path, name, &meta)?;
             if self.matches(&record, false) {
                 count += 1;
                 if !self.count_only {
@@ -450,24 +460,34 @@ impl Plan {
                 ));
             }
             if self.count_children && item.is_dir {
-                item.child_count =
-                    match self.count_children(Path::new(&item.path), &mut count_entries) {
-                        Ok(count) => i32::try_from(count).unwrap_or(i32::MAX),
-                        Err(e)
-                            if matches!(
-                                e.kind(),
-                                io::ErrorKind::PermissionDenied | io::ErrorKind::NotFound
-                            ) =>
-                        {
-                            0
-                        }
-                        Err(e) => return Err(e),
-                    };
+                item.child_count = self.excluded.child_count(
+                    Path::new(&item.path),
+                    self.show_hidden,
+                    &mut count_entries,
+                )?;
             }
         }
         Ok(page)
     }
 }
+fn listing_record(path: &Path, name: String, meta: &fs::Metadata) -> io::Result<FileRecord> {
+    Ok(FileRecord {
+        name,
+        path: path.to_string_lossy().into_owned(),
+        permission: String::new(),
+        created_at: meta.created().ok().map(millis),
+        updated_at: millis(meta.modified()?),
+        size: if meta.is_dir() {
+            0
+        } else {
+            i64::try_from(meta.len()).map_err(io::Error::other)?
+        },
+        is_dir: meta.is_dir(),
+        child_count: 0,
+        file_id: String::new(),
+    })
+}
+
 fn millis(time: SystemTime) -> i64 {
     crate::chrono::DateTime::<crate::chrono::Utc>::from(time).timestamp_millis()
 }

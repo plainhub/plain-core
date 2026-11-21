@@ -105,7 +105,7 @@ impl FileOpsMutation {
         )
         .await
         .map_err(plain_graphql::Error::new)?;
-        Ok(written_file(record))
+        Ok(record.into())
     }
     async fn delete_files(
         &self,
@@ -179,7 +179,7 @@ impl FileOpsMutation {
         )
         .await
         .map_err(plain_graphql::Error::new)?;
-        Ok(written_file(record))
+        Ok(record.into())
     }
 
     async fn rename_file(
@@ -213,7 +213,7 @@ impl FileOpsMutation {
         )
         .await
         .map_err(plain_graphql::Error::new)?;
-        Ok(written_file(record))
+        Ok(record.into())
     }
 
     async fn copy_file_to_directory(
@@ -456,27 +456,6 @@ async fn media_action(
         )
         .await
         .map_err(Into::into)
-}
-
-fn written_file(record: plain_libs::filesystem::record::FileRecord) -> File {
-    File {
-        resource_url: None,
-        permission: record.permission,
-        file_id: (!record.file_id.is_empty()).then(|| record.file_id.into()),
-        name: record.name,
-        path: record.path,
-        created_at: record
-            .created_at
-            .and_then(plain_libs::chrono::DateTime::from_timestamp_millis)
-            .map(plain_rs::infrastructure::types::Instant),
-        updated_at: plain_rs::infrastructure::types::Instant(
-            plain_libs::chrono::DateTime::from_timestamp_millis(record.updated_at)
-                .unwrap_or_default(),
-        ),
-        size: Long(record.size),
-        is_dir: record.is_dir,
-        child_count: record.child_count,
-    }
 }
 
 fn merge_task(value: &Value) -> MergeTask {
