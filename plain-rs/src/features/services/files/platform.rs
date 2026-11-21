@@ -115,7 +115,7 @@ impl FilePlatform {
                 .host
                 .call(
                     "systemFileIndexRows",
-                    json!({"plan":plan,"offset":0,"limit":1,"sortBy":"NAME_ASC"}),
+                    json!({"plan":plan,"offset":0,"limit":1,"sortBy":"NAME_ASC","includeTrashed":true}),
                 )
                 .await
                 .map_err(plain_libs::anyhow::Error::msg)?;

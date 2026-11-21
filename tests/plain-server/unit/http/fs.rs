@@ -1186,6 +1186,77 @@ async fn fs_png_previews_preserve_alpha_mime_and_conditional_cache_responses() {
 }
 
 #[tokio::test]
+async fn fs_previews_trashed_images_by_system_media_id() {
+    use plain_libs::serde_json::{Value, json};
+    use plain_rs::features::files::resource_link::{self, Resource, ResourceType, Scope};
+
+    let root = plain_libs::temporary::tempdir().unwrap();
+    let data = root.path().join("data");
+    let key = [42; 32];
+    let core = ContentServer::start_with_config(
+        &data,
+        &plain_libs::utils::base64::base64_encode(&key),
+        std::sync::Arc::new(
+            plain_rs::features::prefs::Prefs::load(&root.path().join("prefs.json")).unwrap(),
+        ),
+        plain_rs::infrastructure::host::startup::StartupConfig {
+            system_media_catalog: true,
+            ..plain_rs::infrastructure::platform::startup::config()
+        },
+    )
+    .unwrap();
+    let state = core.runtime_state();
+    let path = root.path().join(".trashed-1800000000-preview.png");
+    plain_libs::image::RgbImage::from_pixel(640, 480, plain_libs::image::Rgb([40, 90, 150]))
+        .save(&path)
+        .unwrap();
+    let bytes = std::fs::read(&path).unwrap();
+    let host = state.host.clone();
+    let (generation, mut requests) = host.connect();
+    let provider = tokio::spawn(async move {
+        while let Some(request) = requests.recv().await {
+            assert_eq!(request["method"], "systemFileIndexRows");
+            let params = &request["params"];
+            assert_eq!(params["plan"]["idsColumn"], "_id");
+            assert_eq!(params["limit"], 1);
+            let result = if params["includeTrashed"] == true && params["plan"]["ids"] == json!(["17"]) {
+                json!([{ "mediaId": "17", "path": path, "name": "preview.png" }])
+            } else {
+                json!([])
+            };
+            host.reply(generation, json!({"id": request["id"], "result": result}))
+                .unwrap();
+        }
+    });
+    let scope = Scope::Session(state.native_client_id().unwrap());
+    let id = |id: &str| {
+        resource_link::seal(&scope, &key, &Resource { r#type: ResourceType::Media, id: id.into() })
+            .unwrap()
+    };
+    let query = format!("id={}&action=PREVIEW", id("17"));
+    for (size, expected) in [("&size=SM", (341, 256)), ("&size=LG", (640, 480)), ("", (640, 480))] {
+        let response = call_fs(&state, &format!("{query}{size}"), &[]).await;
+        let status = response.status();
+        let headers = response.headers().clone();
+        let body = body_bytes(response).await;
+        assert_eq!(status, StatusCode::OK, "{}", String::from_utf8_lossy(&body));
+        assert_eq!(headers[header::CONTENT_TYPE], "image/png");
+        let decoded = plain_libs::image::load_from_memory(&body).unwrap();
+        assert_eq!((decoded.width(), decoded.height()), expected);
+        if size.is_empty() {
+            assert_eq!(body, bytes);
+        }
+    }
+    let missing = call_fs(&state, &format!("id={}&action=PREVIEW", id("18")), &[]).await;
+    assert_eq!(missing.status(), StatusCode::FORBIDDEN);
+    let error = body_bytes(missing).await;
+    assert!(String::from_utf8_lossy(&error).ends_with("Media unavailable"));
+    drop(state);
+    core.stop_core().await;
+    provider.abort();
+}
+
+#[tokio::test]
 async fn fs_tiff_avif_heic_and_heif_share_thumbnails_preserve_alpha_and_download_originals() {
     let (_root, core, state, _key) = test_state();
     let directory = plain_libs::temporary::tempdir().unwrap();
