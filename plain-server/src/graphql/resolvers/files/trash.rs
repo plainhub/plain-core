@@ -49,7 +49,4 @@ impl TrashMutation {
     async fn delete_trashed_files(&self, ctx: &Context<'_>, paths: Vec<String>) -> Result<ActionResult> {
         Ok(ActionResult { affected_count: tasks(ctx)?.delete_trashed(paths).await?.try_into()? })
     }
-    async fn delete_trashed_file(&self, ctx: &Context<'_>, path: String) -> Result<bool> {
-        Ok(tasks(ctx)?.delete_trashed(vec![path]).await? != 0)
-    }
 }
