@@ -29,9 +29,17 @@ pub fn bind_listener_fallback(
     preferred: u16,
     candidates: &[u16],
 ) -> std::io::Result<StdTcpListener> {
+    bind_with_fallback(preferred, candidates, bind_listener)
+}
+
+pub(super) fn bind_with_fallback(
+    preferred: u16,
+    candidates: &[u16],
+    bind: fn(u16) -> std::io::Result<StdTcpListener>,
+) -> std::io::Result<StdTcpListener> {
     let preferred_index = candidates.iter().position(|&p| p == preferred);
     if preferred_index.is_none() {
-        match bind_listener(preferred) {
+        match bind(preferred) {
             Ok(listener) => return Ok(listener),
             Err(e) if retryable_bind_error(&e) => {
                 log::warn!(
@@ -45,7 +53,7 @@ pub fn bind_listener_fallback(
     let start = preferred_index.unwrap_or(0);
     for i in 0..candidates.len() {
         let port = candidates[(start + i) % candidates.len()];
-        match bind_listener(port) {
+        match bind(port) {
             Ok(l) => return Ok(l),
             Err(e) if retryable_bind_error(&e) => {
                 log::warn!("local_server: port {port} is unavailable, trying next candidate");
@@ -54,7 +62,7 @@ pub fn bind_listener_fallback(
         }
     }
     log::warn!("local_server: all fixed ports are unavailable, asking the OS for a free port");
-    bind_listener(0)
+    bind(0)
 }
 
 #[cfg(test)]

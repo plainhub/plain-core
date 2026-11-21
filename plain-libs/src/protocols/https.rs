@@ -16,6 +16,18 @@ use tokio_rustls::{TlsAcceptor, server::TlsStream};
 
 pub use tokio_rustls::rustls::ServerConfig;
 
+pub fn bind_dual_stack(port: u16) -> io::Result<net::TcpListener> {
+    use socket2::{Domain, Protocol, Socket, Type};
+
+    let socket = Socket::new(Domain::IPV6, Type::STREAM, Some(Protocol::TCP))?;
+    socket.set_only_v6(false)?;
+    #[cfg(unix)]
+    socket.set_reuse_address(true)?;
+    socket.bind(&net::SocketAddr::from((net::Ipv6Addr::UNSPECIFIED, port)).into())?;
+    socket.listen(128)?;
+    Ok(socket.into())
+}
+
 pub async fn accept_tls(
     config: Arc<ServerConfig>,
     stream: TcpStream,
@@ -46,7 +58,13 @@ pub async fn serve(
             biased;
             _ = async { let _ = stop.wait_for(|&stopped| stopped).await; } => break,
             _ = connections.join_next(), if !connections.is_empty() => {}
-            (stream, address) = accept(&listener) => {
+            (stream, mut address) = accept(&listener) => {
+                // Preserve IPv4 identity for loopback checks and access policy on dual-stack sockets.
+                if let net::SocketAddr::V6(source) = address
+                    && let Some(ipv4) = source.ip().to_ipv4_mapped()
+                {
+                    address = net::SocketAddr::from((ipv4, source.port()));
+                }
                 let config = config.clone();
                 let builder = builder.clone();
                 let router = router.clone().layer(Extension(ConnectInfo(address)));

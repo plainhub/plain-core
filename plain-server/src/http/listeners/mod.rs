@@ -44,9 +44,25 @@ impl HttpListeners {
         https_port: u16,
         tls: ServerConfig,
     ) -> Result<Self, String> {
+        Self::start_with_https_mode(router, http_port, https_port, tls, cfg!(target_os = "android"))
+            .await
+    }
+
+    async fn start_with_https_mode(
+        router: Router,
+        http_port: u16,
+        https_port: u16,
+        tls: ServerConfig,
+        dual_stack: bool,
+    ) -> Result<Self, String> {
         let http = bind::bind_listener_fallback(http_port, &bind::HTTP_PORTS)
             .map_err(|e| format!("HTTP bind failed: {e}"))?;
-        let https = bind::bind_listener_fallback(https_port, &bind::HTTPS_PORTS)
+        let https_bind = if dual_stack {
+            https::bind_dual_stack
+        } else {
+            bind::bind_listener
+        };
+        let https = bind::bind_with_fallback(https_port, &bind::HTTPS_PORTS, https_bind)
             .map_err(|e| format!("HTTPS bind failed: {e}"))?;
         let http_port = http.local_addr().map_err(|e| e.to_string())?.port();
         let https_port = https.local_addr().map_err(|e| e.to_string())?.port();

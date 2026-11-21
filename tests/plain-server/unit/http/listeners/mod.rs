@@ -49,6 +49,35 @@ async fn serves_http_and_tls_then_releases_both_ports() {
 }
 
 #[tokio::test]
+async fn android_https_accepts_aware_ipv6_and_keeps_ipv4_clients_on_the_same_port() {
+    let (cert, key) = certificate();
+    let router = Router::new().route(
+        "/health",
+        get(|ConnectInfo(addr): ConnectInfo<SocketAddr>| async move { addr.ip().to_string() }),
+    );
+    let tls = tls_config(&cert, &key).unwrap();
+    let server = HttpListeners::start_with_https_mode(router, 0, 0, tls, true)
+        .await
+        .unwrap();
+    let client = http_client::builder()
+        .no_proxy()
+        .danger_accept_invalid_certs(true)
+        .timeout(Duration::from_secs(2))
+        .build()
+        .unwrap();
+    for (host, ip) in [("[::1]", "::1"), ("127.0.0.1", "127.0.0.1")] {
+        let response = client
+            .get(format!("https://{host}:{}/health", server.https_port))
+            .send()
+            .await
+            .unwrap_or_else(|error| panic!("HTTPS on {host}: {error}"));
+        assert_eq!(response.status(), 200);
+        assert_eq!(response.text().await.unwrap(), ip);
+    }
+    server.shutdown().await;
+}
+
+#[tokio::test]
 async fn readiness_requires_ok_from_both_health_listeners_without_private_route() {
     use plain_libs::axum::http::StatusCode;
     use std::sync::{
