@@ -5,37 +5,24 @@ use plain_libs::chrono::{DateTime, Utc};
 use plain_libs::platform::mountinfo;
 use plain_libs::platform::mountinfo::CleanPath;
 use plain_libs::rusqlite::OptionalExtension;
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 #[cfg(unix)]
 use std::os::unix::fs::{DirBuilderExt, MetadataExt};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, LazyLock as Lazy, Mutex};
 
-#[cfg(unix)]
-fn owner_mode(meta: &std::fs::Metadata) -> (u32, u32, u32) {
-    (meta.uid(), meta.gid(), meta.mode())
-}
-#[cfg(not(unix))]
-fn owner_mode(_meta: &std::fs::Metadata) -> (u32, u32, u32) {
-    (0, 0, 0)
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct TrashItem {
     pub id: String,
-    #[serde(rename = "type")]
-    pub kind: String,
     pub original_path: String,
     pub disk: String,
-    pub trash_rel_path: String,
     pub path: PathBuf,
-    pub deleted_at: Option<i64>,
-    pub uid: u32,
-    pub gid: u32,
-    pub mode: u32,
-    pub size: Option<i64>,
-    pub entry_count: Option<i64>,
+}
+
+impl TrashItem {
+    pub fn name(&self) -> &str {
+        Path::new(&self.original_path).file_name().and_then(|name| name.to_str()).unwrap_or("")
+    }
 }
 
 pub struct Trash {
@@ -56,37 +43,11 @@ fn trash_item(row: &plain_libs::rusqlite::Row<'_>) -> plain_libs::rusqlite::Resu
         .and_then(Path::to_str)
         .ok_or(plain_libs::rusqlite::Error::InvalidQuery)?
         .to_owned();
-    let relative = absolute
-        .strip_prefix(root)
-        .map_err(crate::infrastructure::db::files::sql_error)?
-        .to_str()
-        .ok_or(plain_libs::rusqlite::Error::InvalidQuery)?
-        .to_owned();
-    let time: String = row.get(4)?;
-    let deleted_at = DateTime::parse_from_rfc3339(&time)
-        .map_err(crate::infrastructure::db::files::sql_error)?
-        .timestamp();
-    let (uid, gid, mode) = std::fs::symlink_metadata(absolute)
-        .map(|metadata| owner_mode(&metadata))
-        .unwrap_or_default();
     Ok(TrashItem {
         id: row.get(0)?,
-        kind: if row.get::<_, String>(3)? == "DIRECTORY" {
-            "dir"
-        } else {
-            "file"
-        }
-        .into(),
         original_path: row.get(2)?,
         disk,
-        trash_rel_path: relative,
         path: absolute.to_owned(),
-        deleted_at: Some(deleted_at),
-        uid,
-        gid,
-        mode,
-        size: row.get(5)?,
-        entry_count: None,
     })
 }
 
@@ -96,7 +57,7 @@ impl Trash {
     }
 
     pub fn load_item(&self, id: &str) -> Result<Option<TrashItem>> {
-        Ok(self.db.with_conn(|conn|conn.query_row("SELECT id,path,original_path,kind,trashed_at,size_bytes FROM file_catalog WHERE id=?1 AND trashed=1",[id],trash_item).optional())?)
+        Ok(self.db.with_conn(|conn|conn.query_row("SELECT id,path,original_path FROM file_catalog WHERE id=?1 AND trashed=1",[id],trash_item).optional())?)
     }
 
     pub async fn trash_paths(&self, paths: Vec<String>) -> Result<Vec<String>> {
@@ -212,47 +173,13 @@ impl Trash {
         item.path.clone()
     }
 
-    pub fn list_trash(
-        &self,
-        offset: usize,
-        limit: usize,
-        text: &str,
-        order: SortOrder,
-    ) -> Result<Vec<TrashItem>> {
-        self.list_with(Vec::new(), offset, limit, text, order)
-    }
-
-    pub fn list_with(&self, mut items: Vec<TrashItem>, offset: usize, limit: usize, text: &str, order: SortOrder) -> Result<Vec<TrashItem>> {
+    pub fn list_with(&self, mut items: Vec<TrashItem>, offset: usize, limit: usize, text: &str) -> Result<Vec<TrashItem>> {
         let needle = text.trim().to_lowercase();
-        let local=self.db.with_conn(|conn|conn.prepare(&format!("SELECT id,path,original_path,kind,trashed_at,size_bytes FROM file_catalog WHERE {TOP_LEVEL}"))?
+        let local=self.db.with_conn(|conn|conn.prepare(&format!("SELECT id,path,original_path FROM file_catalog WHERE {TOP_LEVEL}"))?
             .query_map([],trash_item)?.collect::<plain_libs::rusqlite::Result<Vec<_>>>())?;
         items.extend(local);
         items.retain(|item| item.original_path.to_lowercase().contains(&needle));
-        let name = |item: &TrashItem| {
-            Path::new(&item.original_path)
-                .file_name()
-                .and_then(|name| name.to_str())
-                .unwrap_or("")
-                .to_lowercase()
-                .trim()
-                .to_owned()
-        };
-        items.sort_by(|a, b| {
-            let directories = (b.kind == "dir").cmp(&(a.kind == "dir"));
-            let order = match order {
-                SortOrder::DeletedAtNewest => b.deleted_at.cmp(&a.deleted_at),
-                SortOrder::DeletedAtOldest => a.deleted_at.is_none().cmp(&b.deleted_at.is_none()).then(a.deleted_at.cmp(&b.deleted_at)),
-                SortOrder::NameAsc => directories.then_with(|| name(a).cmp(&name(b))),
-                SortOrder::NameDesc => directories.then_with(|| name(b).cmp(&name(a))),
-                SortOrder::SizeAsc => {
-                    directories.then(a.size.unwrap_or(0).cmp(&b.size.unwrap_or(0)))
-                }
-                SortOrder::SizeDesc => {
-                    directories.then(b.size.unwrap_or(0).cmp(&a.size.unwrap_or(0)))
-                }
-            };
-            order.then(a.id.cmp(&b.id))
-        });
+        items.sort_by_cached_key(|item| (item.name().to_lowercase(), item.id.clone()));
         Ok(items.into_iter().skip(offset).take(limit).collect())
     }
 
@@ -455,48 +382,6 @@ fn parse_trash_id_from_path(p: &Path) -> Option<String> {
     } else {
         Some(id.to_string())
     }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SortOrder {
-    DeletedAtNewest,
-    DeletedAtOldest,
-    NameAsc,
-    NameDesc,
-    SizeAsc,
-    SizeDesc,
-}
-
-pub fn fill_stats(it: &mut TrashItem) -> Result<()> {
-    let abs = &it.path;
-    if it.kind == "dir" {
-        if abs.exists() {
-            it.size = Some(dir_size(&abs));
-            it.entry_count = Some(count_entries(&abs));
-        } else {
-            it.size = Some(0);
-            it.entry_count = Some(0);
-        }
-    } else if let Ok(m) = std::fs::symlink_metadata(abs) {
-        it.size = Some(m.len() as i64);
-        (it.uid, it.gid, it.mode) = owner_mode(&m);
-    }
-    Ok(())
-}
-
-fn dir_size(p: &Path) -> i64 {
-    plain_libs::filesystem::walk::Walk::new(p)
-        .into_iter()
-        .filter_map(|e| e.ok())
-        .filter_map(|e| e.metadata().ok())
-        .map(|m| m.len() as i64)
-        .sum()
-}
-fn count_entries(p: &Path) -> i64 {
-    plain_libs::filesystem::walk::Walk::new(p)
-        .into_iter()
-        .filter_map(|e| e.ok())
-        .count() as i64
 }
 
 #[cfg(test)]

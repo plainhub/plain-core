@@ -1,87 +1,31 @@
 use plain_rs::features::access::AccessFeature;
 use crate::graphql::types::ActionResult;
 use crate::http::auth::public_gate;
-use plain_graphql::{Context, Enum, ID, Object, Result, SimpleObject};
+use plain_graphql::{Context, ID, Object, Result};
 
-use plain_rs::features::files::trash::{SortOrder, Trash, TrashItem};
+use plain_rs::features::files::trash::TrashItem;
 use plain_rs::features::services::files::file_tasks::FileTasks;
-use plain_rs::infrastructure::types::Instant;
-use plain_rs::infrastructure::types::Long;
 use std::sync::Arc;
 
-#[derive(Enum, Clone, Copy, PartialEq, Eq)]
-pub enum TrashedFileSortBy {
-    DateAsc,
-    DateDesc,
-    SizeAsc,
-    SizeDesc,
-    NameAsc,
-    NameDesc,
-}
-#[derive(Enum, Clone, Copy, PartialEq, Eq)]
-pub enum TrashedFileType {
-    File,
-    Dir,
-}
-#[derive(SimpleObject)]
-#[graphql(complex)]
 struct TrashedFile {
-    id: ID,
-    r#type: TrashedFileType,
-    original_path: String,
-    disk: String,
-    trash_rel_path: String,
-    deleted_at: Option<Instant>,
-    uid: i32,
-    gid: i32,
-    mode: i32,
-    size_bytes: Option<Long>,
-    entry_count: Option<i32>,
-    display_name: String,
-    trashed_path: String,
+    item: TrashItem,
+    show_hidden: bool,
 }
-#[plain_graphql::ComplexObject]
+
+#[Object]
 impl TrashedFile {
-    async fn file(&self, ctx: &Context<'_>, show_hidden: bool) -> Result<super::types::File> {
+    async fn id(&self) -> ID {
+        ID::from(self.item.id.as_str())
+    }
+
+    async fn file(&self, ctx: &Context<'_>) -> Result<super::types::File> {
         let platform = ctx.data::<Arc<plain_rs::features::services::files::platform::FilePlatform>>()?;
         Ok(plain_rs::features::services::files::browse::file_row(
-            platform, self.trashed_path.clone().into(), self.display_name.clone(), show_hidden,
+            platform, self.item.path.clone(), self.item.name().to_owned(), self.show_hidden,
         ).await?.into())
     }
 }
 
-impl TryFrom<TrashItem> for TrashedFile {
-    type Error = plain_graphql::Error;
-    fn try_from(row: TrashItem) -> Result<Self> {
-        let path = Trash::physical_path(&row).to_string_lossy().into_owned();
-        Ok(Self {
-            id: row.id.into(),
-            r#type: match row.kind.as_str() {
-                "file" => TrashedFileType::File,
-                "dir" => TrashedFileType::Dir,
-                _ => return Err("invalid trash kind".into()),
-            },
-            display_name: std::path::Path::new(&row.original_path)
-                .file_name()
-                .unwrap_or_default()
-                .to_string_lossy()
-                .into_owned(),
-            original_path: row.original_path,
-            disk: row.disk,
-            trash_rel_path: row.trash_rel_path,
-            deleted_at: row.deleted_at.map(|time| {
-                plain_libs::chrono::DateTime::from_timestamp(time, 0)
-                    .map(Instant).ok_or("invalid trash timestamp")
-            }).transpose()?,
-            uid: row.uid.try_into()?,
-            gid: row.gid.try_into()?,
-            mode: row.mode.try_into()?,
-            size_bytes: row.size.map(Long),
-            entry_count: row.entry_count.map(i32::try_from).transpose()?,
-            trashed_path: path,
-        })
-    }
-}
 fn tasks<'a>(ctx: &'a Context<'_>) -> Result<&'a Arc<FileTasks>> {
     public_gate::require(
         ctx,
@@ -100,27 +44,15 @@ impl TrashQuery {
         query: String,
         offset: i32,
         limit: i32,
-        sort_by: TrashedFileSortBy,
+        #[graphql(default)] show_hidden: bool,
     ) -> Result<Vec<TrashedFile>> {
-        let order = match sort_by {
-            TrashedFileSortBy::DateAsc => SortOrder::DeletedAtOldest,
-            TrashedFileSortBy::DateDesc => SortOrder::DeletedAtNewest,
-            TrashedFileSortBy::SizeAsc => SortOrder::SizeAsc,
-            TrashedFileSortBy::SizeDesc => SortOrder::SizeDesc,
-            TrashedFileSortBy::NameAsc => SortOrder::NameAsc,
-            TrashedFileSortBy::NameDesc => SortOrder::NameDesc,
-        };
-        let fields = ctx.look_ahead();
-        let rows = tasks(ctx)?.trashed(
-            offset.try_into()?, limit.try_into()?, query, order,
-            ["sizeBytes", "entryCount", "uid", "gid", "mode"].iter().any(|field| fields.field(field).exists()),
-        ).await?;
-        if fields.field("file").exists() && !rows.is_empty() {
+        let rows = tasks(ctx)?.trashed(offset.try_into()?, limit.try_into()?, query).await?;
+        if ctx.look_ahead().field("file").exists() && !rows.is_empty() {
             let paths = rows.iter().map(|row| row.path.to_string_lossy().into_owned()).collect::<Vec<_>>();
             ctx.data::<Arc<plain_rs::features::services::files::platform::FilePlatform>>()?
                 .authorize_metadata_paths(&paths).await?;
         }
-        rows.into_iter().map(TryInto::try_into).collect()
+        Ok(rows.into_iter().map(|item| TrashedFile { item, show_hidden }).collect())
     }
     async fn trashed_file_count(&self, ctx: &Context<'_>, query: String) -> Result<i32> {
         Ok(tasks(ctx)?.trash_count(query).await?.try_into()?)

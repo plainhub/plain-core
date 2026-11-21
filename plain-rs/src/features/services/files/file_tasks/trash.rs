@@ -1,4 +1,4 @@
-use crate::features::files::trash::{SortOrder, Trash, TrashItem};
+use crate::features::files::trash::{Trash, TrashItem};
 use crate::features::services::files::file_tasks::*;
 use plain_libs::rusqlite::OptionalExtension;
 
@@ -167,20 +167,12 @@ impl FileTasks {
         offset: usize,
         limit: usize,
         query: String,
-        order: SortOrder,
-        fill_stats: bool,
     ) -> Result<Vec<TrashItem>> {
         let db = self.hooks.platform.db.clone();
         let provider = self.provider_trash().await?;
         tokio::task::spawn_blocking(move || {
             let trash = Trash::new(db);
-            let mut rows = trash.list_with(provider, offset, limit, &query, order)?;
-            if fill_stats {
-                for row in &mut rows {
-                    crate::features::files::trash::fill_stats(row)?;
-                }
-            }
-            Ok(rows)
+            trash.list_with(provider, offset, limit, &query)
         })
         .await?
     }

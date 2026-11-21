@@ -156,33 +156,7 @@ type Mount {
 
 type TrashedFile {
 	id: ID!
-	type: TrashedFileType!
-	originalPath: String!
-	disk: String!
-	trashRelPath: String!
-	deletedAt: Instant
-	uid: Int!
-	gid: Int!
-	mode: Int!
-	sizeBytes: Long
-	entryCount: Int
-	displayName: String!
-	trashedPath: String!
-	file(showHidden: Boolean!): File!
-}
-
-enum TrashedFileSortBy {
-	DATE_ASC
-	DATE_DESC
-	SIZE_ASC
-	SIZE_DESC
-	NAME_ASC
-	NAME_DESC
-}
-
-enum TrashedFileType {
-	FILE
-	DIR
+	file: File!
 }
 
 type UploadedChunk {
@@ -272,6 +246,6 @@ extend type Query {
 	"""
 	recentFiles: [File!]!
 	trashedFileCount(query: String!): Int!
-	trashedFiles(query: String!, offset: Int!, limit: Int!, sortBy: TrashedFileSortBy!): [TrashedFile!]!
+	trashedFiles(query: String!, offset: Int!, limit: Int!, showHidden: Boolean! = false): [TrashedFile!]!
 	uploadedChunks(fileId: String!): [UploadedChunk!]!
 }

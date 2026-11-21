@@ -38,7 +38,7 @@ async fn unicode_trash_search_preserves_case_folding_before_paging() {
         )
         .await
         .unwrap();
-    let found = trash.list_trash(0, 1, "ωMEGA", SortOrder::NameAsc).unwrap();
+    let found = trash.list_with(Vec::new(), 0, 1, "ωMEGA").unwrap();
     assert_eq!(found.len(), 1);
     assert!(found[0].original_path.ends_with("Ωmega.txt"));
     assert_eq!(trash.trash_count("  ωMEGA  ").unwrap(), 1);
@@ -47,7 +47,7 @@ async fn unicode_trash_search_preserves_case_folding_before_paging() {
     assert_eq!(trash.trash_count("%").unwrap(), 0);
     assert!(
         trash
-            .list_trash(1, 1, "ωMEGA", SortOrder::NameAsc)
+            .list_with(Vec::new(), 1, 1, "ωMEGA")
             .unwrap()
             .is_empty()
     );
@@ -114,7 +114,7 @@ async fn permanent_deletion_waits_for_filesystem_success() {
         .unwrap()
         .remove(0);
     let row = trash
-        .list_trash(0, 10, "report", SortOrder::NameAsc)
+        .list_with(Vec::new(), 0, 10, "report")
         .unwrap()
         .remove(0);
     let id = &row.id;

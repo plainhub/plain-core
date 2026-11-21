@@ -14,7 +14,6 @@ struct Row {
     volume_root: PathBuf,
     media_type: i32,
     mime_type: Option<String>,
-    size: i64,
 }
 
 pub(super) const PREFIX: &str = "mediastore:";
@@ -64,28 +63,16 @@ impl FileTasks {
             {
                 bail!("Invalid provider trash entry");
             }
-            let relative = row
-                .path
-                .strip_prefix(&row.volume_root)?
-                .to_str()
-                .ok_or_else(|| anyhow!("Invalid volume path"))?;
+            row.path.strip_prefix(&row.volume_root)?;
             items.push(TrashItem {
                 id: format!("{PREFIX}{}:{}:{path}", kind.kind(), row.id),
-                kind: "file".into(),
                 original_path: row
                     .path
                     .with_file_name(&row.display_name)
                     .to_string_lossy()
                     .into_owned(),
                 disk: row.volume_root.to_string_lossy().into_owned(),
-                trash_rel_path: relative.to_owned(),
                 path: row.path,
-                size: Some(row.size),
-                entry_count: None,
-                deleted_at: None,
-                uid: 0,
-                gid: 0,
-                mode: 0,
             });
         }
         Ok(items)
