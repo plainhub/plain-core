@@ -103,27 +103,30 @@ impl FileTasks {
                 count += 1;
                 continue;
             }
-            let item = trash
-                .resolve_item(&reference)?
-                .ok_or_else(|| anyhow!("trash item not found"))?;
+            let absolute = Path::new(&reference).is_absolute();
+            if absolute {
+                self.hooks.platform.authorize(&reference, false).await?;
+            }
+            let prepared = trash.prepare_restore(&reference)?;
             self.hooks
                 .platform
-                .authorize(&item.original_path, true)
+                .authorize(&prepared.item.original_path, true)
                 .await?;
-            let physical = Trash::physical_path(&item).to_string_lossy().into_owned();
-            self.hooks.platform.authorize(&physical, false).await?;
-            for restored in trash.restore_paths(vec![item.id]).await? {
-                self.hooks
-                    .scan_completed(
-                        FileTaskType::Copy,
-                        &CompletedOp {
-                            src: physical.clone(),
-                            dst: restored,
-                        },
-                    )
-                    .await?;
-                count += 1;
+            let physical = Trash::physical_path(&prepared.item).to_string_lossy().into_owned();
+            if !absolute {
+                self.hooks.platform.authorize(&physical, false).await?;
             }
+            let restored = trash.restore_item(prepared).await?;
+            self.hooks
+                .scan_completed(
+                    FileTaskType::Copy,
+                    &CompletedOp {
+                        src: physical,
+                        dst: restored,
+                    },
+                )
+                .await?;
+            count += 1;
         }
         let _ = self
             .events

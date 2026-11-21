@@ -90,7 +90,7 @@ impl Operation {
             Backend::Files {
                 from_trash,
                 destination,
-                trash: gallery_trash.then(|| Trash::new(platform.db.clone())),
+                trash: (gallery_trash || from_trash).then(|| Trash::new(platform.db.clone())),
                 #[cfg(feature = "runtime-media")]
                 scans,
             }
@@ -209,7 +209,17 @@ fn files(
                     if trashed != from_trash {
                         return Err("Media trash state changed".into());
                     }
-                    std::fs::remove_file(source).map_err(|error| error.to_string())?;
+                    if from_trash {
+                        let store = trash.ok_or("Unsupported filesystem media operation")?;
+                        let item = store.resolve_item(&path)
+                            .map_err(|error| error.to_string())?
+                            .ok_or("Media trash item not found")?;
+                        tokio::runtime::Handle::current()
+                            .block_on(store.remove_trashed_payload(&item))
+                            .map_err(|error| error.to_string())?;
+                    } else {
+                        std::fs::remove_file(source).map_err(|error| error.to_string())?;
+                    }
                     String::new()
                 }
                 Action::Move => {
@@ -257,17 +267,13 @@ fn files(
                         return Err("Media is not in trash".into());
                     }
                     let store = trash.ok_or("Unsupported filesystem media operation")?;
-                    let item = store.load_item(id)
-                        .map_err(|error| error.to_string())?
-                        .ok_or("Media trash item not found")?;
+                    let prepared = store.prepare_restore(id).map_err(|error| error.to_string())?;
                     crate::features::services::files::platform::authorize_native(
-                        Path::new(&item.original_path), true,
+                        Path::new(&prepared.item.original_path), true,
                     ).map_err(|error| error.to_string())?;
                     tokio::runtime::Handle::current()
-                        .block_on(store.restore_paths(vec![id.clone()]))
+                        .block_on(store.restore_item(prepared))
                         .map_err(|error| error.to_string())?
-                        .pop()
-                        .ok_or("Missing restore destination")?
                 }
             };
             Ok(Item {

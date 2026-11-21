@@ -1,7 +1,7 @@
 use super::*;
+use plain_libs::chrono::TimeZone;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
-use plain_libs::chrono::TimeZone;
 
 fn store(directory: &Path) -> Trash {
     Trash::new(Arc::new(Db::open(&directory.join("plain.db")).unwrap()))
@@ -118,16 +118,22 @@ async fn permanent_deletion_waits_for_filesystem_success() {
         .unwrap()
         .remove(0);
     let id = &row.id;
+    let info = Path::new(&row.disk)
+        .join(".plain-trash/info")
+        .join(format!("{id}.json"));
+    assert!(info.is_file());
     let parent = Path::new(&moved).parent().unwrap();
     let saved = parent.with_extension("saved");
     std::fs::rename(parent, &saved).unwrap();
     std::fs::write(parent, b"blocked").unwrap();
     assert!(trash.delete_trash_by_path(&row.id).await.is_err());
     assert!(trash.db.file(id).unwrap().unwrap().trashed_at.is_some());
+    assert!(info.is_file());
     std::fs::remove_file(parent).unwrap();
     std::fs::rename(&saved, parent).unwrap();
     trash.delete_trash_by_path(&row.id).await.unwrap();
     assert!(!Path::new(&moved).exists());
+    assert!(!info.exists());
     assert!(trash.db.file(id).unwrap().is_none());
 }
 
@@ -246,4 +252,112 @@ fn a_shared_trash_root_on_a_posix_volume_is_rejected() {
     let error = prepare_trash_parent(directory.path().to_str().unwrap(), "data/file").unwrap_err();
     assert_eq!(error.kind(), std::io::ErrorKind::InvalidInput);
     assert!(!root.join("data").exists());
+}
+
+#[tokio::test]
+async fn per_item_metadata_round_trips_with_the_file() {
+    let directory = plain_libs::temporary::tempdir().unwrap();
+    let trash = store(directory.path());
+    let file = directory.path().join("report.txt");
+    std::fs::write(&file, b"report").unwrap();
+    let moved = trash
+        .trash_paths(vec![file.to_string_lossy().into()])
+        .await
+        .unwrap()
+        .remove(0);
+    let item = trash.list_with(Vec::new(), 0, 1, "").unwrap().remove(0);
+    let root = Path::new(&item.disk).join(".plain-trash");
+    let info = root.join("info").join(format!("{}.json", item.id));
+    let json: plain_libs::serde_json::Value =
+        plain_libs::serde_json::from_slice(&std::fs::read(&info).unwrap()).unwrap();
+    let location = plain_libs::platform::volumes::locate(&file).unwrap();
+    let original = crate::infrastructure::db::files::relative_path(
+        location.path.strip_prefix(&location.volume.path).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(json["originalPath"], original);
+    assert_eq!(
+        json["trashPath"],
+        Path::new(&moved)
+            .strip_prefix(root)
+            .unwrap()
+            .to_str()
+            .unwrap()
+    );
+    assert!(DateTime::parse_from_rfc3339(json["trashedAt"].as_str().unwrap()).is_ok());
+    assert_eq!(json.as_object().unwrap().len(), 3);
+    trash.restore_paths(vec![item.id]).await.unwrap();
+    assert_eq!(std::fs::read(file).unwrap(), b"report");
+    assert!(!info.exists());
+}
+
+#[tokio::test]
+async fn the_sidecar_is_authoritative_and_the_payload_can_rebuild_a_missing_index() {
+    let directory = plain_libs::temporary::tempdir().unwrap();
+    let trash = store(directory.path());
+    let file = directory.path().join("original.txt");
+    std::fs::write(&file, b"original bytes").unwrap();
+    let moved = trash
+        .trash_paths(vec![file.to_string_lossy().into()])
+        .await
+        .unwrap()
+        .remove(0);
+    let item = trash.list_with(Vec::new(), 0, 1, "").unwrap().remove(0);
+    trash
+        .db
+        .with_conn(|conn| {
+            conn.execute(
+                "UPDATE files SET original_path='wrong.txt' WHERE id=?1",
+                [&item.id],
+            )
+        })
+        .unwrap();
+    let restored = trash
+        .restore_paths(vec![item.id.clone()])
+        .await
+        .unwrap()
+        .remove(0);
+    assert_eq!(Path::new(&restored).file_name().unwrap(), "original.txt");
+    let moved_again = trash.trash_paths(vec![restored]).await.unwrap().remove(0);
+    assert_eq!(
+        parse_trash_id_from_path(Path::new(&moved)),
+        Some(item.id.clone())
+    );
+    let fresh = Trash::new(Arc::new(
+        Db::open(&directory.path().join("fresh.db")).unwrap(),
+    ));
+    let restored = fresh
+        .restore_paths(vec![moved_again])
+        .await
+        .unwrap()
+        .remove(0);
+    assert_eq!(std::fs::read(restored).unwrap(), b"original bytes");
+    let rebuilt = fresh.db.file(&item.id).unwrap().unwrap();
+    assert!(rebuilt.original_path.is_none() && rebuilt.trashed_at.is_none());
+}
+
+#[tokio::test]
+async fn invalid_or_missing_sidecars_never_move_the_payload() {
+    let directory = plain_libs::temporary::tempdir().unwrap();
+    let trash = store(directory.path());
+    let file = directory.path().join("report.txt");
+    std::fs::write(&file, b"keep").unwrap();
+    let moved = trash
+        .trash_paths(vec![file.to_string_lossy().into()])
+        .await
+        .unwrap()
+        .remove(0);
+    let item = trash.list_with(Vec::new(), 0, 1, "").unwrap().remove(0);
+    let info = Path::new(&item.disk)
+        .join(".plain-trash/info")
+        .join(format!("{}.json", item.id));
+    let mut json: plain_libs::serde_json::Value =
+        plain_libs::serde_json::from_slice(&std::fs::read(&info).unwrap()).unwrap();
+    json["originalPath"] = plain_libs::serde_json::Value::String("../elsewhere.txt".into());
+    std::fs::write(&info, json.to_string()).unwrap();
+    assert!(trash.restore_paths(vec![item.id.clone()]).await.is_err());
+    std::fs::remove_file(&info).unwrap();
+    assert!(trash.restore_paths(vec![item.id]).await.is_err());
+    assert!(!file.exists());
+    assert_eq!(std::fs::read(moved).unwrap(), b"keep");
 }
