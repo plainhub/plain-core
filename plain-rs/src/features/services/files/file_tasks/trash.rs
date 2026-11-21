@@ -170,7 +170,6 @@ impl FileTasks {
         offset: usize,
         limit: usize,
         query: String,
-        show_hidden: bool,
     ) -> Result<Vec<plain_libs::filesystem::record::FileRecord>> {
         let db = self.hooks.platform.db.clone();
         let provider = self.provider_trash().await?.into_iter().map(|(row, _)| row).collect();
@@ -184,7 +183,7 @@ impl FileTasks {
         platform.authorize_metadata_paths(&paths).await?;
         let excluded = platform.protected_files();
         tokio::task::spawn_blocking(move || rows.into_iter().map(|row| {
-            Ok(excluded.file_row(&row.path, row.name().to_owned(), show_hidden)?)
+            Ok(excluded.file_row(&row.path, row.name().to_owned(), true)?)
         }).collect()).await?
     }
     pub async fn trash_count(&self, query: String) -> Result<usize> {

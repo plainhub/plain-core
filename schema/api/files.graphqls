@@ -241,6 +241,6 @@ extend type Query {
 	"""
 	recentFiles: [File!]!
 	trashedFileCount(query: String!): Int!
-	trashedFiles(query: String!, offset: Int!, limit: Int!, showHidden: Boolean! = false): [File!]!
+	trashedFiles(query: String!, offset: Int!, limit: Int!): [File!]!
 	uploadedChunks(fileId: String!): [UploadedChunk!]!
 }

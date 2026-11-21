@@ -24,9 +24,8 @@ impl TrashQuery {
         query: String,
         offset: i32,
         limit: i32,
-        #[graphql(default)] show_hidden: bool,
     ) -> Result<Vec<super::types::File>> {
-        let rows = tasks(ctx)?.trashed(offset.try_into()?, limit.try_into()?, query, show_hidden).await?;
+        let rows = tasks(ctx)?.trashed(offset.try_into()?, limit.try_into()?, query).await?;
         Ok(rows.into_iter().map(Into::into).collect())
     }
     async fn trashed_file_count(&self, ctx: &Context<'_>, query: String) -> Result<i32> {
