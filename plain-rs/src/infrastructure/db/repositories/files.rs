@@ -254,11 +254,10 @@ pub(crate) fn upsert(
         .and_then(|value| value.to_str())
         .unwrap_or("");
     let mime = (kind != Some(FileKind::Directory)).then(|| {
-        let mime = plain_libs::utils::mime::mime_from_ext(name);
-        if mime == "video/mp2t" && kind == Some(FileKind::File) {
-            "application/octet-stream"
-        } else {
-            mime
+        match (kind, plain_libs::utils::mime::mime_from_ext(name)) {
+            (Some(FileKind::File), "video/mp2t") => "application/octet-stream",
+            (Some(FileKind::Audio), "video/mp4") => "audio/mp4",
+            (_, mime) => mime,
         }
     });
     if let Some(id) = id {

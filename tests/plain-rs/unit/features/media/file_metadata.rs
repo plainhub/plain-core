@@ -114,6 +114,25 @@ fn data_types_outside_the_media_index_are_errors_even_for_a_real_file() {
 }
 
 #[test]
+fn video_index_reads_audio_only_mp4_as_audio() {
+    let directory = plain_libs::temporary::tempdir().unwrap();
+    let audio_path = directory.path().join("audio.mp4");
+    std::fs::copy(
+        fixture("upstream/lofty/assets/minimal/m4a_codec_aac.m4a"),
+        &audio_path,
+    )
+    .unwrap();
+
+    let audio = read_file_metadata_with_availability(&audio_path, DataType::Video).unwrap();
+    assert_eq!(audio.metadata.data_type, DataType::Audio);
+    assert!(!audio.available.dimensions);
+
+    let video = read_file_metadata(&fixture("video-h265.mp4"), DataType::Video).unwrap();
+    assert_eq!(video.data_type, DataType::Video);
+    assert!(video.width > 0 && video.height > 0);
+}
+
+#[test]
 fn audio_row_carries_probe_tags_and_real_stat_facts() {
     let path = fixture("audio-tagged.mp3");
     let canonical = std::fs::canonicalize(&path).unwrap();

@@ -40,9 +40,22 @@ pub fn read(
         .modified()
         .with_context(|| format!("{path_str} has no readable modified time"))?;
 
+    let (width, height, rotation, taken_at) = visual_facts(&canonical, kind, decode_dimensions);
+    let (data_type, kind) = if data_type == DataType::Video
+        && width == 0
+        && height == 0
+        && matches!(
+            plain_libs::utils::mime::mime_from_ext(&path_str),
+            "video/mp4" | "video/quicktime"
+        )
+        && plain_libs::media::isobmff::tracks(&canonical).is_some_and(|tracks| tracks.audio_only)
+    {
+        (DataType::Audio, "audio")
+    } else {
+        (data_type, kind)
+    };
     let probed = plain_libs::media::probe::probe_media(&path_str, kind);
     let duration_ms = probed.duration_ms;
-    let (width, height, rotation, taken_at) = visual_facts(&canonical, kind, decode_dimensions);
     let available = MediaFileMetadataAvailability {
         tags: kind != "audio" || probed.parsed,
         duration: !matches!(kind, "audio" | "video") || probed.duration_available,

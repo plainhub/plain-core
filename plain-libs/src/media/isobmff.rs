@@ -276,6 +276,7 @@ pub fn mp4_file_milliseconds(
 pub struct Tracks {
     pub first_video_codec: Option<String>,
     pub needs_remux: bool,
+    pub audio_only: bool,
 }
 
 fn child<'a>(data: &'a [u8], kind: &[u8; 4]) -> Option<&'a [u8]> {
@@ -299,17 +300,23 @@ pub fn tracks(path: &Path) -> Option<Tracks> {
         let mut result = Tracks {
             first_video_codec: None,
             needs_remux: false,
+            audio_only: false,
         };
         let mut saw_video = false;
+        let mut saw_audio = false;
+        let mut missing_handler = false;
         for track in atoms(&bytes)?
             .into_iter()
             .filter(|atom| &atom.kind == b"trak")
         {
             let Some(media) = child(track.data, b"mdia") else {
+                missing_handler = true;
                 continue;
             };
-            let video = child(media, b"hdlr").and_then(|handler| handler.get(8..12))
-                == Some(b"vide".as_slice());
+            let handler = child(media, b"hdlr").and_then(|handler| handler.get(8..12));
+            missing_handler |= handler.is_none();
+            saw_audio |= handler == Some(b"soun".as_slice());
+            let video = handler == Some(b"vide".as_slice());
             let description = child(media, b"minf")
                 .and_then(|data| child(data, b"stbl"))
                 .and_then(|data| child(data, b"stsd"));
@@ -330,6 +337,7 @@ pub fn tracks(path: &Path) -> Option<Tracks> {
                 });
             }
         }
+        result.audio_only = saw_audio && !saw_video && !missing_handler;
         return Some(result);
     }
     None
