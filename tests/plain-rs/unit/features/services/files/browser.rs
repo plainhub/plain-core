@@ -94,6 +94,48 @@ async fn ordinary_files_and_long_videos_do_not_probe_support_or_encode() {
         );
     }
 }
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[tokio::test]
+async fn ordinary_video_preview_streams_while_conversion_is_busy() {
+    use crate::features::services::files::{content, links};
+
+    let dir = plain_libs::temporary::tempdir().unwrap();
+    let core = crate::test_runtime::Core::open(dir.path()).unwrap();
+    let state = core.runtime_state();
+    let input = dir.path().join("original.mp4");
+    std::fs::write(&input, movie(b"avc1", 3000, false)).unwrap();
+
+    let conversion = state.browser.conversion.lock().await;
+    let result = tokio::time::timeout(
+        std::time::Duration::from_secs(2),
+        content::read(
+            &state,
+            links::File {
+                path: input.to_str().unwrap().into(),
+                media_id: String::new(),
+                name: "original.mp4".into(),
+            },
+            content::Options {
+                access_order: 0,
+                action: content::Action::Preview,
+                size: None,
+                starts_view: false,
+            },
+        ),
+    )
+    .await
+    .expect("ordinary preview waited for the video conversion lock")
+    .unwrap();
+    assert!(matches!(
+        result,
+        content::Content::File { path, mime, download: false, .. }
+            if path == input && mime == "video/mp4"
+    ));
+    drop(conversion);
+    core.stop_core().await;
+}
+
 #[tokio::test]
 async fn unsupported_transcode_never_enters_the_encoder() {
     let dir = plain_libs::temporary::tempdir().unwrap();

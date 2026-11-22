@@ -143,7 +143,6 @@ impl Runtime {
         E: FnOnce(PathBuf, Arc<Output>) -> EF,
         EF: std::future::Future<Output = Result<bool, String>>,
     {
-        let _conversion = self.conversion.lock().await;
         let source = PathBuf::from(path);
         let before = Source::read(&source).await?;
         if before.size == 0 {
@@ -170,6 +169,10 @@ impl Runtime {
         }
         if !supported() {
             return Ok(None);
+        }
+        let _conversion = self.conversion.lock().await;
+        if Source::read(&source).await? != before {
+            return Err("Source changed during video conversion".into());
         }
         let destination = cache_path(&self.cache, path, &before, operation);
         if tokio::fs::metadata(&destination)
