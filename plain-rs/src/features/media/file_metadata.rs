@@ -130,15 +130,20 @@ fn visual_facts(
     decode_dimensions: impl FnOnce(File) -> Option<(u32, u32)>,
 ) -> (i32, i32, Option<i32>, Option<String>) {
     if kind == "video" {
+        use plain_libs::media::video_info;
+
         return File::open(path)
             .ok()
-            .and_then(|mut reader| plain_libs::media::video_info::read(&mut reader))
+            .and_then(|mut reader| video_info::read(&mut reader))
             .and_then(|video| {
                 Some((
                     i32::try_from(video.width).ok()?,
                     i32::try_from(video.height).ok()?,
                     Some(video.rotation),
-                    None,
+                    video
+                        .raw_taken_at
+                        .as_deref()
+                        .and_then(video_info::normalize_taken_at),
                 ))
             })
             .unwrap_or_default();

@@ -31,20 +31,33 @@ pub struct ImageMetadata {
 #[cfg(feature = "time")]
 impl ImageMetadata {
     pub fn taken_at(&self) -> Option<String> {
+        use crate::chrono::{DateTime, SecondsFormat, Timelike, Utc};
+
+        let raw = self.raw_taken_at.trim();
+        let (clock, afternoon) = match raw.strip_suffix("上午") {
+            Some(clock) => (clock, Some(false)),
+            None => match raw.strip_suffix("下午") {
+                Some(clock) => (clock, Some(true)),
+                None => (raw, None),
+            },
+        };
         let offset = if self.offset_time.is_empty() {
             "+00:00"
         } else {
             &self.offset_time
         };
-        crate::chrono::DateTime::parse_from_str(
-            &format!("{} {offset}", self.raw_taken_at),
+        let date = DateTime::parse_from_str(
+            &format!("{} {offset}", clock.trim_end()),
             "%Y:%m:%d %H:%M:%S %:z",
         )
-        .ok()
-        .map(|date| {
-            date.with_timezone(&crate::chrono::Utc)
-                .to_rfc3339_opts(crate::chrono::SecondsFormat::Millis, true)
-        })
+        .ok()?;
+        if afternoon.is_some_and(|afternoon| afternoon != (date.hour() >= 12)) {
+            return None;
+        }
+        Some(
+            date.with_timezone(&Utc)
+                .to_rfc3339_opts(SecondsFormat::Millis, true),
+        )
     }
 }
 struct Field<'a> {

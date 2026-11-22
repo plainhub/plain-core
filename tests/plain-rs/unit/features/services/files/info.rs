@@ -1,4 +1,12 @@
 use super::*;
+use plain_libs::media::video_info::normalize_taken_at;
+
+#[test]
+fn quicktime_capture_date_accepts_numeric_offset_without_colon() {
+    let mut facts = json!({"rawTakenAt":"2026-10-16T12:34:56.123+0800"});
+    normalize_video(&mut facts);
+    assert_eq!(facts["takenAt"], "2026-10-16T04:34:56.123Z");
+}
 use std::sync::Arc;
 
 #[test]
@@ -30,9 +38,9 @@ fn sdk_capture_dates_keep_offsets_and_fractional_seconds() {
         ("20261016T123456Z", "2026-10-16T12:34:56.000Z"),
         ("2026-10-16T12:34:56-04:00", "2026-10-16T16:34:56.000Z"),
     ] {
-        assert_eq!(taken_at(raw).as_deref(), Some(expected));
+        assert_eq!(normalize_taken_at(raw).as_deref(), Some(expected));
     }
-    assert!(taken_at("20269916T123456.123Z").is_none());
+    assert!(normalize_taken_at("20269916T123456.123Z").is_none());
 }
 
 #[test]

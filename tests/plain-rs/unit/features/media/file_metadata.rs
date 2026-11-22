@@ -224,6 +224,47 @@ fn video_row_carries_container_duration_and_dimensions() {
 }
 
 #[test]
+fn indexed_video_recovers_container_date_for_an_existing_row() {
+    let directory = plain_libs::temporary::tempdir().unwrap();
+    let path = directory.path().join("capture.mp4");
+    let mut bytes = std::fs::read(fixture("video-h264-baseline.mp4")).unwrap();
+    let header = bytes.windows(4).position(|kind| kind == b"mvhd").unwrap() + 4;
+    assert_eq!(bytes[header], 0);
+    let creation_time = header + 4..header + 8;
+    assert_eq!(&bytes[creation_time.clone()], &[0; 4]);
+    std::fs::write(&path, &bytes).unwrap();
+
+    let db = crate::infrastructure::db::Db::open(&directory.path().join("plain.db")).unwrap();
+    let original = read_file_metadata_with_availability(&path, DataType::Video).unwrap();
+    assert!(!original.available.taken_at);
+    let before = db.record_media_file_reads(&[original]).unwrap().remove(0);
+    assert!(before.taken_at.is_none());
+
+    let container_date = "2026-10-16T04:34:56.000Z";
+    let seconds = plain_libs::chrono::DateTime::parse_from_rfc3339(container_date)
+        .unwrap()
+        .timestamp();
+    let quicktime_seconds = u32::try_from(seconds + 2_082_844_800).unwrap();
+    bytes[creation_time.clone()].copy_from_slice(&quicktime_seconds.to_be_bytes());
+    std::fs::write(&path, &bytes).unwrap();
+
+    let parsed = plain_libs::media::video_info::read(&mut File::open(&path).unwrap()).unwrap();
+    assert_eq!(parsed.raw_taken_at.as_deref(), Some(container_date));
+    let found = read_file_metadata_with_availability(&path, DataType::Video).unwrap();
+    assert!(found.available.taken_at);
+    let after = db.record_media_file_reads(&[found]).unwrap().remove(0);
+    assert_eq!(after.id, before.id);
+    assert_eq!(after.taken_at.as_deref(), Some(container_date));
+
+    bytes[creation_time].fill(0);
+    std::fs::write(&path, &bytes).unwrap();
+    let no_date = read_file_metadata_with_availability(&path, DataType::Video).unwrap();
+    assert!(!no_date.available.taken_at);
+    let preserved = db.record_media_file_reads(&[no_date]).unwrap().remove(0);
+    assert_eq!(preserved.taken_at, after.taken_at);
+}
+
+#[test]
 fn video_catalog_dimensions_use_shared_container_readers_without_an_image_decoder() {
     for (name, width, height) in [
         ("video-h264-baseline.mp4", 320, 240),
@@ -475,6 +516,28 @@ fn distant_image_metadata(orientation: u16) -> Vec<u8> {
     bytes[payload + 64..payload + 84].copy_from_slice(b"2026:10:16 12:34:56\0");
     bytes[payload + 96..payload + 103].copy_from_slice(b"+08:00\0");
     bytes
+}
+
+#[test]
+fn indexed_image_dates_accept_consistent_period_suffixes_on_24_hour_clocks() {
+    let directory = plain_libs::temporary::tempdir().unwrap();
+    let path = directory.path().join("capture.tiff");
+    let count = 1024 * 1024 + 256 + 2 + 4;
+    let payload = 2 * 1024 * 1024 + 64;
+    for (date, expected) in [
+        ("2026:10:16 11:34:56上午", Some("2026-10-16T03:34:56.000Z")),
+        ("2026:10:16 17:34:56下午", Some("2026-10-16T09:34:56.000Z")),
+        ("2026:10:16 17:34:56上午", None),
+        ("2026:10:16 17:34:56未知", None),
+    ] {
+        let mut bytes = distant_image_metadata(6);
+        bytes[count..count + 4].copy_from_slice(&((date.len() + 1) as u32).to_le_bytes());
+        bytes[payload..payload + date.len()].copy_from_slice(date.as_bytes());
+        std::fs::write(&path, &bytes).unwrap();
+        let found = read_file_metadata_with_availability(&path, DataType::Image).unwrap();
+        assert_eq!(found.metadata.taken_at.as_deref(), expected, "{date}");
+        assert_eq!(found.available.taken_at, expected.is_some(), "{date}");
+    }
 }
 
 #[test]

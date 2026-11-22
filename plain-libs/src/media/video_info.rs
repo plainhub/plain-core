@@ -26,6 +26,27 @@ pub struct VideoInfo {
     pub raw_location: Option<String>,
 }
 
+pub fn normalize_taken_at(raw: &str) -> Option<String> {
+    use crate::chrono::{DateTime, SecondsFormat, Utc};
+
+    let raw = raw.trim();
+    DateTime::parse_from_rfc3339(raw)
+        .ok()
+        .or_else(|| {
+            [
+                "%Y-%m-%dT%H:%M:%S%.f%#z",
+                "%Y%m%dT%H%M%S%.f%#z",
+                "%Y%m%dT%H%M%S%#z",
+            ]
+            .into_iter()
+            .find_map(|format| DateTime::parse_from_str(raw, format).ok())
+        })
+        .map(|date| {
+            date.with_timezone(&Utc)
+                .to_rfc3339_opts(SecondsFormat::Millis, true)
+        })
+}
+
 pub fn read(reader: &mut (impl Read + Seek)) -> Option<VideoInfo> {
     reader.seek(SeekFrom::Start(0)).ok()?;
     let mut signature = [0; 4];

@@ -195,7 +195,7 @@ fn normalize_video(facts: &mut Value) {
     let date = facts["rawTakenAt"]
         .as_str()
         .or_else(|| facts["takenAt"].as_str())
-        .and_then(taken_at);
+        .and_then(plain_libs::media::video_info::normalize_taken_at);
     let frame_rate = facts["frameRate"]
         .as_f64()
         .filter(|value| value.is_finite() && *value >= 0.0)
@@ -213,20 +213,6 @@ fn normalize_video(facts: &mut Value) {
     facts["durationMs"] = json!(duration);
     facts["bitrate"] = json!(bitrate);
 }
-fn taken_at(raw: &str) -> Option<String> {
-    plain_libs::chrono::DateTime::parse_from_rfc3339(raw)
-        .ok()
-        .or_else(|| {
-            ["%Y%m%dT%H%M%S%.f%#z", "%Y%m%dT%H%M%S%#z"]
-                .into_iter()
-                .find_map(|format| plain_libs::chrono::DateTime::parse_from_str(raw, format).ok())
-        })
-        .map(|date| {
-            date.with_timezone(&plain_libs::chrono::Utc)
-                .to_rfc3339_opts(plain_libs::chrono::SecondsFormat::Millis, true)
-        })
-}
-
 #[cfg(test)]
 #[path = "../../../../../tests/plain-rs/unit/features/services/files/info.rs"]
 mod tests;
