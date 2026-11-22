@@ -548,45 +548,85 @@ async fn concurrent_generation_delivers_one_shared_allocation_to_300_readers() {
 
 #[cfg(all(feature = "media", not(any(target_os = "android", target_os = "ios"))))]
 #[tokio::test]
-async fn service_generates_and_caches_a_thumbnail_for_hevc_video() {
+async fn video_thumbnail_batch_decodes_and_persists_once_per_file() {
+    use std::sync::atomic::Ordering;
+
     let (directory, core, _) = server_with_cache();
-    let path = directory.path().join("video.mp4");
-    std::fs::write(
-        &path,
-        include_bytes!("../../../../../../plain-rs/testdata/video-h265.mp4"),
-    )
-    .unwrap();
     let state = core.runtime_state();
-    let request = request_for(&path);
+    let paths = video_thumbnail_fixtures(directory.path());
     let (first, concurrent) = tokio::join!(
-        state.thumbnails.get(&state, request.clone()),
-        state.thumbnails.get(&state, request.clone())
+        video_thumbnail_batch(&state, &paths),
+        video_thumbnail_batch(&state, &paths)
     );
-    let first = first.unwrap().unwrap();
-    assert_eq!(first.as_ptr(), concurrent.unwrap().unwrap().as_ptr());
-    let image = plain_libs::image::load_from_memory(&first).unwrap();
-    assert_eq!((image.width(), image.height()), (256, 256));
-    let cached = state
-        .thumbnails
-        .get(&state, request)
-        .await
-        .unwrap()
-        .unwrap();
-    assert_eq!(first.as_ptr(), cached.as_ptr());
+    let reads = state.thumbnails.cache_reads.load(Ordering::Relaxed);
+    let cached = video_thumbnail_batch(&state, &paths).await;
+
+    let mut jpeg_bytes = 0;
+    for ((first, concurrent), cached) in first.iter().zip(concurrent).zip(cached) {
+        assert_eq!(first.as_ptr(), concurrent.as_ptr());
+        assert_eq!(first.as_ptr(), cached.as_ptr());
+        let image = plain_libs::image::load_from_memory(first).unwrap();
+        assert_eq!((image.width(), image.height()), (256, 256));
+        jpeg_bytes += first.len() as u64;
+    }
+    assert_eq!(first.len(), paths.len());
     assert_eq!(
-        state
-            .thumbnails
-            .native_decodes
-            .load(std::sync::atomic::Ordering::Relaxed),
-        1
+        state.thumbnails.native_decodes.load(Ordering::Relaxed),
+        paths.len()
     );
+    assert_eq!(state.thumbnails.cache_reads.load(Ordering::Relaxed), reads);
     let cache = state
         .file_platform
-        .thumbnail_cache(path.to_str().unwrap())
+        .thumbnail_cache(paths[0].to_str().unwrap())
         .unwrap();
-    let (files, bytes) = video_cache_entries(&cache.join("thumbs"));
-    assert_eq!((files, bytes), (1, first.len() as u64));
+    assert_eq!(
+        video_cache_entries(&cache.join("thumbs")),
+        (paths.len(), jpeg_bytes)
+    );
     core.stop_core().await;
+}
+
+#[cfg(all(feature = "media", not(any(target_os = "android", target_os = "ios"))))]
+fn video_thumbnail_fixtures(directory: &std::path::Path) -> Vec<std::path::PathBuf> {
+    let fixtures: [&[u8]; 3] = [
+        include_bytes!("../../../../../../plain-rs/testdata/video-h265.mp4"),
+        include_bytes!("../../../../../../plain-rs/testdata/video-h265-hvc1.mp4"),
+        include_bytes!("../../../../../../plain-rs/testdata/video-h264-high.mp4"),
+    ];
+    (0..12)
+        .map(|i| {
+            let path = directory.join(format!("video-{i}.mp4"));
+            std::fs::write(&path, fixtures[i % fixtures.len()]).unwrap();
+            path
+        })
+        .collect()
+}
+
+#[cfg(all(feature = "media", not(any(target_os = "android", target_os = "ios"))))]
+async fn video_thumbnail_batch(
+    state: &crate::runtime::Runtime,
+    paths: &[std::path::PathBuf],
+) -> Vec<bytes::Bytes> {
+    let jobs: Vec<_> = paths
+        .iter()
+        .map(|path| {
+            let state = state.clone();
+            let request = request_for(path);
+            tokio::spawn(async move {
+                state
+                    .thumbnails
+                    .get(&state, request)
+                    .await
+                    .unwrap()
+                    .unwrap()
+            })
+        })
+        .collect();
+    let mut result = Vec::with_capacity(jobs.len());
+    for job in jobs {
+        result.push(job.await.unwrap());
+    }
+    result
 }
 
 #[cfg(all(feature = "media", not(any(target_os = "android", target_os = "ios"))))]
@@ -612,43 +652,18 @@ fn video_cache_entries(directory: &std::path::Path) -> (usize, u64) {
 #[ignore]
 async fn video_thumbnail_batch_benchmark() {
     use std::time::Instant;
-    let fixtures: [&[u8]; 3] = [
-        include_bytes!("../../../../../../plain-rs/testdata/video-h265.mp4"),
-        include_bytes!("../../../../../../plain-rs/testdata/video-h265-hvc1.mp4"),
-        include_bytes!("../../../../../../plain-rs/testdata/video-h264-high.mp4"),
-    ];
     let mut cold = Vec::new();
     let mut warm = Vec::new();
     let mut cache_entries = (0, 0);
     for round in 0..8 {
         let (directory, core, _) = server_with_cache();
         let state = core.runtime_state();
-        let paths: Vec<_> = (0..12)
-            .map(|i| {
-                let path = directory.path().join(format!("video-{i}.mp4"));
-                std::fs::write(&path, fixtures[i % fixtures.len()]).unwrap();
-                path
-            })
-            .collect();
+        let paths = video_thumbnail_fixtures(directory.path());
         let mut timings = [0.; 2];
         for elapsed in &mut timings {
             let start = Instant::now();
-            let mut jobs = tokio::task::JoinSet::new();
-            for path in &paths {
-                let state = state.clone();
-                let request = request_for(path);
-                jobs.spawn(async move {
-                    state
-                        .thumbnails
-                        .get(&state, request)
-                        .await
-                        .unwrap()
-                        .unwrap()
-                });
-            }
-            while let Some(result) = jobs.join_next().await {
-                assert!(result.unwrap().starts_with(&[0xff, 0xd8]));
-            }
+            let results = video_thumbnail_batch(&state, &paths).await;
+            assert!(results.iter().all(|bytes| bytes.starts_with(&[0xff, 0xd8])));
             *elapsed = start.elapsed().as_secs_f64() * 1000.;
         }
         let cache = state

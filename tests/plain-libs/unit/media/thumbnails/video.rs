@@ -248,6 +248,38 @@ fn streamed_video_thumbnail_pixels_match_full_rgb_for_fit_and_crop() {
 }
 
 #[test]
+fn hevc_color_conversion_streams_only_cropped_rows_from_a_reused_band() {
+    let plan = plan_keyframe(&testdata("video-h265.mp4")).unwrap();
+    let decoded = decode_frame(plan).unwrap();
+    let full_rgb = full_rgb(&decoded);
+    let (pixels, _, _) = full_rgb.raw();
+    let DecodedFrame::Hevc(frame) = decoded else {
+        panic!("expected HEVC frame");
+    };
+    let columns = 3..20;
+    let rows = 5..38;
+    let mut addresses = std::collections::HashSet::new();
+    let mut y = rows.start;
+    heic_rs::color::rgb8_rows(
+        &frame,
+        columns.clone(),
+        rows.clone(),
+        MAX_SOURCE_PIXELS,
+        |row| {
+            let offset = y * frame.width;
+            let range =
+                ((offset + columns.start) * 3) as usize..((offset + columns.end) * 3) as usize;
+            assert_eq!(row, &pixels[range]);
+            addresses.insert(row.as_ptr());
+            y += 1;
+        },
+    )
+    .unwrap();
+    assert_eq!(y, rows.end);
+    assert!(addresses.len() <= rows.len() / 2);
+}
+
+#[test]
 #[ignore]
 fn hevc_4k_thumbnail_post_decode_benchmark() {
     use heic_rs::hevc::{ChromaFormat, Frame};
