@@ -3,11 +3,23 @@ use plain_libs::utils::uuid::Uuid;
 pub const DISCOVERY_UUID: &str = "706c6169-0000-8000-8000-000000000000";
 pub const DISCOVERY_UUID_MASK: &str = "ffffffff-0000-f000-c000-000000000000";
 
+pub(crate) const MIGRATED_ID_BASE: u128 = 0x706c6169_0001_8000_8000_000000000000;
+pub(crate) const MIGRATED_ID_MASK: u128 = !((1u128 << 64) | ((1u128 << 62) - 1));
+
 pub fn generate() -> String {
-    let mut bytes = *Uuid::new_v4().as_bytes();
-    bytes[..4].copy_from_slice(b"plai");
-    bytes[6] = (bytes[6] & 0x0f) | 0x80;
-    Uuid::from_bytes(bytes).into_string()
+    generate_with(Uuid::new_v4)
+}
+
+fn generate_with(mut random: impl FnMut() -> Uuid) -> String {
+    loop {
+        let mut bytes = *random().as_bytes();
+        bytes[..4].copy_from_slice(b"plai");
+        bytes[6] = (bytes[6] & 0x0f) | 0x80;
+        let id = Uuid::from_bytes(bytes);
+        if id.as_u128() & MIGRATED_ID_MASK != MIGRATED_ID_BASE {
+            return id.into_string();
+        }
+    }
 }
 
 pub fn is_valid(value: &str) -> bool {
@@ -29,16 +41,23 @@ import {{ bytesToHex }} from '@/lib/strutil'
 
 const prefix = {prefix:?}
 const mask = {mask:?}
+const migratedPrefix = {migrated_prefix:?}
+const migratedMask = {migrated_mask:?}
 
 export function generateClientId(): string {{
-  const bytes = crypto.getRandomValues(new Uint8Array(16))
-  for (let i = 0; i < bytes.length; i++) bytes[i] = (bytes[i] & ~mask[i]) | prefix[i]
+  const bytes = new Uint8Array(16)
+  do {{
+    crypto.getRandomValues(bytes)
+    for (let i = 0; i < bytes.length; i++) bytes[i] = (bytes[i] & ~mask[i]) | prefix[i]
+  }} while (bytes.every((byte, i) => (byte & migratedMask[i]) === migratedPrefix[i]))
   const hex = bytesToHex(bytes)
   return `${{hex.slice(0, 8)}}-${{hex.slice(8, 12)}}-${{hex.slice(12, 16)}}-${{hex.slice(16, 20)}}-${{hex.slice(20)}}`
 }}
 "#,
         prefix = prefix.as_bytes(),
-        mask = mask.as_bytes()
+        mask = mask.as_bytes(),
+        migrated_prefix = MIGRATED_ID_BASE.to_be_bytes(),
+        migrated_mask = MIGRATED_ID_MASK.to_be_bytes()
     )
 }
 

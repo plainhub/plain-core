@@ -11,6 +11,15 @@ pub struct EventSpec {
 }
 pub const EVENTS: &[EventSpec] = &[
     EventSpec {
+        field: "legacyDataUpgradeChanged",
+        event: crate::infrastructure::events::LEGACY_DATA_UPGRADE_CHANGED,
+        aliases: &[],
+        invalidation: false,
+        selection: "",
+        access: &[],
+        capability: None,
+    },
+    EventSpec {
         field: "httpServerChanged",
         event: crate::infrastructure::events::HTTP_SERVER_CHANGED,
         aliases: &["PREFS_UPDATED"],

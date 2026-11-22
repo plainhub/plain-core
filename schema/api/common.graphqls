@@ -209,6 +209,10 @@ type SmsSendResult {
 }
 
 type Subscription {
+	"""
+	Watch this device's 3.3.25 data upgrade, including its current status on entry.
+	"""
+	legacyDataUpgradeChanged: LegacyDataUpgradeStatus!
 	httpServerChanged: HttpServer!
 	prefsChanged: Boolean!
 	peersChanged: Boolean!

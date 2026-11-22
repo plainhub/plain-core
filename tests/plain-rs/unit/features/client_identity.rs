@@ -15,6 +15,19 @@ fn generated_ids_match_the_discovery_mask_and_keep_random_device_bits() {
 }
 
 #[test]
+fn generator_rerolls_reserved_values_and_accepts_adjacent_values() {
+    let mut candidates = [
+        "00000000-0001-4000-8000-000000003039",
+        "00000000-0001-4001-bfff-ffffffffffff",
+        "00000000-0001-4002-8000-000000000000",
+    ]
+    .into_iter();
+    let id = generate_with(|| Uuid::parse_str(candidates.next().unwrap()).unwrap());
+    assert_eq!(id, "706c6169-0001-8002-8000-000000000000");
+    assert!(candidates.next().is_none());
+}
+
+#[test]
 fn parser_rejects_other_prefixes_versions_variants_and_legacy_ids() {
     for value in [
         "706c6169-2d74-8e53-9a16-f08b62c591d3",

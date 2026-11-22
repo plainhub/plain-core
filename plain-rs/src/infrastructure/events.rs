@@ -2,6 +2,7 @@ pub const HTTP_SERVER_CHANGED: &str = "HTTP_SERVER_CHANGED";
 pub const MEDIA_UPDATED: &str = "MEDIA_UPDATED";
 pub const MEDIA_SCAN_PROGRESS: &str = "MEDIA_SCAN_PROGRESS";
 pub const WS_PAIRING_COMPLETED: &str = "PAIRING_COMPLETED";
+pub const LEGACY_DATA_UPGRADE_CHANGED: &str = "LEGACY_DATA_UPGRADE_CHANGED";
 
 #[derive(Clone, Debug)]
 pub struct WsEvent {
@@ -78,6 +79,7 @@ impl WsEvent {
         matches!(
             self.event_type,
             HTTP_SERVER_CHANGED
+                | LEGACY_DATA_UPGRADE_CHANGED
                 | "PEER_CONNECTIONS_UPDATED"
                 | "IMAGE_INDEX_UPDATED"
                 | "IMAGE_MODELS_UPDATED"

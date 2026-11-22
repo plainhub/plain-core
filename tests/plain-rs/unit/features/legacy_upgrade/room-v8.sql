@@ -1,0 +1,27 @@
+-- Source: PlainApp v3.0.0 Room schema export.
+PRAGMA user_version = 8;
+CREATE TABLE IF NOT EXISTS `chats` (`id` TEXT NOT NULL, `from_id` TEXT NOT NULL, `to_id` TEXT NOT NULL, `group_id` TEXT NOT NULL, `status` TEXT NOT NULL, `content` TEXT NOT NULL, `created_at` TEXT NOT NULL, `updated_at` TEXT NOT NULL, PRIMARY KEY(`id`));
+CREATE INDEX IF NOT EXISTS `index_chats_from_id` ON `chats` (`from_id`);
+CREATE INDEX IF NOT EXISTS `index_chats_to_id` ON `chats` (`to_id`);
+CREATE INDEX IF NOT EXISTS `index_chats_group_id` ON `chats` (`group_id`);
+CREATE TABLE IF NOT EXISTS `sessions` (`client_id` TEXT NOT NULL, `client_ip` TEXT NOT NULL, `os_name` TEXT NOT NULL, `os_version` TEXT NOT NULL, `browser_name` TEXT NOT NULL, `browser_version` TEXT NOT NULL, `token` TEXT NOT NULL, `created_at` TEXT NOT NULL, `updated_at` TEXT NOT NULL, PRIMARY KEY(`client_id`));
+CREATE TABLE IF NOT EXISTS `tags` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `type` INTEGER NOT NULL, `count` INTEGER NOT NULL, `created_at` TEXT NOT NULL, `updated_at` TEXT NOT NULL, PRIMARY KEY(`id`));
+CREATE TABLE IF NOT EXISTS `tag_relations` (`tag_id` TEXT NOT NULL, `key` TEXT NOT NULL, `type` INTEGER NOT NULL, `created_at` TEXT NOT NULL, `size` INTEGER NOT NULL, `title` TEXT NOT NULL, PRIMARY KEY(`tag_id`, `key`, `type`));
+CREATE TABLE IF NOT EXISTS `notes` (`id` TEXT NOT NULL, `title` TEXT NOT NULL, `deleted_at` TEXT, `content` TEXT NOT NULL, `created_at` TEXT NOT NULL, `updated_at` TEXT NOT NULL, PRIMARY KEY(`id`));
+CREATE TABLE IF NOT EXISTS `feeds` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `url` TEXT NOT NULL, `fetch_content` INTEGER NOT NULL, `created_at` TEXT NOT NULL, `updated_at` TEXT NOT NULL, PRIMARY KEY(`id`));
+CREATE UNIQUE INDEX IF NOT EXISTS `index_feeds_url` ON `feeds` (`url`);
+CREATE TABLE IF NOT EXISTS `feed_entries` (`id` TEXT NOT NULL, `title` TEXT NOT NULL, `url` TEXT NOT NULL, `image` TEXT NOT NULL, `description` TEXT NOT NULL, `author` TEXT NOT NULL, `content` TEXT NOT NULL, `feed_id` TEXT NOT NULL, `raw_id` TEXT NOT NULL, `published_at` TEXT NOT NULL, `read` INTEGER NOT NULL, `created_at` TEXT NOT NULL, `updated_at` TEXT NOT NULL, PRIMARY KEY(`id`));
+CREATE INDEX IF NOT EXISTS `index_feed_entries_feed_id` ON `feed_entries` (`feed_id`);
+CREATE INDEX IF NOT EXISTS `index_feed_entries_raw_id` ON `feed_entries` (`raw_id`);
+CREATE TABLE IF NOT EXISTS `books` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `author` TEXT NOT NULL, `image` TEXT NOT NULL, `description` TEXT NOT NULL, `created_at` TEXT NOT NULL, `updated_at` TEXT NOT NULL, PRIMARY KEY(`id`));
+CREATE TABLE IF NOT EXISTS `book_chapters` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `book_id` TEXT NOT NULL, `parent_id` TEXT NOT NULL, `content` TEXT NOT NULL, `display_order` INTEGER NOT NULL, `created_at` TEXT NOT NULL, `updated_at` TEXT NOT NULL, PRIMARY KEY(`id`));
+CREATE TABLE IF NOT EXISTS `pomodoro_items` (`id` TEXT NOT NULL, `date` TEXT NOT NULL, `completed_count` INTEGER NOT NULL, `total_work_seconds` INTEGER NOT NULL, `total_break_seconds` INTEGER NOT NULL, `created_at` TEXT NOT NULL, `updated_at` TEXT NOT NULL, PRIMARY KEY(`id`));
+CREATE TABLE IF NOT EXISTS `peers` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `ip` TEXT NOT NULL, `key` TEXT NOT NULL, `public_key` TEXT NOT NULL, `status` TEXT NOT NULL, `port` INTEGER NOT NULL, `device_type` TEXT NOT NULL, `created_at` TEXT NOT NULL, `updated_at` TEXT NOT NULL, PRIMARY KEY(`id`));
+CREATE TABLE IF NOT EXISTS `chat_groups` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `key` TEXT NOT NULL, `members` TEXT NOT NULL, `created_at` TEXT NOT NULL, `updated_at` TEXT NOT NULL, PRIMARY KEY(`id`));
+CREATE TABLE IF NOT EXISTS `bookmarks` (`id` TEXT NOT NULL, `url` TEXT NOT NULL, `title` TEXT NOT NULL, `favicon_path` TEXT NOT NULL, `group_id` TEXT NOT NULL, `pinned` INTEGER NOT NULL, `click_count` INTEGER NOT NULL, `last_clicked_at` TEXT, `sort_order` INTEGER NOT NULL, `created_at` TEXT NOT NULL, `updated_at` TEXT NOT NULL, PRIMARY KEY(`id`));
+CREATE INDEX IF NOT EXISTS `index_bookmarks_group_id` ON `bookmarks` (`group_id`);
+CREATE TABLE IF NOT EXISTS `bookmark_groups` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `collapsed` INTEGER NOT NULL, `sort_order` INTEGER NOT NULL, `created_at` TEXT NOT NULL, `updated_at` TEXT NOT NULL, PRIMARY KEY(`id`));
+CREATE TABLE IF NOT EXISTS `files` (`id` TEXT NOT NULL, `size` INTEGER NOT NULL, `mime_type` TEXT NOT NULL, `real_path` TEXT NOT NULL, `ref_count` INTEGER NOT NULL, `weak_hash` TEXT NOT NULL, `created_at` TEXT NOT NULL, `updated_at` TEXT NOT NULL, PRIMARY KEY(`id`));
+CREATE INDEX IF NOT EXISTS `index_files_size_weak_hash` ON `files` (`size`, `weak_hash`);
+CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT);
+INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '2a8e4b5b20d64222360977009096b72d');

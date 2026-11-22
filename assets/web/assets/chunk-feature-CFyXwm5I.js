@@ -1,1 +1,0 @@
-import{t as e}from"./chunk-local-mode-Bm5bX17I.js";import{n as t,t as n}from"./chunk-data-D8B-n4xp.js";var r=(e,t)=>!!t?.includes(e),i=(i,a)=>r(t.MEDIA_TRASH,i?.capabilities)&&(!e()||a===n.IMAGE),a=e=>r(t.MEDIA_DELETE,e?.capabilities),o=e=>r(t.MEDIA_MOVE,e?.capabilities);export{i,a as n,o as r,r as t};

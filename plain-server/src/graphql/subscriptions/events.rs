@@ -153,6 +153,8 @@ async fn snapshot(state: &ServerState, name: &str) -> Result<Option<String>> {
                 .map_err(|error| plain_graphql::Error::from(error))?
         }
         "IMAGE_MODELS_UPDATED" => state.image_models.snapshot().event().payload,
+        plain_rs::infrastructure::events::LEGACY_DATA_UPGRADE_CHANGED =>
+            plain_libs::serde_json::to_string(&crate::graphql::resolvers::app::legacy_data::snapshot(state)?)?,
         _ => return Ok(None),
     };
     Ok(Some(value))

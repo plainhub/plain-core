@@ -1,0 +1,1 @@
+import{c as e,l as t,s as n}from"./chunk-array-DjSnOJv6.js";function r(r){let{items:i,getName:a,openTextFile:o,openBrowserFile:s,viewMedia:c,download:l}=r;function u(r){let u=a(r);e(u)&&o?o(r):n(u)?s(r):t(u)?c(i.value,r):l(r)}return{openFile:u}}export{r as t};

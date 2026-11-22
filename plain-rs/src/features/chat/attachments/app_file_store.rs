@@ -81,7 +81,7 @@ fn fid_ext(mime_type: &str) -> &'static str {
 /// report an empty `File.type` for less-common extensions (`properties`,
 /// `apk`, …), and the chunked-merge path has no MIME at all. Only when the
 /// name carries no extension do we consult the MIME type.
-fn ext_from_name(file_name: &str, mime_type: &str) -> String {
+pub(crate) fn ext_from_name(file_name: &str, mime_type: &str) -> String {
     Path::new(file_name)
         .extension()
         .and_then(|e| e.to_str())
@@ -123,7 +123,7 @@ pub fn relative_dest_path(hash: &str, ext: &str) -> String {
 }
 
 /// Compute the strong (full-file) SHA-256 hex digest.
-fn strong_hash_file(path: &Path) -> std::io::Result<String> {
+pub(crate) fn strong_hash_file(path: &Path) -> std::io::Result<String> {
     let mut f = fs::File::open(path)?;
     let mut hasher = Sha256::new();
     let mut buf = [0u8; 64 * 1024];
@@ -142,7 +142,7 @@ fn strong_hash_file(path: &Path) -> std::io::Result<String> {
 /// Files smaller than `WEAK_HEAD + WEAK_TAIL` are hashed in full; the head
 /// and tail ranges still get covered (with overlap) and the result is
 /// deterministic.
-fn weak_hash_file(path: &Path) -> std::io::Result<(String, u64)> {
+pub(crate) fn weak_hash_file(path: &Path) -> std::io::Result<(String, u64)> {
     let metadata = fs::metadata(path)?;
     let size = metadata.len();
     let mut f = fs::File::open(path)?;
