@@ -2,6 +2,7 @@ use super::*;
 
 #[test]
 fn supported_command_option_and_help_results_are_preserved() {
+    const VERSION_LINE: &str = concat!("plainapp ", env!("CARGO_PKG_VERSION"), "\n");
     let cases: &[(&[&str], i32, Option<&str>, Option<&str>)] = include!("reference_cases.rs");
     assert_eq!(cases.len(), 564);
     for (arguments, code, parsed, help) in cases {
