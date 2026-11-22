@@ -44,6 +44,7 @@ impl AuditEvents {
                             let _ = reply.send(failure.take().map_or(Ok(()), Err));
                         }
                         Command::Stop(reply) => {
+                            receiver.close();
                             let _ = reply.send(failure.take().map_or(Ok(()), Err));
                             break;
                         }
