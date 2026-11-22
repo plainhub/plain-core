@@ -254,14 +254,21 @@ async fn graphql(state: ServerState, target: &str, request: Request) -> Response
     if authorize_graphql(&query, false).is_err() {
         return StatusCode::FORBIDDEN.into_response();
     }
-    let Ok(route) = state.managed_resources.route(&state, target).await else {
-        return StatusCode::BAD_GATEWAY.into_response();
-    };
-    if current(&state, &session).is_err() || route.check_current(&state).is_err() {
-        return StatusCode::FORBIDDEN.into_response();
-    }
-    let response = route.exchange(&state, text, None).await;
-    if current(&state, &session).is_err() || route.check_current(&state).is_err() {
+    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(10);
+    let response = tokio::time::timeout_at(
+        deadline,
+        state.managed_resources.exchange(
+            &state,
+            target,
+            text,
+            deadline,
+            crate::managed_peers::safe_read(&query),
+            || current(&state, &session),
+        ),
+    )
+    .await
+    .unwrap_or_else(|error| Err(error.into()));
+    if current(&state, &session).is_err() {
         return StatusCode::FORBIDDEN.into_response();
     }
     let response = match response {

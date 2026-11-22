@@ -1,8 +1,8 @@
-use plain_rs::features::peers::error::PeerConnectionErrorCode;
 use crate::graphql::executor::GraphqlExecutor;
 use crate::managed_peers::request_error as peer_error;
 use crate::server::ServerState;
 use plain_graphql::{Request, Response};
+use plain_rs::features::peers::error::PeerConnectionErrorCode;
 use plain_rs::infrastructure::host::request_scope::NativeRequestScope;
 use plain_rs::infrastructure::protocols::graphql::PeerSubscriptionTarget;
 
@@ -76,6 +76,7 @@ impl NativeGraphqlExecutor {
         let deadline = tokio::time::Instant::now() + timeout;
         request.extensions.remove("nativeScope");
         request.extensions.remove("nativeDeadlineMs");
+        let safe_read = crate::managed_peers::safe_read(&request);
         let request =
             plain_libs::serde_json::to_string(&request).map_err(|error| error.to_string())?;
         if request.len() > plain_rs::features::services::peers::managed_resources::GRAPHQL_LIMIT {
@@ -88,9 +89,9 @@ impl NativeGraphqlExecutor {
             _ = stop.wait_for(|value| *value) => Err("Server stopped".into()),
             _ = tokio::time::sleep_until(deadline) => Err(PeerConnectionErrorCode::ConnectionTimeout.to_string()),
             result = async {
-                let route = self.state.managed_resources.route(&self.state, peer_id).await?;
-                let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
-                let response = route.exchange(&self.state, &request, Some(remaining)).await?;
+                let response = self.state.managed_resources
+                    .exchange(&self.state, peer_id, &request, deadline, safe_read, || Ok(()))
+                    .await?;
                 plain_libs::serde_json::from_slice(&response).map_err(plain_libs::anyhow::Error::from)
             } => result.map_err(peer_error),
         }

@@ -1,3 +1,6 @@
+#[path = "managed_recovery.rs"]
+pub(super) mod recovery;
+
 pub const MANAGED_RESOURCE: &str = "x-plain-managed-resource";
 
 use crate::runtime::Runtime as CoreRuntime;
@@ -20,6 +23,7 @@ type RouteSlot = Arc<tokio::sync::Mutex<Option<Arc<PeerRoute>>>>;
 
 #[derive(Default)]
 pub struct ManagedPeerRoutes {
+    pub(super) recovery: recovery::Recovery,
     #[cfg(feature = "test-seams")]
     pub routes: Mutex<HashMap<String, RouteSlot>>,
     #[cfg(not(feature = "test-seams"))]
@@ -38,12 +42,16 @@ pub struct PeerRoute {
 }
 
 impl ManagedPeerRoutes {
-    pub async fn route(&self, state: &CoreRuntime, target: &str) -> Result<Arc<PeerRoute>> {
-        let peer = peers::get(&state.db, target)?
+    fn peer(&self, state: &CoreRuntime, target: &str) -> Result<DPeer> {
+        peers::get(&state.db, target)?
             .filter(|peer| {
                 peer.is_paired() && !peer.public_key.is_empty() && !peer.token.is_empty()
             })
-            .ok_or_else(|| anyhow!("Managed device unavailable"))?;
+            .ok_or_else(|| anyhow!("Managed device unavailable"))
+    }
+
+    pub async fn route(&self, state: &CoreRuntime, target: &str) -> Result<Arc<PeerRoute>> {
+        let peer = self.peer(state, target)?;
         let client_id = state
             .native_client_id()
             .map_err(plain_libs::anyhow::Error::msg)?;
@@ -65,11 +73,9 @@ impl ManagedPeerRoutes {
         }) {
             return Ok(route.clone());
         }
-        let base = http_client::Url::parse(
-            &peer
-                .base_url()
-                .ok_or_else(|| plain_libs::anyhow::anyhow!("No peer address"))?,
-        )?;
+        let base = http_client::Url::parse(&peer.base_url().ok_or(
+            crate::features::peers::error::PeerConnectionErrorCode::PeerAddressUnavailable,
+        )?)?;
         let key = decode_key(&peer.token)?;
         let data = management_http::query(
             state,

@@ -177,7 +177,7 @@ async fn native_queries_and_subscriptions_share_a_pinned_route_without_a_local_l
     remote_state.db.session_save(&session).unwrap();
     let mut peer = peer(REMOTE_ID);
     peer.port = Some(port);
-    peer.token = session.token;
+    peer.token = session.token.clone();
     peers::save(&state.db, &[peer.clone()], SaveMode::Insert).unwrap();
     let executor = local.native_graphql().unwrap();
     let request = || Request::new("{ app { clientId } }");
@@ -358,7 +358,10 @@ async fn native_queries_and_subscriptions_share_a_pinned_route_without_a_local_l
     executor.close_subscriptions(rejected_handle);
     *slot.lock().await = Some(route.clone());
     let idle = tokio::time::timeout(Duration::from_secs(31), subscription.read()).await;
-    assert!(idle.is_err(), "subscription ended during idle heartbeat: {idle:?}");
+    assert!(
+        idle.is_err(),
+        "subscription ended during idle heartbeat: {idle:?}"
+    );
     remote_state
         .events
         .send(plain_rs::infrastructure::events::WsEvent::broadcast(
@@ -373,6 +376,33 @@ async fn native_queries_and_subscriptions_share_a_pinned_route_without_a_local_l
     let event: plain_libs::serde_json::Value = plain_libs::serde_json::from_str(&event).unwrap();
     assert_eq!(event["id"], "content");
     assert_eq!(event["payload"]["data"]["contentChanged"], true);
+
+    let moved = start(&dir.path().join("moved"), REMOTE_ID);
+    moved.runtime_state().db.session_save(&session).unwrap();
+    let (cert, key) = plain_libs::tls::generate_pem(&["localhost".into()]).unwrap();
+    let (_, moved_port) = moved.start_public(0, 0, cert, key).await.unwrap();
+    peers::discovered(
+        &state.db,
+        REMOTE_ID,
+        "127.0.0.1",
+        moved_port,
+        &peer.name,
+        peer.device_type,
+    )
+    .unwrap()
+    .unwrap();
+    let ready = tokio::time::timeout(Duration::from_secs(5), subscription.read())
+        .await
+        .unwrap()
+        .unwrap();
+    let ready: plain_libs::serde_json::Value = plain_libs::serde_json::from_str(&ready).unwrap();
+    assert_eq!(
+        ready["id"], "content",
+        "same subscription operation after address change"
+    );
+    assert_eq!(ready["payload"]["extensions"]["subscriptionReady"], true);
+    moved.stop_core().await;
+
     peers::unpair(&state.db, REMOTE_ID).unwrap();
     assert!(route.check_current(&state).is_err());
     assert!(
@@ -702,4 +732,62 @@ async fn stale_bootstrap_unauthorized_cannot_revoke_a_replacement_management_ses
     stop.send(true).unwrap();
     upstream.await.unwrap().unwrap();
     local.stop_core().await;
+}
+
+#[cfg(feature = "http_transport")]
+#[tokio::test]
+async fn concurrent_reads_share_recovery_after_a_peer_moves() {
+    const LOCAL: &str = "706c6169-1414-8000-8000-000000000012";
+    const REMOTE: &str = "706c6169-1414-8000-8000-000000000013";
+    let dir = plain_libs::temporary::tempdir().unwrap();
+    let local = start(&dir.path().join("local"), LOCAL);
+    let remote = start(&dir.path().join("remote"), REMOTE);
+    let (cert, key) = plain_libs::tls::generate_pem(&["localhost".into()]).unwrap();
+    let (_, port) = remote.start_public(0, 0, cert, key).await.unwrap();
+    let mut session = sessions::create(&remote.runtime_state(), LOCAL.into()).unwrap();
+    session.client_id = LOCAL.into();
+    session.r#type = plain_rs::features::sessions::SessionType::Login;
+    remote.runtime_state().db.session_save(&session).unwrap();
+    let state = local.runtime_state();
+    let mut saved = peer(REMOTE);
+    saved.token = session.token;
+    peers::save(&state.db, &[saved.clone()], SaveMode::Insert).unwrap();
+
+    let executor = local.native_graphql().unwrap();
+    let read = |ms| {
+        executor.execute_peer_scoped(
+            REMOTE,
+            Request::new("{ app { clientId } }"),
+            Default::default(),
+            Duration::from_millis(ms),
+        )
+    };
+    let advertise = async {
+        tokio::time::sleep(Duration::from_millis(250)).await;
+        peers::discovered(
+            &state.db,
+            REMOTE,
+            "127.0.0.1",
+            port,
+            &saved.name,
+            saved.device_type,
+        )
+        .unwrap()
+        .unwrap();
+    };
+    let (a, b, c, ()) = tokio::join!(read(100), read(5000), read(5000), advertise);
+    assert!(
+        a.is_err(),
+        "A should run out of time before the new address is found"
+    );
+    for response in [b, c] {
+        let response = response.expect("the request should recover at the new address");
+        assert!(response.errors.is_empty(), "{response:?}");
+        assert_eq!(
+            plain_libs::serde_json::to_value(response).unwrap()["data"]["app"]["clientId"],
+            REMOTE
+        );
+    }
+    local.stop_core().await;
+    remote.stop_core().await;
 }
