@@ -274,6 +274,21 @@ impl Thumbnails {
         state: &CoreRuntime,
         mut request: Request,
     ) -> Result<Option<Bytes>, Error> {
+        if request.short_edge.is_none()
+            && (1..1024).contains(&request.width)
+            && (1..1024).contains(&request.height)
+        {
+            request.width = THUMBNAIL_SIZE;
+            request.height = THUMBNAIL_SIZE;
+        }
+        self.get_exact(state, request).await
+    }
+
+    pub(crate) async fn get_exact(
+        &self,
+        state: &CoreRuntime,
+        mut request: Request,
+    ) -> Result<Option<Bytes>, Error> {
         let access_order = request
             .access_order
             .take()
@@ -296,10 +311,6 @@ impl Thumbnails {
         }
         if plain_libs::utils::mime::mime_from_ext(&request.path).starts_with("image/") {
             request.center_crop = false;
-        }
-        if request.short_edge.is_none() && request.width < 1024 && request.height < 1024 {
-            request.width = THUMBNAIL_SIZE;
-            request.height = THUMBNAIL_SIZE;
         }
         let lookup = self
             .lookups

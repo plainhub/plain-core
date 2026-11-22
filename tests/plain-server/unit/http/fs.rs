@@ -349,6 +349,44 @@ async fn fs_recent_tracked_once_per_view_not_per_chunk() {
 
 #[cfg(feature = "media")]
 #[tokio::test]
+async fn fs_dense_video_preview_has_its_own_dimensions_and_validator() {
+    let (_root, _core, state, _key) = test_state();
+    let files = plain_libs::temporary::tempdir().unwrap();
+    let path = files.path().join("dense.mp4");
+    std::fs::write(
+        &path,
+        include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../plain-rs/testdata/video-h264-high.mp4"
+        )),
+    )
+    .unwrap();
+    let id = file_id(&state, path.to_str().unwrap());
+    let standard = format!("id={id}&action=PREVIEW&size=SM");
+    let dense = format!("id={id}&action=PREVIEW&size=XS");
+    let mut validators = Vec::new();
+    for (query, pixels) in [(&standard, 256), (&dense, 128)] {
+        let response = call_fs(&state, query, &[]).await;
+        assert_eq!(response.status(), StatusCode::OK);
+        let validator = response.headers()[header::ETAG].to_str().unwrap().to_owned();
+        let bytes = body_bytes(response).await;
+        let image = plain_libs::image::load_from_memory(&bytes).unwrap();
+        assert_eq!((image.width(), image.height()), (pixels, pixels));
+        let cached = call_fs(&state, query, &[(&header::IF_NONE_MATCH, &validator)]).await;
+        assert_eq!(cached.status(), StatusCode::NOT_MODIFIED);
+        assert!(body_bytes(cached).await.is_empty());
+        validators.push(validator);
+    }
+    assert_ne!(validators[0], validators[1]);
+    assert!(state.file_platform.recent_files.list(10).unwrap().is_empty());
+    assert_eq!(
+        state.thumbnails.native_decodes.load(std::sync::atomic::Ordering::Relaxed),
+        2,
+    );
+}
+
+#[cfg(feature = "media")]
+#[tokio::test]
 async fn fs_probe_reports_codec_json() {
     let (_root, _core, state, _key) = test_state();
     let path = concat!(

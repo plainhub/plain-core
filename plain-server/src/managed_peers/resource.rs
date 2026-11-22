@@ -52,13 +52,7 @@ impl PeerResource {
                 },
             );
             if let Some(size) = thumbnail {
-                query.append_pair(
-                    "size",
-                    match size {
-                        Size::Small => "SM",
-                        Size::Large => "LG",
-                    },
-                );
+                query.append_pair("size", size.as_str());
             }
         }
         let response = request(&route, Method::HEAD, url.clone())

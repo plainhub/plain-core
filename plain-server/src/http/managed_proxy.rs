@@ -476,20 +476,13 @@ fn resource_url(
     path: &str,
     parameters: &crate::http::fs::Parameters,
 ) -> Result<http_client::Url> {
-    use plain_rs::features::services::files::content::Size;
     let mut url = base.join(&format!("/{path}"))?;
     let mut query = url.query_pairs_mut();
     query.append_pair("id", &parameters.id);
     if path == "fs" {
         query.append_pair("action", parameters.action.as_str());
         if let Some(size) = parameters.size {
-            query.append_pair(
-                "size",
-                match size {
-                    Size::Small => "SM",
-                    Size::Large => "LG",
-                },
-            );
+            query.append_pair("size", size.as_str());
         }
         if let Some(version) = &parameters.version {
             query.append_pair("v", version);

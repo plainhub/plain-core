@@ -36,6 +36,24 @@ fn login(state: &ServerState, id: &str) -> SessionRow {
     row
 }
 
+#[test]
+fn managed_fs_relay_preserves_preview_size_and_revision() {
+    use plain_rs::features::services::files::content::{Action, Size};
+
+    let base = http_client::Url::parse("https://localhost:8443").unwrap();
+    let parameters = crate::http::fs::Parameters {
+        id: "fixture+/=".to_owned(),
+        action: Action::Preview,
+        size: Some(Size::ExtraSmall),
+        version: Some("1970-01-01T00:00:00Z".to_owned()),
+    };
+    let url = resource_url(&base, "fs", &parameters).unwrap();
+    assert_eq!(
+        url.as_str(),
+        "https://localhost:8443/fs?id=fixture%2B%2F%3D&action=PREVIEW&size=XS&v=1970-01-01T00%3A00%3A00Z"
+    );
+}
+
 #[tokio::test]
 async fn managed_proxy_keeps_the_browser_session_and_streams_a_peer_range() {
     let dir = plain_libs::temporary::tempdir().unwrap();

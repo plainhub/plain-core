@@ -7,10 +7,22 @@ use std::path::PathBuf;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Deserialize)]
 pub enum Size {
+    #[serde(rename = "XS")]
+    ExtraSmall,
     #[serde(rename = "SM")]
     Small,
     #[serde(rename = "LG")]
     Large,
+}
+
+impl Size {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::ExtraSmall => "XS",
+            Self::Small => "SM",
+            Self::Large => "LG",
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Deserialize)]
@@ -219,7 +231,7 @@ pub async fn read(
         return Ok(Content::Directory);
     }
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
-    if options.starts_view && options.size != Some(Size::Small) {
+    if options.starts_view && !matches!(options.size, Some(Size::ExtraSmall | Size::Small)) {
         state.file_platform.recent_files.add(&path);
     }
     if preview
@@ -260,21 +272,22 @@ pub async fn read(
                 let small = size == Size::Small;
                 let image = mime.starts_with("image/");
                 let thumbnail_size = crate::features::services::images::thumbnails::THUMBNAIL_SIZE;
-                let pixels = match (small, image) {
-                    (true, true) => 512,
-                    (true, false) => thumbnail_size,
-                    (false, _) => 1024,
+                let pixels = match (size, image) {
+                    (Size::ExtraSmall, _) => 128,
+                    (Size::Small, true) => 512,
+                    (Size::Small, false) => thumbnail_size,
+                    (Size::Large, _) => 1024,
                 };
                 let bytes = state
                     .thumbnails
-                    .get(
+                    .get_exact(
                         state,
                         crate::features::services::images::thumbnails::Request {
                             access_order: Some(options.access_order),
                             path: path.clone(),
                             width: pixels,
                             height: pixels,
-                            center_crop: small && !image,
+                            center_crop: size != Size::Large && !image,
                             short_edge: (small && image).then_some(thumbnail_size),
                             file_id: media_id,
                             file_name: plain_libs::utils::query::url_encode(filename),
