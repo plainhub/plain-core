@@ -307,7 +307,7 @@ sudo systemctl restart plainapp
 
 ### Releases
 
-A `v*` tag builds the frontend from plain-desktop, compiles it into `plainapp` for Linux amd64 and arm64, and attaches the archives to the GitHub release.
+To release the CLI, bump the version in `plain-cli/Cargo.toml` and update the lockfile. Run the **Release** workflow manually from the commit to publish. It builds and checks `plainapp` for Linux amd64 and arm64 using the committed Web assets, without AI image search. After verifying both archives and scanning them with VirusTotal, the workflow opens a GitHub Release draft with SHA-256 checksums, signed SLSA provenance, and links to the scan reports. Configure the repository’s `VIRUSTOTAL_API_KEY` secret first. Review the results and publish the draft in GitHub.
 
 ## Work on desktop or app
 

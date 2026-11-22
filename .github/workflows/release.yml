@@ -1,26 +1,17 @@
 name: Release
 
 on:
-  push:
-    tags:
-      - "v*"
   workflow_dispatch:
-    inputs:
-      tag:
-        description: "Release tag to create or replace"
-        required: true
-        type: string
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
-  group: plain-core-release-${{ github.ref }}
+  group: plain-core-cli-release
   cancel-in-progress: false
 
 env:
   CARGO_TERM_COLOR: always
-  TAG: ${{ inputs.tag || github.ref_name }}
 
 jobs:
   binary:
@@ -32,7 +23,7 @@ jobs:
         include:
           - arch: amd64
             target: x86_64-unknown-linux-gnu
-            runner: ubuntu-latest
+            runner: ubuntu-24.04
           - arch: arm64
             target: aarch64-unknown-linux-gnu
             runner: ubuntu-24.04-arm
@@ -52,17 +43,153 @@ jobs:
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
         with:
-          key: ${{ matrix.target }}
+          key: cli-release-${{ matrix.target }}
 
-      - name: Build plainapp with the embedded UI
-        run: cargo build --release --locked --target ${{ matrix.target }} -p plainapp --features ai-image-search
+      - name: Build plainapp with the committed Web UI
+        run: cargo build --release --locked --target ${{ matrix.target }} -p plainapp
 
-      - name: Package
-        run: tar -czf plainapp-linux-${{ matrix.arch }}.tar.gz -C target/${{ matrix.target }}/release plainapp
+      - name: Verify and package
+        env:
+          TARGET: ${{ matrix.target }}
+          ARCH: ${{ matrix.arch }}
+        run: |
+          plain="target/$TARGET/release/plainapp"
+          archive="plainapp-linux-$ARCH.tar.gz"
+          tar -czf "$archive" -C "$(dirname "$plain")" plainapp
+          test "$(tar -tzf "$archive")" = plainapp
+          unpacked=$(mktemp -d)
+          tar -xzf "$archive" -C "$unpacked"
+          cmp "$plain" "$unpacked/plainapp"
+          "$unpacked/plainapp" --version
+          "$unpacked/plainapp" --help
 
-      - name: Publish
+      - uses: actions/upload-artifact@v4
+        with:
+          name: plainapp-linux-${{ matrix.arch }}
+          path: plainapp-linux-${{ matrix.arch }}.tar.gz
+          if-no-files-found: error
+
+  hashes:
+    needs: binary
+    runs-on: ubuntu-24.04
+    permissions: {}
+    outputs:
+      subjects: ${{ steps.hashes.outputs.subjects }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          pattern: plainapp-linux-*
+          merge-multiple: true
+
+      - name: Hash both release archives
+        id: hashes
+        working-directory: artifacts
+        run: |
+          sha256sum plainapp-linux-amd64.tar.gz plainapp-linux-arm64.tar.gz > checksums.txt
+          echo "subjects=$(base64 -w0 checksums.txt)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-checksums
+          path: artifacts/checksums.txt
+          if-no-files-found: error
+
+  provenance:
+    needs: hashes
+    permissions:
+      actions: read
+      contents: write
+      id-token: write
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v2.1.0
+    with:
+      base64-subjects: ${{ needs.hashes.outputs.subjects }}
+      upload-assets: false
+
+  virustotal:
+    needs: binary
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          pattern: plainapp-linux-*
+          merge-multiple: true
+
+      - name: Scan both release archives
+        env:
+          VT_API_KEY: ${{ secrets.VIRUSTOTAL_API_KEY }}
+        run: bash scripts/scan-cli-release.sh artifacts > virustotal.md
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: virustotal-report
+          path: virustotal.md
+          if-no-files-found: error
+
+  release:
+    name: Create GitHub Release draft
+    needs: [hashes, provenance, virustotal]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          pattern: plainapp-linux-*
+          merge-multiple: true
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-checksums
+          path: artifacts
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: virustotal-report
+          path: artifacts
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.provenance.outputs.provenance-name }}
+          path: artifacts
+
+      - name: Create draft with both Linux packages
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PROVENANCE_NAME: ${{ needs.provenance.outputs.provenance-name }}
         run: |
-          gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --title "$TAG" --generate-notes
-          gh release upload "$TAG" plainapp-linux-${{ matrix.arch }}.tar.gz --clobber
+          version=$(python3 -c 'import tomllib; print(tomllib.load(open("plain-cli/Cargo.toml", "rb"))["package"]["version"])')
+          tag="v$version"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "Release $tag already exists. Bump plain-cli/Cargo.toml before starting a new release." >&2
+            exit 1
+          fi
+          refs=$(git ls-remote origin "refs/tags/$tag" "refs/tags/$tag^{}")
+          if [ -n "$refs" ]; then
+            tagged_commit=$(printf '%s\n' "$refs" | sort -k2 | tail -n1 | cut -f1)
+            if [ "$tagged_commit" != "$GITHUB_SHA" ]; then
+              echo "Tag $tag points to a different commit." >&2
+              exit 1
+            fi
+          fi
+          (cd artifacts && sha256sum --check checksums.txt)
+          {
+            echo '## Verify the downloads'
+            echo
+            echo 'Run `sha256sum --check checksums.txt` in the directory containing both archives.'
+            printf 'Use `slsa-verifier verify-artifact <archive> --provenance-path %s --source-uri github.com/%s` to verify the build source.\n\n' "$PROVENANCE_NAME" "$GITHUB_REPOSITORY"
+            cat artifacts/virustotal.md
+          } > release-notes.md
+          gh release create "$tag" --draft --target "$GITHUB_SHA" --title "PlainApp CLI $version" --generate-notes --notes-file release-notes.md \
+            artifacts/plainapp-linux-amd64.tar.gz artifacts/plainapp-linux-arm64.tar.gz artifacts/checksums.txt "artifacts/$PROVENANCE_NAME"
