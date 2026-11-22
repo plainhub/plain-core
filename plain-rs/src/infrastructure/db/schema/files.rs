@@ -70,6 +70,9 @@ CREATE INDEX IF NOT EXISTS idx_files_kind_updated_at_id ON files(kind,updated_at
 CREATE INDEX IF NOT EXISTS idx_files_kind_id ON files(kind,id) WHERE missing=0 AND trashed_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_files_kind_indexed_updated_at_id ON files(kind,indexed,updated_at DESC,id,volume_id,path,file_name,size_bytes,missing,trashed_at)
     WHERE missing=0 AND trashed_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_files_kind_indexed_capture_at_updated_at_id
+    ON files(kind,indexed,COALESCE(taken_at,created_at,updated_at) DESC,updated_at DESC,id)
+    WHERE kind='VIDEO' AND indexed=1 AND missing=0 AND trashed_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_files_trashed_at_id ON files(trashed_at,id) WHERE trashed_at IS NOT NULL;
 
 CREATE VIRTUAL TABLE IF NOT EXISTS file_names_fts USING fts5(

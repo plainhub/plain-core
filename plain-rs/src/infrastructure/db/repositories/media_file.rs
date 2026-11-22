@@ -45,6 +45,7 @@ CASE WHEN f.kind='DOC' THEN f.file_name ELSE COALESCE(f.title,'') END AS title,C
 CASE WHEN instr(v.path,'://')>0 THEN v.path||v.identity ELSE CASE WHEN instr(f.path,'/')=0 THEN CASE WHEN v.path='/' THEN '/' ELSE rtrim(v.path,'/') END ELSE rtrim(v.path,'/')||'/'||substr(f.path,1,length(f.path)-length(f.file_name)-1) END END AS bucket_id,
 COALESCE(f.mime_type,'') AS mime_type,CAST(COALESCE(f.size_bytes,0) AS INTEGER) AS size_bytes,CAST(COALESCE(f.duration_ms,0) AS INTEGER) AS duration_ms,f.cover_image_id,
 CAST(COALESCE(f.width,0) AS INTEGER) AS width,CAST(COALESCE(f.height,0) AS INTEGER) AS height,CAST(COALESCE(f.rotation,0) AS INTEGER) AS rotation,f.taken_at,COALESCE(f.created_at,f.updated_at) AS created_at,f.updated_at,
+COALESCE(f.taken_at,f.created_at,f.updated_at) AS capture_at,
 f.favorited,f.trashed_at,f.trashed_at IS NOT NULL AS trashed,
 CASE WHEN f.original_path IS NULL THEN NULL ELSE rtrim(v.path,'/')||'/'||f.original_path END AS original_path
 FROM files f JOIN volumes v ON v.id=f.volume_id")

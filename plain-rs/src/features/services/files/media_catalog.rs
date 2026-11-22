@@ -151,7 +151,7 @@ fn selected_rows(
         MediaSortBy::NameAsc => "file_name COLLATE NOCASE ASC,file_id",
         MediaSortBy::TitleDesc => "title COLLATE NOCASE DESC,file_id",
         MediaSortBy::NameDesc => "file_name COLLATE NOCASE DESC,file_id",
-        MediaSortBy::TakenAtDesc => "COALESCE(taken_at,created_at) DESC,updated_at DESC,file_id",
+        MediaSortBy::TakenAtDesc => "capture_at DESC,updated_at DESC,file_id",
     };
     args.extend([
         Value::Integer(i64::from(limit)),

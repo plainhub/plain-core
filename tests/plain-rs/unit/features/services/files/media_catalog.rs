@@ -318,6 +318,76 @@ fn counts_use_a_covering_index_without_sorting_all_media() {
 }
 
 #[test]
+fn video_pages_sorted_by_capture_time_read_only_a_bounded_part_of_the_catalog() {
+    use std::sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    };
+    let db = Db::open(std::path::Path::new(":memory:")).unwrap();
+    db.with_conn(|conn| conn.execute_batch("INSERT INTO volumes(id,identity,path,is_available) VALUES('v','v','/media',1),('offline','offline','/offline',0);
+WITH RECURSIVE n(x) AS (VALUES(1) UNION ALL SELECT x+1 FROM n WHERE x<6000)
+INSERT INTO files(id,volume_id,path,file_name,kind,updated_at)
+SELECT printf('clip-%04d',x),'v',x||'.mp4',x||'.mp4','VIDEO','2026-01-01T00:00:00Z' FROM n;
+INSERT INTO files(id,volume_id,path,file_name,kind,updated_at,created_at,taken_at,indexed) VALUES
+('captured','v','captured.mp4','captured.mp4','VIDEO','2026-01-01T00:00:00Z',NULL,'2026-01-05T00:00:00Z',1),
+('created','v','created.mp4','created.mp4','VIDEO','2026-01-02T00:00:00Z','2026-01-04T00:00:00Z',NULL,1),
+('updated','v','updated.mp4','updated.mp4','VIDEO','2026-01-03T00:00:00Z',NULL,NULL,1),
+('offline-video','offline','offline.mp4','offline.mp4','VIDEO','2026-01-08T00:00:00Z',NULL,NULL,1),
+('unindexed','v','unindexed.mp4','unindexed.mp4','VIDEO','2026-01-08T00:00:00Z',NULL,NULL,0);"))
+        .unwrap();
+    let samples = Arc::new(AtomicUsize::new(0));
+    db.with_conn(|conn| {
+        let samples = samples.clone();
+        conn.progress_handler(
+            100,
+            Some(move || {
+                samples.fetch_add(1, Ordering::Relaxed);
+                false
+            }),
+        );
+    });
+    let prefs = Prefs::in_memory();
+    let first = rows(
+        &db,
+        &prefs,
+        DataType::Video,
+        "trash:false",
+        MediaSortBy::TakenAtDesc,
+        64,
+        0,
+    )
+    .unwrap();
+    let second = rows(
+        &db,
+        &prefs,
+        DataType::Video,
+        "trash:false",
+        MediaSortBy::TakenAtDesc,
+        64,
+        64,
+    )
+    .unwrap();
+    db.with_conn(|conn| conn.progress_handler(0, None::<fn() -> bool>));
+    assert_eq!(first.len(), 64);
+    assert_eq!(second.len(), 64);
+    assert_eq!(
+        first[..3]
+            .iter()
+            .map(|row| row.id.as_str())
+            .collect::<Vec<_>>(),
+        ["captured", "created", "updated"]
+    );
+    assert_eq!(first[63].id, "clip-0061");
+    assert_eq!(second[0].id, "clip-0062");
+    let executed = samples.load(Ordering::Relaxed);
+    assert!(
+        executed < 200,
+        "opening two 64-item pages took at least {} SQLite VM steps",
+        executed * 100
+    );
+}
+
+#[test]
 fn name_title_modified_and_capture_time_have_distinct_ordering() {
     let directory = plain_libs::temporary::tempdir().unwrap();
     let db = Db::open(&directory.path().join("sort.db")).unwrap();
