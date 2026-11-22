@@ -86,21 +86,28 @@ pub(in crate::features::services::peers) fn moved(a: &DPeer, b: &DPeer) -> bool 
 
 async fn find_route(state: &Runtime, failed: &DPeer) -> Result<Arc<PeerRoute>> {
     let mut updated = state.db.peer_changes();
+    let mut attempted = failed.clone();
     let mut browsed = false;
     loop {
         let candidate = current(state, failed)?;
-        if moved(&candidate, failed) {
+        if moved(&candidate, failed) && moved(&candidate, &attempted) {
             let result = state.managed_resources.route(state, &candidate.id).await;
             let latest = current(state, failed)?;
-            if moved(&latest, &candidate) {
+            attempted = candidate;
+            if moved(&latest, &attempted) {
                 continue;
             }
-            let route = result?;
-            ensure!(
-                same_session(&route.peer, failed) && moved(&route.peer, failed),
-                "Management route changed"
-            );
-            return Ok(route);
+            match result {
+                Err(error) if address_error(&error) && !tls_rejection(&error) => {}
+                Err(error) => return Err(error),
+                Ok(route) => {
+                    ensure!(
+                        same_session(&route.peer, failed) && moved(&route.peer, failed),
+                        "Management route changed"
+                    );
+                    return Ok(route);
+                }
+            }
         }
         if !browsed {
             state.mdns.browse_resident();
@@ -137,14 +144,7 @@ impl ManagedPeerRoutes {
             return Err(error);
         }
         let latest = current(state, &failed)?;
-        let connection_error = error
-            .downcast_ref::<http_client::Error>()
-            .is_some_and(|error| error.is_connect() || error.is_timeout());
-        let address_error = matches!(
-            error.downcast_ref::<PeerConnectionErrorCode>(),
-            Some(PeerConnectionErrorCode::PeerAddressUnavailable)
-        );
-        if !(connection_error || address_error || moved(&latest, &failed)) {
+        if !(address_error(&error) || moved(&latest, &failed)) {
             return Err(error);
         }
 
@@ -173,6 +173,16 @@ pub(in crate::features::services::peers) async fn wait(
         .into()),
         Err(error) => Err(anyhow!(error.to_string())),
     }
+}
+
+fn address_error(error: &plain_libs::anyhow::Error) -> bool {
+    error
+        .downcast_ref::<http_client::Error>()
+        .is_some_and(|error| error.is_connect() || error.is_timeout())
+        || matches!(
+            error.downcast_ref::<PeerConnectionErrorCode>(),
+            Some(PeerConnectionErrorCode::PeerAddressUnavailable)
+        )
 }
 
 pub(in crate::features::services::peers) fn tls_rejection(

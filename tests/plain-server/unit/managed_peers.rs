@@ -764,6 +764,24 @@ async fn concurrent_reads_share_recovery_after_a_peer_moves() {
     };
     let advertise = async {
         tokio::time::sleep(Duration::from_millis(250)).await;
+        let stale = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        peers::discovered(
+            &state.db,
+            REMOTE,
+            "127.0.0.1",
+            stale.local_addr().unwrap().port(),
+            &saved.name,
+            saved.device_type,
+        )
+        .unwrap()
+        .unwrap();
+        let (connection, _) = tokio::time::timeout(Duration::from_secs(2), stale.accept())
+            .await
+            .expect("Core should try the first discovered address")
+            .unwrap();
+        drop(connection);
+        drop(stale);
+        tokio::time::sleep(Duration::from_millis(150)).await;
         peers::discovered(
             &state.db,
             REMOTE,
