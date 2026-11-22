@@ -5,14 +5,6 @@ use plain_graphql::{Context, Result, Subscription};
 pub struct AppStateSubscriptions;
 #[Subscription]
 impl AppStateSubscriptions {
-    /// Watch this device's 3.3.25 data upgrade, including its current status on entry.
-    #[graphql(guard = "crate::http::auth::public_gate::LocalOwner")]
-    async fn legacy_data_upgrade_changed(
-        &self,
-        ctx: &Context<'_>,
-    ) -> Result<BoxStream<'static, Result<plain_rs::features::legacy_upgrade::Status>>> {
-        events::stream(ctx, plain_rs::infrastructure::events::LEGACY_DATA_UPGRADE_CHANGED).await
-    }
     async fn http_server_changed(
         &self,
         ctx: &Context<'_>,

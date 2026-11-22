@@ -985,6 +985,19 @@ fn access_feature_contract_has_exact_values_and_wrappers() {
 mod event_contract;
 
 #[test]
+fn legacy_data_upgrade_is_not_in_the_graphql_schema() {
+    let schema = sdl();
+    for name in [
+        "updateLegacyDataUpgrade",
+        "legacyDataUpgradeChanged",
+        "LegacyDataUpgradeAction",
+        "LegacyDataUpgradeStatus",
+    ] {
+        assert!(!schema.contains(name), "{name} is Android-only");
+    }
+}
+
+#[test]
 fn pairing_commands_have_no_public_ui_state_or_client_record_snapshots() {
     let sdl = sdl();
     for name in [

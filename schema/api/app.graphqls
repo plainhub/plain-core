@@ -120,20 +120,6 @@ type HttpServerState {
 	error: String!
 }
 
-enum LegacyDataUpgradeAction {
-	SKIP
-	IMPORT
-	CLEAR
-}
-
-enum LegacyDataUpgradeStatus {
-	UNAVAILABLE
-	PENDING
-	SKIPPED
-	IMPORTED
-	CLEARED
-}
-
 type LoginEventData {
 	sessionType: SessionType!
 }
@@ -169,10 +155,6 @@ type Mutation {
 	formatDisk(path: String!): Boolean!
 	restartHttpServer(httpPort: Int, httpsPort: Int): HttpServerState!
 	setMountAlias(id: ID!, alias: String!): Boolean!
-	"""
-	Skip the startup prompt, import old data, or clear the imported source data on this device.
-	"""
-	updateLegacyDataUpgrade(action: LegacyDataUpgradeAction!): LegacyDataUpgradeStatus!
 }
 
 type Query {

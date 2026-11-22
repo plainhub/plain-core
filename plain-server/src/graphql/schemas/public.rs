@@ -93,7 +93,6 @@ pub struct Query(
 
 #[derive(MergedObject, Default)]
 pub struct Mutation(
-    crate::graphql::resolvers::app::legacy_data::LegacyDataMutation,
     crate::graphql::resolvers::app::http_server::HttpServerMutation,
     crate::graphql::resolvers::app::cache::CacheMutation,
     crate::graphql::resolvers::discovery::mdns::MdnsMutation,

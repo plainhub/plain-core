@@ -6,7 +6,7 @@ use serde::Deserialize;
 pub struct StartupConfig {
     pub debug: bool,
     pub cache_dir: Option<String>,
-    #[cfg(feature = "runtime")]
+    #[cfg(all(target_os = "android", feature = "runtime"))]
     pub legacy_storage: Option<crate::features::legacy_upgrade::LegacyStorage>,
     pub name: String,
     pub device_type: DeviceType,

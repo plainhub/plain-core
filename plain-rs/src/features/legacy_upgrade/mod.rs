@@ -17,12 +17,8 @@ use std::path::{Path, PathBuf};
 
 const STATE_KEY: &str = "legacy_data_upgrade_3_3_25";
 
-#[derive(Clone, Copy, Debug, Deserialize, Serialize, plain_graphql::Enum, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-#[graphql(
-    name = "LegacyDataUpgradeStatus",
-    rename_items = "SCREAMING_SNAKE_CASE"
-)]
 pub enum Status {
     Unavailable,
     Pending,

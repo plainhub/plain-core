@@ -9,6 +9,3 @@ pub mod cache;
 
 #[cfg(feature = "core")]
 pub mod http_server;
-
-#[cfg(feature = "core")]
-pub mod legacy_data;

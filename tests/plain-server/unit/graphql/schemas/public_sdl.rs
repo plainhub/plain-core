@@ -201,8 +201,7 @@ pub(super) fn files(sdl: &str) -> BTreeMap<String, String> {
         "app",
         resolvers::app::http_server::HttpServerMutation,
         resolvers::app::cache::CacheMutation,
-        resolvers::app::platform::PlatformMutation,
-        resolvers::app::legacy_data::LegacyDataMutation
+        resolvers::app::platform::PlatformMutation
     );
     group!(
         "Mutation",
