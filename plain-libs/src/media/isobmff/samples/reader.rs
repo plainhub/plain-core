@@ -12,6 +12,15 @@ impl VideoTrack {
     pub fn read_hevc(reader: &mut (impl Read + Seek)) -> io::Result<Self> {
         Self::read(reader, hevc::read)
     }
+
+    #[cfg(feature = "thumbnails")]
+    pub(crate) fn read_thumbnail(reader: &mut (impl Read + Seek)) -> io::Result<Self> {
+        Self::read(reader, |stsd| match avc::read(stsd)? {
+            Some(config) => Some(Some(config)),
+            None => hevc::read(stsd),
+        })
+    }
+
     fn read(
         reader: &mut (impl Read + Seek),
         describe: fn(&[u8]) -> Option<Option<avc::Config>>,

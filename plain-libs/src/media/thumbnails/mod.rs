@@ -14,8 +14,7 @@
 //! 7. atomic cache write + LRU insert.
 //!
 //! Non-image files go through the cover-art path (sidecar/lofty); cover-less
-//! MP4-family videos extract a keyframe via pure-Rust demux + H.264 decode
-//! (`video.rs`). Other containers/codec combinations have no pure-Rust
+//! MP4-family videos use the shared AVC and HEVC keyframe decoders.
 
 pub mod admission;
 mod bmp;

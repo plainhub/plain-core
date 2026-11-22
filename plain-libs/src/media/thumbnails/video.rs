@@ -1,23 +1,14 @@
-//! Video thumbnail: pure-Rust MP4 demux + H.264 keyframe decode.
-//!
-//! MP4 family files (mp4/m4v/mov) with an AVC (`avc1`) video track: locate
-//! the keyframe sample nearest the heuristic timepoint via the sample tables
-//! (stts decode timestamps + stss sync samples), read only that sample plus
-//! a bounded number of successors, convert the avcC length-prefixed NALs to
-//! Annex-B, decode one frame, convert planar YUV 4:2:0 → RGB, and hand the
-//! bitmap to the shared resize/encode pipeline.
-//!
-//! Everything else (mkv/avi/flv/webm containers, HEVC/VP9 tracks) has no
-//! pure-Rust decoder and fails cleanly — the engine still tries cover art
-//! first, and a cover-less video then answers `204 No Content`.
+//! Extract an AVC or HEVC random-access frame from an MP4-family video.
 
-use crate::anyhow::{Result, bail};
+use crate::anyhow::{Result, bail, ensure};
 
+use crate::h264::common::YuvFrame;
+use crate::h264::decoder::Decoder;
+use crate::media::isobmff::VideoTrack;
+use crate::media::thumbnails::admission::MAX_SOURCE_PIXELS;
 use crate::media::thumbnails::encode;
 use crate::media::thumbnails::scale;
 use crate::media::thumbnails::scale::Bitmap;
-use crate::h264::common::YuvFrame;
-use crate::h264::decoder::Decoder;
 
 /// How many samples past the located keyframe we feed the decoder at most
 /// (covers multi-sample pictures and streams whose "sync" sample is not a
@@ -27,24 +18,26 @@ const MAX_FOLLOW_SAMPLES: u32 = 16;
 /// Cap on total sample bytes read for one thumbnail.
 const MAX_SAMPLE_BYTES: u64 = 4 * 1024 * 1024;
 
-/// Demuxed input for one frame extraction: Annex-B access units (first one
-/// carries the avcC parameter sets and the located keyframe) plus the coded
-/// frame size for admission pricing.
+#[derive(Debug)]
+enum EncodedFrame {
+    Avc(Vec<Vec<u8>>),
+    Hevc {
+        parameter_sets: Vec<Vec<u8>>,
+        slices: Vec<Vec<u8>>,
+    },
+}
+
 #[derive(Debug)]
 pub struct FramePlan {
-    access_units: Vec<Vec<u8>>,
-    frame_w: u32,
-    frame_h: u32,
-    /// 1-based sample id the plan starts at (diagnostics / tests).
-    #[allow(dead_code)] // asserted by the frame-plan tests
+    frame: EncodedFrame,
+    estimated_bytes: u64,
+    #[cfg(test)]
     first_sample_id: u32,
 }
 
 impl FramePlan {
-    /// Admission pricing: decoded YUV420 (1.5 B/px) + RGB bitmap (3 B/px),
-    /// rounded up.
     pub fn estimated_bytes(&self) -> u64 {
-        u64::from(self.frame_w) * u64::from(self.frame_h) * 5
+        self.estimated_bytes
     }
 }
 
@@ -62,15 +55,15 @@ pub fn generate_video_thumbnail(path: &str, w: u32, h: u32, quality: u8) -> Resu
 pub fn plan_keyframe(path: &str) -> Result<FramePlan> {
     let file = std::fs::File::open(path)?;
     let mut reader = std::io::BufReader::new(file);
-    let track = crate::media::isobmff::VideoTrack::read_avc(&mut reader)?;
+    let track = VideoTrack::read_thumbnail(&mut reader)?;
 
     let frame_w = track.width;
     let frame_h = track.height;
-    if u64::from(frame_w) * u64::from(frame_h)
-        > crate::media::thumbnails::admission::MAX_SOURCE_PIXELS
-    {
-        bail!("video frame {frame_w}x{frame_h} exceeds pixel guard");
-    }
+    let pixels = u64::from(frame_w) * u64::from(frame_h);
+    ensure!(
+        pixels <= MAX_SOURCE_PIXELS,
+        "video frame {frame_w}x{frame_h} exceeds pixel guard"
+    );
 
     // Real duration straight from the track (mdhd) — the old CLI-based
     // call site passed a hard-coded 0, so every video thumb was frame 0.
@@ -85,7 +78,39 @@ pub fn plan_keyframe(path: &str) -> Result<FramePlan> {
     }
 
     let start_id = track.keyframe_at(target_tick);
-    let nal_length_size = track.nal_length_size;
+    if track.sample_entry != *b"avc1" {
+        let sample = track
+            .read_sample(&mut reader, start_id, MAX_SAMPLE_BYTES as usize)?
+            .filter(|sample| !sample.is_empty())
+            .ok_or_else(|| crate::anyhow::anyhow!("no readable HEVC keyframe"))?;
+        let mut parameter_sets = track.parameter_sets;
+        let mut slices = Vec::new();
+        visit_length_prefixed_nals(&sample, track.nal_length_size, |nal| {
+            ensure!(nal.len() >= 2, "short HEVC NAL header");
+            let kind = (nal[0] >> 1) & 63;
+            if (32..=34).contains(&kind) {
+                parameter_sets.push(nal.to_vec());
+            } else if kind <= 31 {
+                slices.push(nal.to_vec());
+            }
+            Ok(())
+        })?;
+        let references: Vec<_> = parameter_sets.iter().map(Vec::as_slice).collect();
+        let coded_pixels = heic_rs::hevc::coded_pixels(&references)?;
+        ensure!(
+            coded_pixels <= MAX_SOURCE_PIXELS,
+            "HEVC keyframe exceeds pixel guard"
+        );
+        return Ok(FramePlan {
+            frame: EncodedFrame::Hevc {
+                parameter_sets,
+                slices,
+            },
+            estimated_bytes: coded_pixels.max(pixels) * 16,
+            #[cfg(test)]
+            first_sample_id: start_id,
+        });
+    }
 
     let mut access_units = Vec::new();
     let mut first = true;
@@ -108,26 +133,47 @@ pub fn plan_keyframe(path: &str) -> Result<FramePlan> {
             }
             first = false;
         }
-        length_prefixed_to_annexb(&sample, nal_length_size, &mut au)?;
+        length_prefixed_to_annexb(&sample, track.nal_length_size, &mut au)?;
         access_units.push(au);
     }
     if access_units.is_empty() {
         bail!("no readable samples at id {start_id}");
     }
     Ok(FramePlan {
-        access_units,
-        frame_w,
-        frame_h,
+        frame: EncodedFrame::Avc(access_units),
+        estimated_bytes: pixels * 5,
+        #[cfg(test)]
         first_sample_id: start_id,
     })
 }
 
 /// Phase 2 (CPU-heavy): decode until the first frame comes out, YUV→RGB.
 pub fn decode_plan(plan: FramePlan) -> Result<Bitmap> {
+    let access_units = match plan.frame {
+        EncodedFrame::Avc(access_units) => access_units,
+        EncodedFrame::Hevc {
+            parameter_sets,
+            slices,
+        } => {
+            let parameter_sets: Vec<_> = parameter_sets.iter().map(Vec::as_slice).collect();
+            let slices: Vec<_> = slices.iter().map(Vec::as_slice).collect();
+            let frame =
+                heic_rs::hevc::decode_still_limited(&parameter_sets, &slices, MAX_SOURCE_PIXELS)?;
+            let image = heic_rs::color::convert(
+                &frame,
+                None,
+                frame.color.unwrap_or_default(),
+                heic_rs::PixelLayout::Rgb8,
+                MAX_SOURCE_PIXELS,
+                Some(1),
+            )?;
+            return Ok(Bitmap::new_rgb(image.data, image.width, image.height));
+        }
+    };
     let mut dec = Decoder::new();
     let mut frame: Option<YuvFrame> = None;
     let mut last_err: Option<crate::h264::decoder::DecodeError> = None;
-    for au in &plan.access_units {
+    for au in &access_units {
         match dec.decode(au) {
             Ok(Some(f)) => {
                 frame = Some(f);
@@ -175,6 +221,18 @@ fn compute_video_timepoint(duration_secs: u32) -> f64 {
 /// samples) to Annex-B: each NAL gets a 4-byte start code. In-tree because
 /// neither the mp4 crate nor the decoder ships this conversion.
 pub fn length_prefixed_to_annexb(data: &[u8], length_size: usize, out: &mut Vec<u8>) -> Result<()> {
+    visit_length_prefixed_nals(data, length_size, |nal| {
+        out.extend_from_slice(&[0, 0, 0, 1]);
+        out.extend_from_slice(nal);
+        Ok(())
+    })
+}
+
+fn visit_length_prefixed_nals(
+    data: &[u8],
+    length_size: usize,
+    mut visit: impl FnMut(&[u8]) -> Result<()>,
+) -> Result<()> {
     if length_size == 0 || length_size > 4 {
         bail!("NAL length size {length_size} out of range");
     }
@@ -191,8 +249,7 @@ pub fn length_prefixed_to_annexb(data: &[u8], length_size: usize, out: &mut Vec<
         if rest.len() < len {
             bail!("NAL length {len} exceeds remaining sample bytes");
         }
-        out.extend_from_slice(&[0, 0, 0, 1]);
-        out.extend_from_slice(&rest[..len]);
+        visit(&rest[..len])?;
         rest = &rest[len..];
     }
     if !rest.is_empty() {

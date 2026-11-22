@@ -85,11 +85,6 @@ fn yuv_to_rgb_known_colors() {
 
 #[test]
 fn error_paths_do_not_panic() {
-    let err = plan_keyframe(&testdata("video-h265.mp4")).unwrap_err();
-    assert_eq!(
-        err.downcast_ref::<std::io::Error>().map(std::io::Error::kind),
-        Some(std::io::ErrorKind::Unsupported)
-    );
     // Garbage bytes with an mp4 extension.
     let tmp = crate::temporary::tempdir().unwrap();
     let garbage = tmp.path().join("garbage.mp4");
@@ -158,9 +153,32 @@ fn fragmented_mp4_preserves_the_existing_frame_access_units_and_decoded_pixels()
     let fragmented = plan_keyframe(&testdata("video/video-h264-fragmented.mp4")).unwrap();
     assert_eq!(fragmented.first_sample_id, classic.first_sample_id);
     assert_eq!(fragmented.estimated_bytes(), classic.estimated_bytes());
-    assert_eq!(fragmented.access_units, classic.access_units);
-    assert!(fragmented.access_units.len() <= MAX_FOLLOW_SAMPLES as usize + 1);
+    let (EncodedFrame::Avc(fragmented_units), EncodedFrame::Avc(classic_units)) =
+        (&fragmented.frame, &classic.frame)
+    else {
+        panic!("expected AVC frame plans");
+    };
+    assert_eq!(fragmented_units, classic_units);
+    assert!(fragmented_units.len() <= MAX_FOLLOW_SAMPLES as usize + 1);
     let classic = decode_plan(classic).unwrap();
     let fragmented = decode_plan(fragmented).unwrap();
     assert_eq!(fragmented.raw(), classic.raw());
+}
+
+#[test]
+fn end_to_end_hevc_mp4_keyframes() {
+    for file in [
+        "video-h265.mp4",
+        "video-h265-hvc1.mp4",
+        "video/video-h265-fragmented.mp4",
+    ] {
+        let path = testdata(file);
+        let frame = generate_video_thumbnail(&path, 256, 256, 75).unwrap();
+        let image = crate::image::load_from_memory(&frame).unwrap().to_rgb8();
+        assert_eq!(image.width().max(image.height()), 256, "{file}");
+        assert!(
+            image.pixels().any(|pixel| pixel != image.get_pixel(0, 0)),
+            "{file}"
+        );
+    }
 }

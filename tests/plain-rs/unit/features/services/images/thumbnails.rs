@@ -546,6 +546,31 @@ async fn concurrent_generation_delivers_one_shared_allocation_to_300_readers() {
     core.stop_core().await;
 }
 
+#[cfg(all(feature = "media", not(any(target_os = "android", target_os = "ios"))))]
+#[tokio::test]
+async fn service_generates_and_caches_a_thumbnail_for_hevc_video() {
+    let (directory, core, _) = server_with_cache();
+    let path = directory.path().join("video.mp4");
+    std::fs::write(
+        &path,
+        include_bytes!("../../../../../../plain-rs/testdata/video-h265.mp4"),
+    )
+    .unwrap();
+    let state = core.runtime_state();
+    let request = request_for(&path);
+    let first = state
+        .thumbnails
+        .get(&state, request.clone())
+        .await
+        .unwrap()
+        .unwrap();
+    let image = plain_libs::image::load_from_memory(&first).unwrap();
+    assert_eq!((image.width(), image.height()), (256, 256));
+    let second = state.thumbnails.get(&state, request).await.unwrap().unwrap();
+    assert_eq!(first, second);
+    core.stop_core().await;
+}
+
 #[cfg(feature = "media")]
 #[tokio::test]
 async fn thumbnail_sizes_share_256_bytes_and_preserve_large_previews() {
