@@ -1,5 +1,5 @@
 mod heif;
-mod rows;
+pub(super) mod rows;
 mod tiff;
 
 use super::{

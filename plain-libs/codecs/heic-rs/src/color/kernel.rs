@@ -44,6 +44,7 @@ pub(crate) fn planes<const N: usize, const BGR: bool, const WIDE: bool>(
     scratch: &mut [u16],
     out: &mut [u8],
     y0: usize,
+    columns: core::ops::Range<usize>,
 ) {
     let w = src.width() as usize;
     let chroma = src.chroma();
@@ -52,15 +53,13 @@ pub(crate) fn planes<const N: usize, const BGR: bool, const WIDE: bool>(
     let (ring, stitch) = scratch.split_at_mut(core::cmp::min(ring_len(w, mode), scratch.len()));
     let mut ring = Ring::new(ring, w);
     let (luma_buf, chroma_buf) = stitch.split_at_mut(core::cmp::min(w, stitch.len()));
-    let rows = out.len().checked_div(w * N).unwrap_or(0);
-    for band_row in 0..rows {
+    let stride = columns.len() * N;
+    for (band_row, dst) in out.chunks_exact_mut(stride).enumerate() {
         let y = y0 + band_row;
-        let Some(dst) = out.get_mut(band_row * w * N..(band_row + 1) * w * N) else {
-            return;
-        };
         let Some(luma) = src.luma(y, luma_buf) else {
             return;
         };
+        let luma = &luma[columns.clone()];
         if mode == Mode::Luma {
             row_luma::<N, BGR, WIDE>(dst, luma, c);
             continue;
@@ -75,7 +74,7 @@ pub(crate) fn planes<const N: usize, const BGR: bool, const WIDE: bool>(
         let (Some((cb0, cr0)), Some((cb1, cr1))) = (ring.get(s0), ring.get(s1)) else {
             return;
         };
-        let rows = [cb0, cb1, cr0, cr1];
+        let rows = [cb0, cb1, cr0, cr1].map(|row| &row[columns.clone()]);
         if mode == Mode::Identity {
             row_identity::<N, BGR, WIDE>(dst, luma, rows, w0, c);
         } else {

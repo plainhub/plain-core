@@ -1,6 +1,6 @@
 use super::super::scale::BoxRowFilter;
 
-pub(super) struct Rows<const CHANNELS: usize> {
+pub(in crate::media::thumbnails) struct Rows<const CHANNELS: usize> {
     width: u32,
     height: u32,
     factor: u32,
@@ -12,7 +12,7 @@ pub(super) struct Rows<const CHANNELS: usize> {
 }
 
 impl<const CHANNELS: usize> Rows<CHANNELS> {
-    pub(super) fn new(width: u32, height: u32, tw: u32, th: u32) -> Self {
+    pub(in crate::media::thumbnails) fn new(width: u32, height: u32, tw: u32, th: u32) -> Self {
         let factor = (width / tw).min(height / th).clamp(1, 64);
         Self {
             width,
@@ -31,7 +31,7 @@ impl<const CHANNELS: usize> Rows<CHANNELS> {
             ),
         }
     }
-    pub(super) fn push(&mut self, row: &[u8]) {
+    pub(in crate::media::thumbnails) fn push(&mut self, row: &[u8]) {
         if self.factor == 1 {
             self.output.extend_from_slice(row);
             return;
@@ -53,7 +53,7 @@ impl<const CHANNELS: usize> Rows<CHANNELS> {
             self.buffered = 0;
         }
     }
-    pub(super) fn finish(self) -> (Vec<u8>, u32, u32) {
+    pub(in crate::media::thumbnails) fn finish(self) -> (Vec<u8>, u32, u32) {
         (
             self.output,
             self.width.div_ceil(self.factor),

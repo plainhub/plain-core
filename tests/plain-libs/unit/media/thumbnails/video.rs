@@ -19,28 +19,56 @@ fn compute_video_timepoint_matrix() {
 }
 
 #[test]
-fn avcc_to_annexb_converts_and_validates() {
-    // Two NALs, 4-byte lengths: {01 02 03} and {aa}.
-    let mut out = Vec::new();
-    length_prefixed_to_annexb(&[0, 0, 0, 3, 1, 2, 3, 0, 0, 0, 1, 0xaa], 4, &mut out).unwrap();
-    assert_eq!(out, vec![0, 0, 0, 1, 1, 2, 3, 0, 0, 0, 1, 0xaa]);
-    // 2-byte length prefixes.
-    let mut out = Vec::new();
-    length_prefixed_to_annexb(&[0, 2, 0xbb, 0xcc, 0, 1, 0xdd], 2, &mut out).unwrap();
-    assert_eq!(out, vec![0, 0, 0, 1, 0xbb, 0xcc, 0, 0, 0, 1, 0xdd]);
-    // 3-byte prefix (nal_length_size_minus_one = 2).
-    let mut out = Vec::new();
-    length_prefixed_to_annexb(&[0, 0, 1, 0xee], 3, &mut out).unwrap();
-    assert_eq!(out, vec![0, 0, 0, 1, 0xee]);
+fn length_prefixed_nals_borrow_the_sample() {
+    for (bytes, length_size, expected) in [
+        (
+            vec![0, 0, 0, 3, 1, 2, 3, 0, 0, 0, 1, 0xaa],
+            4,
+            vec![4..7, 11..12],
+        ),
+        (vec![0, 2, 0xbb, 0xcc, 0, 1, 0xdd], 2, vec![2..4, 6..7]),
+        (vec![0, 0, 1, 0xee], 3, vec![3..4]),
+    ] {
+        let ptr = bytes.as_ptr();
+        let sample = Sample::new(bytes, length_size).unwrap();
+        assert_eq!(sample.bytes.as_ptr(), ptr);
+        assert_eq!(sample.units, expected);
+        for (nal, offset) in sample.nals().zip(expected) {
+            assert_eq!(nal.as_ptr(), ptr.wrapping_add(offset.start));
+        }
+    }
+    for (bytes, length_size) in [
+        (vec![0, 0, 0, 9, 1, 2], 4),
+        (vec![0, 0, 0, 0, 1], 4),
+        (vec![0, 0, 0, 1, 9, 7], 4),
+        (vec![1], 5),
+    ] {
+        assert!(Sample::new(bytes, length_size).is_err());
+    }
+}
 
-    // Errors: declared length overruns the buffer.
-    assert!(length_prefixed_to_annexb(&[0, 0, 0, 9, 1, 2], 4, &mut Vec::new()).is_err());
-    // Zero-length NAL.
-    assert!(length_prefixed_to_annexb(&[0, 0, 0, 0, 1], 4, &mut Vec::new()).is_err());
-    // Trailing bytes shorter than the length prefix size.
-    assert!(length_prefixed_to_annexb(&[0, 0, 0, 1, 9, 7], 4, &mut Vec::new()).is_err());
-    // Absurd length size.
-    assert!(length_prefixed_to_annexb(&[1], 5, &mut Vec::new()).is_err());
+fn full_rgb(frame: &DecodedFrame) -> Bitmap {
+    match frame {
+        DecodedFrame::Avc(frame) => {
+            let mut pixels = vec![0; frame.width * frame.height * 3];
+            for (y, row) in pixels.chunks_exact_mut(frame.width * 3).enumerate() {
+                avc_rgb_row(frame, y, 0, row);
+            }
+            Bitmap::new_rgb(pixels, frame.width as u32, frame.height as u32)
+        }
+        DecodedFrame::Hevc(frame) => {
+            let image = heic_rs::color::convert(
+                frame,
+                None,
+                frame.color.unwrap_or_default(),
+                heic_rs::PixelLayout::Rgb8,
+                MAX_SOURCE_PIXELS,
+                Some(1),
+            )
+            .unwrap();
+            Bitmap::new_rgb(image.data, image.width, image.height)
+        }
+    }
 }
 
 #[test]
@@ -55,7 +83,7 @@ fn yuv_to_rgb_known_colors() {
         v: vec![240, 128],
     };
     f.y.shrink_to_fit();
-    let bm = yuv420_to_rgb(&f);
+    let bm = full_rgb(&DecodedFrame::Avc(f));
     assert_eq!((bm.width(), bm.height(), bm.channels()), (4, 2, 3));
     let (d, _, _) = bm.raw();
     let px = |i: usize| (d[i * 3], d[i * 3 + 1], d[i * 3 + 2]);
@@ -78,7 +106,7 @@ fn yuv_to_rgb_known_colors() {
         u: vec![128],
         v: vec![128],
     };
-    let bm = yuv420_to_rgb(&black);
+    let bm = full_rgb(&DecodedFrame::Avc(black));
     let (d, _, _) = bm.raw();
     assert!(d.iter().all(|&v| v < 16), "anchor black, got {:?}", &d[..6]);
 }
@@ -153,15 +181,23 @@ fn fragmented_mp4_preserves_the_existing_frame_access_units_and_decoded_pixels()
     let fragmented = plan_keyframe(&testdata("video/video-h264-fragmented.mp4")).unwrap();
     assert_eq!(fragmented.first_sample_id, classic.first_sample_id);
     assert_eq!(fragmented.estimated_bytes(), classic.estimated_bytes());
-    let (EncodedFrame::Avc(fragmented_units), EncodedFrame::Avc(classic_units)) =
-        (&fragmented.frame, &classic.frame)
+    let (
+        EncodedFrame::Avc {
+            samples: fragmented_units,
+            ..
+        },
+        EncodedFrame::Avc {
+            samples: classic_units,
+            ..
+        },
+    ) = (&fragmented.frame, &classic.frame)
     else {
         panic!("expected AVC frame plans");
     };
     assert_eq!(fragmented_units, classic_units);
     assert!(fragmented_units.len() <= MAX_FOLLOW_SAMPLES as usize + 1);
-    let classic = decode_plan(classic).unwrap();
-    let fragmented = decode_plan(fragmented).unwrap();
+    let classic = full_rgb(&decode_frame(classic).unwrap());
+    let fragmented = full_rgb(&decode_frame(fragmented).unwrap());
     assert_eq!(fragmented.raw(), classic.raw());
 }
 
@@ -181,4 +217,82 @@ fn end_to_end_hevc_mp4_keyframes() {
             "{file}"
         );
     }
+}
+
+#[test]
+fn streamed_video_thumbnail_pixels_match_full_rgb_for_fit_and_crop() {
+    for file in [
+        "video-h265.mp4",
+        "video-h265-hvc1.mp4",
+        "video-h264-high.mp4",
+    ] {
+        let plan = plan_keyframe(&testdata(file)).unwrap();
+        let frame = decode_frame(plan).unwrap();
+        let (source_w, source_h) = frame.dimensions();
+        for (w, h) in [(256, 256), (73, 97), (31, 29), (640, 480)] {
+            let (fit_w, fit_h) = super::super::compute_target_size(source_w, source_h, w, h);
+            let expected = scale::resize_to(full_rgb(&frame), fit_w, fit_h);
+            assert_eq!(
+                render_frame(&frame, w, h, false).unwrap().raw(),
+                expected.raw(),
+                "{file}, fit {w}x{h}"
+            );
+            let expected = scale::resize_to_fill(full_rgb(&frame), w, h);
+            assert_eq!(
+                render_frame(&frame, w, h, true).unwrap().raw(),
+                expected.raw(),
+                "{file}, crop {w}x{h}"
+            );
+        }
+    }
+}
+
+#[test]
+#[ignore]
+fn hevc_4k_thumbnail_post_decode_benchmark() {
+    use heic_rs::hevc::{ChromaFormat, Frame};
+    let (width, height) = (3840, 2160);
+    let (chroma_w, chroma_h) = (width / 2, height / 2);
+    let sample = |i: usize| ((i ^ (i / 1531)) % 876 + 64) as u16;
+    let frame = DecodedFrame::Hevc(Frame {
+        width,
+        height,
+        bit_depth: 10,
+        chroma: ChromaFormat::Yuv420,
+        y: (0..(width * height) as usize).map(sample).collect(),
+        cb: (0..(chroma_w * chroma_h) as usize).map(sample).collect(),
+        cr: (0..(chroma_w * chroma_h) as usize)
+            .map(|i| sample(i + 511))
+            .collect(),
+        y_stride: width,
+        c_stride: chroma_w,
+        color: None,
+    });
+    let original = || scale::resize_to_fill(full_rgb(&frame), 256, 256);
+    let streamed = || render_frame(&frame, 256, 256, true).unwrap();
+    assert_eq!(original().raw(), streamed().raw());
+    let mut baseline = Vec::new();
+    let mut optimized = Vec::new();
+    let measure = |func: &dyn Fn() -> Bitmap| {
+        let start = std::time::Instant::now();
+        for _ in 0..8 {
+            std::hint::black_box(func());
+        }
+        start.elapsed().as_secs_f64() * 1000.
+    };
+    for round in 0..7 {
+        if round % 2 == 0 {
+            baseline.push(measure(&original));
+            optimized.push(measure(&streamed));
+        } else {
+            optimized.push(measure(&streamed));
+            baseline.push(measure(&original));
+        }
+    }
+    baseline.sort_by(f64::total_cmp);
+    optimized.sort_by(f64::total_cmp);
+    println!(
+        "4k_frames_per_batch=8 rounds=7 baseline_median_ms={:.3} streamed_median_ms={:.3}",
+        baseline[3], optimized[3]
+    );
 }

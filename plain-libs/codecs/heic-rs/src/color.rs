@@ -38,6 +38,51 @@ pub(crate) use source::Source;
 /// The sample depths this conversion is defined for.
 const DEPTHS: core::ops::RangeInclusive<u8> = 8..=16;
 
+/// Convert a region in consecutive rows with a reusable RGB band.
+pub fn rgb8_rows(
+    frame: &Frame,
+    columns: core::ops::Range<u32>,
+    rows: core::ops::Range<u32>,
+    max_pixels: u64,
+    mut visit: impl FnMut(&[u8]),
+) -> Result<()> {
+    frame.validate()?;
+    depth_ok(frame.bit_depth)?;
+    check_pixels(frame.width, frame.height, max_pixels)?;
+    if columns.is_empty()
+        || columns.end > frame.width
+        || rows.start > rows.end
+        || rows.end > frame.height
+    {
+        return Err(Error::Malformed("Invalid color conversion region"));
+    }
+    let source = Source::Frame(frame);
+    let nclx = frame.color.unwrap_or_default();
+    let coeffs = Coeffs::new(nclx, frame.bit_depth, false);
+    let mode = conversion_mode(frame.chroma, false, nclx);
+    let columns = columns.start as usize..columns.end as usize;
+    let stride = columns.len() * 3;
+    let mut scratch = alloc::vec![0; kernel::scratch_len(&source, mode)];
+    let mut rgb = alloc::vec![0; stride * ROWS_PER_BAND.min(rows.len())];
+    for top in (rows.start..rows.end).step_by(ROWS_PER_BAND) {
+        let end = (rows.end - top).min(ROWS_PER_BAND as u32) as usize * stride;
+        let band = &mut rgb[..end];
+        kernel::planes::<3, false, false>(
+            &source,
+            &coeffs,
+            mode,
+            &mut scratch,
+            band,
+            top as usize,
+            columns.clone(),
+        );
+        for row in band.chunks_exact(stride) {
+            visit(row);
+        }
+    }
+    Ok(())
+}
+
 /// Convert a frame, and optionally an alpha plane, into an image.
 ///
 /// `alpha` is the luma plane of a decoded auxiliary item, at the same size as
@@ -90,13 +135,7 @@ pub(crate) fn convert_source(
 
     let wide = layout.bytes_per_channel() == 2;
     let coeffs = Coeffs::new(nclx, src.bit_depth(), wide);
-    let mode = if src.chroma() == ChromaFormat::Monochrome || layout.is_gray() {
-        Mode::Luma
-    } else if nclx.matrix.is_identity() {
-        Mode::Identity
-    } else {
-        Mode::Matrix
-    };
+    let mode = conversion_mode(src.chroma(), layout.is_gray(), nclx);
     run(src, &coeffs, mode, &mut image, threads);
 
     if let Some(a) = alpha.filter(|_| layout.has_alpha()) {
@@ -114,8 +153,17 @@ pub(crate) fn convert_source(
     Ok(image)
 }
 
-/// Refuse a depth the fixed-point coefficients are not defined for, rather
-/// than shifting past the width of the accumulator.
+fn conversion_mode(chroma: ChromaFormat, gray: bool, nclx: Nclx) -> Mode {
+    if chroma == ChromaFormat::Monochrome || gray {
+        Mode::Luma
+    } else if nclx.matrix.is_identity() {
+        Mode::Identity
+    } else {
+        Mode::Matrix
+    }
+}
+
+/// Reject depths outside the fixed-point coefficient range.
 fn depth_ok(depth: u8) -> Result<()> {
     if DEPTHS.contains(&depth) {
         return Ok(());
@@ -185,6 +233,6 @@ fn bands<const N: usize, const BGR: bool, const WIDE: bool>(
     let threads = if small { Some(1) } else { threads };
     parallel::for_each_band(out, w * N, ROWS_PER_BAND, threads, |y0, dst| {
         let mut scratch: Vec<u16> = alloc::vec![0u16; scratch_len];
-        kernel::planes::<N, BGR, WIDE>(src, c, mode, &mut scratch, dst, y0);
+        kernel::planes::<N, BGR, WIDE>(src, c, mode, &mut scratch, dst, y0, 0..w);
     });
 }

@@ -530,13 +530,20 @@ impl Decoder {
         Self::default()
     }
     pub fn decode(&mut self, annex_b: &[u8]) -> Result<Option<YuvFrame>, DecodeError> {
-        let _g = crate::h264::common::prof::scope(crate::h264::common::prof::Stage::Total);
-        let mut frame = None;
         let nals = {
             let _s =
                 crate::h264::common::prof::scope(crate::h264::common::prof::Stage::DecNalSplit);
             split_annex_b(annex_b)
         };
+        self.decode_nals(nals)
+    }
+
+    pub(crate) fn decode_nals<'a>(
+        &mut self,
+        nals: impl IntoIterator<Item = &'a [u8]>,
+    ) -> Result<Option<YuvFrame>, DecodeError> {
+        let _g = crate::h264::common::prof::scope(crate::h264::common::prof::Stage::Total);
+        let mut frame = None;
         for nal in nals {
             if nal.is_empty() {
                 continue;

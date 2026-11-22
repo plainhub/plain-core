@@ -202,6 +202,14 @@ pub fn read_original_thumbnail(
 }
 
 pub async fn get_thumbnail(spec: ThumbSpec, cache: &std::path::Path) -> Result<ThumbOutcome> {
+    render_thumbnail(spec, cache, true).await
+}
+
+async fn render_thumbnail(
+    spec: ThumbSpec,
+    cache: &std::path::Path,
+    cache_non_image: bool,
+) -> Result<ThumbOutcome> {
     let (head, sniffed) = inspect_image(&spec.path).await?;
 
     match sniffed {
@@ -218,6 +226,11 @@ pub async fn get_thumbnail(spec: ThumbSpec, cache: &std::path::Path) -> Result<T
         None => {
             if spec.center_crop && (spec.w == 0 || spec.h == 0) {
                 bail!("positive crop dimensions required");
+            }
+            if !cache_non_image {
+                return Ok(ThumbOutcome::Generated(Bytes::from(
+                    generate_non_image(&spec).await?,
+                )));
             }
             let versioned = cache.join("thumbs").join(format!(
                 "render-v2-{}-{}",
@@ -477,15 +490,13 @@ async fn dispatch_non_image(spec: &ThumbSpec, cache: &std::path::Path) -> Result
                 lru::global().put(cache_path.clone(), d.clone());
                 return Ok(ThumbOutcome::Generated(d));
             }
-            generate_non_image(spec, &cache_path).await
+            let bytes = generate_non_image(spec).await?;
+            tokio::task::spawn_blocking(move || finish_generated(&cache_path, bytes)).await?
         })
         .await
 }
 
-async fn generate_non_image(
-    spec: &ThumbSpec,
-    cache_path: &std::path::Path,
-) -> Result<ThumbOutcome> {
+async fn generate_non_image(spec: &ThumbSpec) -> Result<Vec<u8>> {
     let path = spec.path.clone();
 
     {
@@ -502,11 +513,9 @@ async fn generate_non_image(
             let est = u64::from(dimensions.width) * u64::from(dimensions.height) * 8
                 + u64::from(spec.w) * u64::from(spec.h) * 4;
             let request = spec.clone();
-            let cache_path = cache_path.to_owned();
             return admission::global()
                 .run(est, move || {
-                    let jpg = encode_bitmap(decode::image_from_bytes(&cover.bytes)?, &request)?;
-                    finish_generated(&cache_path, jpg)
+                    encode_bitmap(decode::image_from_bytes(&cover.bytes)?, &request)
                 })
                 .await?;
         }
@@ -518,12 +527,11 @@ async fn generate_non_image(
             .estimated_bytes()
             .saturating_mul(2)
             .saturating_add(u64::from(spec.w) * u64::from(spec.h) * 4);
-        let request = spec.clone();
-        let cache_path = cache_path.to_owned();
+        let (width, height, center_crop, quality) =
+            (spec.w, spec.h, spec.center_crop, spec.quality);
         return admission::global()
             .run(est, move || {
-                let jpg = encode_bitmap(video::decode_plan(plan)?, &request)?;
-                finish_generated(&cache_path, jpg)
+                video::encode_thumbnail(plan, width, height, center_crop, quality)
             })
             .await?;
     }
@@ -726,7 +734,7 @@ pub async fn render(
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
         .subsec_nanos();
-    let outcome = get_thumbnail(spec, cache)
+    let outcome = render_thumbnail(spec, cache, !is_video_ext(path))
         .await
         .map_err(|error| error.to_string())?;
     let bytes = match outcome {

@@ -190,13 +190,16 @@ fn track_probe_reads_video_codecs_and_metadata_tracks_without_confusing_audio() 
                 tracks(&path),
                 Some(Tracks {
                     first_video_codec: Some(String::from_utf8(codec.to_vec()).unwrap()),
-                    needs_remux: metadata
+                    needs_remux: metadata,
+                    audio_only: false,
                 })
             );
         }
     }
     std::fs::write(&path, atom(b"moov", &codec_track(Some(b"mp4a"), b"soun"))).unwrap();
-    assert_eq!(tracks(&path).unwrap().first_video_codec, None);
+    let audio = tracks(&path).unwrap();
+    assert_eq!(audio.first_video_codec, None);
+    assert!(audio.audio_only);
     std::fs::write(&path, atom(b"moov", &codec_track(None, b"vide"))).unwrap();
     assert_eq!(tracks(&path).unwrap().first_video_codec, None);
     std::fs::write(&path, b"truncated").unwrap();

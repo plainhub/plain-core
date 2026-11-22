@@ -558,17 +558,116 @@ async fn service_generates_and_caches_a_thumbnail_for_hevc_video() {
     .unwrap();
     let state = core.runtime_state();
     let request = request_for(&path);
-    let first = state
+    let (first, concurrent) = tokio::join!(
+        state.thumbnails.get(&state, request.clone()),
+        state.thumbnails.get(&state, request.clone())
+    );
+    let first = first.unwrap().unwrap();
+    assert_eq!(first.as_ptr(), concurrent.unwrap().unwrap().as_ptr());
+    let image = plain_libs::image::load_from_memory(&first).unwrap();
+    assert_eq!((image.width(), image.height()), (256, 256));
+    let cached = state
         .thumbnails
-        .get(&state, request.clone())
+        .get(&state, request)
         .await
         .unwrap()
         .unwrap();
-    let image = plain_libs::image::load_from_memory(&first).unwrap();
-    assert_eq!((image.width(), image.height()), (256, 256));
-    let second = state.thumbnails.get(&state, request).await.unwrap().unwrap();
-    assert_eq!(first, second);
+    assert_eq!(first.as_ptr(), cached.as_ptr());
+    assert_eq!(
+        state
+            .thumbnails
+            .native_decodes
+            .load(std::sync::atomic::Ordering::Relaxed),
+        1
+    );
+    let cache = state
+        .file_platform
+        .thumbnail_cache(path.to_str().unwrap())
+        .unwrap();
+    let (files, bytes) = video_cache_entries(&cache.join("thumbs"));
+    assert_eq!((files, bytes), (1, first.len() as u64));
     core.stop_core().await;
+}
+
+#[cfg(all(feature = "media", not(any(target_os = "android", target_os = "ios"))))]
+fn video_cache_entries(directory: &std::path::Path) -> (usize, u64) {
+    std::fs::read_dir(directory)
+        .unwrap()
+        .map(|entry| {
+            let entry = entry.unwrap();
+            let metadata = entry.metadata().unwrap();
+            if metadata.is_dir() {
+                video_cache_entries(&entry.path())
+            } else {
+                (1, metadata.len())
+            }
+        })
+        .fold((0, 0), |(count, size), (files, bytes)| {
+            (count + files, size + bytes)
+        })
+}
+
+#[cfg(all(feature = "media", not(any(target_os = "android", target_os = "ios"))))]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+#[ignore]
+async fn video_thumbnail_batch_benchmark() {
+    use std::time::Instant;
+    let fixtures: [&[u8]; 3] = [
+        include_bytes!("../../../../../../plain-rs/testdata/video-h265.mp4"),
+        include_bytes!("../../../../../../plain-rs/testdata/video-h265-hvc1.mp4"),
+        include_bytes!("../../../../../../plain-rs/testdata/video-h264-high.mp4"),
+    ];
+    let mut cold = Vec::new();
+    let mut warm = Vec::new();
+    let mut cache_entries = (0, 0);
+    for round in 0..8 {
+        let (directory, core, _) = server_with_cache();
+        let state = core.runtime_state();
+        let paths: Vec<_> = (0..12)
+            .map(|i| {
+                let path = directory.path().join(format!("video-{i}.mp4"));
+                std::fs::write(&path, fixtures[i % fixtures.len()]).unwrap();
+                path
+            })
+            .collect();
+        let mut timings = [0.; 2];
+        for elapsed in &mut timings {
+            let start = Instant::now();
+            let mut jobs = tokio::task::JoinSet::new();
+            for path in &paths {
+                let state = state.clone();
+                let request = request_for(path);
+                jobs.spawn(async move {
+                    state
+                        .thumbnails
+                        .get(&state, request)
+                        .await
+                        .unwrap()
+                        .unwrap()
+                });
+            }
+            while let Some(result) = jobs.join_next().await {
+                assert!(result.unwrap().starts_with(&[0xff, 0xd8]));
+            }
+            *elapsed = start.elapsed().as_secs_f64() * 1000.;
+        }
+        let cache = state
+            .file_platform
+            .thumbnail_cache(paths[0].to_str().unwrap())
+            .unwrap();
+        cache_entries = video_cache_entries(&cache.join("thumbs"));
+        if round > 0 {
+            cold.push(timings[0]);
+            warm.push(timings[1]);
+        }
+        core.stop_core().await;
+    }
+    cold.sort_by(f64::total_cmp);
+    warm.sort_by(f64::total_cmp);
+    println!(
+        "batch=12 rounds=7 cold_median_ms={:.3} warm_median_ms={:.3} cache_files={} cache_bytes={}",
+        cold[3], warm[3], cache_entries.0, cache_entries.1
+    );
 }
 
 #[cfg(feature = "media")]
