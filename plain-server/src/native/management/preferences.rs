@@ -60,6 +60,15 @@ impl NativeManagement {
                     .map_err(|error| error.to_string())?
                     .unwrap_or(false)
             )),
+            keys::SELECTED_DEVICE_ID => Ok(json!(
+                state
+                    .store
+                    .get()
+                    .map_err(|error| error.to_string())?
+                    .get_json::<String>(key)
+                    .map_err(|error| error.to_string())?
+                    .unwrap_or_default()
+            )),
             _ => Err(format!("Unknown preference: {key}")),
         }
     }
@@ -82,6 +91,7 @@ impl NativeManagement {
             keys::UPDATE_INFO,
             keys::APP_UPDATE_AVAILABLE,
             keys::ONBOARDING_COMPLETED,
+            keys::SELECTED_DEVICE_ID,
         ] {
             values.insert(key.into(), self.get_pref(key)?);
         }
@@ -90,6 +100,18 @@ impl NativeManagement {
 
     pub async fn set_pref(&self, key: &str, value: plain_libs::serde_json::Value) -> Result<bool, String> {
         self.state.native_client_id()?;
+        if key == keys::SELECTED_DEVICE_ID {
+            let peer_id = value
+                .as_str()
+                .ok_or("Selected device ID must be a string")?;
+            return self
+                .state
+                .store
+                .get()
+                .map_err(|error| error.to_string())?
+                .set_json(key, peer_id)
+                .map_err(|error| error.to_string());
+        }
         if key == keys::ADB_TOKEN {
             if value.as_str() != Some("") {
                 return Err("ADB token can only be cleared; use reset to generate it".into());

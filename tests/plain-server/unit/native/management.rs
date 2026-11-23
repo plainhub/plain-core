@@ -267,6 +267,7 @@ async fn native_preference_reads_and_notification_changes_preserve_shared_state_
                         | plain_rs::features::prefs::pref_keys::UPDATE_INFO
                         | plain_rs::features::prefs::pref_keys::APP_UPDATE_AVAILABLE
                         | plain_rs::features::prefs::pref_keys::ONBOARDING_COMPLETED
+                        | plain_rs::features::prefs::pref_keys::SELECTED_DEVICE_ID
                 ),
             "Unexpected native preference key: {key}"
         );

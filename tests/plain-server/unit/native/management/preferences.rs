@@ -1,6 +1,40 @@
 use crate::server::ContentServer;
 
 #[tokio::test]
+async fn selected_device_preference_survives_reopening_and_stays_native_only() {
+    use plain_libs::serde_json::json;
+
+    let directory = plain_libs::temporary::tempdir().unwrap();
+    let key = "selected_device_id";
+    let peer_id = "a4738425-1db0-485e-809d-390665980ebd";
+    let core = ContentServer::open(directory.path()).unwrap();
+    let management = core.native_management().unwrap();
+    assert_eq!(management.preferences().unwrap().get(key), Some(&json!("")));
+    assert!(management.set_pref(key, json!(peer_id)).await.unwrap());
+    assert!(!management.set_pref(key, json!(peer_id)).await.unwrap());
+    assert!(management.set_pref(key, json!(true)).await.is_err());
+    assert!(core.runtime_state().prefs.get::<String>(key).unwrap().is_none());
+    for request in [
+        "{ prefs(keys:[\"selected_device_id\"]) }",
+        "mutation { setPref(key:\"selected_device_id\",value:\"\") }",
+        "{ keyValue(key:\"selected_device_id\") }",
+        "mutation { setKeyValue(key:\"selected_device_id\",value:\"\") }",
+    ] {
+        let response = core.native_graphql().unwrap().execute(request.into()).await;
+        assert_eq!(response.errors.len(), 1, "{request}: {:?}", response.data);
+    }
+    core.stop_core().await;
+    drop(core);
+
+    let core = ContentServer::open(directory.path()).unwrap();
+    let management = core.native_management().unwrap();
+    assert_eq!(management.preferences().unwrap().get(key), Some(&json!(peer_id)));
+    assert!(management.set_pref(key, json!("")).await.unwrap());
+    assert_eq!(management.get_pref(key).unwrap(), json!(""));
+    core.stop_core().await;
+}
+
+#[tokio::test]
 async fn adb_automation_is_opt_in_and_disabling_revokes_the_token() {
     use plain_libs::serde_json::json;
     use plain_rs::features::prefs::pref_keys::ADB_TOKEN;

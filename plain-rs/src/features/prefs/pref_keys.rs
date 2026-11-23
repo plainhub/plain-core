@@ -97,6 +97,7 @@ pref_keys! {
 pub const UPDATE_INFO: &str = "update_info";
 pub const APP_UPDATE_AVAILABLE: &str = "app_update_available";
 pub const ONBOARDING_COMPLETED: &str = "onboarding_completed";
+pub const SELECTED_DEVICE_ID: &str = "selected_device_id";
 pub const SIGNATURE_PUBLIC_KEY: &str = "signature_public_key";
 
 pub fn access(key: &str) -> Option<PrefAccess> {
