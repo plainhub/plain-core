@@ -18,10 +18,7 @@ pub(super) fn uses_rust_still_decoder(request: &Request) -> bool {
     }
 }
 
-pub async fn native(
-    request: &Request,
-    _cache: &std::path::Path,
-) -> Result<Option<Vec<u8>>, String> {
+pub async fn native(request: &Request) -> Result<Option<Vec<u8>>, String> {
     let path = request.path.clone();
     let width = request.width.min(16384);
     let height = request.height.min(16384);

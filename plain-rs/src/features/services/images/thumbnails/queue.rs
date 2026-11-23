@@ -12,7 +12,6 @@ type Reply = Option<Arc<Output>>;
 
 pub(crate) struct Generation {
     pub(super) request: Request,
-    pub(super) cache: PathBuf,
     pub(super) key: String,
     pub(super) cached: PathBuf,
     pub(super) hash: Option<Arc<std::sync::OnceLock<Vec<u8>>>>,

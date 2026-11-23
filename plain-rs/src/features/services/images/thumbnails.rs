@@ -142,7 +142,6 @@ async fn decode(
     state: &CoreRuntime,
     request: &Request,
     system: bool,
-    cache: &Path,
     hash: Option<&OnceLock<Vec<u8>>>,
 ) -> Result<Option<Bytes>, String> {
     #[cfg(not(feature = "media"))]
@@ -184,18 +183,20 @@ async fn decode(
             .await
             .map_err(|error| error.to_string())?
         } else {
-            plain_libs::media::thumbnails::render(
-                &request.path,
-                request.width,
-                request.height,
-                request.center_crop,
-                request.short_edge,
-                cache,
+            Some(
+                plain_libs::media::thumbnails::render(
+                    &request.path,
+                    request.width,
+                    request.height,
+                    request.center_crop,
+                    request.short_edge,
+                )
+                .await
+                .map_err(|error| error.to_string())?,
             )
-            .await?
         };
         #[cfg(not(feature = "media"))]
-        let bytes = crate::features::services::images::thumbnail_decoder::native(request, cache)
+        let bytes = crate::features::services::images::thumbnail_decoder::native(request)
             .await?
             .map(Bytes::from);
         if let Some(bytes) = bytes.as_ref() {
@@ -345,7 +346,7 @@ impl Thumbnails {
             .await
             .map_err(|error| error.to_string())?;
         let state_for_io = state.clone();
-        let Some((request, cache, key, cached, bytes)) = tokio::task::spawn_blocking(move || {
+        let Some((request, key, cached, bytes)) = tokio::task::spawn_blocking(move || {
             let _lookup = lookup;
             let canonical = match std::fs::canonicalize(&request.path) {
                 Ok(path) => path,
@@ -393,7 +394,7 @@ impl Thumbnails {
             if bytes.is_some() && source_fingerprint(&request)?.as_deref() != Some(&key) {
                 return Ok(None);
             }
-            Ok(Some((request, cache, key, cached, bytes)))
+            Ok(Some((request, key, cached, bytes)))
         })
         .await
         .map_err(|error| error.to_string())??
@@ -407,7 +408,6 @@ impl Thumbnails {
             .submit(
                 Generation {
                     request,
-                    cache,
                     key,
                     cached,
                     hash,
@@ -420,14 +420,13 @@ impl Thumbnails {
     async fn generate(state: &CoreRuntime, job: &Generation) -> Result<Option<Bytes>, String> {
         let Generation {
             request,
-            cache,
             key,
             cached,
             hash,
         } = job;
         let system = super::thumbnail_decoder::uses_system_thumbnail(request);
         if system {
-            if let Some(bytes) = decode(state, request, true, cache, hash.as_deref()).await? {
+            if let Some(bytes) = decode(state, request, true, hash.as_deref()).await? {
                 return Ok(
                     if fingerprint(request).await?.as_deref() == Some(key.as_str()) {
                         Some(bytes)
@@ -451,7 +450,7 @@ impl Thumbnails {
                 },
             );
         }
-        let Some(bytes) = decode(state, request, false, cache, hash.as_deref()).await? else {
+        let Some(bytes) = decode(state, request, false, hash.as_deref()).await? else {
             return Ok(None);
         };
         if fingerprint(request).await?.as_deref() != Some(key.as_str()) {

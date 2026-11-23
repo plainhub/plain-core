@@ -1,20 +1,6 @@
 //! High-performance pure-Rust thumbnail engine.
 //!
-//! Pipeline per request (image files):
-//!
-//! 1. sniff the header (async read of ≤256 KiB) → format + dimensions,
-//! 2. small-image passthrough: an image that already fits the target box
-//!    (and is ≤1 MiB) is served byte-identical — zero decode, zero encode,
-//! 3. hot LRU, then the deterministic file cache
-//!    (`{cache_dir}/thumbs/XX/<sha512>.jpg|png`),
-//! 4. single-flight per cache key — concurrent duplicate requests coalesce,
-//! 5. two-tier admission (CPU permits + decoded-pixel byte budget),
-//! 6. decode (IDCT-scaled JPEG for big→small, `image` crate otherwise)
-//!    → box pre-scale → SIMD resample → EXIF orientation → JPEG/PNG encode,
-//! 7. atomic cache write + LRU insert.
-//!
-//! Non-image files go through the cover-art path (sidecar/lofty); cover-less
-//! MP4-family videos use the shared AVC and HEVC keyframe decoders.
+//! Decodes and resizes images, embedded covers and video keyframes. The caller owns the cache.
 
 pub mod admission;
 mod bmp;
@@ -32,7 +18,6 @@ mod workers;
 
 use crate::anyhow::{Result, bail};
 use bytes::Bytes;
-use std::sync::LazyLock;
 
 use exif::Orientation;
 use scale::Bitmap;
@@ -62,70 +47,30 @@ fn dc_fast_eligible(s: Sniffed, tw: u32, th: u32) -> bool {
     tw > 0 && th > 0 && tw <= s.width.div_ceil(8) && th <= s.height.div_ceil(8)
 }
 
-/// Outcome of a thumbnail request.
-#[derive(Debug)]
-pub enum ThumbOutcome {
-    /// Generated or cached image bytes; the signature identifies the format.
-    Generated(Bytes),
-    /// Source bytes served as-is with their natural MIME type.
-    Original { data: Bytes, mime: String },
-}
-
-/// Everything the engine needs about one request. `mod_unix`/`file_size`
-/// come from the stat the HTTP layer already performed.
-#[derive(Debug, Clone)]
-pub struct ThumbSpec {
-    pub path: String,
-    pub w: u32,
-    pub h: u32,
-    pub quality: u8,
-    pub mod_unix: i64,
-    pub file_size: i64,
-    pub center_crop: bool,
-    pub short_edge: Option<u32>,
-    pub modified_nanos: u32,
+#[derive(Clone)]
+struct ThumbSpec {
+    path: String,
+    w: u32,
+    h: u32,
+    quality: u8,
+    file_size: i64,
+    center_crop: bool,
+    short_edge: Option<u32>,
 }
 
 impl ThumbSpec {
     /// Clamp hostile query params into a sane request.
-    pub fn sanitize(path: &str, w: i32, h: i32, quality: i32, mod_unix: i64, size: i64) -> Self {
+    fn sanitize(path: &str, w: i32, h: i32, quality: i32, size: i64) -> Self {
         ThumbSpec {
             path: path.to_string(),
             w: w.clamp(0, MAX_TARGET_DIM as i32) as u32,
             h: h.clamp(0, MAX_TARGET_DIM as i32) as u32,
             quality: quality.clamp(1, 100) as u8,
-            mod_unix,
             file_size: size,
             center_crop: false,
             short_edge: None,
-            modified_nanos: 0,
         }
     }
-}
-
-static LOCKS: LazyLock<crate::utils::keyed_locks::KeyedLocks> =
-    LazyLock::new(crate::utils::keyed_locks::KeyedLocks::new);
-
-/// Test hook: cold generations keyed by cache path (incremented once per
-/// actual decode+encode, not per request). Keyed so parallel tests cannot
-/// pollute each other's coalescing assertions.
-#[cfg(test)]
-pub(crate) static GENERATIONS: std::sync::LazyLock<
-    std::sync::Mutex<std::collections::HashMap<String, u64>>,
-> = std::sync::LazyLock::new(|| std::sync::Mutex::new(std::collections::HashMap::new()));
-
-#[cfg(test)]
-pub(crate) fn generations_for(key: &str) -> u64 {
-    *GENERATIONS.lock().unwrap().get(key).unwrap_or(&0)
-}
-
-#[cfg(test)]
-fn bump_generations(key: &str) {
-    *GENERATIONS
-        .lock()
-        .unwrap()
-        .entry(key.to_string())
-        .or_insert(0) += 1;
 }
 
 pub fn original_fits(
@@ -202,51 +147,6 @@ pub fn read_original_thumbnail(
     Ok(Some(bytes))
 }
 
-pub async fn get_thumbnail(spec: ThumbSpec, cache: &std::path::Path) -> Result<ThumbOutcome> {
-    render_thumbnail(spec, cache, true).await
-}
-
-async fn render_thumbnail(
-    spec: ThumbSpec,
-    cache: &std::path::Path,
-    cache_non_image: bool,
-) -> Result<ThumbOutcome> {
-    let (head, sniffed) = inspect_image(&spec.path).await?;
-
-    match sniffed {
-        Some(s) => {
-            let policy = match spec.short_edge {
-                Some(short) => format!("short-{short}"),
-                None => "fit-v1".to_owned(),
-            };
-            let cache = cache
-                .join("thumbs")
-                .join(format!("{policy}-{}", spec.modified_nanos));
-            get_image_thumbnail(&spec, head, s, &cache).await
-        }
-        None => {
-            if spec.center_crop && (spec.w == 0 || spec.h == 0) {
-                bail!("positive crop dimensions required");
-            }
-            if !cache_non_image {
-                return Ok(ThumbOutcome::Generated(Bytes::from(
-                    generate_non_image(&spec, false).await?.bytes,
-                )));
-            }
-            let versioned = cache.join("thumbs").join(format!(
-                "render-v2-{}-{}",
-                spec.center_crop, spec.modified_nanos
-            ));
-            let cache = if spec.center_crop || spec.modified_nanos != 0 {
-                versioned.as_path()
-            } else {
-                cache
-            };
-            dispatch_non_image(&spec, cache).await
-        }
-    }
-}
-
 fn image_dimensions(spec: &ThumbSpec, head: &[u8], s: Sniffed) -> (u8, u32, u32, u32, u32) {
     // EXIF orientation first: the *upright* dimensions decide the target box
     // so rotated photos produce correctly-proportioned thumbnails.
@@ -266,61 +166,6 @@ fn image_dimensions(spec: &ThumbSpec, head: &[u8], s: Sniffed) -> (u8, u32, u32,
     };
 
     (orientation, uw, uh, tw, th)
-}
-
-async fn get_image_thumbnail(
-    spec: &ThumbSpec,
-    head: Vec<u8>,
-    s: Sniffed,
-    cache: &std::path::Path,
-) -> Result<ThumbOutcome> {
-    let (orientation, uw, uh, tw, th) = image_dimensions(spec, &head, s);
-
-    // Passthrough: already thumbnail-sized, browser-renderable, small.
-    if s.kind.can_passthrough()
-        && original_fits(uw, uh, tw, th, spec.center_crop, spec.file_size)
-    {
-        let data = tokio::fs::read(&spec.path).await?;
-        return Ok(ThumbOutcome::Original {
-            data: Bytes::from(data),
-            mime: s.kind.mime().to_string(),
-        });
-    }
-
-    let cache_path = thumb_cache_path(
-        cache,
-        &spec.path,
-        spec.w,
-        spec.h,
-        spec.quality,
-        spec.mod_unix,
-        spec.file_size,
-    );
-    let cache_path = if s.preserve_alpha {
-        cache_path.with_extension("png")
-    } else {
-        cache_path
-    };
-    let key = cache_path.to_string_lossy().into_owned();
-
-    if let Some(d) = lru::global().get(&cache_path) {
-        return Ok(ThumbOutcome::Generated(d));
-    }
-
-    // Single-flight: identical in-flight requests wait for one generation.
-    LOCKS
-        .with_lock(key, async {
-            if let Some(d) = lru::global().get(&cache_path) {
-                return Ok(ThumbOutcome::Generated(d));
-            }
-            if let Some(d) = read_cache_file(&cache_path).await {
-                lru::global().put(cache_path.clone(), d.clone());
-                return Ok(ThumbOutcome::Generated(d));
-            }
-            let bytes = generate_image(spec, s, orientation, tw, th, head, false).await?.bytes;
-            tokio::task::spawn_blocking(move || finish_generated(&cache_path, bytes)).await?
-        })
-        .await
 }
 
 async fn generate_image(
@@ -459,41 +304,6 @@ fn estimated_decoded_bytes(s: Sniffed, rw: u32, rh: u32) -> u64 {
 // Non-image dispatch: cover art, then pure-Rust video frame extraction
 // ---------------------------------------------------------------------------
 
-async fn dispatch_non_image(spec: &ThumbSpec, cache: &std::path::Path) -> Result<ThumbOutcome> {
-    let cache_path = thumb_cache_path(
-        cache,
-        &spec.path,
-        spec.w,
-        spec.h,
-        spec.quality,
-        spec.mod_unix,
-        spec.file_size,
-    );
-    let key = cache_path.to_string_lossy().into_owned();
-
-    if let Some(d) = lru::global().get(&cache_path) {
-        return Ok(ThumbOutcome::Generated(d));
-    }
-    if let Some(d) = read_cache_file(&cache_path).await {
-        lru::global().put(cache_path.clone(), d.clone());
-        return Ok(ThumbOutcome::Generated(d));
-    }
-
-    LOCKS
-        .with_lock(key, async {
-            if let Some(d) = lru::global().get(&cache_path) {
-                return Ok(ThumbOutcome::Generated(d));
-            }
-            if let Some(d) = read_cache_file(&cache_path).await {
-                lru::global().put(cache_path.clone(), d.clone());
-                return Ok(ThumbOutcome::Generated(d));
-            }
-            let bytes = generate_non_image(spec, false).await?.bytes;
-            tokio::task::spawn_blocking(move || finish_generated(&cache_path, bytes)).await?
-        })
-        .await
-}
-
 async fn generate_non_image(spec: &ThumbSpec, with_hash: bool) -> Result<Rendered> {
     let path = spec.path.clone();
 
@@ -539,18 +349,6 @@ async fn generate_non_image(spec: &ThumbSpec, with_hash: bool) -> Result<Rendere
     bail!("unsupported file type for thumbnail")
 }
 
-fn finish_generated(cache_path: &std::path::Path, jpg: Vec<u8>) -> Result<ThumbOutcome> {
-    let data = Bytes::from(jpg);
-    let _ = write_thumb_cache(cache_path, &data);
-    lru::global().put(cache_path.to_path_buf(), data.clone());
-    #[cfg(test)]
-    {
-        let key = cache_path.to_string_lossy().into_owned();
-        bump_generations(&key);
-    }
-    Ok(ThumbOutcome::Generated(data))
-}
-
 fn resize_bitmap(bm: Bitmap, spec: &ThumbSpec) -> Bitmap {
     if spec.center_crop {
         scale::resize_to_fill(bm, spec.w, spec.h)
@@ -581,64 +379,6 @@ fn is_video_ext(path: &str) -> bool {
         ext.as_str(),
         "mp4" | "mkv" | "avi" | "mov" | "webm" | "flv" | "m4v"
     )
-}
-
-// ---------------------------------------------------------------------------
-// Cache plumbing (deterministic path, atomic write, ETag)
-// ---------------------------------------------------------------------------
-
-/// Compute the deterministic cache file path for a thumbnail.
-///
-/// Layout: `{cache_dir}/thumbs/XX/<sha512>.jpg` where XX = first 2 hex chars
-/// (256 shard directories). The hash covers source_path|w|h|q|mtime|size so
-/// any source change produces a new path: file existence == valid cache.
-pub fn thumb_cache_path(
-    cache_dir: &std::path::Path,
-    source_path: &str,
-    w: u32,
-    h: u32,
-    quality: u8,
-    mod_unix: i64,
-    file_size: i64,
-) -> std::path::PathBuf {
-    let hex = crate::crypto::sha512_hex(&format!(
-        "{source_path}|jpg1|{w}x{h}|q{quality}|m{mod_unix}|s{file_size}"
-    ));
-    cache_dir
-        .join("thumbs")
-        .join(&hex[..2])
-        .join(format!("{hex}.jpg"))
-}
-
-/// Strong ETag for a thumbnail response. Derives from the cache filename,
-/// which already hashes every invalidation input — computable before any
-/// generation work, so conditional requests cost a stat only.
-pub fn cache_etag(cache_path: &std::path::Path) -> String {
-    let hex = cache_path
-        .file_stem()
-        .and_then(|n| n.to_str())
-        .unwrap_or_default();
-    format!("\"t{hex}\"")
-}
-
-/// Write thumbnail bytes to the cache file atomically (temp + rename).
-pub fn write_thumb_cache(cache_path: &std::path::Path, data: &[u8]) -> std::io::Result<()> {
-    use std::io::Write;
-    if let Some(parent) = cache_path.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
-    let dir = cache_path.parent().unwrap_or(std::path::Path::new("."));
-    let mut tmp = crate::temporary::Builder::new().suffix(".tmp").tempfile_in(dir)?;
-    tmp.write_all(data)?;
-    tmp.persist(cache_path)?;
-    Ok(())
-}
-
-async fn read_cache_file(cache_path: &std::path::Path) -> Option<Bytes> {
-    match tokio::fs::read(cache_path).await {
-        Ok(d) if !d.is_empty() => Some(Bytes::from(d)),
-        _ => None,
-    }
 }
 
 async fn inspect_image(path: &str) -> Result<(Vec<u8>, Option<Sniffed>)> {
@@ -677,17 +417,6 @@ async fn inspect_image(path: &str) -> Result<(Vec<u8>, Option<Sniffed>)> {
 
 pub use crate::media::thumbnail_limits::compute_target_size;
 
-#[derive(Clone, Copy, Debug, Default)]
-pub struct Settings {
-    pub mem_budget_mb: i64,
-    pub lru_mb: i64,
-}
-
-pub fn initialize(settings: Settings) {
-    admission::initialize(settings.mem_budget_mb);
-    lru::initialize(settings.lru_mb);
-}
-
 #[cfg(test)]
 #[path = "../../../../tests/plain-libs/unit/media/thumbnails/mod.rs"]
 mod tests;
@@ -716,7 +445,7 @@ async fn still_result(
     }
     let (head, source) = inspect_image(path).await?;
     let source = source.ok_or_else(|| crate::anyhow::anyhow!("unsupported file type for thumbnail"))?;
-    let mut spec = ThumbSpec::sanitize(path, width.try_into()?, height.try_into()?, 85, 0, size.try_into()?);
+    let mut spec = ThumbSpec::sanitize(path, width.try_into()?, height.try_into()?, 85, size.try_into()?);
     spec.short_edge = short_edge;
     let (orientation, _, _, tw, th) = image_dimensions(&spec, &head, source);
     Ok(Some(generate_image(&spec, source, orientation, tw, th, head, with_hash).await?))
@@ -731,7 +460,7 @@ pub async fn render_with_thumb_hash(
     short_edge: Option<u32>,
 ) -> Result<Option<(Bytes, Vec<u8>)>> {
     let rendered = if video {
-        let mut spec = ThumbSpec::sanitize(path, width.try_into()?, height.try_into()?, 85, 0, 0);
+        let mut spec = ThumbSpec::sanitize(path, width.try_into()?, height.try_into()?, 85, 0);
         spec.center_crop = center_crop;
         Some(generate_non_image(&spec, true).await?)
     } else {
@@ -757,41 +486,22 @@ pub async fn render(
     height: u32,
     center_crop: bool,
     short_edge: Option<u32>,
-    cache: &std::path::Path,
-) -> Result<Option<Bytes>, String> {
-    let meta = tokio::fs::metadata(path)
-        .await
-        .map_err(|error| error.to_string())?;
-    let modified = meta
-        .modified()
-        .map_err(|error| error.to_string())?
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs() as i64;
-    let mut spec = ThumbSpec::sanitize(
-        path,
-        i32::try_from(width).map_err(|error| error.to_string())?,
-        i32::try_from(height).map_err(|error| error.to_string())?,
-        85,
-        modified,
-        meta.len() as i64,
-    );
-    spec.center_crop = center_crop;
+) -> Result<Bytes> {
+    let size = tokio::fs::metadata(path).await?.len();
+    let mut spec = ThumbSpec::sanitize(path, width.try_into()?, height.try_into()?, 85, size.try_into()?);
     spec.short_edge = short_edge;
-    spec.modified_nanos = meta
-        .modified()
-        .map_err(|error| error.to_string())?
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .subsec_nanos();
-    let outcome = render_thumbnail(spec, cache, !is_video_ext(path))
-        .await
-        .map_err(|error| error.to_string())?;
-    let bytes = match outcome {
-        ThumbOutcome::Generated(bytes) => bytes,
-        ThumbOutcome::Original { data, .. } => data,
+    let (head, image) = inspect_image(path).await?;
+    let rendered = if let Some(source) = image {
+        let (orientation, _, _, tw, th) = image_dimensions(&spec, &head, source);
+        generate_image(&spec, source, orientation, tw, th, head, false).await?
+    } else {
+        if center_crop && (spec.w == 0 || spec.h == 0) {
+            bail!("positive crop dimensions required");
+        }
+        spec.center_crop = center_crop;
+        generate_non_image(&spec, false).await?
     };
-    Ok(Some(bytes))
+    Ok(Bytes::from(rendered.bytes))
 }
 
 pub async fn png_preview(path: &str) -> Result<Vec<u8>> {

@@ -548,6 +548,35 @@ async fn concurrent_generation_delivers_one_shared_allocation_to_300_readers() {
 
 #[cfg(all(feature = "media", not(any(target_os = "android", target_os = "ios"))))]
 #[tokio::test]
+async fn audio_cover_writes_only_the_shared_thumbnail_cache() {
+    let (directory, core, _) = server_with_cache();
+    let state = core.runtime_state();
+    let path = directory.path().join("song.mp3");
+    std::fs::write(&path, b"sidecar cover fixture").unwrap();
+    plain_libs::image::RgbImage::from_pixel(400, 300, plain_libs::image::Rgb([80, 60, 100]))
+        .save(directory.path().join("cover.jpg"))
+        .unwrap();
+
+    let first = state.thumbnails.get(&state, request_for(&path)).await.unwrap().unwrap();
+    let cover = plain_libs::image::load_from_memory(&first).unwrap();
+    assert_eq!((cover.width(), cover.height()), (256, 256));
+    let thumbs = state.file_platform.thumbnail_cache(path.to_str().unwrap()).unwrap().join("thumbs");
+    let entries = std::fs::read_dir(&thumbs).unwrap().collect::<Result<Vec<_>, _>>().unwrap();
+    assert_eq!(entries.len(), 1, "audio covers must not create a second cache tree");
+    let cached_file = entries[0].path();
+    assert_eq!(cached_file.extension().unwrap(), "jpg");
+    assert_eq!(cached_file.file_stem().unwrap().len(), 64);
+    assert_eq!(std::fs::read(cached_file).unwrap(), first.as_ref());
+
+    state.thumbnails.hot.clear();
+    let second = state.thumbnails.get(&state, request_for(&path)).await.unwrap().unwrap();
+    assert_eq!(first, second);
+    assert_eq!(state.thumbnails.native_decodes.load(std::sync::atomic::Ordering::Relaxed), 1);
+    core.stop_core().await;
+}
+
+#[cfg(all(feature = "media", not(any(target_os = "android", target_os = "ios"))))]
+#[tokio::test]
 async fn video_thumbnail_batch_decodes_and_persists_once_per_file() {
     use std::sync::atomic::Ordering;
 
@@ -700,9 +729,8 @@ async fn thumbnail_sizes_share_256_bytes_and_preserve_large_previews() {
     .save(&path)
     .unwrap();
     let expected =
-        plain_libs::media::thumbnails::render(path.to_str().unwrap(), 256, 256, true, None, &directory.path().join("reference"))
+        plain_libs::media::thumbnails::render(path.to_str().unwrap(), 256, 256, true, None)
             .await
-            .unwrap()
             .unwrap();
     let mut requests = tokio::task::JoinSet::new();
     for size in [50, 96, 128, 256, 512] {

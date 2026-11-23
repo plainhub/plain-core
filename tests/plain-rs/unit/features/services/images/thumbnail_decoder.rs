@@ -172,7 +172,7 @@ async fn core_only_thumbnail_applies_exif_orientation_before_sizing() {
         file_name: "rotated.jpg".into(),
     };
     let image =
-        plain_libs::image::load_from_memory(&native(&request, directory.path()).await.unwrap().unwrap())
+        plain_libs::image::load_from_memory(&native(&request).await.unwrap().unwrap())
             .unwrap();
     assert_eq!((image.width(), image.height()), (2, 3));
 }
@@ -196,7 +196,7 @@ async fn native_png_thumbnail_retains_transparent_and_partial_alpha() {
         access_order: None,
         file_name: "transparent.png".into(),
     };
-    let bytes = native(&request, directory.path()).await.unwrap().unwrap();
+    let bytes = native(&request).await.unwrap().unwrap();
     assert!(bytes.starts_with(b"\x89PNG\r\n\x1a\n"));
     let decoded = plain_libs::image::load_from_memory(&bytes).unwrap().into_rgba8();
     assert_eq!(decoded.dimensions(), (256, 256));
@@ -224,7 +224,7 @@ async fn native_image_fit_preserves_aspect_without_enlarging_small_images() {
                 access_order: None,
                 file_name: "small.png".into(),
             };
-            let bytes = native(&request, directory.path()).await.unwrap().unwrap();
+            let bytes = native(&request).await.unwrap().unwrap();
             let image = plain_libs::image::load_from_memory(&bytes).unwrap();
             assert_eq!((image.width(), image.height()), dimensions);
             if let Some(expected) = &first {

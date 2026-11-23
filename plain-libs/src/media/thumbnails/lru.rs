@@ -145,24 +145,6 @@ impl ThumbLru {
     }
 }
 
-static GLOBAL: std::sync::OnceLock<ThumbLru> = std::sync::OnceLock::new();
-
-pub fn initialize(raw: i64) {
-    // Missing/invalid key (get_int → 0) falls back to the 32 MB default.
-    let mb = if raw <= 0 { 32 } else { raw.clamp(1, 2048) } as usize;
-    let _ = GLOBAL.set(ThumbLru::new(mb * 1024 * 1024, 4096));
-}
-
-pub fn global() -> &'static ThumbLru {
-    GLOBAL.get_or_init(|| ThumbLru::new(32 * 1024 * 1024, 4096))
-}
-
-/// Test/bench hook: drop the hot cache.
-#[doc(hidden)]
-pub fn debug_clear() {
-    global().clear();
-}
-
 #[cfg(test)]
 #[path = "../../../../tests/plain-libs/unit/media/thumbnails/lru.rs"]
 mod tests;

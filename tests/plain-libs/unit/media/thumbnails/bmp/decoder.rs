@@ -181,56 +181,15 @@ fn malformed_headers_and_every_truncation_return_errors_without_panics() {
 }
 
 #[tokio::test]
-async fn duplicate_bmp_requests_generate_once_and_share_cached_bytes() {
-    use crate::media::thumbnails::{self, ThumbOutcome, ThumbSpec};
-    let directory = crate::temporary::tempdir().unwrap();
-    let path = directory.path().join("batch.bmp");
-    let bytes = fixtures::expanded("rgb24.bmp", 1025, 769, false);
-    std::fs::write(&path, &bytes).unwrap();
-    let spec = ThumbSpec::sanitize(path.to_str().unwrap(), 128, 128, 75, 0, bytes.len() as i64);
-    let key = thumbnails::thumb_cache_path(
-        &directory.path().join("thumbs/fit-v1-0"),
-        path.to_str().unwrap(),
-        128,
-        128,
-        75,
-        0,
-        bytes.len() as i64,
-    );
-    let mut pending = Vec::new();
-    for _ in 0..16 {
-        let spec = spec.clone();
-        let cache = directory.path().to_path_buf();
-        pending.push(tokio::spawn(async move {
-            thumbnails::get_thumbnail(spec, &cache).await.unwrap()
-        }));
-    }
-    let mut results = Vec::new();
-    for pending in pending {
-        let ThumbOutcome::Generated(bytes) = pending.await.unwrap() else {
-            panic!("expected encoded BMP thumbnail")
-        };
-        results.push(bytes);
-    }
-    for bytes in &results {
-        assert_eq!(bytes, &results[0]);
-        assert_eq!(bytes.as_ptr(), results[0].as_ptr());
-    }
-    assert_eq!(thumbnails::generations_for(&key.to_string_lossy()), 1);
-}
-
-#[tokio::test]
-async fn bmp_preview_cache_preserves_formats_alpha_and_real_file_extensions() {
-    let cache = crate::temporary::tempdir().unwrap();
+async fn bmp_preview_preserves_dimensions_and_alpha() {
     for &(name, alpha) in fixtures::FORMATS {
         let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../plain-rs/testdata/bmp")
             .join(name);
         let original = decode(fixture(name)).unwrap();
         let first =
-            crate::media::thumbnails::render(path.to_str().unwrap(), 96, 96, false, None, cache.path())
+            crate::media::thumbnails::render(path.to_str().unwrap(), 96, 96, false, None)
                 .await
-                .unwrap()
                 .unwrap();
         let preview = crate::image::load_from_memory(&first).unwrap();
         assert_eq!(
@@ -244,36 +203,7 @@ async fn bmp_preview_cache_preserves_formats_alpha_and_real_file_extensions() {
         } else {
             assert!(first.starts_with(&[0xff, 0xd8]), "{name}");
         }
-        let second =
-            crate::media::thumbnails::render(path.to_str().unwrap(), 96, 96, false, None, cache.path())
-                .await
-                .unwrap()
-                .unwrap();
-        assert_eq!(first, second, "{name}");
-        assert_eq!(first.as_ptr(), second.as_ptr(), "{name}");
     }
-    let mut directories = vec![cache.path().to_path_buf()];
-    let mut files = 0;
-    while let Some(directory) = directories.pop() {
-        for entry in std::fs::read_dir(directory).unwrap() {
-            let path = entry.unwrap().path();
-            if path.is_dir() {
-                directories.push(path);
-            } else {
-                let bytes = std::fs::read(&path).unwrap();
-                assert_eq!(
-                    path.extension().unwrap(),
-                    if bytes.starts_with(b"\x89PNG") {
-                        "png"
-                    } else {
-                        "jpg"
-                    }
-                );
-                files += 1;
-            }
-        }
-    }
-    assert_eq!(files, fixtures::FORMATS.len());
 }
 
 #[test]
