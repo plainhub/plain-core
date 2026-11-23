@@ -1,1 +1,0 @@
-import{F as e,L as t,j as n}from"./chunk-_plugin-vue_export-helper-DfHvB5Qj.js";function r(r){let i;function a(){if(i)return;let e=[],t={active:!0,onDispose(n){t.active?e.push(n):n()}};i=()=>{t.active=!1;for(let t of e)t();e.length=0},r(t)}function o(){let e=i;i=void 0,e?.()}return a(),n(a),e(o),t(o),()=>{i&&(o(),a())}}export{r as t};
