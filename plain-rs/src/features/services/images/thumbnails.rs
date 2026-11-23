@@ -118,6 +118,11 @@ fn source_fingerprint(request: &Request) -> Result<Option<String>, String> {
     let modified = metadata.modified().map_err(|e| e.to_string())?;
     let system =
         crate::features::services::images::thumbnail_decoder::uses_system_thumbnail(request);
+    let variant = if plain_libs::utils::mime::mime_from_ext(&request.path).starts_with("video/") {
+        "video-thumbnail"
+    } else {
+        "thumbnail"
+    };
     let input = json!([
         request.path,
         metadata.len(),
@@ -128,8 +133,8 @@ fn source_fingerprint(request: &Request) -> Result<Option<String>, String> {
         if system { &request.file_id } else { "" },
         if system { &request.file_name } else { "" },
         match request.short_edge {
-            Some(short) => format!("thumbnail-short-v2-{short}"),
-            None => "thumbnail-v4".to_owned(),
+            Some(short) => format!("{variant}-short-v2-{short}"),
+            None => format!("{variant}-v4"),
         }
     ])
     .to_string();

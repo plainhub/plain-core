@@ -15,6 +15,7 @@ pub struct VideoTrack {
     pub(super) hevc_headers: Vec<(usize, u8)>,
     pub width: u32,
     pub height: u32,
+    pub(crate) rotation: i32,
     pub timescale: u32,
     pub duration_ticks: u64,
     pub nal_length_size: usize,

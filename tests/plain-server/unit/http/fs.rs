@@ -392,6 +392,56 @@ async fn fs_video_previews_keep_aspect_ratio_and_have_distinct_validators() {
 
 #[cfg(feature = "media")]
 #[tokio::test]
+async fn fs_video_previews_follow_track_rotation_at_every_size() {
+    let (_root, core, state, _key) = test_state();
+    let files = plain_libs::temporary::tempdir().unwrap();
+    for name in ["video-h264-high.mp4", "video-h265.mp4"] {
+        let original = std::fs::read(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../plain-rs/testdata").join(name),
+        ).unwrap();
+        let track = original.windows(4).position(|bytes| bytes == b"tkhd").unwrap() + 4;
+        assert_eq!(original[track], 0);
+        let mut previews = Vec::new();
+        for (angle, components) in [
+            (0, [1i32, 0, 0, 1]),
+            (90, [0, 1, -1, 0]),
+            (180, [-1, 0, 0, -1]),
+            (270, [0, -1, 1, 0]),
+        ] {
+            let mut video = original.clone();
+            for (offset, value) in [40, 44, 52, 56].into_iter().zip(components) {
+                video[track + offset..track + offset + 4]
+                    .copy_from_slice(&(value << 16).to_be_bytes());
+            }
+            let path = files.path().join(format!("{angle}-{name}"));
+            std::fs::write(&path, video).unwrap();
+            let id = file_id(&state, path.to_str().unwrap());
+            for (index, size) in ["XS", "SM", "LG"].into_iter().enumerate() {
+                let response = call_fs(&state, &format!("id={id}&action=PREVIEW&size={size}"), &[]).await;
+                assert_eq!(response.status(), StatusCode::OK, "{name} {angle} {size}");
+                let image = plain_libs::image::load_from_memory(&body_bytes(response).await).unwrap();
+                if angle == 0 {
+                    previews.push(image);
+                    continue;
+                }
+                let expected = match angle {
+                    90 => previews[index].rotate90(),
+                    180 => previews[index].rotate180(),
+                    _ => previews[index].rotate270(),
+                }.into_rgb8();
+                let actual = image.into_rgb8();
+                assert_eq!(actual.dimensions(), expected.dimensions(), "{name} {angle} {size}");
+                let error = actual.as_raw().iter().zip(expected.as_raw())
+                    .map(|(a, b)| u64::from(a.abs_diff(*b))).sum::<u64>();
+                assert!(error < actual.as_raw().len() as u64 * 8, "{name} {angle} {size}");
+            }
+        }
+    }
+    core.stop_core().await;
+}
+
+#[cfg(feature = "media")]
+#[tokio::test]
 async fn fs_probe_reports_codec_json() {
     let (_root, _core, state, _key) = test_state();
     let path = concat!(

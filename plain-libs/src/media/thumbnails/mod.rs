@@ -303,10 +303,10 @@ async fn process_non_image<T: Send + 'static>(
             .estimated_bytes()
             .saturating_mul(2)
             .saturating_add(u64::from(spec.w) * u64::from(spec.h) * 4);
-        let spec = spec.clone();
+        let (bounds, center_crop, short_edge) = ((spec.w, spec.h), spec.center_crop, spec.short_edge);
         return admission::global()
             .run(est, move || {
-                let bitmap = video::thumbnail_bitmap(plan, &spec)?;
+                let bitmap = video::thumbnail_bitmap(plan, bounds, center_crop, short_edge)?;
                 finish(bitmap)
             })
             .await?;

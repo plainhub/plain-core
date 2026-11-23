@@ -8,6 +8,7 @@ use crate::h264::decoder::Decoder;
 use crate::media::isobmff::VideoTrack;
 use crate::media::thumbnails::admission::MAX_SOURCE_PIXELS;
 use crate::media::thumbnails::encode;
+use crate::media::thumbnails::exif::Orientation;
 use crate::media::thumbnails::scale;
 use crate::media::thumbnails::scale::Bitmap;
 use crate::media::thumbnails::still::rows::Rows;
@@ -85,6 +86,7 @@ fn hevc_nal_type(nal: &[u8]) -> u8 {
 #[derive(Debug)]
 pub struct FramePlan {
     frame: EncodedFrame,
+    orientation: Orientation,
     estimated_bytes: u64,
     #[cfg(test)]
     first_sample_id: u32,
@@ -111,6 +113,12 @@ pub fn plan_keyframe(path: &str) -> Result<FramePlan> {
     let file = std::fs::File::open(path)?;
     let mut reader = std::io::BufReader::new(file);
     let track = VideoTrack::read_thumbnail(&mut reader)?;
+    let orientation = match track.rotation {
+        90 => Orientation(6),
+        180 => Orientation(3),
+        270 => Orientation(8),
+        _ => Orientation::NORMAL,
+    };
 
     let frame_w = track.width;
     let frame_h = track.height;
@@ -155,6 +163,7 @@ pub fn plan_keyframe(path: &str) -> Result<FramePlan> {
                 parameter_sets,
                 sample,
             },
+            orientation,
             estimated_bytes: coded_pixels.max(pixels) * 16,
             #[cfg(test)]
             first_sample_id: start_id,
@@ -183,6 +192,7 @@ pub fn plan_keyframe(path: &str) -> Result<FramePlan> {
             parameter_sets: track.parameter_sets,
             samples,
         },
+        orientation,
         estimated_bytes: pixels * 5,
         #[cfg(test)]
         first_sample_id: start_id,
@@ -251,15 +261,22 @@ pub fn decode_plan_to_jpeg(
     height: u32,
     quality: u8,
 ) -> Result<Vec<u8>> {
-    let bitmap = render_frame(&decode_frame(plan)?, (width, height), false, None)?;
+    let bitmap = thumbnail_bitmap(plan, (width, height), false, None)?;
     encode::encode_jpeg(bitmap, quality)
 }
 
 pub(super) fn thumbnail_bitmap(
     plan: FramePlan,
-    spec: &super::ThumbSpec,
+    mut bounds: (u32, u32),
+    center_crop: bool,
+    short_edge: Option<u32>,
 ) -> Result<Bitmap> {
-    render_frame(&decode_frame(plan)?, (spec.w, spec.h), spec.center_crop, spec.short_edge)
+    let orientation = plan.orientation;
+    if orientation.swaps_axes() && (center_crop || short_edge.is_none()) {
+        bounds = (bounds.1, bounds.0);
+    }
+    Ok(render_frame(&decode_frame(plan)?, bounds, center_crop, short_edge)?
+        .apply_orientation(orientation))
 }
 
 fn render_frame(

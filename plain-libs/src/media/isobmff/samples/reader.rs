@@ -1,4 +1,4 @@
-use super::super::{MAX_BOX_BYTES, atoms, child, header, payload, time_header, u32_at};
+use super::super::{MAX_BOX_BYTES, atoms, child, header, payload, time_header, u32_at, video};
 use super::{VideoTrack, avc, defaults, fragments, hevc, invalid, required, tables};
 use std::{
     collections::HashSet,
@@ -82,10 +82,10 @@ impl VideoTrack {
             if selected.is_none()
                 && child(mdia, b"hdlr").and_then(|d| d.get(8..12)) == Some(b"vide")
             {
-                selected = Some((id, mdia));
+                selected = Some((id, mdia, tkhd));
             }
         }
-        let (id, mdia) =
+        let (id, mdia, tkhd) =
             selected.ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "no video track"))?;
         let (timescale, duration_ticks) = required(child(mdia, b"mdhd").and_then(time_header))?;
         let stbl = required(child(mdia, b"minf").and_then(|d| child(d, b"stbl")))?;
@@ -122,6 +122,7 @@ impl VideoTrack {
             hevc_headers: config.hevc_headers,
             width: config.width,
             height: config.height,
+            rotation: video::track_matrix(tkhd).and_then(video::matrix_rotation).unwrap_or(0),
             timescale,
             duration_ticks: if duration_ticks == 0 {
                 next_time

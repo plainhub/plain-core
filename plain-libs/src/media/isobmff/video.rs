@@ -3,6 +3,21 @@ use std::io::{Read, Seek, SeekFrom};
 
 use crate::media::video_info::VideoInfo;
 
+pub(super) fn track_matrix(track_header: &[u8]) -> Option<&[u8]> {
+    let offset = match track_header.first()? {
+        0 => 40,
+        1 => 52,
+        _ => return None,
+    };
+    track_header.get(offset..)
+}
+
+pub(super) fn matrix_rotation(matrix: &[u8]) -> Option<i32> {
+    let a = u32_at(matrix, 0)? as i32;
+    let b = u32_at(matrix, 4)? as i32;
+    Some((f64::from(b).atan2(f64::from(a)).to_degrees().round() as i32).rem_euclid(360))
+}
+
 pub(super) fn read(reader: &mut (impl Read + Seek)) -> Option<VideoInfo> {
     let length = reader.seek(SeekFrom::End(0)).ok()?;
     let mut offset = 0;
@@ -22,15 +37,10 @@ pub(super) fn read(reader: &mut (impl Read + Seek)) -> Option<VideoInfo> {
             let Some(track) = super::track(atom.data).filter(|track| track.video) else {
                 continue;
             };
-            let track_header = child(atom.data, b"tkhd")?;
-            let matrix = match track_header.first()? {
-                0 => 40,
-                1 => 52,
-                _ => return None,
-            };
+            let matrix = track_matrix(child(atom.data, b"tkhd")?)?;
             let (mut width, mut height) = (
-                u32_at(track_header, matrix + 36)? >> 16,
-                u32_at(track_header, matrix + 40)? >> 16,
+                u32_at(matrix, 36)? >> 16,
+                u32_at(matrix, 40)? >> 16,
             );
             let sample_table = child(atom.data, b"mdia")
                 .and_then(|data| child(data, b"minf"))
@@ -53,13 +63,7 @@ pub(super) fn read(reader: &mut (impl Read + Seek)) -> Option<VideoInfo> {
             if width == 0 || height == 0 {
                 continue;
             }
-            let a = u32_at(track_header, matrix)? as i32;
-            let b = u32_at(track_header, matrix + 4)? as i32;
-            let rotation = if a == 0 && b == 0 {
-                0
-            } else {
-                (f64::from(b).atan2(f64::from(a)).to_degrees().round() as i32).rem_euclid(360)
-            };
+            let rotation = matrix_rotation(matrix)?;
             let duration = child(&movie, b"mvhd")
                 .and_then(time_header)
                 .and_then(|(scale, ticks)| milliseconds(scale, ticks))
