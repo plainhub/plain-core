@@ -120,7 +120,9 @@ pub async fn clear_application(state: &crate::runtime::Runtime) -> Result<(), St
             .read()
             .map_err(|error| error.to_string())?
             .clone();
-        clear(&state.cache, &state.host, retained).await
+        let result = clear(&state.cache, &state.host, retained).await;
+        state.thumbnails.cache_cleared();
+        result
     })
     .await
     .map_err(|error| error.to_string())?

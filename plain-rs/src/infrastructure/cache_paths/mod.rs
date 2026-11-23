@@ -18,6 +18,9 @@ impl CachePaths {
     pub fn root(&self) -> &Path {
         &self.root
     }
+    pub(crate) fn thumbnails(&self) -> PathBuf {
+        self.root.join("thumbs")
+    }
     pub fn image_cache(&self) -> PathBuf {
         self.root.join("image_cache")
     }

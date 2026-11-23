@@ -546,6 +546,68 @@ async fn concurrent_generation_delivers_one_shared_allocation_to_300_readers() {
     core.stop_core().await;
 }
 
+#[tokio::test]
+async fn startup_trims_the_shared_thumbnail_directory_to_eighty_percent() {
+    let directory = plain_libs::temporary::tempdir().unwrap();
+    let cache = directory.path().join("cache");
+    let thumbs = cache.join("thumbs");
+    std::fs::create_dir_all(&thumbs).unwrap();
+    let mut files = Vec::new();
+    for (index, size) in [150_000_000, 150_000_000, 750_000_000].into_iter().enumerate() {
+        let path = thumbs.join(format!("{index:064x}.jpg"));
+        let file = std::fs::File::create(&path).unwrap();
+        file.set_len(size).unwrap();
+        file.set_times(std::fs::FileTimes::new().set_modified(
+            std::time::UNIX_EPOCH + std::time::Duration::from_secs(1_700_000_000 + index as u64),
+        )).unwrap();
+        files.push(path);
+    }
+    let other = cache.join("not-a-thumbnail.jpg");
+    std::fs::write(&other, b"leave separate caches alone").unwrap();
+    let core = ContentServer::open_with_cache(&directory.path().join("data"), &cache).unwrap();
+
+    let trimmed = tokio::time::timeout(std::time::Duration::from_secs(2), async {
+        while files[0].exists() || files[1].exists() {
+            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+        }
+    }).await;
+    core.stop_core().await;
+    assert!(trimmed.is_ok(), "the cache must remove its two oldest thumbnails");
+    assert_eq!(std::fs::metadata(&files[2]).unwrap().len(), 750_000_000);
+    assert_eq!(std::fs::read(&other).unwrap(), b"leave separate caches alone");
+}
+
+#[cfg(feature = "media")]
+#[tokio::test]
+async fn full_disk_cache_still_returns_the_thumbnail_and_cleans_in_the_background() {
+    let directory = plain_libs::temporary::tempdir().unwrap();
+    let cache = directory.path().join("cache");
+    let thumbs = cache.join("thumbs");
+    std::fs::create_dir_all(&thumbs).unwrap();
+    let old = thumbs.join("old.jpg");
+    std::fs::File::create(&old).unwrap().set_len(super::disk_cache::LIMIT).unwrap();
+    let input = directory.path().join("source.png");
+    plain_libs::image::RgbImage::from_pixel(640, 480, plain_libs::image::Rgb([80, 60, 100]))
+        .save(&input).unwrap();
+    let core = ContentServer::open_with_cache(&directory.path().join("data"), &cache).unwrap();
+    let state = core.runtime_state();
+
+    tokio::time::timeout(std::time::Duration::from_secs(2), async {
+        while state.thumbnails.disk_cache.total() != super::disk_cache::LIMIT {
+            tokio::task::yield_now().await;
+        }
+    }).await.unwrap();
+    let bytes = state.thumbnails.get(&state, request_for(&input)).await.unwrap().unwrap();
+    assert!(plain_libs::image::load_from_memory(&bytes).is_ok());
+    assert_eq!(state.thumbnails.cache_bytes_written.load(std::sync::atomic::Ordering::Relaxed), 0);
+    tokio::time::timeout(std::time::Duration::from_secs(2), async {
+        while old.exists() {
+            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+        }
+    }).await.unwrap();
+    core.stop_core().await;
+}
+
 #[cfg(all(feature = "media", not(any(target_os = "android", target_os = "ios"))))]
 #[tokio::test]
 async fn audio_cover_writes_only_the_shared_thumbnail_cache() {

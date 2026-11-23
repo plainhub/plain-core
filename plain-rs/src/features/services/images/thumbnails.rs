@@ -1,9 +1,11 @@
 use crate::runtime::Runtime as CoreRuntime;
+mod disk_cache;
 mod queue;
 #[cfg(feature = "runtime-media")]
 mod backfill;
 
 use bytes::Bytes;
+use disk_cache::DiskCache;
 pub(crate) use queue::Generation;
 use queue::{Job, Queue};
 use serde::Deserialize;
@@ -37,6 +39,8 @@ const LOOKUP_LIMIT: usize = 320;
 
 pub struct Thumbnails {
     pub(super) queue: Queue,
+    disk_cache: Arc<DiskCache>,
+    disk_task: Mutex<Option<tokio::task::JoinHandle<()>>>,
     dispatcher: Mutex<Option<tokio::task::JoinHandle<()>>>,
     #[cfg(feature = "runtime-media")]
     backfill: Mutex<Option<tokio::task::JoinHandle<()>>>,
@@ -75,6 +79,8 @@ impl Thumbnails {
         });
         Self {
             queue: Queue::default(),
+            disk_cache: Arc::new(DiskCache::new(disk_cache::LIMIT)),
+            disk_task: Mutex::new(None),
             dispatcher: Mutex::new(None),
             #[cfg(feature = "runtime-media")]
             backfill: Mutex::new(None),
@@ -438,35 +444,30 @@ impl Thumbnails {
         if fingerprint(request).await?.as_deref() != Some(key.as_str()) {
             return Ok(None);
         }
-        let stored = bytes.clone();
         let hot_key = cached.clone();
         let cached = cached.with_extension(if bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
             "png"
         } else {
             "jpg"
         });
-        tokio::task::spawn_blocking(move || -> std::io::Result<()> {
-            use std::io::Write;
-            std::fs::create_dir_all(cached.parent().unwrap())?;
-            let temporary = cached.with_extension(format!("{}.tmp", plain_libs::utils::uuid::Uuid::new_v4()));
-            let _cleanup = Temporary(temporary.clone());
-            let mut file = std::fs::OpenOptions::new()
-                .create_new(true)
-                .write(true)
-                .open(&temporary)?;
-            file.write_all(&stored)?;
-            file.flush()?;
-            drop(file);
-            std::fs::rename(&temporary, &cached)
-        })
-        .await
-        .map_err(|error| error.to_string())?
-        .map_err(|error| error.to_string())?;
-        #[cfg(any(test, feature = "test-seams"))]
-        state
-            .thumbnails
-            .cache_bytes_written
-            .fetch_add(bytes.len() as u64, std::sync::atomic::Ordering::Relaxed);
+        if let Ok(guard) = state.cache_changes.clone().try_read_owned()
+            && let Some(reservation) = state.thumbnails.disk_cache.reserve(cached, bytes.len() as u64)
+        {
+            let stored = bytes.clone();
+            match tokio::task::spawn_blocking(move || {
+                let _guard = guard;
+                reservation.persist(&stored)
+            }).await {
+                Ok(Ok(())) => {
+                    #[cfg(any(test, feature = "test-seams"))]
+                    state.thumbnails.cache_bytes_written.fetch_add(
+                        bytes.len() as u64, std::sync::atomic::Ordering::Relaxed,
+                    );
+                }
+                Ok(Err(error)) => log::warn!("Unable to cache a thumbnail: {error}"),
+                Err(error) => log::warn!("Thumbnail cache write did not finish: {error}"),
+            }
+        }
         #[cfg(feature = "media")]
         state.thumbnails.hot.put(hot_key, bytes.clone());
         #[cfg(not(feature = "media"))]
@@ -481,6 +482,7 @@ impl Thumbnails {
 
     pub(crate) fn start(state: CoreRuntime) {
         let service = state.thumbnails.clone();
+        *service.disk_task.lock().unwrap() = Some(tokio::spawn(DiskCache::run(state.clone())));
         #[cfg(feature = "runtime-media")]
         {
             *service.backfill.lock().unwrap() = Some(tokio::spawn(backfill::run(state.clone())));
@@ -491,6 +493,12 @@ impl Thumbnails {
     #[cfg(feature = "runtime-media")]
     pub(crate) fn schedule_backfill(&self) {
         self.backfill_ready.notify_one();
+    }
+
+    pub(crate) fn cache_cleared(&self) {
+        self.disk_cache.reset();
+        #[cfg(feature = "media")]
+        self.hot.clear();
     }
 
     pub async fn shutdown(&self) {
@@ -504,6 +512,10 @@ impl Thumbnails {
         let task = self.dispatcher.lock().unwrap().take();
         if let Some(task) = task {
             task.await.expect("thumbnail dispatcher panicked");
+        }
+        let task = self.disk_task.lock().unwrap().take();
+        if let Some(task) = task {
+            task.await.expect("thumbnail cache maintenance panicked");
         }
     }
 }
@@ -546,13 +558,6 @@ impl Thumbnails {
         Ok(None)
     }
 }
-struct Temporary(PathBuf);
-impl Drop for Temporary {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_file(&self.0);
-    }
-}
-
 #[cfg(test)]
 #[path = "../../../../../tests/plain-rs/unit/features/services/images/thumbnails.rs"]
 mod tests;
