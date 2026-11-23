@@ -254,6 +254,7 @@ fn fetch_error(error_value: http_client::Error) -> DomainError {
 pub async fn fetch_text(url: &str, max_bytes: usize) -> DomainResult<String> {
     require_url(url)?;
     let client = http_client::builder()
+        .user_agent("PlainHub")
         .timeout(std::time::Duration::from_secs(25))
         .build()
         .map_err(error)?;

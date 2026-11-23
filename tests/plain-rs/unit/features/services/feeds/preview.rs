@@ -1,5 +1,5 @@
 use super::*;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 
 async fn serve(
     body: String,
@@ -121,6 +121,42 @@ async fn http_parse_and_size_failures_do_not_create_feeds() {
             .unwrap();
         assert!(db.feeds_list().unwrap().is_empty());
     }
+}
+
+#[tokio::test]
+async fn create_feed_identifies_the_client_to_publishers_that_require_a_user_agent() {
+    let db = Db::open(std::path::Path::new(":memory:")).unwrap();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}/rss", listener.local_addr().unwrap());
+    let server = tokio::spawn(async move {
+        let (mut stream, _) = listener.accept().await.unwrap();
+        let mut headers = BufReader::new(&mut stream).lines();
+        let mut identified = false;
+        while let Some(line) = headers.next_line().await.unwrap() {
+            if line.is_empty() {
+                break;
+            }
+            identified |= line.split_once(':').is_some_and(|(name, value)| {
+                name.eq_ignore_ascii_case("User-Agent") && !value.trim().is_empty()
+            });
+        }
+        let response = if identified {
+            let body = "<rss><channel><title>Fixture RSS</title></channel></rss>";
+            format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/rss+xml\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                body.len()
+            )
+        } else {
+            "HTTP/1.1 204 No Content\r\nConnection: close\r\n\r\n".into()
+        };
+        stream.write_all(response.as_bytes()).await.unwrap();
+    });
+    let feed = super::super::create_without_sync(&db, &url, false, Some("Catalog name"))
+        .await
+        .unwrap();
+    assert_eq!(feed.name, "Catalog name");
+    assert_eq!(db.feed_get_by_url(&url).unwrap().unwrap().id, feed.id);
+    server.await.unwrap();
 }
 
 #[tokio::test]
