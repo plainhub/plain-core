@@ -1,6 +1,7 @@
 use crate::features::discovery::nearby_devices::Device;
 use crate::infrastructure::db::chat_store;
 use crate::infrastructure::events::WsEvent;
+use crate::infrastructure::transport::lan;
 use crate::runtime::Runtime as CoreRuntime;
 use plain_libs::serde_json::json;
 #[derive(Clone)]
@@ -27,6 +28,16 @@ impl Context {
         visible: bool,
         resident: bool,
     ) -> plain_libs::anyhow::Result<bool> {
+        self.seen_with_interfaces(device, visible, resident, lan::local_interfaces)
+    }
+
+    fn seen_with_interfaces(
+        &self,
+        device: Device,
+        visible: bool,
+        resident: bool,
+        interfaces: impl FnOnce() -> Vec<lan::Interface>,
+    ) -> plain_libs::anyhow::Result<bool> {
         if device.id
             == self
                 .prefs
@@ -41,7 +52,7 @@ impl Context {
             if chat_store::peers::discovered(
                 &self.db,
                 &device.id,
-                &crate::features::peers::pairing::prefer_sender_ip(&device.ips, ""),
+                &lan::best(&device.ips, &interfaces()),
                 device.port,
                 &device.name,
                 device.device_type,
@@ -78,7 +89,7 @@ pub fn snapshot(
         .collect();
     let snapshot = devices.snapshot();
     let revision = snapshot.revision;
-    let interfaces = crate::infrastructure::transport::lan::local_interfaces();
+    let interfaces = lan::local_interfaces();
     let mut rows = Vec::new();
     for (device, best_ip) in snapshot.visible_devices(&interfaces) {
         let status = if paired.contains(&device.id) {
@@ -108,7 +119,7 @@ pub async fn sweep(state: &CoreRuntime) -> plain_libs::anyhow::Result<()> {
     let interfaces = if lan.is_empty() {
         Vec::new()
     } else {
-        crate::infrastructure::transport::lan::local_interfaces()
+        lan::local_interfaces()
     };
     for chunk in lan.chunks(4) {
         if !state.nearby_devices.active() {
@@ -116,7 +127,7 @@ pub async fn sweep(state: &CoreRuntime) -> plain_libs::anyhow::Result<()> {
         }
         let interfaces = &interfaces;
         let results = futures_util::future::join_all(chunk.iter().map(|p| async move {
-            let ip = crate::infrastructure::transport::lan::best(&p.device.ips, interfaces);
+            let ip = lan::best(&p.device.ips, interfaces);
             let alive = !ip.is_empty()
                 && crate::features::discovery::nearby_http::probe(&ip, p.device.port)
                     .await

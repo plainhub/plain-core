@@ -109,7 +109,7 @@ async fn resident_peer_changes_emit_one_committed_notice_without_secrets_or_visi
     let device = Device {
         id: "fixture-peer".into(),
         name: "new".into(),
-        ips: vec!["192.0.2.2".into()],
+        ips: vec!["10.20.8.2".into(), "10.20.31.2".into()],
         port: 8443,
         device_type: crate::features::chat::enums::DeviceType::Computer,
         version: "1".into(),
@@ -120,7 +120,15 @@ async fn resident_peer_changes_emit_one_committed_notice_without_secrets_or_visi
         discovery_methods: vec![crate::features::discovery::nearby_devices::DiscoveryMethod::Lan],
     };
     let context = Context::from(&state);
-    context.seen(device.clone(), false, true).unwrap();
+    let interfaces = || {
+        vec![lan::Interface {
+            ip: "10.20.16.5".parse().unwrap(),
+            prefix_length: 20,
+        }]
+    };
+    context
+        .seen_with_interfaces(device.clone(), false, true, interfaces)
+        .unwrap();
     let event = events.try_recv().unwrap();
     assert_eq!(
         event.event_type,
@@ -135,11 +143,13 @@ async fn resident_peer_changes_emit_one_committed_notice_without_secrets_or_visi
         .unwrap()
         .unwrap();
     assert_eq!(peer.name, "new");
-    assert_eq!(peer.ip, "192.0.2.2");
+    assert_eq!(peer.ip, "10.20.31.2");
     assert_eq!(peer.port, Some(8443));
     assert_eq!(peer.key, "fixture-chat-key");
     assert!(events.try_recv().is_err());
-    context.seen(device.clone(), false, true).unwrap();
+    context
+        .seen_with_interfaces(device.clone(), false, true, interfaces)
+        .unwrap();
     assert!(events.try_recv().is_err());
     let mut transient = device.clone();
     transient.name = "not-resident".into();
