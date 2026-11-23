@@ -45,7 +45,6 @@ async fn encrypted_media_download_preserves_all_selected_bytes_and_disambiguates
                 bucket_id: "fixture".into(),
                 size_bytes: 7,
                 duration_ms: 0,
-                cover_image_id: None,
                 width: 0,
                 height: 0,
                 rotation: 0,

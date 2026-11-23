@@ -4,7 +4,6 @@ fn row(data_type: DataType) -> MediaFileRow {
     MediaFileRow {
         album: String::new(),
         album_artist: String::new(),
-        album_id: "native-album".into(),
 
         id: "id".into(),
         data_type: data_type.kind(),
@@ -14,7 +13,6 @@ fn row(data_type: DataType) -> MediaFileRow {
         bucket_id: "bucket".into(),
         size_bytes: 30,
         duration_ms: 10,
-        cover_image_id: Some("album".into()),
         width: 4,
         height: 3,
         rotation: 90,
@@ -52,8 +50,8 @@ fn audio_facts_carry_the_audio_only_fields() {
     let facts = row_facts(&row(DataType::Audio)).unwrap();
     assert_eq!(facts["artist"], json!("Artist"));
     assert_eq!(facts["durationMs"], json!(10));
-    assert_eq!(facts["coverImageId"], json!("album"));
-    assert_eq!(facts["albumId"], json!("native-album"));
+    assert!(facts.get("coverImageId").is_none());
+    assert!(facts.get("albumId").is_none());
     for key in ["takenAt", "width", "height", "rotation"] {
         assert!(facts.get(key).is_none());
     }
@@ -68,7 +66,7 @@ fn video_image_and_doc_share_the_dimension_fields() {
         assert_eq!(facts["width"], json!(4));
         assert_eq!(facts["height"], json!(3));
         assert_eq!(facts["rotation"], json!(90));
-        for key in ["artist", "coverImageId"] {
+        for key in ["artist", "albumId"] {
             assert!(facts.get(key).is_none());
         }
     }

@@ -16,7 +16,6 @@ fn seed_kind(db: &Db, path: &Path, kind: DataType) -> String {
         bucket_id: path.parent().unwrap().to_string_lossy().into_owned(),
         size_bytes: 8,
         duration_ms: 0,
-        cover_image_id: None,
         width: 0,
         height: 0,
         rotation: 0,

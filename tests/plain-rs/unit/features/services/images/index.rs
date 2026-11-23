@@ -152,7 +152,6 @@ async fn native_full_and_selected_indexing_use_local_catalog_and_encoder_without
             bucket_id: String::new(),
             size_bytes: 1,
             duration_ms: 0,
-            cover_image_id: None,
             width: 1,
             height: 1,
             rotation: 0,

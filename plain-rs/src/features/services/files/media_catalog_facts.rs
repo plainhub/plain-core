@@ -33,9 +33,7 @@ pub fn row_facts(row: &MediaFileRow) -> Result<Value, String> {
     match media_type(row.data_type)? {
         DataType::Audio => {
             facts["artist"] = json!(row.artist);
-            facts["albumId"] = json!(row.album_id);
             facts["durationMs"] = json!(row.duration_ms);
-            facts["coverImageId"] = json!(row.cover_image_id.as_deref().unwrap_or_default());
         }
         _ => {
             facts["durationMs"] = json!(row.duration_ms);

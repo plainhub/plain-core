@@ -91,7 +91,6 @@ fn media(
         bucket_id: bucket.to_owned(),
         size_bytes: size,
         duration_ms: 0,
-        cover_image_id: None,
         width: 4000,
         height: 3000,
         rotation: 0,

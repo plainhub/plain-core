@@ -13,7 +13,6 @@ fn file(data_type: DataType, path: &str, title: &str, size_bytes: i64) -> MediaF
         bucket_id: "bucket".into(),
         size_bytes,
         duration_ms: 10,
-        cover_image_id: None,
         width: 0,
         height: 0,
         rotation: 0,

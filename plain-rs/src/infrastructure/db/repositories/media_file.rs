@@ -6,7 +6,7 @@ use crate::infrastructure::db::MediaFileMetadataRead;
 use crate::infrastructure::db::MediaFileRow;
 use plain_libs::rusqlite::{OptionalExtension, params};
 
-pub const COLUMNS: &str = "id,data_type,path,title,artist,bucket_id,size_bytes,duration_ms,cover_image_id,width,height,rotation,taken_at,created_at,updated_at,favorited,trashed,original_path,album,album_artist,album_id";
+pub const COLUMNS: &str = "id,data_type,path,title,artist,bucket_id,size_bytes,duration_ms,width,height,rotation,taken_at,created_at,updated_at,favorited,trashed,original_path,album,album_artist";
 
 pub fn from_row(row: &plain_libs::rusqlite::Row<'_>) -> plain_libs::rusqlite::Result<MediaFileRow> {
     Ok(MediaFileRow {
@@ -18,19 +18,17 @@ pub fn from_row(row: &plain_libs::rusqlite::Row<'_>) -> plain_libs::rusqlite::Re
         bucket_id: row.get(5)?,
         size_bytes: row.get(6)?,
         duration_ms: row.get(7)?,
-        cover_image_id: row.get(8)?,
-        width: row.get(9)?,
-        height: row.get(10)?,
-        rotation: row.get(11)?,
-        taken_at: row.get(12)?,
-        created_at: row.get(13)?,
-        updated_at: row.get(14)?,
-        favorited: row.get(15)?,
-        trashed: row.get(16)?,
-        original_path: row.get(17)?,
-        album: row.get(18)?,
-        album_artist: row.get(19)?,
-        album_id: row.get(20)?,
+        width: row.get(8)?,
+        height: row.get(9)?,
+        rotation: row.get(10)?,
+        taken_at: row.get(11)?,
+        created_at: row.get(12)?,
+        updated_at: row.get(13)?,
+        favorited: row.get(14)?,
+        trashed: row.get(15)?,
+        original_path: row.get(16)?,
+        album: row.get(17)?,
+        album_artist: row.get(18)?,
     })
 }
 
@@ -41,9 +39,9 @@ pub(crate) fn init(conn: &plain_libs::rusqlite::Connection) -> plain_libs::rusql
 CASE f.kind WHEN 'AUDIO' THEN 1 WHEN 'VIDEO' THEN 2 WHEN 'IMAGE' THEN 3 WHEN 'DOC' THEN 24 ELSE 22 END AS data_type,
 CASE WHEN substr(v.path,-1)='/' THEN v.path||f.path ELSE v.path||CASE WHEN f.path='' THEN '' ELSE '/'||f.path END END AS path,
 f.file_name,f.kind,f.volume_id,f.file_identity,f.missing,f.indexed,v.is_available,
-CASE WHEN f.kind='DOC' THEN f.file_name ELSE COALESCE(f.title,'') END AS title,COALESCE(f.artist,'') AS artist,COALESCE(f.album,'') AS album,COALESCE(f.album_artist,'') AS album_artist,COALESCE(f.album_id,'') AS album_id,
+CASE WHEN f.kind='DOC' THEN f.file_name ELSE COALESCE(f.title,'') END AS title,COALESCE(f.artist,'') AS artist,COALESCE(f.album,'') AS album,COALESCE(f.album_artist,'') AS album_artist,
 CASE WHEN instr(v.path,'://')>0 THEN v.path||v.identity ELSE CASE WHEN instr(f.path,'/')=0 THEN CASE WHEN v.path='/' THEN '/' ELSE rtrim(v.path,'/') END ELSE rtrim(v.path,'/')||'/'||substr(f.path,1,length(f.path)-length(f.file_name)-1) END END AS bucket_id,
-COALESCE(f.mime_type,'') AS mime_type,CAST(COALESCE(f.size_bytes,0) AS INTEGER) AS size_bytes,CAST(COALESCE(f.duration_ms,0) AS INTEGER) AS duration_ms,f.cover_image_id,
+COALESCE(f.mime_type,'') AS mime_type,CAST(COALESCE(f.size_bytes,0) AS INTEGER) AS size_bytes,CAST(COALESCE(f.duration_ms,0) AS INTEGER) AS duration_ms,
 CAST(COALESCE(f.width,0) AS INTEGER) AS width,CAST(COALESCE(f.height,0) AS INTEGER) AS height,CAST(COALESCE(f.rotation,0) AS INTEGER) AS rotation,f.taken_at,COALESCE(f.created_at,f.updated_at) AS created_at,f.updated_at,
 COALESCE(f.taken_at,f.created_at,f.updated_at) AS capture_at,
 f.favorited,f.trashed_at,f.trashed_at IS NOT NULL AS trashed,
@@ -101,8 +99,8 @@ impl Db {
             let mut rows=Vec::with_capacity(inputs.len());
             for (file,available,identity,location) in inputs {
                 let id=super::files::upsert(&tx,&location,Some(kind(file.data_type)?),identity,Some(file.size_bytes),Some(&plain_libs::utils::dbtime::normalize(&file.created_at)?),&plain_libs::utils::dbtime::normalize(&file.updated_at)?,None)?;
-                tx.execute("UPDATE files SET title=CASE WHEN ?1 THEN ?2 ELSE title END,artist=CASE WHEN ?1 THEN ?3 ELSE artist END,album=CASE WHEN ?1 THEN ?4 ELSE album END,album_artist=CASE WHEN ?1 THEN ?5 ELSE album_artist END,album_id=CASE WHEN ?1 THEN ?6 ELSE album_id END,duration_ms=CASE WHEN ?7 THEN ?8 ELSE duration_ms END,cover_image_id=CASE WHEN ?9 THEN ?10 ELSE cover_image_id END,width=CASE WHEN ?11 THEN ?12 ELSE width END,height=CASE WHEN ?11 THEN ?13 ELSE height END,rotation=CASE WHEN ?14 THEN ?15 ELSE rotation END,taken_at=CASE WHEN ?16 THEN ?17 ELSE taken_at END WHERE id=?18",
-                    params![available.tags,file.title,file.artist,file.album,file.album_artist,crate::features::media::audio::metadata::album_id(&file.album,&file.album_artist,&file.artist),available.duration,file.duration_ms,available.cover_image_id,file.cover_image_id,available.dimensions,file.width,file.height,available.rotation,file.rotation,available.taken_at,file.taken_at.as_deref().map(plain_libs::utils::dbtime::normalize).transpose()?,id])?;
+                tx.execute("UPDATE files SET title=CASE WHEN ?1 THEN ?2 ELSE title END,artist=CASE WHEN ?1 THEN ?3 ELSE artist END,album=CASE WHEN ?1 THEN ?4 ELSE album END,album_artist=CASE WHEN ?1 THEN ?5 ELSE album_artist END,duration_ms=CASE WHEN ?6 THEN ?7 ELSE duration_ms END,width=CASE WHEN ?8 THEN ?9 ELSE width END,height=CASE WHEN ?8 THEN ?10 ELSE height END,rotation=CASE WHEN ?11 THEN ?12 ELSE rotation END,taken_at=CASE WHEN ?13 THEN ?14 ELSE taken_at END WHERE id=?15",
+                    params![available.tags,file.title,file.artist,file.album,file.album_artist,available.duration,file.duration_ms,available.dimensions,file.width,file.height,available.rotation,file.rotation,available.taken_at,file.taken_at.as_deref().map(plain_libs::utils::dbtime::normalize).transpose()?,id])?;
                 rows.push(tx.query_row(&format!("SELECT {COLUMNS} FROM {SOURCE} WHERE file_id=?1"),[id],from_row)?);
             }
             tx.commit()?;

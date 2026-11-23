@@ -1,9 +1,3 @@
-type AudioAlbumCover {
-	albumId: ID!
-	trackCount: Int!
-	candidatePaths: [String!]!
-}
-
 type AudioArtist {
 	name: String!
 	itemCount: Int!
@@ -28,7 +22,7 @@ type AudioPlaylist {
 	id: ID!
 	name: String!
 	itemCount: Int!
-	coverAlbums: [AudioAlbumCover!]!
+	coverCandidatePaths: [String!]!
 	createdAt: Instant!
 	updatedAt: Instant!
 }

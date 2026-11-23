@@ -139,7 +139,6 @@ fn playlist_item_counts_and_bulk_delete() {
         title: String::new(),
         artist: String::new(),
         duration_ms: 0,
-        album_id: String::new(),
         sort_order: sort,
         added_at: String::new(),
     };

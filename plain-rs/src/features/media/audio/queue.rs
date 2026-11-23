@@ -19,7 +19,6 @@ pub struct AudioTrack {
     pub artist: String,
     pub path: String,
     pub duration_ms: i64,
-    pub album_id: String,
 }
 
 impl AudioTrack {
@@ -36,7 +35,6 @@ impl AudioTrack {
             artist: String::new(),
             path,
             duration_ms: 0,
-            album_id: String::new(),
         }
     }
 }
@@ -49,7 +47,6 @@ impl From<QueueItem> for AudioTrack {
             artist: item.artist,
             path: item.path,
             duration_ms: item.duration_ms,
-            album_id: String::new(),
         }
     }
 }
@@ -68,7 +65,6 @@ impl From<&PlaylistItem> for AudioTrack {
             artist: i.artist.clone(),
             path: i.audio_path.clone(),
             duration_ms: i.duration_ms,
-            album_id: i.album_id.clone(),
         }
     }
 }
@@ -571,7 +567,6 @@ pub fn add_playlist_items(db: &Db, playlist_id: &str, items: &[AudioTrack]) -> D
                 title: a.title.clone(),
                 artist: a.artist.clone(),
                 duration_ms: a.duration_ms,
-                album_id: a.album_id.clone(),
                 sort_order: next,
                 added_at: now.clone(),
             };

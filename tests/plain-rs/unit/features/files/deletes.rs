@@ -2,7 +2,7 @@ use super::*;
 #[test]
 fn deleted_receipts_cascade_atomically_and_preserve_failed_and_foreign_records() {
     let db = Db::open(std::path::Path::new(":memory:")).unwrap();
-    db.with_conn(|c|c.execute_batch("INSERT INTO tag_relations(tag_id,target_key,type,created_at) VALUES('video','old','VIDEO','first'),('foreign','old','NOTE','first'),('file','/root/deleted','FILE','first'),('failed','/root/failed','FILE','first'),('sibling','/root_sibling/file','FILE','first'); INSERT INTO media_play_history(media_type,file_id,position_ms,played_at,play_count) VALUES('VIDEO','old',4000000001,'first',0),('VIDEO','keep',4000000002,'first',0); INSERT INTO platform_audio_media(file_id,path,title,artist,duration_ms,album_id) VALUES('test:/root/deleted','/root/deleted','gone','',1,''),('test:/root/failed','/root/failed','keep','',1,''),('test:/root_sibling/file','/root_sibling/file','keep','',1,''); INSERT INTO audio_queue_items(file_id,sort_order) VALUES('test:/root/deleted',0),('test:/root/failed',1),('test:/root_sibling/file',2);")).unwrap();
+    db.with_conn(|c|c.execute_batch("INSERT INTO tag_relations(tag_id,target_key,type,created_at) VALUES('video','old','VIDEO','first'),('foreign','old','NOTE','first'),('file','/root/deleted','FILE','first'),('failed','/root/failed','FILE','first'),('sibling','/root_sibling/file','FILE','first'); INSERT INTO media_play_history(media_type,file_id,position_ms,played_at,play_count) VALUES('VIDEO','old',4000000001,'first',0),('VIDEO','keep',4000000002,'first',0); INSERT INTO platform_audio_media(file_id,path,title,artist,duration_ms) VALUES('test:/root/deleted','/root/deleted','gone','',1),('test:/root/failed','/root/failed','keep','',1),('test:/root_sibling/file','/root_sibling/file','keep','',1); INSERT INTO audio_queue_items(file_id,sort_order) VALUES('test:/root/deleted',0),('test:/root/failed',1),('test:/root_sibling/file',2);")).unwrap();
     db.with_conn(|c|c.execute_batch("INSERT INTO image_embeddings(file_id,path,embedding,created_at,updated_at) VALUES('private','/root/deleted',x'3f800000','first','first'),('pending','/root/failed',x'3f800000','first','first'),('sibling','/root_sibling/file',x'3f800000','first','first');")).unwrap();
     cleanup(
         &db,
@@ -80,7 +80,6 @@ fn catalog_file(data_type: DataType, path: &str) -> crate::infrastructure::db::M
             .into_owned(),
         size_bytes: 10,
         duration_ms: 0,
-        cover_image_id: None,
         width: 0,
         height: 0,
         rotation: 0,

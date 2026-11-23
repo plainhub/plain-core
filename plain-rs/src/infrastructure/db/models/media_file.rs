@@ -9,7 +9,6 @@ pub struct MediaFileMetadata {
     pub bucket_id: String,
     pub size_bytes: i64,
     pub duration_ms: i64,
-    pub cover_image_id: Option<String>,
     pub width: i32,
     pub height: i32,
     pub rotation: i32,
@@ -25,7 +24,6 @@ pub struct MediaFileMetadataAvailability {
     pub dimensions: bool,
     pub rotation: bool,
     pub taken_at: bool,
-    pub cover_image_id: bool,
 }
 
 impl MediaFileMetadataAvailability {
@@ -35,7 +33,6 @@ impl MediaFileMetadataAvailability {
         dimensions: true,
         rotation: true,
         taken_at: true,
-        cover_image_id: true,
     };
 }
 
@@ -48,7 +45,6 @@ pub struct MediaFileMetadataRead {
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize)]
 pub struct MediaFileRow {
-    pub album_id: String,
     pub id: String,
     pub data_type: i32,
     pub path: String,
@@ -59,7 +55,6 @@ pub struct MediaFileRow {
     pub bucket_id: String,
     pub size_bytes: i64,
     pub duration_ms: i64,
-    pub cover_image_id: Option<String>,
     pub width: i32,
     pub height: i32,
     pub rotation: i32,

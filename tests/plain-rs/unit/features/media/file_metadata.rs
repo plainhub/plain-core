@@ -146,7 +146,6 @@ fn audio_row_carries_probe_tags_and_real_stat_facts() {
     assert_eq!(m.size_bytes, i64::try_from(meta.len()).unwrap());
     assert_eq!(m.artist, "Hydrate Artist");
     assert_eq!(m.title, "Hydrate Title");
-    assert_eq!(m.cover_image_id, None);
     let probed = plain_libs::media::probe::probe_media(m.path.as_str(), "audio");
     assert_eq!(m.duration_ms, probed.duration_ms);
     assert!(m.duration_ms > 0);
@@ -458,7 +457,6 @@ fn probe_availability_keeps_unknown_distinct_from_valid_untagged_audio() {
     let unknown = read_file_metadata_with_availability(&damaged, DataType::Audio).unwrap();
     assert!(!unknown.available.tags);
     assert!(!unknown.available.duration);
-    assert!(!unknown.available.cover_image_id);
     let untagged =
         read_file_metadata_with_availability(&fixture("audio-untagged.mp3"), DataType::Audio)
             .unwrap();

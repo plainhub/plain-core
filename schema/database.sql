@@ -226,8 +226,6 @@ CREATE TABLE IF NOT EXISTS files (
     artist TEXT,
     album TEXT,
     album_artist TEXT,
-    album_id TEXT,
-    cover_image_id TEXT,
     CHECK(path<>'' OR kind='DIRECTORY'),
     CHECK(substr(path,1,1)<>'/'),
     CHECK(instr(path,char(92))=0 AND instr(path,char(0))=0),

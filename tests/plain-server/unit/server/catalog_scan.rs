@@ -134,7 +134,6 @@ async fn rescan_with_failed_probe_retains_current_known_metadata_without_host_ro
     known.title = "Known title".into();
     known.artist = "Known artist".into();
     known.duration_ms = 1500;
-    known.cover_image_id = Some("known-album".into());
     known.size_bytes = 999;
     let original = catalog.record_files(&[known]).unwrap().remove(0);
     let (_generation, mut requests) =
@@ -150,7 +149,6 @@ async fn rescan_with_failed_probe_retains_current_known_metadata_without_host_ro
     assert_eq!(updated.title, original.title);
     assert_eq!(updated.artist, original.artist);
     assert_eq!(updated.duration_ms, original.duration_ms);
-    assert_eq!(updated.cover_image_id, original.cover_image_id);
     assert_eq!(
         updated.size_bytes,
         std::fs::metadata(path).unwrap().len() as i64

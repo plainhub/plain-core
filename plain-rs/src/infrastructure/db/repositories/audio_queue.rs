@@ -11,7 +11,7 @@ pub(crate) mod io {
         c: &Connection,
         path: &str,
     ) -> plain_libs::rusqlite::Result<Option<crate::features::media::audio::queue::AudioTrack>> {
-        c.query_row("SELECT m.path,m.title,m.artist,m.duration_ms,m.album_id,m.file_id FROM audio_media m WHERE m.file_id IN (SELECT file_id FROM audio_media WHERE path=?1 UNION SELECT file_id FROM platform_audio_aliases WHERE path=?1)",[path],|row|Ok(crate::features::media::audio::queue::AudioTrack { file_id:Some(row.get(5)?),path:row.get(0)?,title:row.get(1)?,artist:row.get(2)?,duration_ms:row.get(3)?,album_id:row.get(4)? })).optional()
+        c.query_row("SELECT m.path,m.title,m.artist,m.duration_ms,m.file_id FROM audio_media m WHERE m.file_id IN (SELECT file_id FROM audio_media WHERE path=?1 UNION SELECT file_id FROM platform_audio_aliases WHERE path=?1)",[path],|row|Ok(crate::features::media::audio::queue::AudioTrack { file_id:Some(row.get(4)?),path:row.get(0)?,title:row.get(1)?,artist:row.get(2)?,duration_ms:row.get(3)? })).optional()
     }
 
     pub fn save_current(
@@ -103,12 +103,11 @@ pub(crate) mod io {
             duration_ms: r.get(5)?,
             sort_order: r.get(6)?,
             added_at: r.get(7)?,
-            album_id: r.get(8)?,
-            file_id: r.get(9)?,
+            file_id: r.get(8)?,
         })
     }
     pub fn playlist_items(c: &Connection, id: &str) -> plain_libs::rusqlite::Result<Vec<PlaylistItem>> {
-        c.prepare("SELECT p.id,p.playlist_id,m.path,m.title,m.artist,m.duration_ms,p.sort_order,p.added_at,m.album_id,p.file_id FROM audio_playlist_items p JOIN audio_media m USING(file_id) WHERE playlist_id=? ORDER BY sort_order,p.id")?.query_map([id],item_row)?.collect()
+        c.prepare("SELECT p.id,p.playlist_id,m.path,m.title,m.artist,m.duration_ms,p.sort_order,p.added_at,p.file_id FROM audio_playlist_items p JOIN audio_media m USING(file_id) WHERE playlist_id=? ORDER BY sort_order,p.id")?.query_map([id],item_row)?.collect()
     }
     pub fn playlist_count(c: &Connection, id: &str) -> plain_libs::rusqlite::Result<usize> {
         c.query_row(
@@ -130,10 +129,10 @@ pub(crate) mod io {
         offset: i64,
         limit: i64,
     ) -> plain_libs::rusqlite::Result<Vec<PlaylistItem>> {
-        c.prepare("SELECT p.id,p.playlist_id,m.path,m.title,m.artist,m.duration_ms,p.sort_order,p.added_at,m.album_id,p.file_id FROM audio_playlist_items p JOIN audio_media m USING(file_id) WHERE playlist_id=?1 ORDER BY sort_order,p.id LIMIT ?2 OFFSET ?3")?.query_map(params![id,limit,offset],item_row)?.collect()
+        c.prepare("SELECT p.id,p.playlist_id,m.path,m.title,m.artist,m.duration_ms,p.sort_order,p.added_at,p.file_id FROM audio_playlist_items p JOIN audio_media m USING(file_id) WHERE playlist_id=?1 ORDER BY sort_order,p.id LIMIT ?2 OFFSET ?3")?.query_map(params![id,limit,offset],item_row)?.collect()
     }
     pub fn all_playlist_items(c: &Connection) -> plain_libs::rusqlite::Result<Vec<PlaylistItem>> {
-        c.prepare("SELECT p.id,p.playlist_id,m.path,m.title,m.artist,m.duration_ms,p.sort_order,p.added_at,m.album_id,p.file_id FROM audio_playlist_items p JOIN audio_media m USING(file_id)")?.query_map([],item_row)?.collect()
+        c.prepare("SELECT p.id,p.playlist_id,m.path,m.title,m.artist,m.duration_ms,p.sort_order,p.added_at,p.file_id FROM audio_playlist_items p JOIN audio_media m USING(file_id)")?.query_map([],item_row)?.collect()
     }
     pub fn insert_playlist_item(c: &Connection, p: &PlaylistItem) -> plain_libs::rusqlite::Result<()> {
         c.execute("INSERT INTO audio_playlist_items (id,playlist_id,file_id,sort_order,added_at) SELECT ?1,?2,file_id,?3,?4 FROM audio_media WHERE file_id IN (SELECT file_id FROM audio_media WHERE path=?5 UNION SELECT file_id FROM platform_audio_aliases WHERE path=?5)",params![p.id,p.playlist_id,p.sort_order,p.added_at,p.audio_path])?;

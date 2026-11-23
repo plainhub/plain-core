@@ -20,7 +20,6 @@ pub fn audio(path: &str, title: &str, duration_ms: i64) -> AudioTrack {
         artist: "A".to_string(),
         path: path.to_string(),
         duration_ms,
-        album_id: String::new(),
     }
 }
 
@@ -32,7 +31,7 @@ pub fn register_audio(db: &Db, track: &AudioTrack) {
     if track.path.is_empty() || track.duration_ms < 0 {
         return;
     }
-    db.with_conn(|conn| conn.execute("INSERT INTO platform_audio_media(file_id,path,title,artist,duration_ms,album_id) VALUES(?1,?2,?3,?4,?5,?6) ON CONFLICT(file_id) DO UPDATE SET title=excluded.title,artist=excluded.artist,duration_ms=excluded.duration_ms,album_id=CASE WHEN excluded.album_id<>'' THEN excluded.album_id ELSE platform_audio_media.album_id END",plain_libs::rusqlite::params![format!("test:{}",track.path),track.path,track.title,track.artist,track.duration_ms,track.album_id])).unwrap();
+    db.with_conn(|conn| conn.execute("INSERT INTO platform_audio_media(file_id,path,title,artist,duration_ms) VALUES(?1,?2,?3,?4,?5) ON CONFLICT(file_id) DO UPDATE SET title=excluded.title,artist=excluded.artist,duration_ms=excluded.duration_ms",plain_libs::rusqlite::params![format!("test:{}",track.path),track.path,track.title,track.artist,track.duration_ms])).unwrap();
 }
 
 pub fn register_audio_tracks(db: &Db, tracks: &[AudioTrack]) {
@@ -52,7 +51,6 @@ pub fn register_native_audio(db: &Db, track: &AudioTrack) {
         bucket_id: String::new(),
         size_bytes: 1,
         duration_ms: track.duration_ms,
-        cover_image_id: None,
         width: 0,
         height: 0,
         rotation: 0,
@@ -88,7 +86,6 @@ pub fn indexed_on_playing(
             title: title.into(),
             artist: artist.into(),
             duration_ms,
-            album_id: String::new(),
         },
     );
     crate::features::media::audio::queue::on_playing(db, path)

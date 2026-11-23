@@ -279,12 +279,11 @@ fn aliases_of_one_system_media_are_deduplicated_in_queue_and_playlist() {
     let db = Db::open(std::path::Path::new(":memory:")).unwrap();
     db.use_platform_audio_catalog().unwrap();
     let uri = "content://media/external/audio/media/42";
-    let mut media = crate::infrastructure::db::audio_catalog::AudioMedia {
+    let media = crate::infrastructure::db::audio_catalog::AudioMedia {
         file_id: Some("42".into()),
         aliases: vec![uri.into()],
         track: crate::features::media::audio::queue::AudioTrack::from_path_stem("/music/one.mp3"),
     };
-    media.track.album_id = "7".into();
     db.cache_platform_audio(&[media], true).unwrap();
     let tracks = [
         crate::features::media::audio::queue::AudioTrack::from_path_stem(uri),
@@ -305,7 +304,6 @@ fn aliases_of_one_system_media_are_deduplicated_in_queue_and_playlist() {
     );
     let items = crate::infrastructure::db::audio_queue::playlist_items(&db, &playlist.id).unwrap();
     assert_eq!(items.len(), 1);
-    assert_eq!(items[0].album_id, "7");
     db.forget_platform_audio_paths(&[uri.into()]).unwrap();
     crate::features::media::audio::queue::enqueue(&db, std::slice::from_ref(&tracks[0]), false)
         .unwrap();

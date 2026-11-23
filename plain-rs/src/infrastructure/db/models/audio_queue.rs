@@ -28,7 +28,6 @@ pub struct PlaylistItem {
     pub title: String,
     pub artist: String,
     pub duration_ms: i64,
-    pub album_id: String,
     pub sort_order: i64,
     pub added_at: String,
 }

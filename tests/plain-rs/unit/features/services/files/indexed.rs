@@ -15,7 +15,6 @@ fn seed(db: &Db, path: &str, size: i64) {
         bucket_id: String::new(),
         size_bytes: size,
         duration_ms: 0,
-        cover_image_id: None,
         width: 0,
         height: 0,
         rotation: 0,

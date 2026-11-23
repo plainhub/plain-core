@@ -12,7 +12,6 @@ fn metadata(path: &str) -> MediaFileMetadata {
         bucket_id: "photos".into(),
         size_bytes: 10,
         duration_ms: 0,
-        cover_image_id: None,
         width: 640,
         height: 480,
         rotation: 0,
@@ -85,7 +84,6 @@ fn unavailable_probe_fields_preserve_current_metadata_but_successful_empty_value
     let mut known = metadata("/photos/one.jpg");
     known.artist = "Artist".into();
     known.duration_ms = 12_000;
-    known.cover_image_id = Some("album".into());
     known.rotation = 90;
     known.taken_at = Some("2026-10-11T00:00:00.000Z".into());
     let original = db.record_media_files(&[known.clone()]).unwrap().remove(0);
@@ -93,7 +91,6 @@ fn unavailable_probe_fields_preserve_current_metadata_but_successful_empty_value
     unknown.title = "Filename fallback".into();
     unknown.artist.clear();
     unknown.duration_ms = 0;
-    unknown.cover_image_id = None;
     unknown.width = 0;
     unknown.height = 0;
     unknown.rotation = 0;
@@ -111,7 +108,6 @@ fn unavailable_probe_fields_preserve_current_metadata_but_successful_empty_value
     assert_eq!(preserved.title, known.title);
     assert_eq!(preserved.artist, known.artist);
     assert_eq!(preserved.duration_ms, known.duration_ms);
-    assert_eq!(preserved.cover_image_id, known.cover_image_id);
     assert_eq!(
         (preserved.width, preserved.height, preserved.rotation),
         (known.width, known.height, known.rotation)
@@ -129,7 +125,6 @@ fn unavailable_probe_fields_preserve_current_metadata_but_successful_empty_value
     assert_eq!(cleared.title, "Filename fallback");
     assert!(cleared.artist.is_empty());
     assert_eq!(cleared.duration_ms, 0);
-    assert!(cleared.cover_image_id.is_none());
     assert_eq!((cleared.width, cleared.height, cleared.rotation), (0, 0, 0));
     assert_eq!(cleared.taken_at, None);
     assert_eq!(cleared.id, original.id);
@@ -231,49 +226,26 @@ fn forgetting_a_directory_removes_descendants_and_preserves_prefix_neighbors() {
 }
 
 #[test]
-fn native_album_grouping_survives_failed_probes_and_clears_removed_album_tags() {
+fn audio_tags_are_retained_when_probe_fails() {
     let directory = plain_libs::temporary::tempdir().unwrap();
     let db = Db::open(&directory.path().join("data.db")).unwrap();
-    let mut one = metadata("/album/one.mp3");
-    one.data_type = DataType::Audio;
-    one.album = "Shared Album".into();
-    one.album_artist = "Album Artist".into();
-    one.artist = "Track One".into();
-    let mut two = one.clone();
-    two.path = "/album/two.mp3".into();
-    two.artist = "Track Two".into();
-    let rows = db.record_media_files(&[one.clone(), two]).unwrap();
-    assert!(!rows[0].album_id.is_empty());
-    assert_eq!(rows[0].album_id, rows[1].album_id);
-    let track = crate::features::media::audio::queue::track_by_id(&db, &rows[0].id).unwrap();
-    assert_eq!(track.album_id, rows[0].album_id);
-    let mut unreadable = one.clone();
-    unreadable.album.clear();
-    unreadable.album_artist.clear();
-    let retained = db
-        .record_media_file_reads(&[MediaFileMetadataRead {
-            file_identity: None,
-            metadata: unreadable.clone(),
-            available: Default::default(),
-        }])
-        .unwrap()
-        .remove(0);
-    assert_eq!(retained.album, "Shared Album");
-    assert_eq!(retained.album_artist, "Album Artist");
-    assert_eq!(retained.album_id, rows[0].album_id);
-    let cleared = db.record_media_files(&[unreadable]).unwrap().remove(0);
-    assert_eq!(cleared.id, rows[0].id);
-    assert!(cleared.album_id.is_empty());
-    assert!(
-        crate::features::media::audio::queue::track_by_id(&db, &cleared.id)
-            .unwrap()
-            .album_id
-            .is_empty()
-    );
-    one.album = "New Album".into();
-    let changed = db.record_media_files(&[one]).unwrap().remove(0);
-    assert_eq!(changed.id, rows[0].id);
-    assert_ne!(changed.album_id, rows[0].album_id);
+    let mut track = metadata("/album/one.mp3");
+    track.data_type = DataType::Audio;
+    track.artist = "Track Artist".into();
+    track.album = "Album".into();
+    track.album_artist = "Album Artist".into();
+    let original = db.record_media_files(&[track.clone()]).unwrap().remove(0);
+    track.artist.clear();
+    track.album.clear();
+    track.album_artist.clear();
+    let retained = db.record_media_file_reads(&[MediaFileMetadataRead {
+        file_identity: None,
+        metadata: track.clone(),
+        available: Default::default(),
+    }]).unwrap().remove(0);
+    assert_eq!(retained, original);
+    let cleared = db.record_media_files(&[track]).unwrap().remove(0);
+    assert!(cleared.artist.is_empty() && cleared.album.is_empty() && cleared.album_artist.is_empty());
 }
 
 fn observed_file(path: &std::path::Path, identity: &str) -> MediaFileMetadataRead {
@@ -411,4 +383,26 @@ fn file_generation_qualifies_relocation_across_media_kind_changes() {
     audio.metadata.data_type = DataType::Audio;
     let audio = db.record_media_file_reads(&[audio]).unwrap().remove(0);
     assert_eq!(before.id, audio.id);
+}
+
+#[test]
+fn files_schema_does_not_store_generated_album_ids_or_cover_references() {
+    let directory = plain_libs::temporary::tempdir().unwrap();
+    let db = Db::open(&directory.path().join("plain.db")).unwrap();
+    db.with_conn(|conn| {
+        let count: i64 = conn.query_row(
+            "SELECT count(*) FROM pragma_table_info('files') WHERE name IN ('album_id','cover_image_id')",
+            [],
+            |row| row.get(0),
+        )?;
+        assert_eq!(count, 0);
+        let count: i64 = conn.query_row(
+            "SELECT count(*) FROM pragma_table_info('files') WHERE name IN ('artist','album','album_artist')",
+            [],
+            |row| row.get(0),
+        )?;
+        assert_eq!(count, 3);
+        Ok::<_, plain_libs::rusqlite::Error>(())
+    })
+    .unwrap();
 }

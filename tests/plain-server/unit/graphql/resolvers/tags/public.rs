@@ -64,7 +64,6 @@ fn doc(path: &str) -> plain_rs::infrastructure::db::MediaFileMetadata {
         bucket_id: "b3".to_owned(),
         size_bytes: 10,
         duration_ms: 0,
-        cover_image_id: None,
         width: 0,
         height: 0,
         rotation: 0,

@@ -8,7 +8,7 @@ use plain_libs::platform::volumes::Volume;
 use plain_libs::rusqlite::{Connection, OptionalExtension, params};
 use std::path::{Component, Path};
 
-pub const COLUMNS: &str = "id,volume_id,path,file_name,kind,file_identity,mime_type,size_bytes,created_at,updated_at,missing,favorited,trashed_at,original_path,duration_ms,width,height,rotation,taken_at,title,artist,album,album_artist,album_id,cover_image_id,indexed";
+pub const COLUMNS: &str = "id,volume_id,path,file_name,kind,file_identity,mime_type,size_bytes,created_at,updated_at,missing,favorited,trashed_at,original_path,duration_ms,width,height,rotation,taken_at,title,artist,album,album_artist,indexed";
 
 pub fn name_filter(text: &str) -> (String, Vec<String>) {
     if text.contains('\0') {
@@ -56,9 +56,7 @@ pub fn from_row(row: &plain_libs::rusqlite::Row<'_>) -> plain_libs::rusqlite::Re
         artist: row.get(20)?,
         album: row.get(21)?,
         album_artist: row.get(22)?,
-        album_id: row.get(23)?,
-        cover_image_id: row.get(24)?,
-        indexed: row.get(25)?,
+        indexed: row.get(23)?,
     })
 }
 

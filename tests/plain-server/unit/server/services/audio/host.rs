@@ -7,7 +7,7 @@ async fn native_host_lifetime_restores_position_and_invalidates_reports_once_per
     let state = core.runtime_state().core;
     let track = queue::AudioTrack::from_path_stem("/owned/track.mp3");
     state.db.with_conn(|conn| conn.execute(
-        "INSERT INTO platform_audio_media(file_id,path,title,artist,duration_ms,album_id) VALUES('owned-track',?1,'Track','',0,'')",
+        "INSERT INTO platform_audio_media(file_id,path,title,artist,duration_ms) VALUES('owned-track',?1,'Track','',0)",
         [&track.path],
     )).unwrap();
     queue::enqueue(&state.db, std::slice::from_ref(&track), false).unwrap();

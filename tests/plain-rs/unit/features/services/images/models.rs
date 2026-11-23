@@ -518,7 +518,6 @@ async fn semantic_search_pages_all_matches_and_filters_before_pagination() {
                 bucket_id: folder.into(),
                 size_bytes: 2048,
                 duration_ms: 0,
-                cover_image_id: None,
                 width: 64,
                 height: 64,
                 rotation: 0,

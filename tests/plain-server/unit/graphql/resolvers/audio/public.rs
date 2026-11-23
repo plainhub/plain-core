@@ -19,7 +19,7 @@ fn stub(host: Arc<Host>, db: Arc<Db>, handler: impl Fn(&str, Value) -> Value + S
                 Value::Null
             } else if request["method"] == "audioLibraryResolve" {
                 let params = &request["params"];
-                let mut rows = db.with_conn(|conn|conn.prepare("SELECT id,path,title,artist,duration_ms,cover_image_id FROM file_catalog WHERE data_type=1 UNION SELECT file_id,path,title,artist,duration_ms,album_id FROM platform_audio_media UNION SELECT id,path,title,artist,duration_ms,'' FROM file_catalog WHERE data_type=1").unwrap().query_map([],|row|Ok(json!({"mediaId":row.get::<_,String>(0)?,"path":row.get::<_,String>(1)?,"title":row.get::<_,String>(2)?,"artist":row.get::<_,String>(3)?,"durationMs":row.get::<_,i64>(4)?,"albumId":row.get::<_,String>(5)?,"aliases":[]}))).unwrap().collect::<plain_libs::rusqlite::Result<Vec<_>>>().unwrap());
+                let mut rows = db.with_conn(|conn|conn.prepare("SELECT id,path,title,artist,duration_ms FROM file_catalog WHERE data_type=1 UNION SELECT file_id,path,title,artist,duration_ms FROM platform_audio_media").unwrap().query_map([],|row|Ok(json!({"mediaId":row.get::<_,String>(0)?,"path":row.get::<_,String>(1)?,"title":row.get::<_,String>(2)?,"artist":row.get::<_,String>(3)?,"durationMs":row.get::<_,i64>(4)?,"aliases":[]}))).unwrap().collect::<plain_libs::rusqlite::Result<Vec<_>>>().unwrap());
                 let mut paths = params["paths"].as_array().unwrap().clone();
                 if let Some(ids) = params["ids"].as_array() {
                     paths.extend(ids.iter().filter_map(|id| {
@@ -133,7 +133,6 @@ fn track(path: &str, title: &str, artist: &str) -> AudioTrack {
         path: path.to_string(),
         title: title.to_string(),
         artist: artist.to_string(),
-        album_id: String::new(),
         duration_ms: 1000,
     }
 }
@@ -144,7 +143,7 @@ fn seed_queue(schema: &PublicSchema, tracks: &[(&str, &str, &str)]) {
         .map(|(path, title, artist)| track(path, title, artist))
         .collect();
     for item in &items {
-        database(schema).with_conn(|conn|conn.execute("INSERT INTO platform_audio_media(file_id,path,title,artist,duration_ms,album_id) VALUES(?1,?2,?3,?4,?5,'')",plain_libs::rusqlite::params![format!("test:{}",item.path),item.path,item.title,item.artist,item.duration_ms])).unwrap();
+        database(schema).with_conn(|conn|conn.execute("INSERT INTO platform_audio_media(file_id,path,title,artist,duration_ms) VALUES(?1,?2,?3,?4,?5)",plain_libs::rusqlite::params![format!("test:{}",item.path),item.path,item.title,item.artist,item.duration_ms])).unwrap();
     }
     domain::enqueue(database(schema), &items, false).unwrap();
 }
@@ -695,7 +694,7 @@ async fn an_ungranted_library_counts_zero_and_refuses_to_list() {
 }
 
 #[tokio::test]
-async fn a_library_row_keeps_the_album_art_reference() {
+async fn a_native_library_row_without_album_art_has_an_empty_reference() {
     let (_dir, schema) = fixture_with(GRANTED, |method, _params| match method {
         _other => panic!("unexpected host call {_other}"),
     });
@@ -711,7 +710,6 @@ async fn a_library_row_keeps_the_album_art_reference() {
             bucket_id: "bucket-1".to_owned(),
             size_bytes: 42,
             duration_ms: 1234,
-            cover_image_id: Some("album-file-1".to_owned()),
             width: 0,
             height: 0,
             rotation: 0,
@@ -721,49 +719,16 @@ async fn a_library_row_keeps_the_album_art_reference() {
         }])
         .unwrap();
 
-    let key = plain_rs::features::sessions::token_key(
-        &schema
-            .data::<plain_rs::runtime::Runtime>()
-            .unwrap()
-            .native_url_token()
-            .unwrap(),
-    )
-    .unwrap();
     let document = r#"query { audios(offset: 0, limit: 10, query: "", sortBy: TITLE_ASC) {
         id title artist path durationMs size bucketId albumFileId createdAt updatedAt isFavorite tags { name }
     } }"#;
-    let unauthenticated = query(&schema, document).await;
-    assert!(
-        unauthenticated["errors"]
-            .as_array()
-            .is_some_and(|errors| !errors.is_empty()),
-        "A remote request without a session must not use a native session credential: {unauthenticated}"
-    );
     let listed = local_query(&schema, document).await;
     assert!(
         listed["errors"].as_array().is_none_or(Vec::is_empty),
         "{listed}"
     );
     let row = &listed["data"]["audios"][0];
-    let (scope, payload) =
-        plain_rs::features::files::resource_link::parse(row["albumFileId"].as_str().unwrap())
-            .unwrap();
-    assert_eq!(
-        scope,
-        plain_rs::features::files::resource_link::Scope::Session(
-            schema
-                .data::<plain_rs::runtime::Runtime>()
-                .unwrap()
-                .native_client_id()
-                .unwrap()
-        )
-    );
-    let resource = plain_rs::features::files::resource_link::open(&scope, &key, payload).unwrap();
-    assert_eq!(
-        resource.r#type,
-        plain_rs::features::files::resource_link::ResourceType::Media
-    );
-    assert_eq!(resource.id, "album-file-1");
+    assert_eq!(row["albumFileId"], "");
     assert_eq!(row["artist"], "Band");
     assert_eq!(row["durationMs"], 1234);
     assert_eq!(row["size"], 42);
@@ -830,7 +795,6 @@ async fn adding_tracks_reads_every_search_page_without_an_item_limit() {
             bucket_id: "b".to_owned(),
             size_bytes: 10,
             duration_ms: 123,
-            cover_image_id: Some(String::new()),
             width: 0,
             height: 0,
             rotation: 0,
@@ -982,7 +946,6 @@ async fn raw_album_art_is_encoded_only_when_selected_with_the_native_session_key
             size: Long(42),
             bucket_id: "music".into(),
             album_art_uri: uri.into(),
-            cover_image_id: String::new(),
             created_at: Instant::default(),
             updated_at: Instant::default(),
             is_favorite: false,
@@ -1078,10 +1041,7 @@ async fn playlist_covers_use_the_shared_catalog_without_platform_requests() {
         &[plain_rs::infrastructure::db::audio_catalog::AudioMedia {
             file_id: Some("track".into()),
             aliases: Vec::new(),
-            track: AudioTrack {
-                album_id: "album".into(),
-                ..track("/music/a.mp3", "A", "Artist")
-            },
+            track: track("/music/a.mp3", "A", "Artist"),
         }],
         false,
     )
@@ -1092,24 +1052,24 @@ async fn playlist_covers_use_the_shared_catalog_without_platform_requests() {
     let playlist = domain::create_playlist(db, "Playlist").unwrap();
     let empty = domain::create_playlist(db, "Empty").unwrap();
     db.with_conn(|conn| conn.execute("UPDATE audio_playlist_items SET playlist_id=?1 WHERE playlist_id='playlist'", [&playlist.id])).unwrap();
-    let result = query(&schema, r#"query { audioPlaylists { id coverAlbums { albumId trackCount candidatePaths } } }"#).await;
+    let result = query(&schema, r#"query { audioPlaylists { id coverCandidatePaths } }"#).await;
     assert!(result["errors"].is_null(), "{result}");
     assert_eq!(
-        result["data"]["audioPlaylists"].as_array().unwrap().iter().find(|row| row["id"] == playlist.id).unwrap()["coverAlbums"],
-        json!([{"albumId":"album","trackCount":1,"candidatePaths":["/music/a.mp3"]}])
+        result["data"]["audioPlaylists"].as_array().unwrap().iter().find(|row| row["id"] == playlist.id).unwrap()["coverCandidatePaths"],
+        json!(["/music/a.mp3"])
     );
-    assert_eq!(result["data"]["audioPlaylists"].as_array().unwrap().iter().find(|row| row["id"] == empty.id).unwrap()["coverAlbums"], json!([]));
-    let single = query(&schema, &format!(r#"{{ audioPlaylist(id:"{}") {{ id name itemCount coverAlbums {{ albumId trackCount candidatePaths }} }} }}"#, playlist.id)).await;
+    assert_eq!(result["data"]["audioPlaylists"].as_array().unwrap().iter().find(|row| row["id"] == empty.id).unwrap()["coverCandidatePaths"], json!([]));
+    let single = query(&schema, &format!(r#"{{ audioPlaylist(id:"{}") {{ id name itemCount coverCandidatePaths }} }}"#, playlist.id)).await;
     assert!(single["errors"].is_null(), "{single}");
-    assert_eq!(single["data"]["audioPlaylist"]["coverAlbums"], json!([{"albumId":"album","trackCount":1,"candidatePaths":["/music/a.mp3"]}]));
+    assert_eq!(single["data"]["audioPlaylist"]["coverCandidatePaths"], json!(["/music/a.mp3"]));
     assert_eq!(single["data"]["audioPlaylist"]["name"], "Playlist");
     assert_eq!(single["data"]["audioPlaylist"]["itemCount"], 1);
-    let missing = query(&schema, r#"{ audioPlaylist(id:"missing") { id coverAlbums { albumId } } }"#).await;
+    let missing = query(&schema, r#"{ audioPlaylist(id:"missing") { id coverCandidatePaths } }"#).await;
     assert!(missing["errors"].is_null(), "{missing}");
     assert!(missing["data"]["audioPlaylist"].is_null());
-    let renamed = query(&schema, &format!(r#"mutation {{ updateAudioPlaylist(id:"{}",name:"Renamed") {{ name coverAlbums {{ albumId trackCount candidatePaths }} }} }}"#, playlist.id)).await;
+    let renamed = query(&schema, &format!(r#"mutation {{ updateAudioPlaylist(id:"{}",name:"Renamed") {{ name coverCandidatePaths }} }}"#, playlist.id)).await;
     assert!(renamed["errors"].is_null(), "{renamed}");
-    assert_eq!(renamed["data"]["updateAudioPlaylist"]["coverAlbums"], single["data"]["audioPlaylist"]["coverAlbums"]);
+    assert_eq!(renamed["data"]["updateAudioPlaylist"]["coverCandidatePaths"], single["data"]["audioPlaylist"]["coverCandidatePaths"]);
 }
 
 #[tokio::test]
@@ -1125,13 +1085,13 @@ async fn playlist_cover_queries_are_optional_batched_and_scoped_to_one_playlist(
     db.with_conn(|conn| {
         let preparations = preparations.clone();
         conn.authorizer(Some(move |context: AuthContext<'_>| {
-            if matches!(context.action, AuthAction::Function { function_name: "row_number" }) {
+            if matches!(context.action, AuthAction::Read { table_name: "audio_playlist_items", column_name: "sort_order" }) {
                 preparations.fetch_add(1, Ordering::SeqCst);
             }
             Authorization::Allow
         })).unwrap();
     });
-    let result = query(&schema, "{ audioPlaylists { id coverAlbums { albumId } } }").await;
+    let result = query(&schema, "{ audioPlaylists { id coverCandidatePaths } }").await;
     assert!(result["errors"].is_null(), "{result}");
     assert_eq!(preparations.load(Ordering::SeqCst), 0);
     seed_queue(&schema, &[("/one.mp3", "One", "Artist")]);
@@ -1142,19 +1102,20 @@ async fn playlist_cover_queries_are_optional_batched_and_scoped_to_one_playlist(
         domain::add_playlist_items(db, &playlist.id, &[track.clone()]).unwrap();
         ids.push(playlist.id);
     }
+    preparations.store(0, Ordering::SeqCst);
     for request in [
         "{ audioPlaylists { id name itemCount } }".to_string(),
         format!(r#"{{ audioPlaylist(id:"{}") {{ id name }} }}"#, ids[0]),
-        format!(r#"{{ audioPlaylist(id:"{}") {{ coverAlbums {{ albumId }} }} }}"#, empty.id),
+        format!(r#"{{ audioPlaylist(id:"{}") {{ coverCandidatePaths }} }}"#, empty.id),
     ] {
         let result = query(&schema, &request).await;
         assert!(result["errors"].is_null(), "{result}");
     }
     assert_eq!(preparations.load(Ordering::SeqCst), 0);
-    let result = query(&schema, "{ audioPlaylists { id ...Covers } } fragment Covers on AudioPlaylist { artwork: coverAlbums { albumId } }").await;
+    let result = query(&schema, "{ audioPlaylists { id ...Covers } } fragment Covers on AudioPlaylist { artwork: coverCandidatePaths }").await;
     assert!(result["errors"].is_null(), "{result}");
     assert_eq!(preparations.swap(0, Ordering::SeqCst), 1);
-    let result = query(&schema, &format!(r#"{{ audioPlaylist(id:"{}") {{ id coverAlbums {{ albumId }} }} }}"#, ids[0])).await;
+    let result = query(&schema, &format!(r#"{{ audioPlaylist(id:"{}") {{ id coverCandidatePaths }} }}"#, ids[0])).await;
     assert!(result["errors"].is_null(), "{result}");
     assert_eq!(result["data"]["audioPlaylist"]["id"], ids[0]);
     assert_eq!(preparations.load(Ordering::SeqCst), 1);
@@ -1176,7 +1137,7 @@ async fn merged_playlist_reads_preserve_cover_candidates_without_extra_sql_work(
         for (index, id) in ids.iter().enumerate() {
             for order in 0..40 {
                 let track_id = format!("track-{index}-{order}");
-                conn.execute("INSERT INTO platform_audio_media(file_id,path,title,artist,duration_ms,album_id) VALUES(?1,?2,'Track','Artist',1000,?3)", plain_libs::rusqlite::params![track_id, format!("/{track_id}.mp3"), format!("album-{}", order % 10)]).unwrap();
+                conn.execute("INSERT INTO platform_audio_media(file_id,path,title,artist,duration_ms) VALUES(?1,?2,'Track','Artist',1000)", plain_libs::rusqlite::params![track_id, format!("/{track_id}.mp3")]).unwrap();
                 conn.execute("INSERT INTO audio_playlist_items(id,playlist_id,file_id,sort_order,added_at) VALUES(?1,?2,?1,?3,'2026-01-01T00:00:00Z')", plain_libs::rusqlite::params![track_id, id, order]).unwrap();
             }
         }
@@ -1195,35 +1156,30 @@ async fn merged_playlist_reads_preserve_cover_candidates_without_extra_sql_work(
     service.run(|db, _| domain::playlists(db)).await.unwrap();
     let batch_ids = ids.clone();
     let expected = service.run(move |db, _| {
-        plain_rs::features::media::audio::playlist_covers::playlist_covers(db, &batch_ids)
+        plain_rs::features::media::audio::playlist_covers::playlist_cover_candidates(db, &batch_ids)
     }).await.unwrap();
     let old_list_steps = steps.swap(0, Ordering::Relaxed);
-    let merged = query(&schema, "{ audioPlaylists { id coverAlbums { albumId trackCount candidatePaths } } }").await;
+    let merged = query(&schema, "{ audioPlaylists { id coverCandidatePaths } }").await;
     assert!(merged["errors"].is_null(), "{merged}");
     let new_list_steps = steps.swap(0, Ordering::Relaxed);
     assert!(new_list_steps <= old_list_steps, "list SQL work increased: {old_list_steps} -> {new_list_steps}");
-    for covers in &expected {
-        assert_eq!(covers.albums.len(), 8);
-        let actual = merged["data"]["audioPlaylists"].as_array().unwrap().iter().find(|row| row["id"] == covers.id).unwrap();
-        let albums = covers.albums.iter().map(|album| {
-            assert_eq!(album.track_count, 4);
-            assert_eq!(album.candidate_paths.len(), 3);
-            json!({"albumId":album.album_id,"trackCount":album.track_count,"candidatePaths":album.candidate_paths})
-        }).collect::<Vec<_>>();
-        assert_eq!(actual["coverAlbums"], json!(albums));
+    for (id, candidates) in ids.iter().zip(&expected) {
+        assert_eq!(candidates.len(), 40);
+        let actual = merged["data"]["audioPlaylists"].as_array().unwrap().iter().find(|row| row["id"] == *id).unwrap();
+        assert_eq!(actual["coverCandidatePaths"], json!(candidates));
     }
     service.run(|db, _| domain::playlists(db)).await.unwrap();
     let selected = ids[0].clone();
     service.run(move |db, _| {
-        plain_rs::features::media::audio::playlist_covers::playlist_covers(db, &[selected])
+        plain_rs::features::media::audio::playlist_covers::playlist_cover_candidates(db, &[selected])
     }).await.unwrap();
     let old_detail_steps = steps.swap(0, Ordering::Relaxed);
-    let detail = query(&schema, &format!(r#"{{ audioPlaylist(id:"{}") {{ id name itemCount coverAlbums {{ albumId trackCount candidatePaths }} }} }}"#, ids[0])).await;
+    let detail = query(&schema, &format!(r#"{{ audioPlaylist(id:"{}") {{ id name itemCount coverCandidatePaths }} }}"#, ids[0])).await;
     assert!(detail["errors"].is_null(), "{detail}");
     let new_detail_steps = steps.swap(0, Ordering::Relaxed);
     assert!(new_detail_steps <= old_detail_steps, "detail SQL work increased: {old_detail_steps} -> {new_detail_steps}");
     let list = merged["data"]["audioPlaylists"].as_array().unwrap().iter().find(|row| row["id"] == ids[0]).unwrap();
-    assert_eq!(detail["data"]["audioPlaylist"]["coverAlbums"], list["coverAlbums"]);
+    assert_eq!(detail["data"]["audioPlaylist"]["coverCandidatePaths"], list["coverCandidatePaths"]);
     eprintln!("playlist SQL progress steps: list {old_list_steps} -> {new_list_steps}; detail {old_detail_steps} -> {new_detail_steps}");
 }
 
@@ -1232,8 +1188,8 @@ async fn playlist_cover_fields_preserve_audio_access_checks() {
     let (_dir, schema) = fixture_with("[]", |method, _| panic!("unexpected host call {method}"));
     let playlist = domain::create_playlist(database(&schema), "Denied").unwrap();
     for request in [
-        "{ audioPlaylists { coverAlbums { albumId } } }".to_string(),
-        format!(r#"{{ audioPlaylist(id:"{}") {{ coverAlbums {{ albumId }} }} }}"#, playlist.id),
+        "{ audioPlaylists { coverCandidatePaths } }".to_string(),
+        format!(r#"{{ audioPlaylist(id:"{}") {{ coverCandidatePaths }} }}"#, playlist.id),
     ] {
         let result = query(&schema, &request).await;
         assert!(!result["errors"].is_null(), "{result}");
@@ -1300,7 +1256,6 @@ async fn artists_project_the_authoritative_catalog_without_sdk_metadata_calls() 
                 bucket_id: String::new(),
                 size_bytes: 1,
                 duration_ms: 0,
-                cover_image_id: None,
                 width: 0,
                 height: 0,
                 rotation: 0,
@@ -1318,7 +1273,6 @@ async fn artists_project_the_authoritative_catalog_without_sdk_metadata_calls() 
                 bucket_id: String::new(),
                 size_bytes: 1,
                 duration_ms: 0,
-                cover_image_id: None,
                 width: 0,
                 height: 0,
                 rotation: 0,
@@ -1359,7 +1313,7 @@ async fn artists_are_available_without_capability_sampling() {
 
 #[cfg(feature = "media")]
 #[tokio::test]
-async fn native_album_tags_reach_playlist_covers_without_platform_catalog_calls() {
+async fn native_tracks_provide_cover_candidates_without_platform_catalog_calls() {
     let (directory, schema) =
         fixture_with(GRANTED, |method, _| panic!("unexpected host call {method}"));
     let bytes = std::fs::read(
@@ -1387,21 +1341,17 @@ async fn native_album_tags_reach_playlist_covers_without_platform_catalog_calls(
     let rows = database(&schema).record_media_files(&metadata).unwrap();
     assert_eq!(rows[0].artist, "Track Artist");
     assert_eq!(rows[1].artist, "Guest Artist");
-    assert_eq!(rows[0].album_id, rows[1].album_id);
-    assert!(!rows[0].album_id.is_empty());
     let tracks = rows
         .iter()
         .map(|row| domain::track_by_id(database(&schema), &row.id).unwrap())
         .collect::<Vec<_>>();
     let playlist = domain::create_playlist(database(&schema), "Album").unwrap();
     domain::add_playlist_items(database(&schema), &playlist.id, &tracks).unwrap();
-    let result = query(&schema,&format!(r#"{{ audioPlaylist(id:"{}") {{ coverAlbums {{ albumId trackCount candidatePaths }} }} }}"#,playlist.id)).await;
+    let result = query(&schema,&format!(r#"{{ audioPlaylist(id:"{}") {{ coverCandidatePaths }} }}"#,playlist.id)).await;
     assert!(result["errors"].is_null(), "{result}");
     assert_eq!(
-        result["data"]["audioPlaylist"]["coverAlbums"],
-        json!([{
-            "albumId":rows[0].album_id,"trackCount":2,"candidatePaths":[rows[0].path,rows[1].path],
-        }])
+        result["data"]["audioPlaylist"]["coverCandidatePaths"],
+        json!([rows[0].path,rows[1].path])
     );
 }
 
@@ -1557,7 +1507,6 @@ async fn replace_queue_uses_the_requested_sort_instead_of_target_preferences() {
         bucket_id: String::new(),
         size_bytes: 1,
         duration_ms: 1000,
-        cover_image_id: None,
         width: 0,
         height: 0,
         rotation: 0,

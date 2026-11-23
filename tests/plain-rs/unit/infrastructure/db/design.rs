@@ -16,7 +16,6 @@ fn register(db: &Db) -> String {
         bucket_id: "/".into(),
         size_bytes: 1,
         duration_ms: 1,
-        cover_image_id: None,
         width: 0,
         height: 0,
         rotation: 0,
@@ -115,7 +114,6 @@ fn media_storage_uses_nullable_cover_and_canonical_utc_times() {
         .media_file_by_path(DataType::Audio, "/track.mp3")
         .unwrap()
         .unwrap();
-    assert_eq!(item.cover_image_id, None);
     assert_eq!(item.created_at, "2026-01-01T00:00:00.000Z");
     assert_eq!(item.updated_at, item.created_at);
     db.with_conn(|conn| {

@@ -12,7 +12,6 @@ fn metadata() -> crate::infrastructure::db::MediaFileMetadata {
         bucket_id: "pictures".into(),
         size_bytes: 2048,
         duration_ms: 0,
-        cover_image_id: None,
         width: 800,
         height: 600,
         rotation: 0,

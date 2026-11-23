@@ -62,7 +62,6 @@ pub fn read(
         dimensions: width > 0 && height > 0,
         rotation: rotation.is_some(),
         taken_at: taken_at.is_some(),
-        cover_image_id: false,
     };
     Ok(MediaFileMetadataRead {
         file_identity: plain_libs::utils::file_identity::within_volume_key(&canonical)?,
@@ -81,7 +80,6 @@ pub fn read(
             bucket_id,
             size_bytes,
             duration_ms,
-            cover_image_id: None,
             width,
             height,
             rotation: rotation.unwrap_or_default(),

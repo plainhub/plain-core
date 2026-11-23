@@ -54,7 +54,6 @@ fn owned_queue_rows_keep_their_string_allocations_when_projected() {
     assert_eq!(track.title, "Synthetic title");
     assert_eq!(track.artist, "Synthetic artist");
     assert_eq!(track.duration_ms, 1234);
-    assert!(track.album_id.is_empty());
 }
 
 #[test]
@@ -303,13 +302,12 @@ fn state_survives_reopen() {
 }
 
 #[test]
-fn milliseconds_survive_restart_without_persisting_album_snapshots() {
+fn milliseconds_survive_restart() {
     let dir = plain_libs::temporary::tempdir().unwrap();
     let path = dir.path().join("audio.db");
     let db = crate::infrastructure::db::Db::open(&path).unwrap();
     let pl = create_playlist(&db, "Precise").unwrap();
-    let mut item = audio("/precise.mp3", "Precise", 117_123);
-    item.album_id = "album-42".into();
+    let item = audio("/precise.mp3", "Precise", 117_123);
     fixtures::register_native_audio(&db, &item);
     add_playlist_items(&db, &pl.id, std::slice::from_ref(&item)).unwrap();
     enqueue(&db, std::slice::from_ref(&item), false).unwrap();
@@ -324,7 +322,6 @@ fn milliseconds_survive_restart_without_persisting_album_snapshots() {
         .unwrap()
         .remove(0);
     assert_eq!(saved.duration_ms, 117_123);
-    assert_eq!(saved.album_id, "");
     assert_eq!(
         db.media_file_by_path(crate::features::enums::DataType::Audio, "/precise.mp3")
             .unwrap()

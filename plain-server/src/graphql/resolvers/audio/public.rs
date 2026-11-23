@@ -57,8 +57,6 @@ pub struct Audio {
     pub bucket_id: plain_graphql::ID,
     #[graphql(skip)]
     pub album_art_uri: String,
-    #[graphql(skip)]
-    pub cover_image_id: String,
     #[graphql(name = "createdAt")]
     #[graphql(getter = true)]
     pub created_at: Instant,
@@ -72,16 +70,10 @@ pub struct Audio {
 #[plain_graphql::ComplexObject]
 impl Audio {
     fn album_file_id(&self, ctx: &Context<'_>) -> plain_graphql::Result<String> {
-        let resource = if !self.album_art_uri.is_empty() {
-            plain_rs::features::files::resource_link::Resource::reference(&self.album_art_uri)
-        } else if !self.cover_image_id.is_empty() {
-            plain_rs::features::files::resource_link::Resource {
-                r#type: plain_rs::features::files::resource_link::ResourceType::Media,
-                id: self.cover_image_id.clone(),
-            }
-        } else {
+        if self.album_art_uri.is_empty() {
             return Ok(String::new());
-        };
+        }
+        let resource = plain_rs::features::files::resource_link::Resource::reference(&self.album_art_uri);
         let (scope, token) = crate::graphql::executor::resource_credentials(ctx)?;
         plain_rs::features::files::resource_link::seal(
             &scope,
@@ -107,18 +99,11 @@ pub struct AudioPlaylist {
     pub name: String,
     #[graphql(name = "itemCount")]
     pub item_count: i32,
-    pub cover_albums: Vec<AudioAlbumCover>,
+    pub cover_candidate_paths: Vec<String>,
     #[graphql(name = "createdAt")]
     pub created_at: Instant,
     #[graphql(name = "updatedAt")]
     pub updated_at: Instant,
-}
-
-#[derive(SimpleObject, Clone, Debug)]
-pub struct AudioAlbumCover {
-    pub album_id: plain_graphql::ID,
-    pub track_count: i32,
-    pub candidate_paths: Vec<String>,
 }
 
 #[derive(SimpleObject, Clone, Debug)]
@@ -261,27 +246,24 @@ impl AudioQuery {
         &self,
         ctx: &Context<'_>,
     ) -> plain_graphql::Result<Vec<AudioPlaylist>> {
-        let include_covers = ctx.look_ahead().field("coverAlbums").exists();
+        let include_covers = ctx.look_ahead().field("coverCandidatePaths").exists();
         if include_covers {
             public_gate::require(ctx, prefs(ctx), &[FEATURE])?;
         }
-        let (rows, covers) = audio(ctx)?
+        let (rows, mut covers) = audio(ctx)?
             .run(move |db, _| {
                 let rows = domain::playlists(db)?;
                 let ids = rows.iter()
                     .filter(|(_, count)| include_covers && *count > 0)
                     .map(|(row, _)| row.id.clone())
                     .collect::<Vec<_>>();
-                let covers = plain_rs::features::media::audio::playlist_covers::playlist_covers(db, &ids)?;
-                Ok((rows, covers))
+                let covers = plain_rs::features::media::audio::playlist_covers::playlist_cover_candidates(db, &ids)?;
+                Ok((rows, ids.into_iter().zip(covers).collect::<std::collections::HashMap<_, _>>()))
             })
             .await?;
-        let mut covers = covers.into_iter()
-            .map(|row| (row.id, row.albums))
-            .collect::<std::collections::HashMap<_, _>>();
         rows.into_iter().map(|(row, count)| {
-            let albums = covers.remove(&row.id).unwrap_or_default();
-            playlist(row, count, albums)
+            let candidates = covers.remove(&row.id).unwrap_or_default();
+            playlist(row, count, candidates)
         }).collect()
     }
 
@@ -645,7 +627,6 @@ pub(crate) async fn search_tracks(
             path: crate::graphql::types::facts::text(&row, "path"),
             title: crate::graphql::types::facts::text(&row, "title"),
             artist: crate::graphql::types::facts::text(&row, "artist"),
-            album_id: String::new(),
             duration_ms: crate::graphql::types::facts::integer(&row, "durationMs"),
         }));
         if count < 500 {
@@ -687,7 +668,7 @@ fn playlist_item(row: plain_rs::infrastructure::db::PlaylistItem) -> AudioItem {
 }
 
 async fn read_playlist(ctx: &Context<'_>, id: String) -> plain_graphql::Result<Option<AudioPlaylist>> {
-    let include_covers = ctx.look_ahead().field("coverAlbums").exists();
+    let include_covers = ctx.look_ahead().field("coverCandidatePaths").exists();
     if include_covers {
         public_gate::require(ctx, prefs(ctx), &[FEATURE])?;
     }
@@ -697,8 +678,7 @@ async fn read_playlist(ctx: &Context<'_>, id: String) -> plain_graphql::Result<O
         };
         let count = domain::playlist_item_count(db, &id)?;
         let covers = if include_covers && count > 0 {
-            plain_rs::features::media::audio::playlist_covers::playlist_covers(db, &[id])?
-                .remove(0).albums
+            plain_rs::features::media::audio::playlist_covers::playlist_cover_candidates(db, &[id])?.remove(0)
         } else {
             Vec::new()
         };
@@ -710,17 +690,13 @@ async fn read_playlist(ctx: &Context<'_>, id: String) -> plain_graphql::Result<O
 fn playlist(
     row: Playlist,
     count: usize,
-    albums: Vec<plain_rs::features::media::audio::playlist_covers::AlbumCover>,
+    cover_candidate_paths: Vec<String>,
 ) -> plain_graphql::Result<AudioPlaylist> {
     Ok(AudioPlaylist {
         id: row.id.into(),
         name: row.name,
         item_count: count.try_into()?,
-        cover_albums: albums.into_iter().map(|album| AudioAlbumCover {
-            album_id: album.album_id.into(),
-            track_count: album.track_count,
-            candidate_paths: album.candidate_paths,
-        }).collect(),
+        cover_candidate_paths,
         created_at: crate::graphql::resolvers::common::content_common::instant(&row.created_at)?,
         updated_at: crate::graphql::resolvers::common::content_common::instant(&row.updated_at)?,
     })
@@ -781,7 +757,6 @@ pub(crate) fn audio_from_facts(item: &Value) -> Audio {
         bucket_id: crate::graphql::types::facts::id(item, "bucketId"),
         album_id: crate::graphql::types::facts::text(item, "albumId").into(),
         album_art_uri: crate::graphql::types::facts::text(item, "albumArtUri"),
-        cover_image_id: crate::graphql::types::facts::text(item, "coverImageId"),
         created_at: crate::graphql::types::facts::instant(item, "createdAt"),
         updated_at: crate::graphql::types::facts::instant(item, "updatedAt"),
         is_favorite: crate::graphql::types::facts::flag(item, "isFavorite"),

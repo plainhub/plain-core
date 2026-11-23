@@ -17,14 +17,14 @@ pub(crate) fn init(conn: &Connection) -> plain_libs::rusqlite::Result<()> {
     conn.execute_batch(
         "CREATE TEMP TABLE platform_audio_media (
             file_id TEXT NOT NULL PRIMARY KEY,path TEXT NOT NULL UNIQUE,
-            title TEXT NOT NULL,artist TEXT NOT NULL,duration_ms INTEGER NOT NULL,album_id TEXT NOT NULL
+            title TEXT NOT NULL,artist TEXT NOT NULL,duration_ms INTEGER NOT NULL
         );
         CREATE TEMP TABLE platform_audio_aliases(path TEXT NOT NULL PRIMARY KEY,file_id TEXT NOT NULL);
         CREATE TEMP TABLE platform_audio_catalog (enabled INTEGER NOT NULL);
         CREATE TEMP VIEW audio_media AS
-            SELECT file_id,path,title,artist,duration_ms,album_id FROM platform_audio_media
+            SELECT file_id,path,title,artist,duration_ms FROM platform_audio_media
             UNION ALL
-            SELECT id,path,title,artist,duration_ms,album_id FROM file_catalog
+            SELECT id,path,title,artist,duration_ms FROM file_catalog
             WHERE kind='AUDIO' AND trashed_at IS NULL AND missing=0 AND indexed=1 AND is_available=1 AND NOT EXISTS(SELECT 1 FROM platform_audio_catalog);",
     )
 }
@@ -69,8 +69,8 @@ impl Db {
             if replace { tx.execute("DELETE FROM platform_audio_media", [])?; }
             for row in rows {
                 let Some(id) = row.file_id.as_deref().filter(|id| !id.is_empty()) else { continue; };
-                tx.execute("INSERT INTO platform_audio_media(file_id,path,title,artist,duration_ms,album_id) VALUES(?1,?2,?3,?4,?5,?6) ON CONFLICT(file_id) DO UPDATE SET path=excluded.path,title=excluded.title,artist=excluded.artist,duration_ms=excluded.duration_ms,album_id=excluded.album_id",
-                    params![id,row.track.path,row.track.title,row.track.artist,row.track.duration_ms,row.track.album_id])?;
+                tx.execute("INSERT INTO platform_audio_media(file_id,path,title,artist,duration_ms) VALUES(?1,?2,?3,?4,?5) ON CONFLICT(file_id) DO UPDATE SET path=excluded.path,title=excluded.title,artist=excluded.artist,duration_ms=excluded.duration_ms",
+                    params![id,row.track.path,row.track.title,row.track.artist,row.track.duration_ms])?;
                 for path in &row.aliases { tx.execute("INSERT INTO platform_audio_aliases(path,file_id) VALUES(?1,?2) ON CONFLICT(path) DO UPDATE SET file_id=excluded.file_id",params![path,id])?; }
             }
             tx.commit()

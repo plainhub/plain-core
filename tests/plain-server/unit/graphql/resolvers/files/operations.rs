@@ -94,7 +94,6 @@ fn seed_media(
             bucket_id: "b".to_owned(),
             size_bytes: 10,
             duration_ms: 0,
-            cover_image_id: Some(String::new()),
             width: 0,
             height: 0,
             rotation: 0,

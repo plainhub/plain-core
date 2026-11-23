@@ -31,11 +31,6 @@ fn track(path: &str, facts: plain_libs::media::probe::ProbedMeta) -> AudioTrack 
         } else {
             facts.title
         },
-        album_id: crate::features::media::audio::metadata::album_id(
-            &facts.album,
-            &facts.album_artist,
-            &facts.artist,
-        ),
         artist: crate::features::media::audio::metadata::normalize_artist(&facts.artist),
         duration_ms: facts.duration_ms,
     }
@@ -56,7 +51,6 @@ pub fn from_row(row: MediaFileRow) -> AudioMedia {
             },
             artist: crate::features::media::audio::metadata::normalize_artist(&row.artist),
             duration_ms: row.duration_ms,
-            album_id: row.album_id,
         },
     }
 }
