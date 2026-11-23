@@ -603,11 +603,26 @@ async fn fs_image_previews_keep_aspect_ratio_and_respect_each_size() {
 
 #[tokio::test]
 async fn fs_rotated_image_previews_return_upright_pixels_at_every_size() {
+    for extension in ["jpg", "png", "webp"] {
+        assert_rotated_image_previews(extension, false, 0).await;
+    }
+}
+
+#[tokio::test]
+async fn fs_image_previews_find_jpeg_orientation_beyond_the_initial_header() {
+    assert_rotated_image_previews("jpg", true, 0).await;
+}
+
+#[tokio::test]
+async fn fs_image_previews_find_a_distant_webp_orientation_entry() {
+    assert_rotated_image_previews("webp", false, 300_000).await;
+}
+
+async fn assert_rotated_image_previews(extension: &str, late_app1: bool, exif_padding: u32) {
     use plain_libs::image::{ExtendedColorType, ImageEncoder, Rgb, RgbImage, codecs};
 
-    fn write_rotated(mut encoder: impl ImageEncoder, source: &RgbImage) {
-        let exif = b"II\x2a\0\x08\0\0\0\x01\0\x12\x01\x03\0\x01\0\0\0\x06\0\0\0\0\0\0\0";
-        encoder.set_exif_metadata(exif.to_vec()).unwrap();
+    fn write_rotated(mut encoder: impl ImageEncoder, source: &RgbImage, exif: Vec<u8>) {
+        encoder.set_exif_metadata(exif).unwrap();
         encoder
             .write_image(source.as_raw(), source.width(), source.height(), ExtendedColorType::Rgb8)
             .unwrap();
@@ -615,19 +630,41 @@ async fn fs_rotated_image_previews_return_upright_pixels_at_every_size() {
 
     let (_root, core, state, _key) = test_state();
     let files = plain_libs::temporary::tempdir().unwrap();
+    let mut exif = b"II\x2a\0\x08\0\0\0\x01\0\x12\x01\x03\0\x01\0\0\0\x06\0\0\0\0\0\0\0".to_vec();
+    exif[4..8].copy_from_slice(&(8 + exif_padding).to_le_bytes());
+    exif.splice(8..8, std::iter::repeat_n(0, exif_padding as usize));
     let source = RgbImage::from_fn(480, 320, |x, y| match (x < 240, y < 160) {
         (true, true) => Rgb([255, 0, 0]),
         (false, true) => Rgb([0, 255, 0]),
         (true, false) => Rgb([0, 0, 255]),
         (false, false) => Rgb([255, 255, 255]),
     });
-    for extension in ["jpg", "png", "webp"] {
-        let path = files.path().join(format!("rotated.{extension}"));
+    for prefix in if late_app1 { &[0, 1][..] } else { &[0][..] } {
+        let path = files.path().join(format!("rotated-{prefix}.{extension}"));
         let file = std::fs::File::create(&path).unwrap();
         match extension {
-            "jpg" => write_rotated(codecs::jpeg::JpegEncoder::new(file), &source),
-            "png" => write_rotated(codecs::png::PngEncoder::new(file), &source),
-            _ => write_rotated(codecs::webp::WebPEncoder::new_lossless(file), &source),
+            "jpg" => write_rotated(codecs::jpeg::JpegEncoder::new(file), &source, exif.clone()),
+            "png" => write_rotated(codecs::png::PngEncoder::new(file), &source, exif.clone()),
+            _ => write_rotated(codecs::webp::WebPEncoder::new_lossless(file), &source, exif.clone()),
+        }
+        if late_app1 {
+            let mut jpeg = std::fs::read(&path).unwrap();
+            let app1 = jpeg.windows(2).position(|w| w == [0xff, 0xe1]).unwrap();
+            let length = usize::from(u16::from_be_bytes([jpeg[app1 + 2], jpeg[app1 + 3]]));
+            let exif = jpeg.drain(app1..app1 + 2 + length).collect::<Vec<_>>();
+            let mut segments = Vec::new();
+            for _ in 0..5 {
+                segments.extend_from_slice(&[0xff, 0xef, 0xff, 0xff]);
+                segments.resize(segments.len() + 65533, 0);
+            }
+            segments.extend(exif);
+            let insert_at = if *prefix == 0 {
+                jpeg.windows(2).position(|w| w == [0xff, 0xda]).unwrap()
+            } else {
+                app1
+            };
+            jpeg.splice(insert_at..insert_at, segments);
+            std::fs::write(&path, jpeg).unwrap();
         }
         let id = file_id(&state, path.to_str().unwrap());
         for (size, (width, height)) in [("LG", (320, 480)), ("SM", (256, 384)), ("XS", (128, 192))] {

@@ -1,6 +1,5 @@
 use crate::features::services::images::thumbnails::Request;
 use crate::test_runtime::Core as ContentServer;
-use sha2::Digest;
 use std::sync::Arc;
 
 #[tokio::test]
@@ -873,7 +872,7 @@ async fn thumbnail_sizes_share_256_bytes_and_preserve_large_previews() {
 
 #[cfg(feature = "media")]
 #[tokio::test]
-async fn real_image_extensions_skip_old_thumbnails_and_use_current_cache_keys() {
+async fn png_thumbnail_cache_preserves_alpha_and_uses_requested_size() {
     let (directory, core, _) = server_with_cache();
     let state = core.runtime_state();
     let source = directory.path().join("alpha.PNG");
@@ -881,79 +880,37 @@ async fn real_image_extensions_skip_old_thumbnails_and_use_current_cache_keys() 
         .save(&source)
         .unwrap();
     let source = source.canonicalize().unwrap();
-    let request = Request {
-        width: 256,
-        height: 256,
-        ..request_for(&source)
-    };
-    let source_key = |request: &Request, version: &str| {
-        let metadata = std::fs::metadata(&request.path).unwrap();
-        let input = plain_libs::serde_json::json!([
-            request.path,
-            metadata.len(),
-            format!("{:?}", metadata.modified().unwrap()),
-            request.width,
-            request.height,
-            request.center_crop,
-            "",
-            "",
-            version
-        ])
-        .to_string();
-        plain_libs::utils::hex::bytes_to_hex(&sha2::Sha256::digest(input.as_bytes()))
-    };
-    let old_key = source_key(&request, "thumbnail-v3");
-    assert_ne!(
-        super::source_fingerprint(&request).unwrap().unwrap(),
-        old_key
-    );
-    let old = state
+    let cache = state
         .file_platform
-        .thumbnail_cache(&request.path)
+        .thumbnail_cache(source.to_str().unwrap())
         .unwrap()
-        .join("thumbs")
-        .join(format!("{old_key}.png"));
-    std::fs::create_dir_all(old.parent().unwrap()).unwrap();
-    std::fs::write(&old, b"legacy flattened thumbnail").unwrap();
-    let bytes = state
-        .thumbnails
-        .get(&state, request)
-        .await
-        .unwrap()
-        .unwrap();
-    let generated = old.with_file_name(format!(
-        "{}.png",
-        super::source_fingerprint(&Request {
+        .join("thumbs");
+
+    for (short_edge, size) in [(None, 256), (Some(128), 128)] {
+        let request = Request {
             width: 256,
             height: 256,
             center_crop: false,
-            short_edge: None,
+            short_edge,
             ..request_for(&source)
-        })
-        .unwrap()
-        .unwrap()
-    ));
-    assert_eq!(std::fs::read(&generated).unwrap(), bytes);
-    assert!(bytes.starts_with(b"\x89PNG\r\n\x1a\n"));
-    assert_eq!(
-        plain_libs::image::load_from_memory(&bytes)
+        };
+        let key = super::source_fingerprint(&request).unwrap().unwrap();
+        let bytes = state
+            .thumbnails
+            .get_exact(&state, request.clone())
+            .await
             .unwrap()
-            .into_rgba8()
-            .get_pixel(128, 128)[3],
-        0
-    );
-    let jpeg = directory.path().join("photo.jpg");
-    plain_libs::image::RgbImage::from_pixel(512, 512, plain_libs::image::Rgb([40, 90, 150]))
-        .save(&jpeg)
-        .unwrap();
-    let request = Request {
-        width: 256,
-        height: 256,
-        ..request_for(&jpeg.canonicalize().unwrap())
-    };
+            .unwrap();
+        assert_eq!(std::fs::read(cache.join(format!("{key}.png"))).unwrap(), bytes);
+        let image = plain_libs::image::load_from_memory(&bytes).unwrap().into_rgba8();
+        assert_eq!(image.dimensions(), (size, size));
+        assert_eq!(image.get_pixel(0, 0)[3], 0);
+        let cached = state.thumbnails.get_exact(&state, request).await.unwrap();
+        assert_eq!(cached.as_ref(), Some(&bytes));
+    }
     assert_eq!(
-        super::source_fingerprint(&request).unwrap().unwrap(),
-        source_key(&request, "thumbnail-v4")
+        state.thumbnails.native_decodes.load(std::sync::atomic::Ordering::Relaxed),
+        2
     );
     core.stop_core().await;
 }

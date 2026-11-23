@@ -107,6 +107,27 @@ async fn sdk_images_with_supported_headers_skip_host_metadata_calls() {
     assert_eq!(facts["height"], 2);
     assert!(requests.try_recv().is_err());
 }
+
+#[tokio::test]
+async fn image_info_swaps_axes_for_mirrored_rotations() {
+    use plain_libs::image::{ExtendedColorType, ImageEncoder, codecs::jpeg::JpegEncoder};
+
+    let directory = plain_libs::temporary::tempdir().unwrap();
+    let info = Info::sdk(Arc::new(Host::default()));
+    for orientation in [5, 7] {
+        let path = directory.path().join(format!("{orientation}.jpg"));
+        let mut encoder = JpegEncoder::new(std::fs::File::create(&path).unwrap());
+        let mut exif = b"II\x2a\0\x08\0\0\0\x01\0\x12\x01\x03\0\x01\0\0\0\0\0\0\0\0\0\0\0".to_vec();
+        exif[18] = orientation;
+        encoder.set_exif_metadata(exif).unwrap();
+        encoder.write_image(&[0; 18], 3, 2, ExtendedColorType::Rgb8).unwrap();
+        let facts = info.read(path.to_str().unwrap(), DataType::Image).await.unwrap();
+        assert_eq!(facts["width"], 2, "orientation {orientation}");
+        assert_eq!(facts["height"], 3, "orientation {orientation}");
+        assert_eq!(facts["rotation"], 0);
+    }
+}
+
 #[tokio::test]
 async fn distant_tiff_fields_are_served_by_rust_without_sdk_metadata_fallback() {
     let directory = plain_libs::temporary::tempdir().unwrap();

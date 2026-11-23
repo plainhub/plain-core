@@ -48,8 +48,6 @@ where
     }
 }
 
-// The location of the eXIf chunk is restricted [PNGEXT150 3.7], but this
-// reader is liberal about it.
 fn get_exif_attr_sub<R>(reader: &mut R) -> Result<Vec<u8>, Error>
 where
     R: BufRead,
@@ -73,6 +71,9 @@ where
             let mut data = Vec::new();
             reader.read_exact_len(&mut data, len)?;
             return Ok(data);
+        }
+        if matches!(&ctype, b"IDAT" | b"IEND") {
+            return Err(Error::NotFound("PNG"));
         }
         // Chunk data and CRC.
         reader.discard_exact(

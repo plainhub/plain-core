@@ -147,37 +147,33 @@ fn image_reader(
             None
         }
     };
-    let mut facts = image_facts_with_exif(&bytes, exif.as_deref());
-    if facts["width"].as_i64().unwrap_or(0) <= 0 || facts["height"].as_i64().unwrap_or(0) <= 0 {
+    let metadata_bytes = exif.as_deref().unwrap_or(&bytes);
+    let metadata = plain_libs::utils::image_metadata::read(metadata_bytes);
+    let mut dimensions = plain_libs::utils::image_dimensions::dimensions(&bytes)
+        .or_else(|| exif.as_deref().and_then(plain_libs::utils::image_dimensions::dimensions))
+        .map(|(width, height)| (i64::from(width), i64::from(height)))
+        .unwrap_or((0, 0));
+    if dimensions.0 <= 0 || dimensions.1 <= 0 {
         reader
             .seek(SeekFrom::Start(0))
             .map_err(|error| error.to_string())?;
         if let Some((width, height)) = plain_libs::media::image_io::source_dimensions(reader) {
-            let swapped = matches!(facts["rotation"].as_i64(), Some(90 | 270));
-            facts["width"] = json!(if swapped { height } else { width });
-            facts["height"] = json!(if swapped { width } else { height });
+            dimensions = (i64::from(width), i64::from(height));
         }
     }
-    Ok(facts)
-}
-fn image_facts_with_exif(bytes: &[u8], exif: Option<&[u8]>) -> Value {
-    let metadata_bytes = exif.unwrap_or(bytes);
-    let metadata = plain_libs::utils::image_metadata::read(metadata_bytes);
-    let date = metadata.taken_at();
-    let mut facts = plain_libs::serde_json::to_value(metadata).unwrap_or_else(|_| json!({}));
-    let (mut width, mut height) = plain_libs::utils::image_dimensions::dimensions(bytes)
-        .or_else(|| exif.and_then(plain_libs::utils::image_dimensions::dimensions))
-        .unwrap_or((0, 0));
-    if matches!(facts["rotation"].as_i64(), Some(90 | 270)) {
+    let (mut width, mut height) = dimensions;
+    if matches!(metadata.orientation, Some(5..=8)) {
         std::mem::swap(&mut width, &mut height);
     }
+    let date = metadata.taken_at();
+    let mut facts = plain_libs::serde_json::to_value(metadata).unwrap_or_else(|_| json!({}));
     facts["width"] = json!(width);
     facts["height"] = json!(height);
     facts["takenAt"] = json!(date);
     facts["location"] = plain_libs::utils::image_metadata::gps(metadata_bytes)
         .map(|(latitude, longitude)| json!({"latitude":latitude,"longitude":longitude}))
         .unwrap_or(Value::Null);
-    facts
+    Ok(facts)
 }
 fn image_prefix(reader: impl Read) -> std::io::Result<Vec<u8>> {
     let mut bytes = Vec::new();

@@ -74,9 +74,7 @@ impl std::fmt::Display for SniffError {
 
 impl std::error::Error for SniffError {}
 
-fn be16(b: &[u8], i: usize) -> Option<u16> {
-    Some(u16::from_be_bytes([*b.get(i)?, *b.get(i + 1)?]))
-}
+use std::io::{BufRead, Cursor, Seek, SeekFrom};
 fn le16(b: &[u8], i: usize) -> Option<u16> {
     Some(u16::from_le_bytes([*b.get(i)?, *b.get(i + 1)?]))
 }
@@ -88,7 +86,7 @@ pub fn sniff_header(buf: &[u8]) -> Result<Sniffed, SniffError> {
         return Err(SniffError::Truncated);
     }
     if buf.starts_with(&[0xFF, 0xD8]) {
-        return sniff_jpeg(buf);
+        return sniff_jpeg(&mut Cursor::new(buf), false);
     }
     if buf.starts_with(&[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A]) {
         // IHDR must be the first chunk: length(4) + "IHDR" then BE w/h.
@@ -161,61 +159,69 @@ pub fn sniff_header(buf: &[u8]) -> Result<Sniffed, SniffError> {
     Err(SniffError::Unknown)
 }
 
-/// Walk JPEG marker segments until a SOF frame header yields the dimensions.
-fn sniff_jpeg(buf: &[u8]) -> Result<Sniffed, SniffError> {
-    let sof =
-        |m: u8| -> bool { matches!(m, 0xC0..=0xC3 | 0xC5..=0xC7 | 0xC9..=0xCB | 0xCD..=0xCF) };
-    let mut i = 2usize;
-    while i < buf.len() {
-        if buf[i] != 0xFF {
-            // Tolerate garbage between segments by scanning to the next marker.
-            i += 1;
-            continue;
+pub(super) fn sniff_jpeg(
+    reader: &mut (impl BufRead + Seek),
+    read_orientation: bool,
+) -> Result<Sniffed, SniffError> {
+    use crate::binary::{BigEndian, ReadBytesExt};
+    use crate::image::metadata::Orientation;
+    use crate::utils::range_reader::RangeReader;
+
+    reader.seek(SeekFrom::Start(2)).map_err(|_| SniffError::Truncated)?;
+    let mut source = None;
+    let mut orientation = None;
+    while reader.skip_until(0xff).map_err(|_| SniffError::Truncated)? != 0 {
+        let mut marker = reader.read_u8().map_err(|_| SniffError::Truncated)?;
+        while marker == 0xff {
+            marker = reader.read_u8().map_err(|_| SniffError::Truncated)?;
         }
-        // Skip fill bytes (repeated 0xFF padding before the marker code).
-        let mut m_pos = i + 1;
-        while m_pos < buf.len() && buf[m_pos] == 0xFF {
-            m_pos += 1;
+        match marker {
+            0xda | 0xd9 => break,
+            0xd8 | 0x01 | 0xd0..=0xd7 => continue,
+            _ => {}
         }
-        let Some(&m) = buf.get(m_pos) else {
-            return Err(SniffError::Truncated);
-        };
-        match m {
-            // Standalone markers without a length payload.
-            0xD8 | 0x01 | 0xD0..=0xD7 => {
-                i = m_pos + 1;
-                continue;
+        let length = reader.read_u16::<BigEndian>().map_err(|_| SniffError::Truncated)?
+            .checked_sub(2).ok_or(SniffError::Unknown)?;
+        let start = reader.stream_position().map_err(|_| SniffError::Truncated)?;
+        if matches!(marker, 0xc0..=0xc3 | 0xc5..=0xc7 | 0xc9..=0xcb | 0xcd..=0xcf) {
+            if length < 5 {
+                return Err(SniffError::Truncated);
             }
-            _ if sof(m) => {
-                // Layout after the marker code: len(2) precision(1)
-                // height(2) width(2).
-                let h = u32::from(be16(buf, m_pos + 4).ok_or(SniffError::Truncated)?);
-                let w = u32::from(be16(buf, m_pos + 6).ok_or(SniffError::Truncated)?);
-                if w == 0 || h == 0 {
-                    return Err(SniffError::Unknown);
-                }
-                return Ok(Sniffed {
-                    kind: ImageKind::Jpeg,
-                    width: w,
-                    height: h,
-                    progressive: m == 0xC2,
-                    preserve_alpha: false,
-                    orientation: 1,
-                    work_bytes: 0,
-                });
+            let mut shape = [0; 5];
+            reader.read_exact(&mut shape).map_err(|_| SniffError::Truncated)?;
+            let width = u32::from(u16::from_be_bytes([shape[3], shape[4]]));
+            let height = u32::from(u16::from_be_bytes([shape[1], shape[2]]));
+            if width == 0 || height == 0 {
+                return Err(SniffError::Unknown);
             }
-            _ => {
-                // Length-prefixed segment (APPn, DQT, DHT, ...): the 2-byte
-                // BE length counts itself; skip to the next marker.
-                let len = usize::from(be16(buf, m_pos + 1).ok_or(SniffError::Truncated)?);
-                if len < 2 {
-                    return Err(SniffError::Unknown);
-                }
-                i = m_pos + len + 1;
+            source = Some(Sniffed {
+                kind: ImageKind::Jpeg,
+                width,
+                height,
+                progressive: marker == 0xc2,
+                preserve_alpha: false,
+                orientation: 1,
+                work_bytes: 0,
+            });
+        } else if read_orientation && marker == 0xe1 && length >= 6 {
+            let mut exif = [0; 6];
+            reader.read_exact(&mut exif).map_err(|_| SniffError::Truncated)?;
+            if &exif == b"Exif\0\0" {
+                let mut tiff = RangeReader::new(&mut *reader, start + 6, u64::from(length - 6))
+                    .map_err(|_| SniffError::Truncated)?;
+                orientation = Orientation::from_exif_reader(&mut tiff);
             }
         }
+        if let Some(mut source) = source
+            && (!read_orientation || orientation.is_some())
+        {
+            source.orientation = orientation.map_or(1, Orientation::to_exif);
+            return Ok(source);
+        }
+        reader.seek(SeekFrom::Start(start + u64::from(length)))
+            .map_err(|_| SniffError::Truncated)?;
     }
-    Err(SniffError::Truncated)
+    source.ok_or(SniffError::Truncated)
 }
 
 fn sniff_webp(buf: &[u8]) -> Result<Sniffed, SniffError> {

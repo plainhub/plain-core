@@ -5,7 +5,7 @@ pub use self::cicp::{
 };
 use crate::binary::{BigEndian, LittleEndian, ReadBytesExt};
 use std::{
-    io::{Cursor, Read},
+    io::{Cursor, Read, Seek, SeekFrom},
     num::NonZeroU32,
 };
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
@@ -50,33 +50,24 @@ impl Orientation {
     }
     #[must_use]
     pub fn from_exif_chunk(chunk: &[u8]) -> Option<Self> {
-        Self::from_exif_chunk_inner(chunk).map(|res| res.0)
+        Self::from_exif_reader(&mut Cursor::new(chunk))
     }
 
-    #[must_use]
-    fn from_exif_chunk_inner(chunk: &[u8]) -> Option<(Self, u64, ExifEndian)> {
-        let mut reader = Cursor::new(chunk);
+    pub(crate) fn from_exif_reader(reader: &mut (impl Read + Seek)) -> Option<Self> {
         let mut magic = [0; 4];
         reader.read_exact(&mut magic).ok()?;
         match magic {
-            [0x49, 0x49, 42, 0] => {
-                return Self::locate_orientation_entry::<LittleEndian>(&mut reader)
-                    .map(|(orient, offset)| (orient, offset, ExifEndian::Little));
-            }
-            [0x4d, 0x4d, 0, 42] => {
-                return Self::locate_orientation_entry::<BigEndian>(&mut reader)
-                    .map(|(orient, offset)| (orient, offset, ExifEndian::Big));
-            }
-            _ => {}
+            [0x49, 0x49, 42, 0] => Self::locate_orientation_entry::<LittleEndian>(reader),
+            [0x4d, 0x4d, 0, 42] => Self::locate_orientation_entry::<BigEndian>(reader),
+            _ => None,
         }
-        None
     }
-    fn locate_orientation_entry<B>(reader: &mut Cursor<&[u8]>) -> Option<(Self, u64)>
+    fn locate_orientation_entry<B>(reader: &mut (impl Read + Seek)) -> Option<Self>
     where
         B: crate::binary::ByteOrder,
     {
         let ifd_offset = reader.read_u32::<B>().ok()?;
-        reader.set_position(u64::from(ifd_offset));
+        reader.seek(SeekFrom::Start(u64::from(ifd_offset))).ok()?;
         let entries = reader.read_u16::<B>().ok()?;
         for _ in 0..entries {
             let tag = reader.read_u16::<B>().ok()?;
@@ -85,18 +76,11 @@ impl Orientation {
             let value = reader.read_u16::<B>().ok()?;
             let _padding = reader.read_u16::<B>().ok()?;
             if tag == 0x112 && format == 3 && count == 1 {
-                let offset = reader.position() - 4;
-                let orientation = Self::from_exif(value.min(255) as u8);
-                return orientation.map(|orient| (orient, offset));
+                return Self::from_exif(value.min(255) as u8);
             }
         }
         None
     }
-}
-#[derive(Debug, Copy, Clone)]
-enum ExifEndian {
-    Big,
-    Little,
 }
 #[derive(Clone, Copy)]
 pub enum LoopCount {

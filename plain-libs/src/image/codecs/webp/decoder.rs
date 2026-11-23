@@ -72,8 +72,8 @@ impl<R: BufRead + Seek> ImageDecoder for WebPDecoder<R> {
         if let Some(orientation) = self.orientation {
             return Ok(orientation);
         }
-        let exif = self.inner.exif_prefix(256 * 1024).map_err(ImageError::from_webp_decode)?;
-        let orientation = Orientation::from_exif_chunk(exif.strip_prefix(b"Exif\0\0").unwrap_or(&exif))
+        let orientation = self.inner.exif_reader()?
+            .and_then(|mut exif| Orientation::from_exif_reader(&mut exif))
             .unwrap_or(Orientation::NoTransforms);
         self.orientation = Some(orientation);
         Ok(orientation)

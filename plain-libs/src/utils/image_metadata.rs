@@ -160,6 +160,7 @@ fn tiff_payload(bytes: &[u8]) -> Option<&[u8]> {
     } else {
         return None;
     };
+    let exif_tag = if png { b"eXIf" } else { b"EXIF" };
     loop {
         let header = bytes.get(offset..)?.get(..8)?;
         let (tag, length) = if png {
@@ -174,9 +175,11 @@ fn tiff_payload(bytes: &[u8]) -> Option<&[u8]> {
             )
         };
         let start = offset.checked_add(8)?;
-        let data = bytes.get(start..)?.get(..length)?;
-        if tag == b"eXIf" || tag == b"EXIF" {
-            return Some(data.strip_prefix(b"Exif\0\0").unwrap_or(data));
+        if tag == exif_tag {
+            return bytes.get(start..)?.get(..length);
+        }
+        if png && matches!(tag, b"IDAT" | b"IEND") {
+            return None;
         }
         offset = start
             .checked_add(length)?

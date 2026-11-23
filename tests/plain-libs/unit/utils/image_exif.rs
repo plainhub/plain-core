@@ -131,17 +131,11 @@ fn cyclic_and_oversized_tiff_fields_are_rejected_without_reading_the_file_body()
 }
 
 #[test]
-fn png_metadata_after_large_pixel_chunks_is_still_found() {
-    let mut tiff = vec![0; 32];
-    tiff[..2].copy_from_slice(b"II");
-    u16_at(&mut tiff, 2, 42, true);
-    u32_at(&mut tiff, 4, 8, true);
-    u16_at(&mut tiff, 8, 1, true);
-    entry(&mut tiff, 10, 0x0112, 3, 1, 6, true);
+fn png_exif_readers_stop_at_image_data() {
     let mut png = b"\x89PNG\r\n\x1a\n".to_vec();
     for (tag, body) in [
         (b"IDAT", vec![0; 256 * 1024]),
-        (b"eXIf", tiff),
+        (b"eXIf", orientation_tiff()),
         (b"IEND", Vec::new()),
     ] {
         png.extend_from_slice(&(body.len() as u32).to_be_bytes());
@@ -149,8 +143,13 @@ fn png_metadata_after_large_pixel_chunks_is_still_found() {
         png.extend_from_slice(&body);
         png.extend_from_slice(&[0; 4]);
     }
-    let tiff = read(&mut Cursor::new(png)).unwrap().unwrap();
-    assert_eq!(crate::utils::image_metadata::read(&tiff).rotation, 90);
+    assert!(crate::utils::image_metadata::orientation(&png).is_none());
+    let mut reader = Counted {
+        input: Cursor::new(png),
+        read: 0,
+    };
+    assert!(read(&mut reader).unwrap().is_none());
+    assert!(reader.read < 16 * 1024, "read {} bytes", reader.read);
 }
 
 fn orientation_tiff() -> Vec<u8> {

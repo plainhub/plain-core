@@ -107,10 +107,19 @@ pub fn read_original_thumbnail(
     if bytes.len() as u64 > PASSTHROUGH_MAX_BYTES {
         return Ok(None);
     }
-    let Ok(sniffed) = sniff::sniff_header(&bytes) else {
+    let jpeg = bytes.starts_with(b"\xff\xd8");
+    let header = if jpeg {
+        sniff::sniff_jpeg(&mut std::io::Cursor::new(&bytes), true)
+    } else {
+        sniff::sniff_header(&bytes)
+    };
+    let Ok(sniffed) = header else {
         return Ok(None);
     };
-    if !sniffed.kind.can_passthrough() || exif::orientation(&bytes).is_some_and(|value| value != 1) {
+    if !sniffed.kind.can_passthrough()
+        || sniffed.orientation != 1
+        || (!jpeg && exif::orientation(&bytes).is_some_and(|value| value != 1))
+    {
         return Ok(None);
     }
     let (w, h) = (sniffed.width, sniffed.height);
@@ -135,11 +144,7 @@ async fn process_image<T: Send + 'static>(
     head: Vec<u8>,
     finish: impl FnOnce(Bitmap) -> Result<T> + Send + 'static,
 ) -> Result<T> {
-    let orientation = Orientation(if s.kind == ImageKind::Jpeg {
-        exif::orientation(&head).unwrap_or(1)
-    } else {
-        s.orientation
-    });
+    let orientation = Orientation(s.orientation);
     let (rw, rh) = stored_target_size(spec, s, orientation);
 
     // Decompression-bomb guard for full decodes; scaled JPEG decodes only
@@ -365,14 +370,18 @@ async fn inspect_image(path: &str) -> Result<(Vec<u8>, Option<Sniffed>)> {
             return Ok((head, Some(source)));
         }
         head.reserve(HEAD_READ - length);
-        if file
+        if (&mut file)
             .take((HEAD_READ - length) as u64)
             .read_to_end(&mut head)
             .is_err()
         {
             return Ok((Vec::new(), None));
         }
-        let facts = sniff::sniff_header(&head).ok();
+        let facts = if head.starts_with(b"\xff\xd8") {
+            sniff::sniff_jpeg(&mut std::io::BufReader::new(file), true).ok()
+        } else {
+            sniff::sniff_header(&head).ok()
+        };
         Ok((head, facts))
     })
     .await?
