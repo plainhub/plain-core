@@ -82,12 +82,16 @@ impl LegacyStorage {
         self.database_directory.join("plain.db")
     }
 
-    fn preferences(&self) -> PathBuf {
+    pub(crate) fn preferences(&self) -> PathBuf {
         self.preferences_directory
             .join("datastore/settings.preferences_pb")
     }
 
-    pub fn present(&self, target_db: &Path) -> Result<bool> {
+    pub(crate) fn backup_preferences(&self) -> PathBuf {
+        self.preferences().with_extension("preferences_pb.bak")
+    }
+
+    fn present(&self, target_db: &Path) -> Result<bool> {
         let source_db = self.database();
         ensure!(
             source_db != target_db,
@@ -99,34 +103,40 @@ impl LegacyStorage {
                 "Legacy database overlaps the current database"
             );
         }
-        Ok(source_db.try_exists()? || self.preferences().try_exists()?)
+        Ok(source_db.try_exists()? || self.backup_preferences().try_exists()?)
     }
 
-    pub fn prepare_identity(&self, prefs: &Prefs) -> Result<()> {
-        if prefs.get::<String>(pref_keys::CLIENT_ID)?.is_some() {
-            return Ok(());
+    pub fn prepare_identity(&self, prefs: &Prefs) -> Result<bool> {
+        let path = self.preferences();
+        if !path.try_exists()? {
+            return Ok(false);
         }
-        let values = preferences::read(&self.preferences())?;
-        let Some(old_id) = values.client_id.as_deref() else {
-            return Ok(());
-        };
-        let id = short_id::convert(old_id)?;
-        let signing_key = values
-            .signature_key_pair
-            .as_deref()
-            .map(convert_keypair)
-            .transpose()?;
-        prefs.update(|values| {
-            values.insert(pref_keys::CLIENT_ID.to_owned(), Value::String(id));
-            if let Some(signing_key) = signing_key {
-                values.insert(
-                    pref_keys::SIGNATURE_KEY_PAIR.to_owned(),
-                    Value::String(signing_key),
-                );
-            }
-            Ok(())
-        })?;
-        Ok(())
+        let backup = self.backup_preferences();
+        ensure!(
+            !backup.try_exists()?,
+            "Legacy settings backup already exists"
+        );
+        let values = preferences::read(&path)?;
+        if let Some(old_id) = values.client_id.as_deref() {
+            let id = short_id::convert(old_id)?;
+            let signing_key = values
+                .signature_key_pair
+                .as_deref()
+                .map(convert_keypair)
+                .transpose()?;
+            prefs.update(|values| {
+                values.insert(pref_keys::CLIENT_ID.to_owned(), Value::String(id));
+                if let Some(signing_key) = signing_key {
+                    values.insert(
+                        pref_keys::SIGNATURE_KEY_PAIR.to_owned(),
+                        Value::String(signing_key),
+                    );
+                }
+                Ok(())
+            })?;
+        }
+        std::fs::rename(&path, &backup).context("Failed to back up legacy settings")?;
+        Ok(true)
     }
 
     pub fn status(&self, db: &Db, target: &Path) -> Result<Status> {
@@ -137,29 +147,6 @@ impl LegacyStorage {
             Status::Pending
         } else {
             Status::Unavailable
-        })
-    }
-
-    pub fn skip(&self, db: &Db, target: &Path) -> Result<Status> {
-        ensure!(
-            self.present(&target.join("plain.db"))?,
-            "Legacy data is unavailable"
-        );
-        db.with_conn(|connection| {
-            let tx = connection.transaction()?;
-            ensure!(
-                Receipt::read(&tx)?.is_none_or(|receipt| receipt.status == Status::Skipped),
-                "Legacy import has already started"
-            );
-            let receipt = Receipt {
-                status: Status::Skipped,
-                files: Vec::new(),
-                pomodoro_settings: None,
-            };
-            receipt.write(&tx)?;
-            complete_onboarding(&tx)?;
-            tx.commit()?;
-            Ok(receipt.status)
         })
     }
 
@@ -200,7 +187,7 @@ impl LegacyStorage {
             self.present(&target.join("plain.db"))?,
             "Legacy data is unavailable"
         );
-        let mut settings = preferences::read(&self.preferences())?;
+        let mut settings = preferences::read(&self.backup_preferences())?;
         let self_id = prefs
             .get::<String>(pref_keys::CLIENT_ID)?
             .unwrap_or_default();
@@ -264,7 +251,7 @@ impl LegacyStorage {
             if self.database().try_exists()? {
                 room::clear(&self.database())?;
             }
-            preferences::clear(&self.preferences())?;
+            preferences::clear(&self.backup_preferences())?;
             receipt.files.clear();
             receipt.status = Status::Cleared;
             receipt.write(conn)?;

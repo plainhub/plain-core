@@ -63,6 +63,10 @@ impl FilePlatform {
             configured_key.with_extension("tmp"),
             configured_key,
         ];
+        #[cfg(target_os = "android")]
+        if let Some(legacy) = &host.startup().legacy_storage {
+            protected_files.extend([legacy.preferences(), legacy.backup_preferences()]);
+        }
         for suffix in ["-wal", "-shm", "-journal"] {
             let mut path = database.clone().into_os_string();
             path.push(suffix);

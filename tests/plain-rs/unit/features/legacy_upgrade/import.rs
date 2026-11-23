@@ -176,7 +176,47 @@ fn fixture(root: &Path) -> (LegacyStorage, PathBuf, String) {
 }
 
 #[test]
-fn skip_then_import_and_delete_only_the_imported_data() {
+fn startup_migrates_existing_identity_and_renames_legacy_settings() {
+    let temp = plain_libs::temporary::tempdir().unwrap();
+    let (storage, current, _) = fixture(temp.path());
+    let prefs_path = current.join("prefs.json");
+    let prefs = Prefs::load(&prefs_path).unwrap();
+    crate::features::prefs::security::bootstrap(&prefs).unwrap();
+    let original = std::fs::read(storage.preferences()).unwrap();
+
+    assert!(storage.prepare_identity(&prefs).unwrap());
+
+    assert_eq!(
+        Prefs::load(&prefs_path)
+            .unwrap()
+            .get::<String>(pref_keys::CLIENT_ID)
+            .unwrap()
+            .as_deref(),
+        Some(LOCAL)
+    );
+    assert!(!storage.preferences().exists());
+    assert_eq!(
+        std::fs::read(storage.backup_preferences()).unwrap(),
+        original
+    );
+    assert!(!storage.prepare_identity(&prefs).unwrap());
+}
+
+#[test]
+fn startup_leaves_invalid_settings_available_for_retry() {
+    let temp = plain_libs::temporary::tempdir().unwrap();
+    let (storage, _, _) = fixture(temp.path());
+    let prefs = Prefs::in_memory();
+    std::fs::write(storage.preferences(), [0xff]).unwrap();
+
+    assert!(storage.prepare_identity(&prefs).is_err());
+    assert!(storage.preferences().is_file());
+    assert!(!storage.backup_preferences().exists());
+    assert!(prefs.get::<String>(pref_keys::CLIENT_ID).unwrap().is_none());
+}
+
+#[test]
+fn deferred_import_reads_backup_and_deletes_only_the_imported_data() {
     let temp = plain_libs::temporary::tempdir().unwrap();
     let (storage, current, old_asset) = fixture(temp.path());
     let db = Db::open(&current.join("plain.db")).unwrap();
@@ -191,8 +231,8 @@ fn skip_then_import_and_delete_only_the_imported_data() {
     );
     assert_eq!(storage.status(&db, &current).unwrap(), Status::Pending);
     assert!(storage.clear(&db, &current).is_err());
-    assert_eq!(storage.skip(&db, &current).unwrap(), Status::Skipped);
-    assert_eq!(storage.status(&db, &current).unwrap(), Status::Skipped);
+    assert!(!storage.prepare_identity(&prefs).unwrap());
+    assert!(db.with_conn(|conn| Receipt::read(conn)).unwrap().is_none());
     assert!(
         db.get_chat_by_id(&short_id::convert("message").unwrap())
             .is_none()
@@ -274,13 +314,13 @@ fn skip_then_import_and_delete_only_the_imported_data() {
         0
     );
     assert!(
-        preferences::read(&storage.preferences())
+        preferences::read(&storage.backup_preferences())
             .unwrap()
             .client_id
             .is_none()
     );
     assert!(
-        std::fs::read(&storage.preferences())
+        std::fs::read(storage.backup_preferences())
             .unwrap()
             .windows(6)
             .any(|bytes| bytes == b"locale")
@@ -336,7 +376,7 @@ fn the_global_chat_draft_stays_in_the_old_preferences() {
     );
 
     storage.clear(&db, &current).unwrap();
-    let old_settings = std::fs::read_to_string(storage.preferences()).unwrap();
+    let old_settings = std::fs::read_to_string(storage.backup_preferences()).unwrap();
     assert!(old_settings.contains("old global chat draft"));
     assert!(!old_settings.contains("old note draft"));
 }
@@ -387,11 +427,11 @@ fn an_install_without_legacy_storage_has_no_upgrade() {
         files_directory: legacy,
     };
     assert_eq!(storage.status(&db, &target).unwrap(), Status::Unavailable);
-    assert!(storage.skip(&db, &target).is_err());
+    assert!(!storage.prepare_identity(&Prefs::in_memory()).unwrap());
 }
 
 #[test]
-fn a_feed_added_after_skipping_keeps_its_entries_and_gains_legacy_tags() {
+fn a_feed_added_before_import_keeps_its_entries_and_gains_legacy_tags() {
     let temp = plain_libs::temporary::tempdir().unwrap();
     let (storage, current, _) = fixture(temp.path());
     let old = Connection::open(storage.database()).unwrap();
@@ -416,7 +456,6 @@ fn a_feed_added_after_skipping_keeps_its_entries_and_gains_legacy_tags() {
     let db = Db::open(&current.join("plain.db")).unwrap();
     let prefs = Prefs::in_memory();
     storage.prepare_identity(&prefs).unwrap();
-    storage.skip(&db, &current).unwrap();
     db.with_conn(|conn| {
         conn.execute("INSERT INTO feeds(id,name,url,fetch_full_content,created_at,updated_at) VALUES ('00000000-0000-7000-8000-000000000101','Current title',?1,0,?2,?2)", params![url, TIME]).unwrap();
         conn.execute("INSERT INTO feed_entries VALUES ('00000000-0000-7000-8000-000000000102','Current entry','','','','','','00000000-0000-7000-8000-000000000101','guid',?1,1,?1,?1)", [TIME]).unwrap();
