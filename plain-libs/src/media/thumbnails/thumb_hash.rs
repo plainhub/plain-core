@@ -1,6 +1,6 @@
 use super::scale::Bitmap;
 
-const SAMPLE_EDGE: u32 = 32;
+pub(super) const SAMPLE_EDGE: u32 = 32;
 
 pub(super) fn from_bitmap(bitmap: &Bitmap) -> Vec<u8> {
     let (pixels, width, height) = bitmap.raw();

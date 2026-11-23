@@ -1,6 +1,7 @@
 use super::{CoreRuntime, Request, Thumbnails};
 use futures_util::{StreamExt, stream::FuturesUnordered};
 use std::{
+    cmp::Reverse,
     collections::{BTreeMap, HashMap},
     path::PathBuf,
     sync::{Arc, Mutex},
@@ -14,17 +15,39 @@ pub(crate) struct Generation {
     pub(super) request: Request,
     pub(super) key: String,
     pub(super) cached: PathBuf,
-    pub(super) hash: Option<Arc<std::sync::OnceLock<Vec<u8>>>>,
 }
+
+pub(super) enum Job {
+    Thumbnail(Generation),
+    #[cfg(feature = "runtime-media")]
+    ThumbHash {
+        path: String,
+        video: bool,
+        size: u64,
+    },
+}
+
+impl Job {
+    fn key(&self) -> &str {
+        match self {
+            Self::Thumbnail(request) => &request.key,
+            #[cfg(feature = "runtime-media")]
+            Self::ThumbHash { path, .. } => path,
+        }
+    }
+}
+
+type Order = (u64, Reverse<u64>);
 
 struct Entry {
     reply: watch::Sender<Reply>,
-    queued_order: Option<u64>,
+    queued_order: Option<Order>,
 }
 
 #[derive(Default)]
 struct Pending {
-    jobs: BTreeMap<u64, Generation>,
+    jobs: BTreeMap<Order, Job>,
+    sequence: u64,
     replies: HashMap<String, Entry>,
 }
 
@@ -59,32 +82,39 @@ impl Drop for Waiting<'_> {
 }
 
 impl Queue {
-    pub(super) async fn submit(&self, job: Generation, access_order: u64) -> Output {
-        let key = job.key.clone();
+    pub(super) async fn submit(&self, job: Job, access_order: u64) -> Output {
+        let key = job.key().to_owned();
         let receiver = {
             let mut pending = self.pending.lock().unwrap();
-            let Pending { jobs, replies } = &mut *pending;
+            let Pending {
+                jobs,
+                replies,
+                sequence,
+            } = &mut *pending;
             if let Some(entry) = replies.get_mut(&key) {
                 if let Some(previous) = entry
                     .queued_order
-                    .filter(|previous| *previous < access_order)
+                    .filter(|previous| previous.0 < access_order)
                 {
                     let previous_job = jobs.remove(&previous).unwrap();
-                    jobs.insert(access_order, previous_job);
-                    entry.queued_order = Some(access_order);
+                    let order = (access_order, previous.1);
+                    jobs.insert(order, previous_job);
+                    entry.queued_order = Some(order);
                 }
                 drop(job);
                 entry.reply.subscribe()
             } else {
                 let (sender, receiver) = watch::channel(None);
+                let order = (access_order, Reverse(*sequence));
+                *sequence += 1;
                 replies.insert(
                     key.clone(),
                     Entry {
                         reply: sender,
-                        queued_order: Some(access_order),
+                        queued_order: Some(order),
                     },
                 );
-                jobs.insert(access_order, job);
+                jobs.insert(order, job);
                 receiver
             }
         };
@@ -115,10 +145,10 @@ impl Queue {
             if running.len() < workers {
                 let mut pending = state.thumbnails.queue.pending.lock().unwrap();
                 if let Some((_, job)) = pending.jobs.pop_last() {
-                    let entry = pending.replies.get_mut(&job.key).unwrap();
+                    let entry = pending.replies.get_mut(job.key()).unwrap();
                     entry.queued_order = None;
                     if entry.reply.receiver_count() == 0 {
-                        pending.replies.remove(&job.key);
+                        pending.replies.remove(job.key());
                     } else {
                         running.push(Self::complete(&state, job));
                     }
@@ -137,8 +167,17 @@ impl Queue {
         pending.replies.clear();
     }
 
-    async fn complete(state: &CoreRuntime, job: Generation) {
-        let result = Thumbnails::generate(state, &job).await;
+    async fn complete(state: &CoreRuntime, job: Job) {
+        let result = match &job {
+            Job::Thumbnail(request) => Thumbnails::generate(state, request).await,
+            #[cfg(feature = "runtime-media")]
+            Job::ThumbHash { path, video, size } => {
+                plain_libs::media::thumbnails::render_thumb_hash(path, *video, *size)
+                    .await
+                    .map(|hash| hash.map(bytes::Bytes::from))
+                    .map_err(|error| error.to_string())
+            }
+        };
         let reply = state
             .thumbnails
             .queue
@@ -146,7 +185,7 @@ impl Queue {
             .lock()
             .unwrap()
             .replies
-            .remove(&job.key)
+            .remove(job.key())
             .unwrap();
         let _ = reply.reply.send(Some(Arc::new(result)));
     }

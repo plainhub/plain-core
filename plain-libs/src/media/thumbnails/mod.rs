@@ -168,15 +168,15 @@ fn image_dimensions(spec: &ThumbSpec, head: &[u8], s: Sniffed) -> (u8, u32, u32,
     (orientation, uw, uh, tw, th)
 }
 
-async fn generate_image(
+async fn process_image<T: Send + 'static>(
     spec: &ThumbSpec,
     s: Sniffed,
     orientation: u8,
     tw: u32,
     th: u32,
     head: Vec<u8>,
-    with_hash: bool,
-) -> Result<Rendered> {
+    finish: impl FnOnce(Bitmap) -> Result<T> + Send + 'static,
+) -> Result<T> {
     let swaps = Orientation(orientation).swaps_axes();
     // The stored bitmap must be resized to the swapped target so the
     // post-resize rotation lands exactly on (tw, th).
@@ -213,14 +213,13 @@ async fn generate_image(
     });
 
     let path = spec.path.clone();
-    let quality = spec.quality;
     admission::global()
         .run(est, move || {
             let preview = preview.as_ref().map(|(bytes, _)| bytes.as_slice());
             let bm = decode_to_target(&path, &head, s, rw, rh, preview)?;
             let bm = scale::resize_to(bm, rw, rh);
             let bm = bm.apply_orientation(Orientation(orientation));
-            encode_result(bm, quality, s.preserve_alpha, with_hash)
+            finish(bm)
         })
         .await?
 }
@@ -304,7 +303,10 @@ fn estimated_decoded_bytes(s: Sniffed, rw: u32, rh: u32) -> u64 {
 // Non-image dispatch: cover art, then pure-Rust video frame extraction
 // ---------------------------------------------------------------------------
 
-async fn generate_non_image(spec: &ThumbSpec, with_hash: bool) -> Result<Rendered> {
+async fn process_non_image<T: Send + 'static>(
+    spec: &ThumbSpec,
+    finish: impl FnOnce(Bitmap) -> Result<T> + Send + 'static,
+) -> Result<T> {
     let path = spec.path.clone();
 
     {
@@ -324,7 +326,7 @@ async fn generate_non_image(spec: &ThumbSpec, with_hash: bool) -> Result<Rendere
             return admission::global()
                 .run(est, move || {
                     let bitmap = resize_bitmap(decode::image_from_bytes(&cover.bytes)?, &request);
-                    encode_result(bitmap, request.quality, false, with_hash)
+                    finish(bitmap)
                 })
                 .await?;
         }
@@ -336,12 +338,11 @@ async fn generate_non_image(spec: &ThumbSpec, with_hash: bool) -> Result<Rendere
             .estimated_bytes()
             .saturating_mul(2)
             .saturating_add(u64::from(spec.w) * u64::from(spec.h) * 4);
-        let (width, height, center_crop, quality) =
-            (spec.w, spec.h, spec.center_crop, spec.quality);
+        let (width, height, center_crop) = (spec.w, spec.h, spec.center_crop);
         return admission::global()
             .run(est, move || {
                 let bitmap = video::thumbnail_bitmap(plan, width, height, center_crop)?;
-                encode_result(bitmap, quality, false, with_hash)
+                finish(bitmap)
             })
             .await?;
     }
@@ -358,15 +359,12 @@ fn resize_bitmap(bm: Bitmap, spec: &ThumbSpec) -> Bitmap {
     }
 }
 
-struct Rendered {
-    bytes: Vec<u8>,
-    thumb_hash: Option<Vec<u8>>,
-}
-
-fn encode_result(bm: Bitmap, quality: u8, png: bool, with_hash: bool) -> Result<Rendered> {
-    let thumb_hash = with_hash.then(|| thumb_hash::from_bitmap(&bm));
-    let bytes = if png { encode::encode_png(bm)? } else { encode::encode_jpeg(bm, quality)? };
-    Ok(Rendered { bytes, thumb_hash })
+fn encode_bitmap(bitmap: Bitmap, quality: u8, png: bool) -> Result<Vec<u8>> {
+    if png {
+        encode::encode_png(bitmap)
+    } else {
+        encode::encode_jpeg(bitmap, quality)
+    }
 }
 
 fn is_video_ext(path: &str) -> bool {
@@ -427,19 +425,20 @@ pub async fn generate_still(
     height: u32,
     short_edge: Option<u32>,
 ) -> Result<Option<Bytes>> {
-    Ok(still_result(path, width, height, short_edge, false)
-        .await?
-        .map(|output| Bytes::from(output.bytes)))
+    let size = tokio::fs::metadata(path).await?.len();
+    process_still(path, width, height, short_edge, size, |bitmap, alpha| {
+        Ok(Bytes::from(encode_bitmap(bitmap, 85, alpha)?))
+    }).await
 }
 
-async fn still_result(
+async fn process_still<T: Send + 'static>(
     path: &str,
     width: u32,
     height: u32,
     short_edge: Option<u32>,
-    with_hash: bool,
-) -> Result<Option<Rendered>> {
-    let size = tokio::fs::metadata(path).await?.len();
+    size: u64,
+    finish: impl FnOnce(Bitmap, bool) -> Result<T> + Send + 'static,
+) -> Result<Option<T>> {
     if size == 0 {
         return Ok(None);
     }
@@ -448,36 +447,23 @@ async fn still_result(
     let mut spec = ThumbSpec::sanitize(path, width.try_into()?, height.try_into()?, 85, size.try_into()?);
     spec.short_edge = short_edge;
     let (orientation, _, _, tw, th) = image_dimensions(&spec, &head, source);
-    Ok(Some(generate_image(&spec, source, orientation, tw, th, head, with_hash).await?))
+    Ok(Some(process_image(&spec, source, orientation, tw, th, head, move |bitmap| {
+        finish(bitmap, source.preserve_alpha)
+    }).await?))
 }
 
-pub async fn render_with_thumb_hash(
-    path: &str,
-    width: u32,
-    height: u32,
-    video: bool,
-    center_crop: bool,
-    short_edge: Option<u32>,
-) -> Result<Option<(Bytes, Vec<u8>)>> {
-    let rendered = if video {
-        let mut spec = ThumbSpec::sanitize(path, width.try_into()?, height.try_into()?, 85, 0);
-        spec.center_crop = center_crop;
-        Some(generate_non_image(&spec, true).await?)
-    } else {
-        still_result(path, width, height, short_edge, true).await?
-    };
-    Ok(rendered.map(|output| (Bytes::from(output.bytes), output.thumb_hash.unwrap())))
-}
-
-pub async fn thumb_hash_from_encoded(bytes: Bytes) -> Result<Vec<u8>> {
-    tokio::task::spawn_blocking(move || {
-        let source = sniff::sniff_header(&bytes)?;
-        if source.width > 1024 || source.height > 1024 {
-            bail!("encoded thumbnail exceeds size limit");
-        }
-        Ok(thumb_hash::from_bitmap(&decode::image_from_bytes(&bytes)?))
-    })
-    .await?
+pub async fn render_thumb_hash(path: &str, video: bool, size: u64) -> Result<Option<Vec<u8>>> {
+    let edge = thumb_hash::SAMPLE_EDGE;
+    if video {
+        let mut spec = ThumbSpec::sanitize(path, edge as i32, edge as i32, 85, size.try_into()?);
+        spec.center_crop = true;
+        return Ok(Some(process_non_image(&spec, |bitmap| {
+            Ok(thumb_hash::from_bitmap(&bitmap))
+        }).await?));
+    }
+    process_still(path, edge, edge, None, size, |bitmap, _| {
+        Ok(thumb_hash::from_bitmap(&bitmap))
+    }).await
 }
 
 pub async fn render(
@@ -491,17 +477,21 @@ pub async fn render(
     let mut spec = ThumbSpec::sanitize(path, width.try_into()?, height.try_into()?, 85, size.try_into()?);
     spec.short_edge = short_edge;
     let (head, image) = inspect_image(path).await?;
-    let rendered = if let Some(source) = image {
+    let quality = spec.quality;
+    let bytes = if let Some(source) = image {
         let (orientation, _, _, tw, th) = image_dimensions(&spec, &head, source);
-        generate_image(&spec, source, orientation, tw, th, head, false).await?
+        process_image(&spec, source, orientation, tw, th, head, move |bitmap| {
+            encode_bitmap(bitmap, quality, source.preserve_alpha)
+        })
+        .await?
     } else {
         if center_crop && (spec.w == 0 || spec.h == 0) {
             bail!("positive crop dimensions required");
         }
         spec.center_crop = center_crop;
-        generate_non_image(&spec, false).await?
+        process_non_image(&spec, move |bitmap| encode::encode_jpeg(bitmap, quality)).await?
     };
-    Ok(Bytes::from(rendered.bytes))
+    Ok(Bytes::from(bytes))
 }
 
 pub async fn png_preview(path: &str) -> Result<Vec<u8>> {

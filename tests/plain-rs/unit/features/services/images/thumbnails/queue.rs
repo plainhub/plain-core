@@ -1,8 +1,8 @@
 use super::*;
 use futures_util::poll;
 
-fn job(key: impl Into<String>) -> Generation {
-    Generation {
+fn job(key: impl Into<String>) -> Job {
+    Job::Thumbnail(Generation {
         request: Request {
             path: "/photo.jpg".into(),
             width: 256,
@@ -15,8 +15,7 @@ fn job(key: impl Into<String>) -> Generation {
         },
         key: key.into(),
         cached: PathBuf::new(),
-        hash: None,
-    }
+    })
 }
 
 #[tokio::test]
@@ -36,7 +35,7 @@ async fn newest_requests_run_first_and_reaccess_promotes_one_shared_job() {
             .jobs
             .values()
             .rev()
-            .map(|job| job.key.as_str())
+            .map(|job| job.key())
             .collect::<Vec<_>>(),
         ["third", "second", "first"]
     );
@@ -50,7 +49,7 @@ async fn newest_requests_run_first_and_reaccess_promotes_one_shared_job() {
                 .jobs
                 .values()
                 .rev()
-                .map(|job| job.key.as_str())
+                .map(|job| job.key())
                 .collect::<Vec<_>>(),
             ["first", "third", "second"]
         );
@@ -80,7 +79,10 @@ async fn newest_access_keeps_all_2000_older_pending_requests() {
     assert!(poll!(&mut newest).is_pending());
     let pending = queue.pending.lock().unwrap();
     assert_eq!(pending.jobs.len(), 2001);
-    assert_eq!(pending.jobs.last_key_value().unwrap().1.key, "current-page");
+    assert_eq!(
+        pending.jobs.last_key_value().unwrap().1.key(),
+        "current-page"
+    );
     assert_eq!(pending.replies.len(), 2001);
     for index in 0..2000 {
         assert!(pending.replies.contains_key(&format!("old-{index}")));
@@ -103,7 +105,7 @@ async fn delayed_old_file_lookups_cannot_overtake_a_new_page_or_demote_a_reacces
             .last_key_value()
             .unwrap()
             .1
-            .key,
+            .key(),
         "new-page"
     );
     let mut reaccess = Box::pin(queue.submit(job("old-page"), 4));
@@ -112,8 +114,8 @@ async fn delayed_old_file_lookups_cannot_overtake_a_new_page_or_demote_a_reacces
     assert!(poll!(&mut older_duplicate).is_pending());
     let pending = queue.pending.lock().unwrap();
     assert_eq!(pending.jobs.len(), 2);
-    assert_eq!(pending.jobs.last_key_value().unwrap().1.key, "old-page");
-    assert_eq!(*pending.jobs.last_key_value().unwrap().0, 4);
+    assert_eq!(pending.jobs.last_key_value().unwrap().1.key(), "old-page");
+    assert_eq!(pending.jobs.last_key_value().unwrap().0.0, 4);
 }
 
 #[tokio::test]
@@ -180,5 +182,45 @@ async fn dropping_an_old_reply_does_not_remove_a_new_job_for_the_same_key() {
     assert_eq!(queue.waiting(), 1);
     assert_eq!(queue.pending.lock().unwrap().jobs.len(), 1);
     drop(new);
+    assert!(queue.pending.lock().unwrap().jobs.is_empty());
+}
+
+#[tokio::test]
+async fn foreground_promotes_one_request_without_losing_parallel_background_jobs() {
+    let queue = Queue::default();
+    let mut one = Box::pin(queue.submit(job("first-cover"), 0));
+    let mut two = Box::pin(queue.submit(job("second-cover"), 0));
+    let mut three = Box::pin(queue.submit(job("remaining-item"), 0));
+    assert!(poll!(&mut one).is_pending());
+    assert!(poll!(&mut two).is_pending());
+    assert!(poll!(&mut three).is_pending());
+    let (jobs, replies) = {
+        let pending = queue.pending.lock().unwrap();
+        (pending.jobs.len(), pending.replies.len())
+    };
+    assert_eq!(jobs, 3);
+    assert_eq!(replies, 3);
+
+    let mut visible = Box::pin(queue.submit(job("second-cover"), 2));
+    assert!(poll!(&mut visible).is_pending());
+    assert_eq!(
+        queue
+            .pending
+            .lock()
+            .unwrap()
+            .jobs
+            .values()
+            .rev()
+            .map(|job| job.key())
+            .collect::<Vec<_>>(),
+        ["second-cover", "first-cover", "remaining-item"],
+    );
+    drop(one);
+    assert_eq!(queue.pending.lock().unwrap().jobs.len(), 2);
+    drop(two);
+    assert_eq!(queue.pending.lock().unwrap().jobs.len(), 2);
+    drop(visible);
+    assert_eq!(queue.pending.lock().unwrap().jobs.len(), 1);
+    drop(three);
     assert!(queue.pending.lock().unwrap().jobs.is_empty());
 }
