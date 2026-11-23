@@ -135,20 +135,36 @@ fn clamp_request(sw: u32, sh: u32, tw: u32, th: u32) -> (u32, u32) {
 /// GIF, BMP-less). Returns a Bitmap without intermediate DynamicImage
 /// copies for the common RGB/RGBA cases.
 pub fn image_full(path: &std::path::Path) -> Result<Bitmap> {
+    image_full_with_orientation(path).map(|(bitmap, _)| bitmap)
+}
+
+pub(super) fn image_full_with_orientation(
+    path: &std::path::Path,
+) -> Result<(Bitmap, super::exif::Orientation)> {
+    use crate::image::{ImageDecoder, ImageFormat};
+    use super::exif::Orientation;
+
     let mut input = std::fs::File::open(path)?;
     let mut header = [0; 64];
     let n = input.read(&mut header)?;
     if let Some(kind) = super::still::kind(&header[..n]) {
-        return super::still::decode_file(path, kind);
+        return Ok((super::still::decode_file(path, kind)?, Orientation::NORMAL));
     }
     let mut reader = crate::image::ImageReader::open(path)?;
     reader = reader.with_guessed_format()?;
-    if reader.format() == Some(crate::image::ImageFormat::Bmp) {
-        return super::bmp::decode_reader(reader.into_inner());
+    if reader.format() == Some(ImageFormat::Bmp) {
+        return Ok((super::bmp::decode_reader(reader.into_inner())?, Orientation::NORMAL));
     }
+    let reads_orientation = matches!(reader.format(), Some(ImageFormat::Png | ImageFormat::WebP));
     reader.no_limits();
-    let img = reader.decode().map_err(crate::anyhow::Error::from)?;
-    Ok(Bitmap::from_dynamic(img))
+    let mut decoder = reader.into_decoder()?;
+    let orientation = if reads_orientation {
+        Orientation(decoder.orientation()?.to_exif())
+    } else {
+        Orientation::NORMAL
+    };
+    let image = crate::image::DynamicImage::from_decoder(decoder)?;
+    Ok((Bitmap::from_dynamic(image), orientation))
 }
 
 /// Decode from in-memory bytes (embedded cover art and sidecar covers).

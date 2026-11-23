@@ -177,6 +177,16 @@ impl<R: BufRead + Seek> ImageDecoder for PngDecoder<R> {
             .as_ref()
             .map(|x| x.to_vec()))
     }
+    fn orientation(&mut self) -> ImageResult<crate::image::metadata::Orientation> {
+        use crate::image::metadata::Orientation;
+        Ok(self
+            .reader
+            .info()
+            .exif_metadata
+            .as_deref()
+            .and_then(Orientation::from_exif_chunk)
+            .unwrap_or(Orientation::NoTransforms))
+    }
     fn xmp_metadata(&mut self) -> ImageResult<Option<Vec<u8>>> {
         if let Some(mut itx_chunk) = self
             .reader

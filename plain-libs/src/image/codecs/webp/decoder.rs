@@ -69,10 +69,14 @@ impl<R: BufRead + Seek> ImageDecoder for WebPDecoder<R> {
             .map_err(ImageError::from_webp_decode)
     }
     fn orientation(&mut self) -> ImageResult<Orientation> {
-        if self.orientation.is_none() {
-            let _ = self.exif_metadata()?;
+        if let Some(orientation) = self.orientation {
+            return Ok(orientation);
         }
-        Ok(self.orientation.unwrap())
+        let exif = self.inner.exif_prefix(256 * 1024).map_err(ImageError::from_webp_decode)?;
+        let orientation = Orientation::from_exif_chunk(exif.strip_prefix(b"Exif\0\0").unwrap_or(&exif))
+            .unwrap_or(Orientation::NoTransforms);
+        self.orientation = Some(orientation);
+        Ok(orientation)
     }
 }
 impl<'a, R: 'a + BufRead + Seek> AnimationDecoder<'a> for WebPDecoder<R> {

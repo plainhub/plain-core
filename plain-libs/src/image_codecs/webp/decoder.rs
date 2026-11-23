@@ -460,6 +460,17 @@ impl<R: BufRead + Seek> WebPDecoder<R> {
     pub fn exif_metadata(&mut self) -> Result<Option<Vec<u8>>, DecodingError> {
         self.read_chunk(WebPRiffChunk::EXIF, self.memory_limit)
     }
+    pub(crate) fn exif_prefix(&mut self, limit: u64) -> Result<Vec<u8>, DecodingError> {
+        let mut data = Vec::new();
+        if let Some(range) = self.chunks.get(&WebPRiffChunk::EXIF) {
+            self.r.seek(io::SeekFrom::Start(range.start))?;
+            self.r
+                .by_ref()
+                .take((range.end - range.start).min(limit))
+                .read_to_end(&mut data)?;
+        }
+        Ok(data)
+    }
     pub fn xmp_metadata(&mut self) -> Result<Option<Vec<u8>>, DecodingError> {
         self.read_chunk(WebPRiffChunk::XMP, self.memory_limit)
     }

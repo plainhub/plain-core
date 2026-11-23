@@ -269,14 +269,10 @@ pub async fn read(
         };
         if !animated {
             if let Some(size) = options.size {
-                let small = size == Size::Small;
-                let image = mime.starts_with("image/");
-                let thumbnail_size = crate::features::services::images::thumbnails::THUMBNAIL_SIZE;
-                let pixels = match (size, image) {
-                    (Size::ExtraSmall, _) => 128,
-                    (Size::Small, true) => 512,
-                    (Size::Small, false) => thumbnail_size,
-                    (Size::Large, _) => 1024,
+                let short_edge = match size {
+                    Size::ExtraSmall => 128,
+                    Size::Small => crate::features::services::images::thumbnails::THUMBNAIL_SIZE,
+                    Size::Large => 1024,
                 };
                 let bytes = state
                     .thumbnails
@@ -285,10 +281,10 @@ pub async fn read(
                         crate::features::services::images::thumbnails::Request {
                             access_order: Some(options.access_order),
                             path: path.clone(),
-                            width: pixels,
-                            height: pixels,
-                            center_crop: size != Size::Large && !image,
-                            short_edge: (small && image).then_some(thumbnail_size),
+                            width: short_edge * 2,
+                            height: short_edge * 2,
+                            center_crop: false,
+                            short_edge: Some(short_edge),
                             file_id: media_id,
                             file_name: plain_libs::utils::query::url_encode(filename),
                         },

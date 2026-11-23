@@ -40,14 +40,9 @@ pub fn thumbnail(
     let mut image =
         crate::image::DynamicImage::from_decoder(decoder).map_err(|error| error.to_string())?;
     image.apply_orientation(orientation);
-    let (width, height) = match short_edge {
-        Some(short) => crate::media::thumbnail_limits::short_edge_size(
-            image.width(), image.height(), short, width,
-        ),
-        None => crate::media::thumbnail_limits::compute_target_size(
-            image.width(), image.height(), width, height,
-        ),
-    };
+    let (width, height) = super::thumbnail_limits::target_size(
+        image.width(), image.height(), (width, height), short_edge,
+    );
     let image = image.thumbnail_exact(width, height);
     encode_thumbnail(&image, format == Some(crate::image::ImageFormat::Png)).map(Some)
 }

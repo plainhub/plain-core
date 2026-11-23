@@ -17,6 +17,7 @@ pub mod video;
 mod workers;
 
 use crate::anyhow::{Result, bail};
+use super::thumbnail_limits::target_size;
 use bytes::Bytes;
 
 use exif::Orientation;
@@ -73,19 +74,6 @@ impl ThumbSpec {
     }
 }
 
-pub fn original_fits(
-    width: u32,
-    height: u32,
-    target_width: u32,
-    target_height: u32,
-    _center_crop: bool,
-    bytes: i64,
-) -> bool {
-    u64::try_from(bytes).is_ok_and(|size| size <= PASSTHROUGH_MAX_BYTES)
-        && (target_width == 0 || width <= target_width)
-        && (target_height == 0 || height <= target_height)
-}
-
 pub fn read_original_thumbnail(
     path: &std::path::Path,
     width: u32,
@@ -122,65 +110,37 @@ pub fn read_original_thumbnail(
     let Ok(sniffed) = sniff::sniff_header(&bytes) else {
         return Ok(None);
     };
-    if !sniffed.kind.can_passthrough() {
+    if !sniffed.kind.can_passthrough() || exif::orientation(&bytes).is_some_and(|value| value != 1) {
         return Ok(None);
     }
-    let orientation = if sniffed.kind == ImageKind::Jpeg {
-        exif::orientation(&bytes).unwrap_or(1)
-    } else {
-        1
-    };
-    let (source_width, source_height) = if Orientation(orientation).swaps_axes() {
-        (sniffed.height, sniffed.width)
-    } else {
-        (sniffed.width, sniffed.height)
-    };
-    let (width, height) = match short_edge {
-        Some(short) => crate::media::thumbnail_limits::short_edge_size(
-            source_width, source_height, short, width,
-        ),
-        None => (width, height),
-    };
-    if !original_fits(source_width, source_height, width, height, false, size as i64) {
-        return Ok(None);
-    }
-    Ok(Some(bytes))
+    let (w, h) = (sniffed.width, sniffed.height);
+    Ok((target_size(w, h, (width, height), short_edge) == (w, h)).then_some(bytes))
 }
 
-fn image_dimensions(spec: &ThumbSpec, head: &[u8], s: Sniffed) -> (u8, u32, u32, u32, u32) {
-    // EXIF orientation first: the *upright* dimensions decide the target box
-    // so rotated photos produce correctly-proportioned thumbnails.
-    let orientation = if s.kind == ImageKind::Jpeg {
-        exif::orientation(head).unwrap_or(1)
-    } else {
-        s.orientation
-    };
-    let (uw, uh) = if Orientation(orientation).swaps_axes() {
+fn stored_target_size(spec: &ThumbSpec, s: Sniffed, orientation: Orientation) -> (u32, u32) {
+    let (uw, uh) = if orientation.swaps_axes() {
         (s.height, s.width)
     } else {
         (s.width, s.height)
     };
-    let (tw, th) = match spec.short_edge {
-        Some(short) => crate::media::thumbnail_limits::short_edge_size(uw, uh, short, spec.w),
-        None => compute_target_size(uw, uh, spec.w, spec.h),
-    };
+    let (tw, th) = target_size(uw, uh, (spec.w, spec.h), spec.short_edge);
 
-    (orientation, uw, uh, tw, th)
+    // Resize in stored coordinates, then orient the smaller bitmap.
+    if orientation.swaps_axes() { (th, tw) } else { (tw, th) }
 }
 
 async fn process_image<T: Send + 'static>(
     spec: &ThumbSpec,
     s: Sniffed,
-    orientation: u8,
-    tw: u32,
-    th: u32,
     head: Vec<u8>,
     finish: impl FnOnce(Bitmap) -> Result<T> + Send + 'static,
 ) -> Result<T> {
-    let swaps = Orientation(orientation).swaps_axes();
-    // The stored bitmap must be resized to the swapped target so the
-    // post-resize rotation lands exactly on (tw, th).
-    let (rw, rh) = if swaps { (th, tw) } else { (tw, th) };
+    let orientation = Orientation(if s.kind == ImageKind::Jpeg {
+        exif::orientation(&head).unwrap_or(1)
+    } else {
+        s.orientation
+    });
+    let (rw, rh) = stored_target_size(spec, s, orientation);
 
     // Decompression-bomb guard for full decodes; scaled JPEG decodes only
     // materialize their scaled output, so they are priced by that instead.
@@ -189,7 +149,7 @@ async fn process_image<T: Send + 'static>(
     if !scaled_jpeg && u64::from(s.width) * u64::from(s.height) > admission::MAX_SOURCE_PIXELS {
         bail!("source {}x{} exceeds pixel guard", s.width, s.height);
     }
-    let preview = if spec.short_edge.is_none() {
+    let preview = if spec.short_edge.is_none() && orientation == Orientation::NORMAL {
         crate::utils::image_metadata::thumbnail(&head).and_then(|bytes| {
             let dimensions = sniff::sniff_header(bytes).ok()?;
             (dimensions.kind == ImageKind::Jpeg && dimensions.width >= rw && dimensions.height >= rh)
@@ -212,13 +172,18 @@ async fn process_image<T: Send + 'static>(
         dc_input_bytes(s, rw, rh, spec.file_size)
     });
 
-    let path = spec.path.clone();
+    let spec = spec.clone();
     admission::global()
         .run(est, move || {
             let preview = preview.as_ref().map(|(bytes, _)| bytes.as_slice());
-            let bm = decode_to_target(&path, &head, s, rw, rh, preview)?;
+            let (bm, orientation, (rw, rh)) = if matches!(s.kind, ImageKind::Png | ImageKind::WebP) {
+                let (bm, orientation) = decode::image_full_with_orientation(std::path::Path::new(&spec.path))?;
+                (bm, orientation, stored_target_size(&spec, s, orientation))
+            } else {
+                (decode_to_target(&spec.path, &head, s, rw, rh, preview)?, orientation, (rw, rh))
+            };
             let bm = scale::resize_to(bm, rw, rh);
-            let bm = bm.apply_orientation(Orientation(orientation));
+            let bm = bm.apply_orientation(orientation);
             finish(bm)
         })
         .await?
@@ -338,10 +303,10 @@ async fn process_non_image<T: Send + 'static>(
             .estimated_bytes()
             .saturating_mul(2)
             .saturating_add(u64::from(spec.w) * u64::from(spec.h) * 4);
-        let (width, height, center_crop) = (spec.w, spec.h, spec.center_crop);
+        let spec = spec.clone();
         return admission::global()
             .run(est, move || {
-                let bitmap = video::thumbnail_bitmap(plan, width, height, center_crop)?;
+                let bitmap = video::thumbnail_bitmap(plan, &spec)?;
                 finish(bitmap)
             })
             .await?;
@@ -354,7 +319,7 @@ fn resize_bitmap(bm: Bitmap, spec: &ThumbSpec) -> Bitmap {
     if spec.center_crop {
         scale::resize_to_fill(bm, spec.w, spec.h)
     } else {
-        let (w, h) = compute_target_size(bm.width(), bm.height(), spec.w, spec.h);
+        let (w, h) = target_size(bm.width(), bm.height(), (spec.w, spec.h), spec.short_edge);
         scale::resize_to(bm, w, h)
     }
 }
@@ -446,8 +411,7 @@ async fn process_still<T: Send + 'static>(
     let source = source.ok_or_else(|| crate::anyhow::anyhow!("unsupported file type for thumbnail"))?;
     let mut spec = ThumbSpec::sanitize(path, width.try_into()?, height.try_into()?, 85, size.try_into()?);
     spec.short_edge = short_edge;
-    let (orientation, _, _, tw, th) = image_dimensions(&spec, &head, source);
-    Ok(Some(process_image(&spec, source, orientation, tw, th, head, move |bitmap| {
+    Ok(Some(process_image(&spec, source, head, move |bitmap| {
         finish(bitmap, source.preserve_alpha)
     }).await?))
 }
@@ -479,8 +443,7 @@ pub async fn render(
     let (head, image) = inspect_image(path).await?;
     let quality = spec.quality;
     let bytes = if let Some(source) = image {
-        let (orientation, _, _, tw, th) = image_dimensions(&spec, &head, source);
-        process_image(&spec, source, orientation, tw, th, head, move |bitmap| {
+        process_image(&spec, source, head, move |bitmap| {
             encode_bitmap(bitmap, quality, source.preserve_alpha)
         })
         .await?

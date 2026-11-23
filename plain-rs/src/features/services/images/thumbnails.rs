@@ -128,8 +128,8 @@ fn source_fingerprint(request: &Request) -> Result<Option<String>, String> {
         if system { &request.file_id } else { "" },
         if system { &request.file_name } else { "" },
         match request.short_edge {
-            Some(short) => format!("thumbnail-short-v1-{short}"),
-            None => "thumbnail-v3".to_owned(),
+            Some(short) => format!("thumbnail-short-v2-{short}"),
+            None => "thumbnail-v4".to_owned(),
         }
     ])
     .to_string();

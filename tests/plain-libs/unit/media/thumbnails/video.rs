@@ -233,13 +233,13 @@ fn streamed_video_thumbnail_pixels_match_full_rgb_for_fit_and_crop() {
             let (fit_w, fit_h) = super::super::compute_target_size(source_w, source_h, w, h);
             let expected = scale::resize_to(full_rgb(&frame), fit_w, fit_h);
             assert_eq!(
-                render_frame(&frame, w, h, false).unwrap().raw(),
+                render_frame(&frame, (w, h), false, None).unwrap().raw(),
                 expected.raw(),
                 "{file}, fit {w}x{h}"
             );
             let expected = scale::resize_to_fill(full_rgb(&frame), w, h);
             assert_eq!(
-                render_frame(&frame, w, h, true).unwrap().raw(),
+                render_frame(&frame, (w, h), true, None).unwrap().raw(),
                 expected.raw(),
                 "{file}, crop {w}x{h}"
             );
@@ -301,7 +301,7 @@ fn hevc_4k_thumbnail_post_decode_benchmark() {
         color: None,
     });
     let original = || scale::resize_to_fill(full_rgb(&frame), 256, 256);
-    let streamed = || render_frame(&frame, 256, 256, true).unwrap();
+    let streamed = || render_frame(&frame, (256, 256), true, None).unwrap();
     assert_eq!(original().raw(), streamed().raw());
     let mut baseline = Vec::new();
     let mut optimized = Vec::new();

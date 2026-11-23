@@ -349,8 +349,8 @@ async fn fs_recent_tracked_once_per_view_not_per_chunk() {
 
 #[cfg(feature = "media")]
 #[tokio::test]
-async fn fs_dense_video_preview_has_its_own_dimensions_and_validator() {
-    let (_root, _core, state, _key) = test_state();
+async fn fs_video_previews_keep_aspect_ratio_and_have_distinct_validators() {
+    let (_root, core, state, _key) = test_state();
     let files = plain_libs::temporary::tempdir().unwrap();
     let path = files.path().join("dense.mp4");
     std::fs::write(
@@ -365,13 +365,13 @@ async fn fs_dense_video_preview_has_its_own_dimensions_and_validator() {
     let standard = format!("id={id}&action=PREVIEW&size=SM");
     let dense = format!("id={id}&action=PREVIEW&size=XS");
     let mut validators = Vec::new();
-    for (query, pixels) in [(&standard, 256), (&dense, 128)] {
+    for (query, dimensions) in [(&dense, (170, 128)), (&standard, (320, 240))] {
         let response = call_fs(&state, query, &[]).await;
         assert_eq!(response.status(), StatusCode::OK);
         let validator = response.headers()[header::ETAG].to_str().unwrap().to_owned();
         let bytes = body_bytes(response).await;
         let image = plain_libs::image::load_from_memory(&bytes).unwrap();
-        assert_eq!((image.width(), image.height()), (pixels, pixels));
+        assert_eq!((image.width(), image.height()), dimensions);
         let cached = call_fs(&state, query, &[(&header::IF_NONE_MATCH, &validator)]).await;
         assert_eq!(cached.status(), StatusCode::NOT_MODIFIED);
         assert!(body_bytes(cached).await.is_empty());
@@ -383,6 +383,11 @@ async fn fs_dense_video_preview_has_its_own_dimensions_and_validator() {
         state.thumbnails.native_decodes.load(std::sync::atomic::Ordering::Relaxed),
         2,
     );
+    let response = call_fs(&state, &format!("id={id}&action=PREVIEW&size=LG"), &[]).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let image = plain_libs::image::load_from_memory(&body_bytes(response).await).unwrap();
+    assert_eq!((image.width(), image.height()), (320, 240));
+    core.stop_core().await;
 }
 
 #[cfg(feature = "media")]
@@ -505,15 +510,17 @@ async fn fs_empty_png_has_no_thumbnail_and_remains_downloadable() {
 }
 
 #[tokio::test]
-async fn fs_small_images_target_short_edge_without_cropping() {
+async fn fs_image_previews_keep_aspect_ratio_and_respect_each_size() {
     let (_root, core, state, _key) = test_state();
     let files = plain_libs::temporary::tempdir().unwrap();
-    for (source, small, large) in [
-        ((400, 1200), (170, 512), (341, 1024)),
-        ((1200, 400), (512, 170), (1024, 341)),
-        ((200, 1600), (64, 512), (128, 1024)),
-        ((100, 300), (100, 300), (100, 300)),
-        ((400, 400), (256, 256), (400, 400)),
+    for (source, extra_small, small, large) in [
+        ((400, 1200), (85, 256), (170, 512), (400, 1200)),
+        ((1200, 400), (256, 85), (512, 170), (1200, 400)),
+        ((200, 1600), (32, 256), (64, 512), (200, 1600)),
+        ((300, 2400), (32, 256), (64, 512), (256, 2048)),
+        ((100, 300), (85, 256), (100, 300), (100, 300)),
+        ((400, 400), (128, 128), (256, 256), (400, 400)),
+        ((64, 32), (64, 32), (64, 32), (64, 32)),
     ] {
         let path = files.path().join(format!("{}x{}.png", source.0, source.1));
         plain_libs::image::RgbImage::from_fn(source.0, source.1, |column, row| {
@@ -526,7 +533,7 @@ async fn fs_small_images_target_short_edge_without_cropping() {
         .save(&path)
         .unwrap();
         let id = file_id(&state, path.to_str().unwrap());
-        for (size, expected) in [("SM", small), ("LG", large), ("SM", small)] {
+        for (size, expected) in [("XS", extra_small), ("SM", small), ("LG", large), ("XS", extra_small)] {
             let response = call_fs(&state, &format!("id={id}&action=PREVIEW&size={size}"), &[])
                 .await;
             assert_eq!(response.status(), StatusCode::OK);
@@ -539,6 +546,59 @@ async fn fs_small_images_target_short_edge_without_cropping() {
                 image.get_pixel(image.width() - 1, image.height() - 1).0,
                 [0, 0, 0]
             );
+        }
+    }
+    core.stop_core().await;
+}
+
+#[tokio::test]
+async fn fs_rotated_image_previews_return_upright_pixels_at_every_size() {
+    use plain_libs::image::{ExtendedColorType, ImageEncoder, Rgb, RgbImage, codecs};
+
+    fn write_rotated(mut encoder: impl ImageEncoder, source: &RgbImage) {
+        let exif = b"II\x2a\0\x08\0\0\0\x01\0\x12\x01\x03\0\x01\0\0\0\x06\0\0\0\0\0\0\0";
+        encoder.set_exif_metadata(exif.to_vec()).unwrap();
+        encoder
+            .write_image(source.as_raw(), source.width(), source.height(), ExtendedColorType::Rgb8)
+            .unwrap();
+    }
+
+    let (_root, core, state, _key) = test_state();
+    let files = plain_libs::temporary::tempdir().unwrap();
+    let source = RgbImage::from_fn(480, 320, |x, y| match (x < 240, y < 160) {
+        (true, true) => Rgb([255, 0, 0]),
+        (false, true) => Rgb([0, 255, 0]),
+        (true, false) => Rgb([0, 0, 255]),
+        (false, false) => Rgb([255, 255, 255]),
+    });
+    for extension in ["jpg", "png", "webp"] {
+        let path = files.path().join(format!("rotated.{extension}"));
+        let file = std::fs::File::create(&path).unwrap();
+        match extension {
+            "jpg" => write_rotated(codecs::jpeg::JpegEncoder::new(file), &source),
+            "png" => write_rotated(codecs::png::PngEncoder::new(file), &source),
+            _ => write_rotated(codecs::webp::WebPEncoder::new_lossless(file), &source),
+        }
+        let id = file_id(&state, path.to_str().unwrap());
+        for (size, (width, height)) in [("LG", (320, 480)), ("SM", (256, 384)), ("XS", (128, 192))] {
+            let response = call_fs(&state, &format!("id={id}&action=PREVIEW&size={size}"), &[]).await;
+            assert_eq!(response.status(), StatusCode::OK, "{extension} {size}");
+            let image = plain_libs::image::load_from_memory(&body_bytes(response).await)
+                .unwrap()
+                .into_rgb8();
+            assert_eq!(image.dimensions(), (width, height), "{extension} {size}");
+            for (x, y, expected) in [
+                (width / 4, height / 4, [0, 0, 255]),
+                (3 * width / 4, height / 4, [255, 0, 0]),
+                (width / 4, 3 * height / 4, [255, 255, 255]),
+                (3 * width / 4, 3 * height / 4, [0, 255, 0]),
+            ] {
+                assert!(
+                    image.get_pixel(x, y).0.into_iter().zip(expected).all(|(actual, expected)| actual.abs_diff(expected) <= 12),
+                    "{extension} {size} pixel ({x}, {y}): {:?}",
+                    image.get_pixel(x, y)
+                );
+            }
         }
     }
     core.stop_core().await;
@@ -1201,7 +1261,7 @@ async fn fs_named_sizes_preserve_preview_quality_original_bytes_and_reject_inval
     .save(&path)
     .unwrap();
     let id = file_id(&state, path.to_str().unwrap());
-    for (size, dimensions) in [("SM", (341, 256)), ("LG", (1024, 768))] {
+    for (size, dimensions) in [("XS", (170, 128)), ("SM", (341, 256)), ("LG", (1365, 1024))] {
         let response = call_fs(&state, &format!("id={id}&action=PREVIEW&size={size}"), &[]).await;
         assert_eq!(response.status(), StatusCode::OK);
         let bytes = body_bytes(response).await;
@@ -1231,7 +1291,7 @@ async fn fs_png_previews_preserve_alpha_mime_and_conditional_cache_responses() {
     .save(&path)
     .unwrap();
     let id = file_id(&state, path.to_str().unwrap());
-    for (size, dimensions) in [("SM", (341, 256)), ("LG", (1024, 768))] {
+    for (size, dimensions) in [("XS", (170, 128)), ("SM", (341, 256)), ("LG", (1200, 900))] {
         let query = format!("id={id}&action=PREVIEW&size={size}");
         let first = call_fs(&state, &query, &[]).await;
         assert_eq!(first.status(), StatusCode::OK);
@@ -1436,7 +1496,7 @@ async fn fs_small_browser_images_keep_dimensions_and_original_bytes_for_both_siz
 }
 
 #[tokio::test]
-async fn fs_large_still_formats_preserve_aspect_ratio_for_both_preview_sizes() {
+async fn fs_large_still_formats_preserve_aspect_ratio_at_every_preview_size() {
     let (_root, core, state, _key) = test_state();
     let directory = plain_libs::temporary::tempdir().unwrap();
     for (extension, fixture) in [
@@ -1454,7 +1514,7 @@ async fn fs_large_still_formats_preserve_aspect_ratio_for_both_preview_sizes() {
         )
         .unwrap();
         let id = file_id(&state, path.to_str().unwrap());
-        for (size, expected) in [("SM", (341, 256)), ("LG", (1024, 768))] {
+        for (size, expected) in [("XS", (170, 128)), ("SM", (341, 256)), ("LG", (1024, 768))] {
             let response =
                 call_fs(&state, &format!("id={id}&action=PREVIEW&size={size}"), &[]).await;
             assert_eq!(response.status(), StatusCode::OK, "{extension} {size}");

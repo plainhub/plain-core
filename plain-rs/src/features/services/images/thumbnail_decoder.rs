@@ -14,7 +14,7 @@ pub(super) fn uses_rust_still_decoder(request: &Request) -> bool {
     match plain_libs::utils::mime::mime_from_ext(&request.path) {
         "image/jpeg" | "image/png" | "image/webp" | "image/gif" | "image/apng" => true,
         "image/bmp" | "image/tiff" | "image/avif" | "image/heic" => cfg!(feature = "media"),
-        _ => cfg!(feature = "media") && request.short_edge.is_some(),
+        mime => cfg!(feature = "media") && mime.starts_with("image/") && request.short_edge.is_some(),
     }
 }
 

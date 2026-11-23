@@ -51,6 +51,18 @@ pub fn short_edge_size(width: u32, height: u32, short_limit: u32, long_limit: u3
     }
 }
 
+pub fn target_size(
+    width: u32,
+    height: u32,
+    bounds: (u32, u32),
+    short_edge: Option<u32>,
+) -> (u32, u32) {
+    match short_edge {
+        Some(short) => short_edge_size(width, height, short, bounds.0),
+        None => compute_target_size(width, height, bounds.0, bounds.1),
+    }
+}
+
 #[cfg(test)]
 #[path = "../../../tests/plain-libs/unit/media/thumbnail_limits.rs"]
 mod tests;

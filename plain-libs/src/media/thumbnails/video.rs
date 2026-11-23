@@ -251,39 +251,28 @@ pub fn decode_plan_to_jpeg(
     height: u32,
     quality: u8,
 ) -> Result<Vec<u8>> {
-    encode_thumbnail(plan, width, height, false, quality)
-}
-
-pub(super) fn encode_thumbnail(
-    plan: FramePlan,
-    width: u32,
-    height: u32,
-    center_crop: bool,
-    quality: u8,
-) -> Result<Vec<u8>> {
-    encode::encode_jpeg(thumbnail_bitmap(plan, width, height, center_crop)?, quality)
+    let bitmap = render_frame(&decode_frame(plan)?, (width, height), false, None)?;
+    encode::encode_jpeg(bitmap, quality)
 }
 
 pub(super) fn thumbnail_bitmap(
     plan: FramePlan,
-    width: u32,
-    height: u32,
-    center_crop: bool,
+    spec: &super::ThumbSpec,
 ) -> Result<Bitmap> {
-    render_frame(&decode_frame(plan)?, width, height, center_crop)
+    render_frame(&decode_frame(plan)?, (spec.w, spec.h), spec.center_crop, spec.short_edge)
 }
 
 fn render_frame(
     frame: &DecodedFrame,
-    width: u32,
-    height: u32,
+    bounds: (u32, u32),
     center_crop: bool,
+    short_edge: Option<u32>,
 ) -> Result<Bitmap> {
     let (source_w, source_h) = frame.dimensions();
-    let crop = center_crop.then_some((width, height));
+    let crop = center_crop.then_some(bounds);
     let (crop_w, crop_h) = scale::crop_size(source_w, source_h, crop);
     let (target_w, target_h) =
-        crop.unwrap_or_else(|| super::compute_target_size(source_w, source_h, width, height));
+        crop.unwrap_or_else(|| super::target_size(source_w, source_h, bounds, short_edge));
     let left = (source_w - crop_w) / 2;
     let top = (source_h - crop_h) / 2;
     let mut rows = Rows::<3>::new(crop_w, crop_h, target_w, target_h);

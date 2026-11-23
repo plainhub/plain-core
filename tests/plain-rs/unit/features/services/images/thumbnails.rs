@@ -873,7 +873,7 @@ async fn thumbnail_sizes_share_256_bytes_and_preserve_large_previews() {
 
 #[cfg(feature = "media")]
 #[tokio::test]
-async fn real_image_extensions_skip_legacy_white_thumbnails_and_use_current_cache_keys() {
+async fn real_image_extensions_skip_old_thumbnails_and_use_current_cache_keys() {
     let (directory, core, _) = server_with_cache();
     let state = core.runtime_state();
     let source = directory.path().join("alpha.PNG");
@@ -902,7 +902,7 @@ async fn real_image_extensions_skip_legacy_white_thumbnails_and_use_current_cach
         .to_string();
         plain_libs::utils::hex::bytes_to_hex(&sha2::Sha256::digest(input.as_bytes()))
     };
-    let old_key = source_key(&request, "thumbnail-v2");
+    let old_key = source_key(&request, "thumbnail-v3");
     assert_ne!(
         super::source_fingerprint(&request).unwrap().unwrap(),
         old_key
@@ -912,7 +912,7 @@ async fn real_image_extensions_skip_legacy_white_thumbnails_and_use_current_cach
         .thumbnail_cache(&request.path)
         .unwrap()
         .join("thumbs")
-        .join(format!("{old_key}.thumb"));
+        .join(format!("{old_key}.png"));
     std::fs::create_dir_all(old.parent().unwrap()).unwrap();
     std::fs::write(&old, b"legacy flattened thumbnail").unwrap();
     let bytes = state
@@ -953,7 +953,7 @@ async fn real_image_extensions_skip_legacy_white_thumbnails_and_use_current_cach
     };
     assert_eq!(
         super::source_fingerprint(&request).unwrap().unwrap(),
-        source_key(&request, "thumbnail-v3")
+        source_key(&request, "thumbnail-v4")
     );
     core.stop_core().await;
 }

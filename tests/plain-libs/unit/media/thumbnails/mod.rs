@@ -375,22 +375,13 @@ async fn decoded_pixels_and_output_buffers_are_admitted_before_allocating_them()
 }
 
 #[test]
-fn original_thumbnail_selection_preserves_source_bounds_and_transfer_budget() {
-    assert!(super::original_fits(80, 80, 96, 96, true, 1000));
-    assert!(super::original_fits(96, 96, 96, 96, true, 1000));
-    assert!(super::original_fits(80, 40, 96, 96, false, 1000));
-    assert!(super::original_fits(80, 40, 96, 96, true, 1000));
-    assert!(!super::original_fits(97, 96, 96, 96, false, 1000));
-    assert!(!super::original_fits(96, 97, 96, 96, false, 1000));
-    assert!(!super::original_fits(
-        80,
-        80,
-        96,
-        96,
-        true,
-        super::PASSTHROUGH_MAX_BYTES as i64 + 1
-    ));
-    assert!(!super::original_fits(80, 80, 96, 96, true, -1));
+fn original_thumbnail_selection_preserves_transfer_budget() {
+    let directory = fresh_dir("passthrough-budget");
+    let path = directory.path().join("large.jpg");
+    write_jpeg(&path, 80, 80);
+    let file = std::fs::OpenOptions::new().write(true).open(&path).unwrap();
+    file.set_len(PASSTHROUGH_MAX_BYTES + 1).unwrap();
+    assert!(read_original_thumbnail(&path, 96, 96, None).unwrap().is_none());
 }
 
 #[test]
