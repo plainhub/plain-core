@@ -96,7 +96,7 @@ async fn platform_catalog_queries_media_independently_of_file_index_volumes() {
                         json!(["bucket_display_name != ''"])
                     );
                     assert_eq!(request["params"]["plan"]["args"], json!([]));
-                    json!([{"id":"camera","name":"Camera","size":2048,"path":"content://media/images/42"}])
+                    json!([{"id":"camera","name":"Camera","size":2048,"path":"content://media/images/42","updatedAt":"2026-01-01T00:00:00Z"}])
                 }
                 other => panic!("unexpected host operation {other}"),
             };

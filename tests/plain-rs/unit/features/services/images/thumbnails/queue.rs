@@ -16,6 +16,7 @@ fn job(key: impl Into<String>) -> Generation {
         key: key.into(),
         cache: PathBuf::new(),
         cached: PathBuf::new(),
+        hash: None,
     }
 }
 

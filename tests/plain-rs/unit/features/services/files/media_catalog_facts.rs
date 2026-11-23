@@ -2,6 +2,7 @@ use super::*;
 
 fn row(data_type: DataType) -> MediaFileRow {
     MediaFileRow {
+        thumb_hash: None,
         album: String::new(),
         album_artist: String::new(),
 

@@ -261,10 +261,16 @@ pub(super) fn encode_thumbnail(
     center_crop: bool,
     quality: u8,
 ) -> Result<Vec<u8>> {
-    encode::encode_jpeg(
-        render_frame(&decode_frame(plan)?, width, height, center_crop)?,
-        quality,
-    )
+    encode::encode_jpeg(thumbnail_bitmap(plan, width, height, center_crop)?, quality)
+}
+
+pub(super) fn thumbnail_bitmap(
+    plan: FramePlan,
+    width: u32,
+    height: u32,
+    center_crop: bool,
+) -> Result<Bitmap> {
+    render_frame(&decode_frame(plan)?, width, height, center_crop)
 }
 
 fn render_frame(

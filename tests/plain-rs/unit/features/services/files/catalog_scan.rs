@@ -1034,7 +1034,7 @@ async fn automatic_scan_leaves_library_packages_untouched_until_an_explicit_scan
 
 #[cfg(all(feature = "runtime-media", feature = "media"))]
 #[tokio::test]
-async fn indexing_does_not_generate_thumbnails_or_delete_disk_cache() {
+async fn indexing_finishes_before_thumbnail_decode_and_preserves_disk_cache() {
     use std::sync::atomic::Ordering;
     let sources = directory_scan_fixture();
     let path = sources.path().join("photo.png");
@@ -1052,17 +1052,32 @@ async fn indexing_does_not_generate_thumbnails_or_delete_disk_cache() {
         .unwrap()
         .set_len(257 * 1024 * 1024)
         .unwrap();
-    catalog
-        .scan_directory(sources.path().to_str().unwrap())
-        .await
-        .unwrap();
+    let gate = std::sync::Arc::new(tokio::sync::Semaphore::new(0));
+    *state.thumbnails.decode_gate.lock().unwrap() = Some(gate.clone());
+    let source_path = path.to_str().unwrap();
+    tokio::time::timeout(
+        std::time::Duration::from_secs(10),
+        catalog.scan_directory(sources.path().to_str().unwrap()),
+    )
+    .await
+    .expect("indexing must finish while decode is blocked")
+    .unwrap();
     assert_eq!(catalog.count(DataType::Image).unwrap(), 1);
-    assert_eq!(state.thumbnails.native_decodes.load(Ordering::SeqCst), 0);
+    assert!(catalog.by_path(DataType::Image, source_path).unwrap().unwrap().thumb_hash.is_none());
     assert!(retained.exists());
+
+    let mut events = state.events.subscribe();
+    gate.add_permits(1);
+    tokio::time::timeout(std::time::Duration::from_secs(10), async {
+        while events.recv().await.unwrap().event_type != crate::infrastructure::events::MEDIA_UPDATED {}
+    })
+    .await
+    .expect("thumbnail batch must publish its committed hash");
+    assert!(catalog.by_path(DataType::Image, source_path).unwrap().unwrap().thumb_hash.is_some());
     let request = crate::features::services::images::thumbnails::Request {
         path: path.to_string_lossy().into_owned(),
-        width: 256,
-        height: 256,
+        width: 128,
+        height: 128,
         center_crop: true,
         short_edge: None,
         file_id: String::new(),
@@ -1071,14 +1086,14 @@ async fn indexing_does_not_generate_thumbnails_or_delete_disk_cache() {
     };
     let first = state
         .thumbnails
-        .get(&state, request.clone())
+        .get_exact(&state, request.clone())
         .await
         .unwrap()
         .unwrap();
     assert!(first.starts_with(b"\x89PNG\r\n\x1a\n"));
     let second = state
         .thumbnails
-        .get(&state, request)
+        .get_exact(&state, request)
         .await
         .unwrap()
         .unwrap();

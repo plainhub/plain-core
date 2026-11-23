@@ -6,7 +6,7 @@ use crate::infrastructure::db::MediaFileMetadataRead;
 use crate::infrastructure::db::MediaFileRow;
 use plain_libs::rusqlite::{OptionalExtension, params};
 
-pub const COLUMNS: &str = "id,data_type,path,title,artist,bucket_id,size_bytes,duration_ms,width,height,rotation,taken_at,created_at,updated_at,favorited,trashed,original_path,album,album_artist";
+pub const COLUMNS: &str = "id,data_type,path,title,artist,bucket_id,size_bytes,duration_ms,width,height,rotation,taken_at,created_at,updated_at,favorited,trashed,original_path,album,album_artist,thumb_hash";
 
 pub fn from_row(row: &plain_libs::rusqlite::Row<'_>) -> plain_libs::rusqlite::Result<MediaFileRow> {
     Ok(MediaFileRow {
@@ -29,6 +29,7 @@ pub fn from_row(row: &plain_libs::rusqlite::Row<'_>) -> plain_libs::rusqlite::Re
         original_path: row.get(16)?,
         album: row.get(17)?,
         album_artist: row.get(18)?,
+        thumb_hash: row.get(19)?,
     })
 }
 
@@ -44,7 +45,7 @@ CASE WHEN instr(v.path,'://')>0 THEN v.path||v.identity ELSE CASE WHEN instr(f.p
 COALESCE(f.mime_type,'') AS mime_type,CAST(COALESCE(f.size_bytes,0) AS INTEGER) AS size_bytes,CAST(COALESCE(f.duration_ms,0) AS INTEGER) AS duration_ms,
 CAST(COALESCE(f.width,0) AS INTEGER) AS width,CAST(COALESCE(f.height,0) AS INTEGER) AS height,CAST(COALESCE(f.rotation,0) AS INTEGER) AS rotation,f.taken_at,COALESCE(f.created_at,f.updated_at) AS created_at,f.updated_at,
 COALESCE(f.taken_at,f.created_at,f.updated_at) AS capture_at,
-f.favorited,f.trashed_at,f.trashed_at IS NOT NULL AS trashed,
+f.thumb_hash,f.favorited,f.trashed_at,f.trashed_at IS NOT NULL AS trashed,
 CASE WHEN f.original_path IS NULL THEN NULL ELSE rtrim(v.path,'/')||'/'||f.original_path END AS original_path
 FROM files f JOIN volumes v ON v.id=f.volume_id")
 }

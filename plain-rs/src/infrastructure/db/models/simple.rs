@@ -61,8 +61,6 @@ pub struct ImageEmbeddingRow {
     pub file_id: String,
     pub path: String,
     pub embedding_base64: String,
-    pub created_at: String,
-    pub updated_at: String,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]

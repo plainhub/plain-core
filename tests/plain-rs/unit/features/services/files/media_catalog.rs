@@ -131,7 +131,7 @@ fn buckets_use_shared_visibility_and_original_folder_names() {
         count(&db, &crate::features::prefs::Prefs::in_memory(), DataType::Image, "").unwrap() as u64
     );
     assert_eq!(result.len(), 2);
-    assert_eq!(result[0].top_items, ["/first/Albums/recent.jpg"]);
+    assert_eq!(result[0].cover_items.iter().map(|item| item.path.as_str()).collect::<Vec<_>>(), ["/first/Albums/recent.jpg"]);
     assert_eq!(result[0].id, "/first/Albums");
     assert_eq!(result[0].name, "Albums");
     assert_eq!(result[0].size, 9_000_000_000i64);
@@ -150,7 +150,7 @@ fn document_buckets_keep_the_same_nonempty_document_filter_as_rows() {
     .unwrap();
     let items = buckets(&db, &crate::features::prefs::Prefs::in_memory(), DataType::Doc).unwrap();
     assert_eq!(items.len(), 1);
-    assert_eq!(items[0].top_items[0], "/docs/readme.txt");
+    assert_eq!(items[0].cover_items[0].path, "/docs/readme.txt");
     assert_eq!(items.len() as i64, count(&db, &crate::features::prefs::Prefs::in_memory(), DataType::Doc, "").unwrap());
 }
 
@@ -430,7 +430,7 @@ SELECT printf('f%04d',x),'v','images/'||x||'.jpg',x||'.jpg','IMAGE',CASE WHEN x=
         assert_eq!(row.get::<_, String>(0).unwrap(), "/media/images");
         assert_eq!(row.get::<_, i64>(1).unwrap(), 1000);
         assert_eq!(row.get::<_, i64>(2).unwrap(), 100_000);
-        assert_eq!(row.as_ref().column_count(), 7);
+        assert_eq!(row.as_ref().column_count(), 3 + 4 * 3);
         assert!(
             rows.next().unwrap().is_none(),
             "SQLite must return one row, not 1000 file facts"
@@ -454,7 +454,7 @@ SELECT printf('f%04d',x),'v','images/'||x||'.jpg',x||'.jpg','IMAGE',CASE WHEN x=
     assert_eq!(result[0].item_count, 1000);
     assert_eq!(result[0].size, 100_000);
     assert_eq!(
-        result[0].top_items,
+        result[0].cover_items.iter().map(|item| item.path.as_str()).collect::<Vec<_>>(),
         [
             "/media/images/2.jpg",
             "/media/images/1.jpg",

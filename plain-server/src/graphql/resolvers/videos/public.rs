@@ -42,6 +42,7 @@ pub struct Video {
     #[graphql(name = "updatedAt")]
     #[graphql(getter = true)]
     pub updated_at: Instant,
+    pub thumb_hash: Option<String>,
     #[graphql(name = "takenAt")]
     pub taken_at: Option<Instant>,
     #[graphql(name = "isFavorite")]
@@ -107,6 +108,7 @@ pub(crate) fn video_from_facts(item: &Value) -> Video {
         bucket_id: row.bucket_id,
         created_at: row.created_at,
         updated_at: row.updated_at,
+        thumb_hash: item["thumbHash"].as_str().map(str::to_owned),
         taken_at: optional_instant(item, "takenAt"),
         is_favorite: flag(item, "isFavorite"),
     }

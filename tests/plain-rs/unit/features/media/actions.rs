@@ -84,7 +84,7 @@ fn cleanup_transaction_failure_preserves_all_references() {
 #[test]
 fn video_cleanup_keeps_other_types_and_move_keeps_user_tags() {
     let db = test_db("media_action_video_image");
-    db.with_conn(|c|c.execute_batch("INSERT INTO tags(id,name,type,created_at,updated_at) VALUES('image','image','IMAGE','now','now'); INSERT INTO tag_relations(tag_id,target_key,type,created_at) VALUES('image','one','IMAGE','now'); INSERT INTO media_play_history(media_type,file_id,position_ms,played_at,play_count) VALUES('VIDEO','one',456,'now',0); INSERT INTO image_embeddings(file_id,path,embedding,created_at,updated_at) VALUES('one','/one',X'3f800000','now','now');")).unwrap();
+    db.with_conn(|c|c.execute_batch("INSERT INTO tags(id,name,type,created_at,updated_at) VALUES('image','image','IMAGE','now','now'); INSERT INTO tag_relations(tag_id,target_key,type,created_at) VALUES('image','one','IMAGE','now'); INSERT INTO media_play_history(media_type,file_id,position_ms,played_at,play_count) VALUES('VIDEO','one',456,'now',0); INSERT INTO image_embeddings(file_id,path,embedding) VALUES('one','/one',X'3f800000');")).unwrap();
     let item = Item {
         id: "one".into(),
         path: "/one".into(),

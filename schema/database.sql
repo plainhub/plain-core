@@ -222,6 +222,7 @@ CREATE TABLE IF NOT EXISTS files (
     height INTEGER CHECK(height>=0),
     rotation INTEGER CHECK(rotation IN (0,90,180,270)),
     taken_at TEXT,
+    thumb_hash BLOB CHECK(length(thumb_hash) BETWEEN 5 AND 25),
     title TEXT,
     artist TEXT,
     album TEXT,
@@ -262,6 +263,9 @@ CREATE INDEX IF NOT EXISTS idx_files_kind_indexed_capture_at_updated_at_id
     ON files(kind,indexed,COALESCE(taken_at,created_at,updated_at) DESC,updated_at DESC,id)
 WHERE kind='VIDEO' AND indexed=1 AND missing=0 AND trashed_at IS NULL;
 
+CREATE INDEX IF NOT EXISTS idx_files_thumb_hash_pending ON files(kind,updated_at DESC,id DESC)
+WHERE thumb_hash IS NULL AND kind IN ('IMAGE','VIDEO') AND indexed=1 AND missing=0 AND trashed_at IS NULL;
+
 CREATE INDEX IF NOT EXISTS idx_files_trashed_at_id ON files(trashed_at,id) WHERE trashed_at IS NOT NULL;
 
 CREATE VIRTUAL TABLE IF NOT EXISTS file_names_fts USING fts5(
@@ -297,9 +301,7 @@ CREATE INDEX IF NOT EXISTS idx_image_editor_projects_updated_at ON image_editor_
 CREATE TABLE IF NOT EXISTS image_embeddings (
     file_id TEXT NOT NULL PRIMARY KEY CHECK(length(file_id)>0),
     path TEXT NOT NULL,
-    embedding BLOB NOT NULL,
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
+    embedding BLOB NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS key_values (key TEXT PRIMARY KEY NOT NULL,value TEXT NOT NULL) STRICT, WITHOUT ROWID;

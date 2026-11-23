@@ -1,5 +1,7 @@
 use crate::runtime::Runtime as CoreRuntime;
 mod queue;
+#[cfg(feature = "runtime-media")]
+mod backfill;
 
 use bytes::Bytes;
 pub(crate) use queue::Generation;
@@ -10,7 +12,7 @@ use sha2::{Digest, Sha256};
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, OnceLock},
 };
 use tokio::sync::{Semaphore, oneshot};
 
@@ -36,6 +38,10 @@ const LOOKUP_LIMIT: usize = 320;
 pub struct Thumbnails {
     pub(super) queue: Queue,
     dispatcher: Mutex<Option<tokio::task::JoinHandle<()>>>,
+    #[cfg(feature = "runtime-media")]
+    backfill: Mutex<Option<tokio::task::JoinHandle<()>>>,
+    #[cfg(feature = "runtime-media")]
+    backfill_ready: tokio::sync::Notify,
     lookups: Arc<Semaphore>,
     next_access: std::sync::atomic::AtomicU64,
     #[cfg(any(test, feature = "test-seams"))]
@@ -70,8 +76,12 @@ impl Thumbnails {
         Self {
             queue: Queue::default(),
             dispatcher: Mutex::new(None),
+            #[cfg(feature = "runtime-media")]
+            backfill: Mutex::new(None),
+            #[cfg(feature = "runtime-media")]
+            backfill_ready: tokio::sync::Notify::new(),
             lookups: Arc::new(Semaphore::new(LOOKUP_LIMIT)),
-            next_access: std::sync::atomic::AtomicU64::new(0),
+            next_access: std::sync::atomic::AtomicU64::new(1),
             #[cfg(any(test, feature = "test-seams"))]
             cache_bytes_written: std::sync::atomic::AtomicU64::new(0),
             #[cfg(feature = "media")]
@@ -133,7 +143,10 @@ async fn decode(
     request: &Request,
     system: bool,
     cache: &Path,
+    hash: Option<&OnceLock<Vec<u8>>>,
 ) -> Result<Option<Bytes>, String> {
+    #[cfg(not(feature = "media"))]
+    let _ = hash;
     let rust_still = super::thumbnail_decoder::uses_rust_still_decoder(request);
     if rust_still || !cfg!(any(target_os = "android", target_os = "ios")) {
         #[cfg(any(test, feature = "test-seams"))]
@@ -152,7 +165,19 @@ async fn decode(
             }
         }
         #[cfg(feature = "media")]
-        let bytes = if rust_still {
+        let bytes = if let Some(hash) = hash {
+            let is_video = !plain_libs::utils::mime::mime_from_ext(&request.path).starts_with("image/");
+            plain_libs::media::thumbnails::render_with_thumb_hash(
+                &request.path, request.width, request.height, is_video,
+                request.center_crop, request.short_edge,
+            )
+            .await
+            .map_err(|error| error.to_string())?
+            .map(|(bytes, thumb_hash)| {
+                let _ = hash.set(thumb_hash);
+                bytes
+            })
+        } else if rust_still {
             plain_libs::media::thumbnails::generate_still(
                 &request.path, request.width, request.height, request.short_edge,
             )
@@ -296,7 +321,7 @@ impl Thumbnails {
         let mut stop = state.stop.clone();
         tokio::select! {
             _ = stop.wait_for(|value| *value) => Err(Error("Rust core stopped".into())),
-            result = self.get_inner(state, request, access_order) => result.map_err(Error),
+            result = self.get_inner(state, request, access_order, None) => result.map_err(Error),
         }
     }
 
@@ -305,6 +330,7 @@ impl Thumbnails {
         state: &CoreRuntime,
         mut request: Request,
         access_order: u64,
+        hash: Option<Arc<OnceLock<Vec<u8>>>>,
     ) -> Result<Option<Bytes>, String> {
         if request.width == 0 || request.height == 0 || !Path::new(&request.path).is_absolute() {
             return Err("positive thumbnail dimensions and absolute path required".into());
@@ -384,6 +410,7 @@ impl Thumbnails {
                     cache,
                     key,
                     cached,
+                    hash,
                 },
                 access_order,
             )
@@ -396,10 +423,11 @@ impl Thumbnails {
             cache,
             key,
             cached,
+            hash,
         } = job;
         let system = super::thumbnail_decoder::uses_system_thumbnail(request);
         if system {
-            if let Some(bytes) = decode(state, request, true, cache).await? {
+            if let Some(bytes) = decode(state, request, true, cache, hash.as_deref()).await? {
                 return Ok(
                     if fingerprint(request).await?.as_deref() == Some(key.as_str()) {
                         Some(bytes)
@@ -423,7 +451,7 @@ impl Thumbnails {
                 },
             );
         }
-        let Some(bytes) = decode(state, request, false, cache).await? else {
+        let Some(bytes) = decode(state, request, false, cache, hash.as_deref()).await? else {
             return Ok(None);
         };
         if fingerprint(request).await?.as_deref() != Some(key.as_str()) {
@@ -472,10 +500,26 @@ impl Thumbnails {
 
     pub(crate) fn start(state: CoreRuntime) {
         let service = state.thumbnails.clone();
+        #[cfg(feature = "runtime-media")]
+        {
+            *service.backfill.lock().unwrap() = Some(tokio::spawn(backfill::run(state.clone())));
+        }
         *service.dispatcher.lock().unwrap() = Some(tokio::spawn(Queue::run(state)));
     }
 
+    #[cfg(feature = "runtime-media")]
+    pub(crate) fn schedule_backfill(&self) {
+        self.backfill_ready.notify_one();
+    }
+
     pub async fn shutdown(&self) {
+        #[cfg(feature = "runtime-media")]
+        {
+            let task = self.backfill.lock().unwrap().take();
+            if let Some(task) = task {
+                task.await.expect("thumbnail hash worker panicked");
+            }
+        }
         let task = self.dispatcher.lock().unwrap().take();
         if let Some(task) = task {
             task.await.expect("thumbnail dispatcher panicked");

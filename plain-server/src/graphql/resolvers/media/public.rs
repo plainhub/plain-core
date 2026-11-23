@@ -73,7 +73,20 @@ impl MediaQuery {
                     item_count: i32::try_from(bucket.item_count)
                         .map_err(|error| plain_graphql::Error::from(error))?,
                     size: Long(bucket.size),
-                    top_item_paths: bucket.top_items,
+                    cover_items: bucket
+                        .cover_items
+                        .into_iter()
+                        .map(|cover| {
+                            Ok(super::types::MediaBucketCover {
+                                path: cover.path,
+                                updated_at: crate::graphql::types::parse_instant(&cover.updated_at)?,
+                                thumb_hash: cover
+                                    .thumb_hash
+                                    .as_deref()
+                                    .map(plain_libs::utils::base64::base64_encode),
+                            })
+                        })
+                        .collect::<plain_graphql::Result<_>>()?,
                 })
             })
             .collect()

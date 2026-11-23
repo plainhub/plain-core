@@ -230,8 +230,6 @@ fn image_embedding_blob_survives_the_base64_boundary() {
         file_id: "e1".into(),
         path: "/photos/a.jpg".into(),
         embedding_base64: encoded.clone(),
-        created_at: "2026-01-01T00:00:00.000Z".into(),
-        updated_at: "2026-01-01T00:00:00.000Z".into(),
     })
     .unwrap();
 
@@ -254,8 +252,6 @@ fn image_embedding_delete_all() {
             file_id: id.into(),
             path: format!("/{id}.jpg"),
             embedding_base64: "P4AAAA==".into(),
-            created_at: "2026-01-01T00:00:00.000Z".into(),
-            updated_at: "2026-01-01T00:00:00.000Z".into(),
         })
         .unwrap();
     }

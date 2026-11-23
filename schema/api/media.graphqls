@@ -84,7 +84,13 @@ type MediaBucket {
 	id: ID!
 	name: String!
 	itemCount: Int!
-	topItemPaths: [String!]!
+	coverItems: [MediaBucketCover!]!
+}
+
+type MediaBucketCover {
+	path: String!
+	updatedAt: Instant!
+	thumbHash: String
 }
 
 interface MediaItem {

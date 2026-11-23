@@ -36,6 +36,13 @@ pub struct ItemFact {
     pub name: String,
     pub size: i64,
     path: String,
+    updated_at: String,
+}
+
+pub struct CoverItem {
+    pub path: String,
+    pub updated_at: String,
+    pub thumb_hash: Option<Vec<u8>>,
 }
 
 pub struct Bucket {
@@ -43,7 +50,7 @@ pub struct Bucket {
     pub name: String,
     pub item_count: u64,
     pub size: i64,
-    pub top_items: Vec<String>,
+    pub cover_items: Vec<CoverItem>,
     pub(super) sort_name: String,
 }
 
@@ -70,6 +77,11 @@ fn aggregate_with_sort_key(
     let mut buckets = Vec::<Bucket>::new();
     for item in items {
         plain_libs::anyhow::ensure!(item.size >= 0, "invalid media bucket item size");
+        let cover = CoverItem {
+            path: item.path,
+            updated_at: item.updated_at,
+            thumb_hash: None,
+        };
         if let Some(&index) = positions.get(&item.id) {
             let bucket = &mut buckets[index];
             plain_libs::anyhow::ensure!(bucket.name == item.name, "inconsistent media bucket name");
@@ -81,8 +93,8 @@ fn aggregate_with_sort_key(
                 .size
                 .checked_add(item.size)
                 .ok_or_else(|| plain_libs::anyhow::anyhow!("media bucket size overflow"))?;
-            if bucket.top_items.len() < 4 {
-                bucket.top_items.push(item.path);
+            if bucket.cover_items.len() < 4 {
+                bucket.cover_items.push(cover);
             }
         } else {
             positions.insert(item.id.clone(), buckets.len());
@@ -92,7 +104,7 @@ fn aggregate_with_sort_key(
                 name: item.name,
                 item_count: 1,
                 size: item.size,
-                top_items: vec![item.path],
+                cover_items: vec![cover],
                 sort_name,
             });
         }

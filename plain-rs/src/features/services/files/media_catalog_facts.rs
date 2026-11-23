@@ -30,7 +30,11 @@ pub fn row_facts(row: &MediaFileRow) -> Result<Value, String> {
         "updatedAt": row.updated_at,
         "isFavorite": row.favorited,
     });
-    match media_type(row.data_type)? {
+    let kind = media_type(row.data_type)?;
+    if matches!(kind, DataType::Image | DataType::Video) {
+        facts["thumbHash"] = json!(row.thumb_hash.as_deref().map(plain_libs::utils::base64::base64_encode));
+    }
+    match kind {
         DataType::Audio => {
             facts["artist"] = json!(row.artist);
             facts["durationMs"] = json!(row.duration_ms);

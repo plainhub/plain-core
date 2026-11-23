@@ -407,12 +407,18 @@ async fn buckets_collapse_rows_into_folders() {
             .into_iter()
             .map(|(path, bucket)| media(DataType::Video, path, "clip", 10, bucket))
             .collect();
-            db.record_media_files(&rows).unwrap();
+            let indexed = db.record_media_files(&rows).unwrap();
+            db.with_conn(|conn| {
+                conn.execute("UPDATE files SET thumb_hash=?1 WHERE id=?2", plain_libs::rusqlite::params![
+                    vec![17u8; 20], indexed.first().unwrap().id
+                ]).unwrap();
+            });
         },
         |method, _| panic!("unexpected host call {method}"),
     );
     let response = schema
-        .execute(r#"query { mediaBuckets(type:VIDEO) { id name itemCount size topItemPaths } }"#)
+        .execute(r#"query { mediaBuckets(type:VIDEO) { id name itemCount size coverItems { path updatedAt thumbHash } }
+            videos(query:"",offset:0,limit:30,sortBy:NAME_ASC) { path thumbHash } }"#)
         .await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     let data = response.data.into_json().unwrap();
@@ -425,8 +431,13 @@ async fn buckets_collapse_rows_into_folders() {
     assert_eq!(buckets[1]["id"], "/storage/Movies");
     assert_eq!(buckets[1]["itemCount"], 5);
     assert_eq!(buckets[1]["size"], 50);
+    let cover = &buckets[0]["coverItems"][0];
+    let videos = data["videos"].as_array().unwrap();
+    let video = videos.iter().find(|item| item["path"] == cover["path"]).unwrap();
+    assert_eq!(cover["thumbHash"], plain_libs::utils::base64::base64_encode(&[17; 20]));
+    assert_eq!(video["thumbHash"], cover["thumbHash"]);
     // Five rows in, but only four samples out — the grid never needs more.
-    assert_eq!(buckets[1]["topItemPaths"].as_array().unwrap().len(), 4);
+    assert_eq!(buckets[1]["coverItems"].as_array().unwrap().len(), 4);
 }
 
 #[tokio::test]

@@ -20,6 +20,14 @@ fn item(id: &str, values: &[f32]) -> EmbeddingInput {
 #[test]
 fn ranked_search_is_bounded_and_persisted() {
     let db = test_db("embeddings_search");
+    let columns: Vec<String> = db
+        .with_conn(|c| {
+            let mut query = c.prepare("PRAGMA table_info(image_embeddings)")?;
+            query.query_map([], |row| row.get(1))?
+                .collect::<plain_libs::rusqlite::Result<Vec<String>>>()
+        })
+        .unwrap();
+    assert_eq!(columns, ["file_id", "path", "embedding"]);
     save(
         &db,
         &[

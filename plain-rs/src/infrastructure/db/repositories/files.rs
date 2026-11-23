@@ -272,7 +272,9 @@ pub(crate) fn upsert(
                 params![destination, id],
             )?;
         }
-        conn.execute("UPDATE files SET path=?1,file_name=?2,kind=COALESCE(?3,kind),file_identity=COALESCE(?4,file_identity),size_bytes=COALESCE(?5,size_bytes),created_at=COALESCE(created_at,?6),updated_at=?7,missing=0,indexed=1,mime_type=?8,last_seen_scan_id=COALESCE(?10,last_seen_scan_id) WHERE id=?9",
+        conn.execute("UPDATE files SET path=?1,file_name=?2,kind=COALESCE(?3,kind),file_identity=COALESCE(?4,file_identity),size_bytes=COALESCE(?5,size_bytes),created_at=COALESCE(created_at,?6),updated_at=?7,missing=0,indexed=1,mime_type=?8,last_seen_scan_id=COALESCE(?10,last_seen_scan_id),
+thumb_hash=CASE WHEN updated_at IS NOT ?7 OR size_bytes IS NOT COALESCE(?5,size_bytes)
+OR kind IS NOT COALESCE(?3,kind) OR path IS NOT ?1 OR file_identity IS NOT COALESCE(?4,file_identity) THEN NULL ELSE thumb_hash END WHERE id=?9",
             params![path,name,kind,identity,size,created,updated,mime,id,scan_id])?;
         Ok(id)
     } else {

@@ -45,6 +45,7 @@ pub struct MediaFileMetadataRead {
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize)]
 pub struct MediaFileRow {
+    pub thumb_hash: Option<Vec<u8>>,
     pub id: String,
     pub data_type: i32,
     pub path: String,

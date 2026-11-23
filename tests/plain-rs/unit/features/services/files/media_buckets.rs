@@ -6,6 +6,7 @@ fn fact(id: &str, name: &str, path: &str, size: i64) -> ItemFact {
         name: name.into(),
         size,
         path: path.into(),
+        updated_at: "2026-01-01T00:00:00Z".into(),
     }
 }
 
@@ -18,7 +19,7 @@ fn aggregation_sums_sizes_counts_items_and_keeps_four_newest_paths() {
     assert_eq!(result.len(), 1);
     assert_eq!(result[0].item_count, 6);
     assert_eq!(result[0].size, 60);
-    assert_eq!(result[0].top_items, ["/p/0", "/p/1", "/p/2", "/p/3"]);
+    assert_eq!(result[0].cover_items.iter().map(|item| item.path.as_str()).collect::<Vec<_>>(), ["/p/0", "/p/1", "/p/2", "/p/3"]);
 }
 
 #[test]
@@ -97,8 +98,8 @@ fn sort_keys_are_computed_once_per_bucket_and_shared_across_provider_sources() {
     assert_eq!(buckets[0].sort_name, "zhongguo");
     assert_eq!(buckets[1].sort_name, "zulu");
     let raw = plain_libs::serde_json::json!([
-        {"id":"b", "name":"中国", "path":"content://image/b", "size":2},
-        {"id":"a", "name":"Zulu", "path":"content://image/a", "size":2}
+        {"id":"b", "name":"中国", "path":"content://image/b", "size":2, "updatedAt":"2026-01-01T00:00:00Z"},
+        {"id":"a", "name":"Zulu", "path":"content://image/a", "size":2, "updatedAt":"2026-01-01T00:00:00Z"}
     ]);
     let platform = aggregate(
         DataType::Image,

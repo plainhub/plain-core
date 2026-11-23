@@ -148,8 +148,6 @@ fn embedding_storage_rejects_invalid_vectors() {
                 file_id: "image".into(),
                 path: "/image.jpg".into(),
                 embedding_base64: plain_libs::utils::base64::base64_encode(&bytes),
-                created_at: "2026-01-01T00:00:00.000Z".into(),
-                updated_at: "2026-01-01T00:00:00.000Z".into(),
             })
             .is_err()
         );

@@ -22,6 +22,12 @@ pub struct MediaBucket {
     pub name: String,
     #[graphql(name = "itemCount")]
     pub item_count: i32,
-    #[graphql(name = "topItemPaths")]
-    pub top_item_paths: Vec<String>,
+    pub cover_items: Vec<MediaBucketCover>,
+}
+
+#[derive(SimpleObject, Clone, Debug)]
+pub struct MediaBucketCover {
+    pub path: String,
+    pub updated_at: plain_rs::infrastructure::types::Instant,
+    pub thumb_hash: Option<String>,
 }

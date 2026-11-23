@@ -15,7 +15,7 @@ const SHARE_COLUMNS: &str = "id, name, password, url_token, expires_at, read_onl
      created_at, updated_at";
 const POMODORO_COLUMNS: &str =
     "id, date, completed_count, total_work_secs, total_break_secs, created_at, updated_at";
-const EMBEDDING_COLUMNS: &str = "file_id, path, embedding, created_at, updated_at";
+const EMBEDDING_COLUMNS: &str = "file_id, path, embedding";
 
 fn session_from_row(
     row: &plain_libs::rusqlite::Row<'_>,
@@ -73,8 +73,6 @@ fn embedding_from_row(
         file_id: row.get(0)?,
         path: row.get(1)?,
         embedding_base64: plain_libs::utils::base64::base64_encode(&blob),
-        created_at: row.get(3)?,
-        updated_at: row.get(4)?,
     })
 }
 
@@ -542,9 +540,9 @@ impl Db {
             .map_err(plain_libs::rusqlite::Error::InvalidParameterName)?;
         self.with_conn(|c| {
             c.execute(
-                "INSERT OR REPLACE INTO image_embeddings (file_id, path, embedding, created_at, updated_at)
-                 VALUES (?1, ?2, ?3, ?4, ?5)",
-                params![row.file_id, row.path, blob, plain_libs::utils::dbtime::normalize(&row.created_at)?, plain_libs::utils::dbtime::normalize(&row.updated_at)?],
+                "INSERT OR REPLACE INTO image_embeddings (file_id, path, embedding)
+                 VALUES (?1, ?2, ?3)",
+                params![row.file_id, row.path, blob],
             )?;
             Ok(())
         })

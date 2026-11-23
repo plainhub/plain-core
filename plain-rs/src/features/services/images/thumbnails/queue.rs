@@ -15,6 +15,7 @@ pub(crate) struct Generation {
     pub(super) cache: PathBuf,
     pub(super) key: String,
     pub(super) cached: PathBuf,
+    pub(super) hash: Option<Arc<std::sync::OnceLock<Vec<u8>>>>,
 }
 
 struct Entry {

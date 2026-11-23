@@ -99,6 +99,7 @@ type Image implements MediaItem {
 	bucketId: ID!
 	createdAt: Instant!
 	updatedAt: Instant!
+	thumbHash: String
 	takenAt: Instant
 	isFavorite: Boolean!
 	tags: [Tag!]!
@@ -273,6 +274,7 @@ type Video implements MediaItem {
 	bucketId: ID!
 	createdAt: Instant!
 	updatedAt: Instant!
+	thumbHash: String
 	takenAt: Instant
 	isFavorite: Boolean!
 	tags: [Tag!]!

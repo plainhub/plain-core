@@ -4,6 +4,7 @@ use crate::infrastructure::db::Db;
 
 fn row(title: &str) -> MediaFileRow {
     MediaFileRow {
+        thumb_hash: None,
         album: String::new(),
         album_artist: String::new(),
 

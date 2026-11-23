@@ -3,7 +3,7 @@ use super::*;
 fn deleted_receipts_cascade_atomically_and_preserve_failed_and_foreign_records() {
     let db = Db::open(std::path::Path::new(":memory:")).unwrap();
     db.with_conn(|c|c.execute_batch("INSERT INTO tag_relations(tag_id,target_key,type,created_at) VALUES('video','old','VIDEO','first'),('foreign','old','NOTE','first'),('file','/root/deleted','FILE','first'),('failed','/root/failed','FILE','first'),('sibling','/root_sibling/file','FILE','first'); INSERT INTO media_play_history(media_type,file_id,position_ms,played_at,play_count) VALUES('VIDEO','old',4000000001,'first',0),('VIDEO','keep',4000000002,'first',0); INSERT INTO platform_audio_media(file_id,path,title,artist,duration_ms) VALUES('test:/root/deleted','/root/deleted','gone','',1),('test:/root/failed','/root/failed','keep','',1),('test:/root_sibling/file','/root_sibling/file','keep','',1); INSERT INTO audio_queue_items(file_id,sort_order) VALUES('test:/root/deleted',0),('test:/root/failed',1),('test:/root_sibling/file',2);")).unwrap();
-    db.with_conn(|c|c.execute_batch("INSERT INTO image_embeddings(file_id,path,embedding,created_at,updated_at) VALUES('private','/root/deleted',x'3f800000','first','first'),('pending','/root/failed',x'3f800000','first','first'),('sibling','/root_sibling/file',x'3f800000','first','first');")).unwrap();
+    db.with_conn(|c|c.execute_batch("INSERT INTO image_embeddings(file_id,path,embedding) VALUES('private','/root/deleted',x'3f800000'),('pending','/root/failed',x'3f800000'),('sibling','/root_sibling/file',x'3f800000');")).unwrap();
     cleanup(
         &db,
         &[Item {
@@ -257,7 +257,7 @@ fn missing_paths_keep_user_state_until_confirmed_permanent_deletion() {
             [&gone.id],
         )?;
         c.execute(
-            "INSERT INTO image_embeddings(file_id,path,embedding,created_at,updated_at) VALUES(?1,?2,x'3f800000','first','first')",
+            "INSERT INTO image_embeddings(file_id,path,embedding) VALUES(?1,?2,x'3f800000')",
             params![&gone.id, &gone.path],
         )?;
         Ok(())
@@ -379,7 +379,7 @@ INSERT INTO audio_queue_items(file_id,sort_order) VALUES('audio',0);
 INSERT INTO audio_playlists(id,name,created_at,updated_at) VALUES('playlist','Playlist','now','now');
 INSERT INTO audio_playlist_items(id,playlist_id,file_id,sort_order,added_at) VALUES('item','playlist','audio',0,'now');
 INSERT INTO media_play_history(media_type,file_id,position_ms,played_at,play_count) VALUES('AUDIO','audio',123,'now',1);
-INSERT INTO image_embeddings(file_id,path,embedding,created_at,updated_at) VALUES('image','/scan/root_%/old.jpg',x'3f800000','now','now');
+INSERT INTO image_embeddings(file_id,path,embedding) VALUES('image','/scan/root_%/old.jpg',x'3f800000');
 CREATE TRIGGER reject_scan_delete BEFORE DELETE ON files BEGIN SELECT RAISE(ABORT,'rejected'); END;" )).unwrap();
     let root = std::path::Path::new("/scan/root_%");
     let gaps = [root.join("denied")];

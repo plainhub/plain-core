@@ -183,7 +183,7 @@ async fn media_buckets_are_served_by_the_core_catalog() {
     let response = core
         .native_graphql()
         .unwrap()
-        .execute("query { mediaBuckets(type: DOC) { id name itemCount topItemPaths } }".into())
+        .execute("query { mediaBuckets(type: DOC) { id name itemCount coverItems { path } } }".into())
         .await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     let data = response.data.into_json().unwrap();
@@ -193,12 +193,12 @@ async fn media_buckets_are_served_by_the_core_catalog() {
     );
     assert_eq!(data["mediaBuckets"][0]["itemCount"], 1);
     assert_eq!(
-        data["mediaBuckets"][0]["topItemPaths"],
-        plain_libs::serde_json::json!([directory
+        data["mediaBuckets"][0]["coverItems"][0]["path"],
+        plain_libs::serde_json::json!(directory
             .0
             .canonicalize()
             .unwrap()
-            .join(path.file_name().unwrap())])
+            .join(path.file_name().unwrap()))
     );
     core.stop_core().await;
     runner.await.unwrap().unwrap();

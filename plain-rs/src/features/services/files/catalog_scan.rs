@@ -199,7 +199,12 @@ impl NativeMediaCatalog {
             }
             Ok(())
         }.await;
-        session.finish(result)
+        let succeeded = result.is_ok();
+        let snapshot = session.finish(result)?;
+        if succeeded && matches!(data_type, DataType::Image | DataType::Video) {
+            self.state.thumbnails.schedule_backfill();
+        }
+        Ok(snapshot)
     }
 
     #[cfg(feature = "runtime-media")]
@@ -985,7 +990,12 @@ impl NativeMediaCatalog {
             session.finish(Err(error.clone()))?;
             return Err(error);
         }
-        session.finish(result)
+        let succeeded = result.is_ok();
+        let snapshot = session.finish(result)?;
+        if succeeded && !background {
+            self.state.thumbnails.schedule_backfill();
+        }
+        Ok(snapshot)
     }
 
     #[cfg(feature = "runtime-media")]

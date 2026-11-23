@@ -224,16 +224,30 @@ pub fn add_document_extension(counts: &mut std::collections::BTreeMap<String, i3
 
 fn bucket_selection(db: &Db, prefs: &Prefs, data_type: DataType) -> Result<(String, Vec<Value>)> {
     let (sql, args) = selection(db, prefs, data_type, "")?;
+    let selection = sql.replace(
+        "{columns}",
+        "bucket_id,file_id,path,size_bytes,ROW_NUMBER() OVER (PARTITION BY bucket_id ORDER BY updated_at DESC,file_id) AS position",
+    );
     Ok((
         format!(
-            "WITH ranked AS ({})
-SELECT bucket_id,COUNT(*),SUM(size_bytes),
-MAX(CASE WHEN position=1 THEN path END),
-MAX(CASE WHEN position=2 THEN path END),
-MAX(CASE WHEN position=3 THEN path END),
-MAX(CASE WHEN position=4 THEN path END)
-FROM ranked GROUP BY bucket_id",
-            sql.replace("{columns}", "bucket_id,path,size_bytes,ROW_NUMBER() OVER (PARTITION BY bucket_id ORDER BY updated_at DESC,file_id) AS position")
+            "WITH ranked AS ({selection}), covers AS (
+                SELECT bucket_id,COUNT(*) AS item_count,SUM(size_bytes) AS size,
+                MAX(CASE WHEN position=1 THEN file_id END) AS id1,
+                MAX(CASE WHEN position=2 THEN file_id END) AS id2,
+                MAX(CASE WHEN position=3 THEN file_id END) AS id3,
+                MAX(CASE WHEN position=4 THEN file_id END) AS id4,
+                MAX(CASE WHEN position=1 THEN path END) AS path1,
+                MAX(CASE WHEN position=2 THEN path END) AS path2,
+                MAX(CASE WHEN position=3 THEN path END) AS path3,
+                MAX(CASE WHEN position=4 THEN path END) AS path4
+                FROM ranked GROUP BY bucket_id
+             )
+             SELECT bucket_id,item_count,size,
+                path1,f1.updated_at,f1.thumb_hash,path2,f2.updated_at,f2.thumb_hash,
+                path3,f3.updated_at,f3.thumb_hash,path4,f4.updated_at,f4.thumb_hash
+             FROM covers
+             LEFT JOIN files f1 ON f1.id=id1 LEFT JOIN files f2 ON f2.id=id2
+             LEFT JOIN files f3 ON f3.id=id3 LEFT JOIN files f4 ON f4.id=id4"
         ),
         args,
     ))
@@ -251,21 +265,23 @@ pub fn buckets(db: &Db, prefs: &Prefs, data_type: DataType) -> Result<Vec<super:
                     .and_then(|name| name.to_str())
                     .unwrap_or(&id)
                     .to_owned();
+                let mut cover_items = Vec::with_capacity(4);
+                for column in [3, 6, 9, 12] {
+                    if let Some(path) = row.get::<_, Option<String>>(column)? {
+                        cover_items.push(super::media_buckets::CoverItem {
+                            path,
+                            updated_at: row.get(column + 1)?,
+                            thumb_hash: row.get(column + 2)?,
+                        });
+                    }
+                }
                 Ok(super::media_buckets::Bucket {
                     sort_name: plain_libs::utils::sort_name::sort_name(&name),
                     id,
                     name,
                     item_count: row.get::<_, i64>(1)? as u64,
                     size: row.get(2)?,
-                    top_items: [
-                        row.get::<_, Option<String>>(3)?,
-                        row.get(4)?,
-                        row.get(5)?,
-                        row.get(6)?,
-                    ]
-                    .into_iter()
-                    .flatten()
-                    .collect(),
+                    cover_items,
                 })
             })?
             .collect::<plain_libs::rusqlite::Result<Vec<_>>>()
