@@ -737,6 +737,17 @@ async fn stale_bootstrap_unauthorized_cannot_revoke_a_replacement_management_ses
 #[cfg(feature = "http_transport")]
 #[tokio::test]
 async fn concurrent_reads_share_recovery_after_a_peer_moves() {
+    assert_concurrent_reads_recover(false).await;
+}
+
+#[cfg(feature = "http_transport")]
+#[tokio::test]
+async fn concurrent_reads_recover_when_the_first_new_address_stalls() {
+    assert_concurrent_reads_recover(true).await;
+}
+
+#[cfg(feature = "http_transport")]
+async fn assert_concurrent_reads_recover(stall: bool) {
     const LOCAL: &str = "706c6169-1414-8000-8000-000000000012";
     const REMOTE: &str = "706c6169-1414-8000-8000-000000000013";
     let dir = plain_libs::temporary::tempdir().unwrap();
@@ -762,6 +773,7 @@ async fn concurrent_reads_share_recovery_after_a_peer_moves() {
             Duration::from_millis(ms),
         )
     };
+    let mut stalled_connection = None;
     let advertise = async {
         tokio::time::sleep(Duration::from_millis(250)).await;
         let stale = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -779,7 +791,11 @@ async fn concurrent_reads_share_recovery_after_a_peer_moves() {
             .await
             .expect("Core should try the first discovered address")
             .unwrap();
-        drop(connection);
+        if stall {
+            stalled_connection = Some(connection);
+        } else {
+            drop(connection);
+        }
         drop(stale);
         tokio::time::sleep(Duration::from_millis(150)).await;
         peers::discovered(
@@ -793,7 +809,8 @@ async fn concurrent_reads_share_recovery_after_a_peer_moves() {
         .unwrap()
         .unwrap();
     };
-    let (a, b, c, ()) = tokio::join!(read(100), read(5000), read(5000), advertise);
+    let (a, b, c, ()) = tokio::join!(read(100), read(1800), read(1800), advertise);
+    drop(stalled_connection);
     assert!(
         a.is_err(),
         "A should run out of time before the new address is found"

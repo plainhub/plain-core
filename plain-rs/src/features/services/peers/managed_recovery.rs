@@ -88,13 +88,24 @@ async fn find_route(state: &Runtime, failed: &DPeer) -> Result<Arc<PeerRoute>> {
     let mut updated = state.db.peer_changes();
     let mut attempted = failed.clone();
     let mut browsed = false;
-    loop {
+    'find: loop {
         let candidate = current(state, failed)?;
         if moved(&candidate, failed) && moved(&candidate, &attempted) {
-            let result = state.managed_resources.route(state, &candidate.id).await;
-            let latest = current(state, failed)?;
             attempted = candidate;
-            if moved(&latest, &attempted) {
+            let connect = state.managed_resources.route(state, &failed.id);
+            tokio::pin!(connect);
+            let result = loop {
+                tokio::select! {
+                    changed = updated.changed() => {
+                        changed?;
+                        if moved(&current(state, failed)?, &attempted) {
+                            continue 'find;
+                        }
+                    }
+                    result = &mut connect => break result,
+                }
+            };
+            if moved(&current(state, failed)?, &attempted) {
                 continue;
             }
             match result {
