@@ -135,11 +135,22 @@ async fn serve(state: ServerState, parameters: Parameters, mut headers: HeaderMa
                 mime,
                 name,
                 download,
-            } => secure(
-                file_response::stream_file(&path, &mime, &headers).await,
-                Some(&name),
-                download,
-            ),
+            } => {
+                let mime = if parameters.action == content::Action::Preview
+                    && parameters.size.is_none()
+                    && mime == "application/octet-stream"
+                    && plain_libs::utils::text_file::is_text_file(&name)
+                {
+                    "text/plain; charset=utf-8"
+                } else {
+                    &mime
+                };
+                secure(
+                    file_response::stream_file(&path, mime, &headers).await,
+                    Some(&name),
+                    download,
+                )
+            }
             Content::Temporary { file, mime, name } => secure(
                 file_response::stream_temporary(file, mime, &headers).await,
                 name.as_deref(),

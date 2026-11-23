@@ -914,6 +914,38 @@ async fn session_urls_revoke_new_requests_without_canceling_started_transfers() 
 }
 
 #[tokio::test]
+async fn fs_source_and_configuration_previews_return_plain_text() {
+    let (_root, core, state, _key) = test_state();
+    let directory = plain_libs::temporary::tempdir().unwrap();
+    let fixture = "Example \u{4e2d}\n";
+    for (name, mime) in [
+        ("main.CPP", "text/plain; charset=utf-8"),
+        ("settings.toml", "text/plain; charset=utf-8"),
+        ("Dockerfile", "text/plain; charset=utf-8"),
+        ("unknown.bin", "application/octet-stream"),
+    ] {
+        let path = directory.path().join(name);
+        std::fs::write(&path, fixture).unwrap();
+        let id = file_id(&state, path.to_str().unwrap());
+        let response = call_fs(&state, &format!("id={id}&action=PREVIEW"), &[]).await;
+        assert_eq!(response.status(), StatusCode::OK, "{name}");
+        assert_eq!(response.headers()[header::CONTENT_TYPE], mime, "{name}");
+        assert_eq!(body_bytes(response).await, fixture.as_bytes(), "{name}");
+        let native = core.preview_native_file(id.clone()).await.unwrap();
+        assert_eq!(native.status, 200, "{name}");
+        assert_eq!(native.headers["content-type"], mime, "{name}");
+        assert_eq!(native.content, fixture, "{name}");
+        let download = call_fs(&state, &format!("id={id}&action=DOWNLOAD"), &[]).await;
+        assert_eq!(
+            download.headers()[header::CONTENT_TYPE],
+            "application/octet-stream",
+            "{name}"
+        );
+        assert_eq!(body_bytes(download).await, fixture.as_bytes(), "{name}");
+    }
+}
+
+#[tokio::test]
 async fn native_file_preview_uses_its_session_and_the_shared_preview() {
     use plain_rs::features::files::resource_link::{self, Resource, Scope};
     let (_root, core, state, _key) = test_state();

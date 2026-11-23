@@ -18,6 +18,7 @@ pub mod query;
 pub mod search_dsl;
 pub mod sort_name;
 pub mod source_reader;
+pub mod text_file;
 pub mod unique_path;
 pub mod xml;
 
