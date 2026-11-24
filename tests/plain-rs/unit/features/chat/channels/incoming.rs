@@ -12,9 +12,27 @@ fn db() -> Db {
         None,
         crate::features::chat::enums::DeviceType::Computer,
     );
-    owner.public_key = base64_encode(&[9; 32]);
+    owner.public_key = signing_public_key("owner");
     peers::save(&db, &[owner], SaveMode::Insert).unwrap();
     db
+}
+
+fn signing_key() -> [u8; 64] {
+    plain_libs::crypto::ed25519_keypair_from_seed(&[9; 32])
+}
+
+fn signing_public_key(peer_id: &str) -> String {
+    if peer_id == "owner" {
+        base64_encode(&signing_key()[32..])
+    } else {
+        base64_encode(&[8; 32])
+    }
+}
+
+fn sign(state: &mut State) {
+    state.signature = plain_libs::crypto::ed25519_sign(
+        &signing_key(), &state.signing_bytes("channel"),
+    );
 }
 
 fn member(peer_id: &str, status: MemberStatus) -> MemberSnapshot {
@@ -24,27 +42,28 @@ fn member(peer_id: &str, status: MemberStatus) -> MemberSnapshot {
         name: None,
         device_type: None,
         ip: None,
-        public_key: None,
+        signature_public_key: signing_public_key(peer_id),
+        encryption_public_key: base64_encode(&[40; 32]),
         port: None,
     }
 }
 
 fn state(version: i64) -> State {
-    State {
+    let mut state = State {
         name: "Channel".into(),
         version,
         members: vec![
             member("owner", MemberStatus::Joined),
             member("guest", MemberStatus::Pending),
         ],
-    }
+        signature: String::new(),
+    };
+    sign(&mut state);
+    state
 }
 
 fn invite(version: i64) -> Notification {
-    Notification::Invite {
-        channel_key: base64_encode(&[7; 32]),
-        state: state(version),
-    }
+    Notification::Invite(state(version))
 }
 
 fn stored(db: &Db) -> Option<DChannel> {
@@ -57,17 +76,14 @@ fn invite_validates_roster_and_existing_owner_and_reinvites_only_at_new_version(
     assert!(receive(&db, "other", "owner", "channel", invite(1)).is_err());
     assert!(stored(&db).is_none());
     let mut forged = state(1);
-    forged.members[0].public_key = Some(base64_encode(&[8; 32]));
+    forged.members[0].signature_public_key = base64_encode(&[8; 32]);
     assert!(
         receive(
             &db,
             "guest",
             "owner",
             "channel",
-            Notification::Invite {
-                channel_key: base64_encode(&[7; 32]),
-                state: forged,
-            }
+            Notification::Invite(forged)
         )
         .is_err()
     );
@@ -182,6 +198,7 @@ fn snapshots_validate_before_effects_and_roll_back_peer_creation_on_channel_writ
         snapshot
             .members
             .push(member("no-metadata", MemberStatus::Pending));
+        sign(&mut snapshot);
         Notification::StateChanged(snapshot)
     };
     db.with_conn(|c| c.execute_batch("CREATE TRIGGER reject_channel BEFORE UPDATE ON chat_channels BEGIN SELECT RAISE(ABORT, 'test failure'); END;")).unwrap();
@@ -196,7 +213,7 @@ fn snapshots_validate_before_effects_and_roll_back_peer_creation_on_channel_writ
             .changed
     );
     assert_eq!(peers::get(&db, "new").unwrap().unwrap().name, "New peer");
-    assert!(peers::get(&db, "no-metadata").unwrap().is_none());
+    assert!(peers::get(&db, "no-metadata").unwrap().unwrap().encryption_public_key.is_some());
     assert!(stored(&db).unwrap().members.contains("no-metadata"));
 }
 
@@ -277,4 +294,18 @@ fn invitation_replies_and_leave_affect_only_the_sender() {
         decode_members(&stored(&db).unwrap().members),
         vec![ChannelMember::new("owner")]
     );
+}
+
+#[test]
+fn a_late_unavailable_reply_preserves_the_newer_channel() {
+    let db = db();
+    receive(&db, "guest", "owner", "channel", invite(1)).unwrap();
+    let before = stored(&db).unwrap();
+    receive(&db, "guest", "owner", "channel", Notification::StateChanged(state(2))).unwrap();
+    let current = stored(&db).unwrap();
+    let result = receive(&db, "guest", "owner", "channel", Notification::Unavailable {
+        version: before.version, updated_at: before.updated_at,
+    }).unwrap();
+    assert!(!result.changed);
+    assert_eq!(stored(&db).unwrap(), current);
 }

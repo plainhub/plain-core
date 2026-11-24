@@ -13,6 +13,8 @@ pub struct DPeer {
     pub key: String,
     /// Base64-encoded raw Ed25519 public key (32 bytes).
     pub public_key: String,
+    #[serde(skip)]
+    pub encryption_public_key: Option<[u8; 32]>,
     pub status: PeerStatus,
     pub port: Option<u16>,
     pub device_type: DeviceType,
@@ -31,6 +33,7 @@ impl DPeer {
             ip: ip.to_string(),
             key: String::new(),
             public_key: String::new(),
+            encryption_public_key: None,
             status: PeerStatus::Unpaired,
             port,
             device_type,

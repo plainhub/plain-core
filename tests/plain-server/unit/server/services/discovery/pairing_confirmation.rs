@@ -11,7 +11,7 @@ fn fixture(id: &str) -> (plain_libs::temporary::TempDir, crate::server::ContentS
     let (key, _) = plain_libs::crypto::ed25519_generate();
     prefs.set("client_id", id).unwrap();
     prefs
-        .set("signature_key_pair", base64_encode(&key))
+        .set("signature_private_key", base64_encode(&key[..32]))
         .unwrap();
     let server =
         crate::server::ContentServer::start(directory.path(), &base64_encode(&[3; 32]), prefs)
@@ -56,8 +56,9 @@ async fn scanner_sends_only_the_response_and_both_tls_peers_save_the_same_key() 
             .unwrap()
     };
     let signing =
-        plain_rs::features::services::peers::peer_wire::signing_keypair(&remote.prefs).unwrap();
+        plain_rs::features::prefs::security::signing_keypair(&remote.prefs).unwrap();
     let mut forged = plain_rs::features::peers::pairing::protocol::PairingAccept {
+        encryption_public_key: plain_libs::utils::base64::base64_encode(&[41; 32]),
         request_id: qr.request_id.clone(),
         signature_public_key: Some(base64_encode(&signing[32..])),
         from_name: Some("Unverified scanner".into()),

@@ -103,7 +103,7 @@ fn import_peers(source: &Connection, target: &Connection) -> Result<()> {
         let device_type = enum_text(row.get("device_type")?, "OTHER");
         let (created, updated) = super::rows::dates(row)?;
         target.execute(
-            "INSERT INTO peers(id,name,ip,chat_token,public_key,port,status,device_type,created_at,updated_at) \
+            "INSERT INTO peers(id,name,ip,chat_token,signature_public_key,port,status,device_type,created_at,updated_at) \
              VALUES (?1,?2,?3,?4,?5,NULLIF(?6,0),?7,?8,?9,?10) ON CONFLICT(id) DO NOTHING",
             params![id, name, ip, key_blob::optional(&key)?, key_blob::optional(&public_key)?, port, status, device_type, created, updated],
         )?;
@@ -122,7 +122,6 @@ fn import_channels(source: &Connection, target: &Connection, self_id: &str) -> R
     for_each(source, "SELECT * FROM chat_channels", |row| {
         let id = short_id::convert(&row.get::<_, String>("id")?)?;
         let name: String = row.get("name")?;
-        let key: String = row.get("key")?;
         let owner: String = row.get("owner")?;
         let owner = (!owner.is_empty())
             .then(|| channel_peer(&owner, self_id))
@@ -150,9 +149,9 @@ fn import_channels(source: &Connection, target: &Connection, self_id: &str) -> R
         let status = enum_text(row.get("status")?, "JOINED");
         let (created, updated) = super::rows::dates(row)?;
         target.execute(
-            "INSERT INTO chat_channels(id,name,key,owner_id,members,version,status,created_at,updated_at) \
-             VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9) ON CONFLICT(id) DO NOTHING",
-            params![id, name, key_blob::optional(&key)?, owner, serde_json::to_string(&members)?, version, status, created, updated],
+            "INSERT INTO chat_channels(id,name,owner_id,members,version,status,created_at,updated_at) \
+             VALUES (?1,?2,?3,?4,?5,?6,?7,?8) ON CONFLICT(id) DO NOTHING",
+            params![id, name, owner, serde_json::to_string(&members)?, version, status, created, updated],
         )?;
         Ok(())
     })

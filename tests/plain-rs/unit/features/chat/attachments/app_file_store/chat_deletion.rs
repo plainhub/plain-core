@@ -98,7 +98,7 @@ fn entity_removal_is_atomic_retains_channel_peer_and_returns_removed_channel_sna
     let mut channel = DChannel::new("group", "owner");
     channel.id = "group".into();
     channel.members = r#"[{"peerId":"peer","status":"PENDING"}]"#.into();
-    channel.key = plain_libs::utils::base64::base64_encode(&[44; 32]);
+
     channels::save(&db, &[channel], SaveMode::Insert).unwrap();
     let content=plain_libs::serde_json::json!({"type":"MESSAGE","value":{"format":"PLAIN","items":[{"type":"FILE","attachment":{"id":"local-attachment","uri":format!("fid:{}",file.fid_suffix),"size":14}}]}}).to_string();
     let mut direct = DChat::new("me", "peer", "", &content);
@@ -130,8 +130,8 @@ fn entity_removal_is_atomic_retains_channel_peer_and_returns_removed_channel_sna
     db.with_conn(|c| c.execute_batch("DROP TRIGGER reject_channel"))
         .unwrap();
     assert_eq!(
-        remove_channel(&db, &root, "group").unwrap().unwrap().key,
-        plain_libs::utils::base64::base64_encode(&[44; 32])
+        remove_channel(&db, &root, "group").unwrap().unwrap().id,
+        "group"
     );
     assert!(messages::get(&db, "group-message").unwrap().is_none());
     assert!(db.app_file_get(&file.id).unwrap().is_none());

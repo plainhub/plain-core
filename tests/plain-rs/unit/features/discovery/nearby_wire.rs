@@ -5,7 +5,7 @@ use plain_libs::serde_json::json;
 fn canonical_messages_round_trip_and_reject_unknown_or_malformed_payloads() {
     for value in [
         json!({"kind":"PAIRING_REJECT","payload":{"requestId":"request","signature":"proof"}}),
-        json!({"kind":"PAIRING_ACCEPT","payload":{"requestId":"request","port":8443,"deviceType":"PHONE","ecdhPublicKey":"key","ips":[],"signature":"proof","awareSupported":false}}),
+        json!({"kind":"PAIRING_ACCEPT","payload":{"requestId":"request","encryptionPublicKey":"test-key","port":8443,"deviceType":"PHONE","ecdhPublicKey":"key","ips":[],"signature":"proof","awareSupported":false}}),
         json!({"kind":"PAIR_CANCEL","payload":{"fromId":"a","toId":"b","requestSignature":"request","signaturePublicKey":"public","timestamp":1,"signature":"proof"}}),
     ] {
         let message: Message = plain_libs::serde_json::from_value(value).unwrap();

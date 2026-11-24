@@ -593,7 +593,7 @@ async fn managed_browser_relays_media_sockets_through_pinned_peer() {
 
 #[tokio::test]
 async fn first_login_and_chat_range_use_proxy_without_a_management_token() {
-    use plain_rs::features::{prefs::security, services::peers::peer_wire};
+    use plain_rs::features::prefs::security;
     let dir = plain_libs::temporary::tempdir().unwrap();
     let a = start(
         &dir.path().join("a"),
@@ -614,7 +614,7 @@ async fn first_login_and_chat_range_use_proxy_without_a_management_token() {
     let browser = login(&a_state, "706c6169-0000-8000-8000-000000000051");
     security::configure_password_login(&b_state.prefs).unwrap();
     security::set_password_login(&b_state.prefs, "fixture-password").unwrap();
-    let pair = peer_wire::signing_keypair(&b_state.prefs).unwrap();
+    let pair = security::signing_keypair(&b_state.prefs).unwrap();
     let mut peer = DPeer::new(
         &b_id,
         "Fixture B",

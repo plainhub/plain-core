@@ -15,7 +15,7 @@ fn tmp_prefs(tag: &str) -> Prefs {
 }
 
 #[test]
-fn ensure_identity_generates_and_persists_all_three_keys() {
+fn ensure_identity_persists_the_signing_seed() {
     let prefs = tmp_prefs("identity");
     let id = ensure_identity(&prefs);
     let uuid = plain_libs::utils::uuid::Uuid::parse_str(&id.client_id).expect("clientId must be a UUID");
@@ -25,7 +25,6 @@ fn ensure_identity_generates_and_persists_all_three_keys() {
     assert!(!id.device_name.is_empty());
     assert!(!id.ed25519_keypair.is_empty());
 
-    // All three keys persisted under the plain-app contract names.
     assert_eq!(
         prefs.get::<String>("client_id").unwrap().as_deref(),
         Some(id.client_id.as_str())
@@ -34,13 +33,37 @@ fn ensure_identity_generates_and_persists_all_three_keys() {
         prefs.get::<String>("device_name").unwrap().as_deref(),
         Some(id.device_name.as_str())
     );
-    assert_eq!(
-        prefs
-            .get::<String>("signature_key_pair")
-            .unwrap()
-            .as_deref(),
-        Some(id.ed25519_keypair.as_str())
-    );
+    let decode = plain_libs::utils::base64::base64_decode;
+    let seed = prefs.get::<String>("signature_private_key").unwrap().unwrap();
+    assert_eq!(decode(&seed), decode(&id.ed25519_keypair)[..32]);
+}
+
+#[test]
+fn bootstrap_derives_the_same_public_keys_after_reload() {
+    use crate::features::prefs::{pref_keys::*, security};
+
+    let prefs = tmp_prefs("public-keys");
+    let old_pair = base64_encode(&ed25519_generate().0);
+    let old = plain_libs::serde_json::json!({"signature_key_pair": old_pair});
+    std::fs::create_dir_all(prefs.path().parent().unwrap()).unwrap();
+    std::fs::write(prefs.path(), old.to_string()).unwrap();
+    let prefs = Prefs::load(prefs.path()).unwrap();
+    security::bootstrap(&prefs).unwrap();
+    let signature = security::get_entry(&prefs, SIGNATURE_PUBLIC_KEY).unwrap();
+    let encryption = security::encryption_public_key(&prefs).unwrap();
+    assert_ne!(base64_encode(&security::signing_keypair(&prefs).unwrap()), old_pair);
+    assert!(!prefs.entries().iter().any(|(key, _)| key == "signature_key_pair"));
+    for key in [SIGNATURE_PRIVATE_KEY, ENCRYPTION_PRIVATE_KEY] {
+        let encoded = prefs.get::<String>(key).unwrap().unwrap();
+        assert_eq!(plain_libs::utils::base64::base64_decode(&encoded).len(), 32);
+        assert!(security::get_entry(&prefs, key).unwrap().is_none());
+        assert!(security::set_entry(&prefs, key, plain_libs::serde_json::json!("invalid")).is_err());
+    }
+    let reloaded = Prefs::load(prefs.path()).unwrap();
+    security::bootstrap(&reloaded).unwrap();
+    assert_eq!(security::get_entry(&reloaded, SIGNATURE_PUBLIC_KEY).unwrap(), signature);
+    assert_eq!(security::encryption_public_key(&reloaded).unwrap(), encryption);
+    assert!(!reloaded.entries().iter().any(|(key, _)| key.ends_with("public_key")));
 }
 
 #[test]

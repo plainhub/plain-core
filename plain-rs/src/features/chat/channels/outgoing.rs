@@ -50,7 +50,7 @@ impl Action {
         let (query, variables) = match self {
             Self::Invite => (
                 "mutation($channelId: ID!, $input: ChannelInviteInput!) { notifyChannelInvite(channelId: $channelId, input: $input) }",
-                json!({"channelId":channel_id,"input":{"channelKey":channel.key,"state":require_state(state)?}}),
+                json!({"channelId":channel_id,"input":{"state":require_state(state)?}}),
             ),
             Self::StateChanged => (
                 "mutation($channelId: ID!, $input: ChannelStateInput!) { notifyChannelStateChanged(channelId: $channelId, input: $input) }",
@@ -99,7 +99,8 @@ pub fn snapshot(
     actor: &str,
     name: String,
     device_type: DeviceType,
-    public_key: &[u8],
+    signing_keypair: &[u8],
+    encryption_public_key: &[u8; 32],
     members: Vec<ChannelMember>,
 ) -> Result<State> {
     let graph_device = |kind| match kind {
@@ -110,35 +111,47 @@ pub fn snapshot(
         members
             .into_iter()
             .map(|member| {
-                let mut item = MemberSnapshot {
+                if member.peer_id == actor {
+                    return Ok(MemberSnapshot {
+                        peer_id: member.peer_id,
+                        status: member.status,
+                        name: Some(name.clone()),
+                        device_type: Some(graph_device(device_type)),
+                        ip: None,
+                        signature_public_key: base64_encode(&signing_keypair[32..]),
+                        encryption_public_key: base64_encode(encryption_public_key),
+                        port: None,
+                    });
+                }
+                let peer = store::peer(c, &member.peer_id)?
+                    .ok_or_else(|| plain_libs::anyhow::anyhow!("Channel member identity unavailable"))?;
+                let key = peer.encryption_public_key
+                    .ok_or_else(|| plain_libs::anyhow::anyhow!("Channel member encryption key unavailable"))?;
+                store::public_key(&peer.public_key)?;
+                Ok(MemberSnapshot {
                     peer_id: member.peer_id,
                     status: member.status,
-                    name: None,
-                    device_type: None,
-                    ip: None,
-                    public_key: None,
-                    port: None,
-                };
-                if item.peer_id == actor {
-                    item.name = Some(name.clone());
-                    item.device_type = Some(graph_device(device_type));
-                    item.public_key = Some(base64_encode(public_key));
-                } else if let Some(peer) = store::peer(c, &item.peer_id)? {
-                    item.name = Some(peer.name);
-                    item.device_type = Some(graph_device(peer.device_type));
-                    item.ip = Some(peer.ip);
-                    item.public_key = (!peer.public_key.is_empty()).then_some(peer.public_key);
-                    item.port = peer.port;
-                }
-                Ok(item)
+                    name: Some(peer.name),
+                    device_type: Some(graph_device(peer.device_type)),
+                    ip: Some(peer.ip),
+                    signature_public_key: peer.public_key,
+                    encryption_public_key: base64_encode(&key),
+                    port: peer.port,
+                })
             })
             .collect()
     })?;
-    Ok(State {
+    let mut state = State {
         name: channel.name.clone(),
         version: channel.version,
         members,
-    })
+        signature: String::new(),
+    };
+    state.signature = plain_libs::crypto::ed25519_sign(
+        signing_keypair,
+        &state.signing_bytes(&channel.id),
+    );
+    Ok(state)
 }
 
 pub fn pairing_key(peer: &crate::infrastructure::db::DPeer) -> Result<Vec<u8>> {

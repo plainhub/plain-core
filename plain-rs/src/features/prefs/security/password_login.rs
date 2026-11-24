@@ -38,15 +38,8 @@ impl std::fmt::Debug for PasswordCredential {
 }
 
 pub(super) fn write_password(map: &mut Map<String, Value>, password: &str) -> Result<()> {
-    ensure(map, SIGNATURE_KEY_PAIR, || {
-        plain_libs::utils::base64::base64_encode(&plain_libs::crypto::ed25519_generate().0)
-    })?;
-    let pair = plain_libs::utils::base64::base64_decode(&read::<String>(map, SIGNATURE_KEY_PAIR)?);
-    if pair.len() != 64 {
-        return Err(PrefsError::Decode(
-            <plain_libs::serde_json::Error as serde::de::Error>::custom("Invalid signing identity"),
-        ));
-    }
+    let seed = ensure_private_key(map, SIGNATURE_PRIVATE_KEY)?;
+    let pair = plain_libs::crypto::ed25519_keypair_from_seed(&seed);
     let registration = plain_libs::auth::server::register(password.as_bytes(), &pair[32..])
         .map_err(|_| {
             PrefsError::Encode(<plain_libs::serde_json::Error as serde::ser::Error>::custom(

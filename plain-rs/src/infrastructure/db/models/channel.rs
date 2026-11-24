@@ -13,7 +13,6 @@ pub struct DChannel {
     )]
     pub owner_id: Option<String>,
     pub members: String,
-    pub key: String,
     pub version: i64,
     pub status: ChannelStatus,
     pub created_at: String,
@@ -28,7 +27,6 @@ impl DChannel {
             name: name.to_string(),
             owner_id: (!owner.is_empty()).then(|| owner.to_owned()),
             members: "[]".to_string(),
-            key: String::new(),
             version: 1,
             status: ChannelStatus::Joined,
             created_at: now.clone(),

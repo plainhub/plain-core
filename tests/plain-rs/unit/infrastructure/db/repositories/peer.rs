@@ -47,91 +47,18 @@ fn delete_peer_removes_row() {
     assert!(db.get_peer_by_id("p1").is_none());
 }
 
-#[test]
-fn login_peer_creates_unpaired_peer_with_token() {
-    let db = Db::open(&unique_tmp_dir("login-new").join("plain.db")).expect("open db");
-
-    db.login_peer(
-        "p1",
-        "Pixel 9",
-        "203.0.113.10",
-        8443,
-        DeviceType::Phone,
-        &plain_libs::utils::base64::base64_encode(&[4; 32]),
-        &plain_libs::utils::base64::base64_encode(&[6; 32]),
-        "",
-    )
-    .expect("login peer");
-
-    let peer = db.get_peer_by_id("p1").expect("login creates peer");
-    assert_eq!(peer.status, PeerStatus::Unpaired);
-    assert_eq!(peer.token, plain_libs::utils::base64::base64_encode(&[4; 32]));
-    assert_eq!(peer.public_key, plain_libs::utils::base64::base64_encode(&[6; 32]));
-    assert_eq!(peer.ip, "203.0.113.10");
-    assert_eq!(peer.port, Some(8443));
-    assert_eq!(db.get_login_peers().len(), 1);
-}
-
-#[test]
-fn login_peer_refreshes_existing_row_and_keeps_pairing_state() {
-    let db = Db::open(&unique_tmp_dir("login-paired").join("plain.db")).expect("open db");
-    seed_peer(&db, "p1", PeerStatus::Paired, &plain_libs::utils::base64::base64_encode(&[3; 32]));
-
-    db.login_peer(
-        "p1",
-        "Pixel 9",
-        "203.0.113.20",
-        8443,
-        DeviceType::Phone,
-        &plain_libs::utils::base64::base64_encode(&[5; 32]),
-        "",
-        "",
-    )
-    .expect("refresh login peer");
-
-    let peer = db.get_peer_by_id("p1").expect("peer still exists");
-    assert_eq!(peer.status, PeerStatus::Paired);
-    assert_eq!(peer.key, plain_libs::utils::base64::base64_encode(&[3; 32]));
-    assert_eq!(peer.token, plain_libs::utils::base64::base64_encode(&[5; 32]));
-    assert_eq!(peer.ip, "203.0.113.20");
-}
-
-#[test]
-fn login_peer_with_chat_key_creates_paired_peer_with_token() {
-    let db = Db::open(&unique_tmp_dir("login-chat").join("plain.db")).expect("open db");
-    db.login_peer(
-        "p1",
-        "Pixel 9",
-        "203.0.113.10",
-        8443,
-        DeviceType::Phone,
-        &plain_libs::utils::base64::base64_encode(&[7; 32]),
-        &plain_libs::utils::base64::base64_encode(&[8; 32]),
-        &plain_libs::utils::base64::base64_encode(&[3; 32]),
-    )
-    .expect("login and pair peer");
-
-    let peer = db.get_peer_by_id("p1").expect("paired peer");
-    assert_eq!(peer.status, PeerStatus::Paired);
-    assert_eq!(peer.key, plain_libs::utils::base64::base64_encode(&[3; 32]));
-    assert_eq!(peer.token, plain_libs::utils::base64::base64_encode(&[7; 32]));
-    assert_eq!(peer.public_key, plain_libs::utils::base64::base64_encode(&[8; 32]));
+fn seed_logged_in_peer(db: &Db, name: &str) {
+    let encode = plain_libs::utils::base64::base64_encode;
+    let mut peer = DPeer::new("p1", name, "203.0.113.10", Some(8443), DeviceType::Phone);
+    peer.token = encode(&[4; 32]);
+    peer.public_key = encode(&[6; 32]);
+    db.upsert_peer(&peer);
 }
 
 #[test]
 fn logout_peer_clears_token_and_drops_from_login_list() {
     let db = Db::open(&unique_tmp_dir("logout").join("plain.db")).expect("open db");
-    db.login_peer(
-        "p1",
-        "Pixel 9",
-        "203.0.113.10",
-        8443,
-        DeviceType::Phone,
-        &plain_libs::utils::base64::base64_encode(&[4; 32]),
-        &plain_libs::utils::base64::base64_encode(&[6; 32]),
-        "",
-    )
-    .expect("login peer");
+    seed_logged_in_peer(&db, "Fixture");
     assert_eq!(db.get_login_peers().len(), 1);
 
     db.logout_peer("p1").unwrap();
@@ -146,17 +73,7 @@ fn logout_peer_clears_token_and_drops_from_login_list() {
 #[test]
 fn update_peer_name_renames_only() {
     let db = Db::open(&unique_tmp_dir("rename").join("plain.db")).expect("open db");
-    db.login_peer(
-        "p1",
-        "old",
-        "203.0.113.10",
-        8443,
-        DeviceType::Phone,
-        &plain_libs::utils::base64::base64_encode(&[4; 32]),
-        &plain_libs::utils::base64::base64_encode(&[6; 32]),
-        "",
-    )
-    .expect("login peer");
+    seed_logged_in_peer(&db, "old");
 
     db.with_conn(|connection| {
         crate::infrastructure::db::chat_store::peers::update_name(connection, "p1", "new-name")
@@ -239,24 +156,33 @@ fn unknown_port_is_null_and_has_no_connection_urls() {
 fn login_credentials_are_raw_blobs_and_logout_clears_the_token() {
     let db = Db::open(std::path::Path::new(":memory:")).unwrap();
     let encode = plain_libs::utils::base64::base64_encode;
-    db.login_peer(
-        "test-peer", "Test peer", "", 8080, DeviceType::Phone,
-        &encode(&[0xef; 32]), &encode(&[0xa4; 32]), &encode(&[0x80; 32]),
-    )
-    .unwrap();
+    use crate::features::peers::pairing::peer_store::{self, Facts};
+    peer_store::save_confirmed(&db, Facts {
+        id: "test-peer".into(), name: "Test peer".into(), ip: String::new(),
+        port: 8080, device_type: DeviceType::Phone, key: encode(&[0x80; 32]),
+        public_key: encode(&[0xa4; 32]), encryption_public_key: encode(&[0xb5; 32]),
+    }, None, Some(&encode(&[0xef; 32]))).unwrap();
 
     db.with_conn(|conn| -> plain_libs::rusqlite::Result<()> {
         let mut statement = conn.prepare("PRAGMA table_info(peers)")?;
         let columns = statement
             .query_map([], |row| row.get::<_, String>(1))?
             .collect::<Result<Vec<_>, _>>()?;
-        assert!(!columns.iter().any(|name| matches!(name.as_str(), "key" | "token")));
+        assert!(!columns.iter().any(|name| matches!(name.as_str(), "key" | "token" | "public_key")));
+        let encryption_key = conn.query_row(
+            "SELECT encryption_public_key FROM peers WHERE id='test-peer'", [],
+            |row| row.get::<_, Option<Vec<u8>>>(0),
+        )?;
+        assert_eq!(encryption_key, Some(vec![0xb5; 32]));
+        for invalid in ["zeroblob(31)", "'text key'"] {
+            assert!(conn.execute(&format!("UPDATE peers SET encryption_public_key={invalid} WHERE id='test-peer'"), []).is_err());
+        }
         Ok(())
     }).unwrap();
 
     let credentials = || {
         db.with_conn(|c| c.query_row(
-            "SELECT chat_token, public_key, manage_token FROM peers WHERE id='test-peer'",
+            "SELECT chat_token, signature_public_key, manage_token FROM peers WHERE id='test-peer'",
             [],
             |row| Ok((row.get::<_, Vec<u8>>(0)?, row.get::<_, Vec<u8>>(1)?, row.get::<_, Option<Vec<u8>>>(2)?)),
         )).unwrap()

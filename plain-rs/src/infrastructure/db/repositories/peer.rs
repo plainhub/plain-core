@@ -8,7 +8,7 @@ use crate::infrastructure::db::Db;
 use crate::infrastructure::db::now_iso;
 
 pub(crate) const PEER_COLS: &str =
-    "id,name,ip,chat_token,public_key,status,port,device_type,manage_token,created_at,updated_at";
+    "id,name,ip,chat_token,signature_public_key,status,port,device_type,manage_token,created_at,updated_at,encryption_public_key";
 
 pub(crate) fn row_to_peer(row: &plain_libs::rusqlite::Row<'_>) -> plain_libs::rusqlite::Result<DPeer> {
     Ok(DPeer {
@@ -23,6 +23,7 @@ pub(crate) fn row_to_peer(row: &plain_libs::rusqlite::Row<'_>) -> plain_libs::ru
         token: key_blob::read_optional(row, 8)?,
         created_at: row.get(9)?,
         updated_at: row.get(10)?,
+        encryption_public_key: row.get(11)?,
     })
 }
 
@@ -54,11 +55,11 @@ impl Db {
         let conn = self.0.lock().unwrap();
         let result = (|| -> plain_libs::rusqlite::Result<usize> {
             conn.execute(
-            "INSERT INTO peers (id,name,ip,chat_token,public_key,status,port,device_type,manage_token,created_at,updated_at)
+            "INSERT INTO peers (id,name,ip,chat_token,signature_public_key,status,port,device_type,manage_token,created_at,updated_at)
              VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)
              ON CONFLICT(id) DO UPDATE SET
                name=excluded.name, ip=excluded.ip, chat_token=excluded.chat_token,
-               public_key=excluded.public_key, status=excluded.status,
+               signature_public_key=excluded.signature_public_key, status=excluded.status,
                port=excluded.port, device_type=excluded.device_type,
                manage_token=excluded.manage_token, updated_at=excluded.updated_at",
             params![
@@ -106,71 +107,6 @@ impl Db {
         if let Err(error) = result {
             log::error!("update_peer_status_and_key failed id={id} err={error}");
         }
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    pub fn login_peer(
-        &self,
-        id: &str,
-        name: &str,
-        ip: &str,
-        port: u16,
-        device_type: DeviceType,
-        token: &str,
-        signature_public_key: &str,
-        chat_key: &str,
-    ) -> Result<(), String> {
-        self.login_peer_confirmed(
-            id,
-            name,
-            ip,
-            port,
-            device_type,
-            token,
-            signature_public_key,
-            chat_key,
-            signature_public_key,
-        )
-    }
-    pub fn login_peer_confirmed(
-        &self,
-        id: &str,
-        name: &str,
-        ip: &str,
-        port: u16,
-        device_type: DeviceType,
-        token: &str,
-        signature_public_key: &str,
-        chat_key: &str,
-        previous_identity: &str,
-    ) -> Result<(), String> {
-        let now = now_iso();
-        let conn = self.0.lock().unwrap();
-        let result = conn.execute(
-            "INSERT INTO peers (id,name,ip,chat_token,public_key,status,port,device_type,manage_token,created_at,updated_at)
-             VALUES (?1,?2,?3,?9,?7,CASE WHEN ?9 IS NOT NULL THEN 'PAIRED' ELSE 'UNPAIRED' END,?4,?5,?6,?8,?8)
-             ON CONFLICT(id) DO UPDATE SET
-               manage_token=excluded.manage_token, ip=excluded.ip, port=excluded.port,
-               name=CASE WHEN excluded.name<>'' THEN excluded.name ELSE peers.name END,
-               device_type=CASE WHEN excluded.device_type<>'' THEN excluded.device_type ELSE peers.device_type END,
-               public_key=coalesce(excluded.public_key,peers.public_key),
-               chat_token=coalesce(excluded.chat_token,peers.chat_token),
-               status=CASE WHEN excluded.chat_token IS NOT NULL THEN 'PAIRED' ELSE peers.status END,
-               updated_at=excluded.updated_at
-             WHERE peers.public_key IS NULL OR peers.public_key=?10",
-            params![
-                id, name, ip, port as i64, device_type,
-                key_blob::encode(token).map_err(|error| error.to_string())?,
-                key_blob::optional(signature_public_key).map_err(|error| error.to_string())?, now,
-                key_blob::optional(chat_key).map_err(|error| error.to_string())?,
-                key_blob::optional(previous_identity).map_err(|error| error.to_string())?,
-            ],
-        );
-        if result.map_err(|e| e.to_string())? != 1 {
-            return Err("Peer identity changed".into());
-        }
-        log::info!("login_peer ok id={} name={} host={}:{}", id, name, ip, port);
-        Ok(())
     }
 
     pub fn logout_peer(&self, id: &str) -> Result<(), String> {

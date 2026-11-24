@@ -20,15 +20,21 @@ impl Mutation {
         plain_libs::serde_json::from_str::<crate::graphql::resolvers::chat::content::ChatContent>(
             &content,
         )?;
-        let Some(received) = plain_rs::features::chat::messages::message_lifecycle::receive(
-            &c.state.db,
-            &c.authenticated.peer.id,
-            &c.channel_id,
-            &content,
-            &c.authenticated.signature_b64,
-            c.authenticated.timestamp,
-        )?
-        else {
+        use plain_rs::features::chat::messages::message_lifecycle;
+        let received = if c.channel_id.is_empty() {
+            message_lifecycle::receive(
+                &c.state.db, &c.authenticated.peer.id, "", &content,
+                &c.authenticated.signature_b64, c.authenticated.timestamp,
+            )?
+        } else {
+            let message_id = c.authenticated.message_id.as_deref()
+                .ok_or_else(|| plain_graphql::Error::new("Missing signed channel message ID"))?;
+            let actor = c.state.native_client_id().map_err(plain_graphql::Error::new)?;
+            message_lifecycle::receive_channel(
+                &c.state.db, &actor, &c.authenticated.peer.id, &c.channel_id, message_id, &content,
+            )?
+        };
+        let Some(received) = received else {
             return Ok(vec![]);
         };
         let item = item(&received.chat)?;
@@ -63,10 +69,7 @@ impl Mutation {
         receive(
             ctx,
             channel_id,
-            Notification::Invite {
-                channel_key: input.channel_key,
-                state: input.state.try_into()?,
-            },
+            Notification::Invite(input.state.try_into()?),
         )
         .await
     }
@@ -154,7 +157,6 @@ async fn receive(
 
 #[derive(InputObject)]
 struct ChannelInviteInput {
-    channel_key: String,
     state: ChannelStateInput,
 }
 
@@ -163,6 +165,7 @@ struct ChannelStateInput {
     name: String,
     version: Long,
     members: Vec<ChannelMemberInput>,
+    signature: String,
 }
 
 #[derive(InputObject)]
@@ -172,7 +175,8 @@ struct ChannelMemberInput {
     name: Option<String>,
     device_type: Option<DeviceType>,
     ip: Option<String>,
-    public_key: Option<String>,
+    signature_public_key: String,
+    encryption_public_key: String,
     port: Option<i32>,
 }
 
@@ -198,7 +202,8 @@ impl TryFrom<ChannelStateInput> for State {
                     name: member.name,
                     device_type: member.device_type.map(Into::into),
                     ip: member.ip,
-                    public_key: member.public_key,
+                    signature_public_key: member.signature_public_key,
+                    encryption_public_key: member.encryption_public_key,
                     port,
                 })
             })
@@ -207,6 +212,7 @@ impl TryFrom<ChannelStateInput> for State {
             name: input.name,
             version: input.version.0,
             members,
+            signature: input.signature,
         })
     }
 }

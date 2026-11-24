@@ -1,3 +1,4 @@
+use crate::features::peers::pairing::security::same_public_key;
 use crate::features::services::discovery::pairing_error::PairingFailure;
 use crate::features::discovery::nearby_devices::DiscoveryMethod;
 use crate::features::discovery::nearby_http;
@@ -477,7 +478,7 @@ pub async fn execute(state: &CoreRuntime, request: Request) -> plain_libs::anyho
                 "Invalid pairing client ID"
             );
             let local_key =
-                crate::features::services::peers::peer_wire::signing_keypair(&state.prefs)?;
+                crate::features::prefs::security::signing_keypair(&state.prefs)?;
             let request = PairingRequest {
                 to_id: state
                     .native_client_id()
@@ -494,7 +495,7 @@ pub async fn execute(state: &CoreRuntime, request: Request) -> plain_libs::anyho
                 crate::infrastructure::db::chat_store::peers::get(&state.db, &request.from_id)?;
             let saved_key = known.as_ref().filter(|peer| !peer.public_key.is_empty());
             if let Some(peer) = saved_key {
-                if peer.public_key != request.payload.signature_public_key {
+                if !same_public_key(&peer.public_key, &request.payload.signature_public_key) {
                     return Ok(Value::Null);
                 }
             } else if !state

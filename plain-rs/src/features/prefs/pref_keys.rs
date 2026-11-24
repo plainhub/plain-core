@@ -90,7 +90,8 @@ pref_keys! {
         CLIENT_ID = "client_id",
         ADB_TOKEN = "adb_token",
         MASTER_SECRET = "master_secret",
-        SIGNATURE_KEY_PAIR = "signature_key_pair",
+        SIGNATURE_PRIVATE_KEY = "signature_private_key",
+        ENCRYPTION_PRIVATE_KEY = "encryption_private_key",
     }
 }
 

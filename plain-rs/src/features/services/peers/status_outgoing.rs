@@ -226,7 +226,7 @@ impl Outgoing {
                 == Some(&actor),
             "Identity changed"
         );
-        let keypair = crate::features::services::peers::peer_wire::signing_keypair(&state.prefs)?;
+        let keypair = crate::features::prefs::security::signing_keypair(&state.prefs)?;
         let key = plain_libs::utils::base64::base64_decode(&peer.key);
         let init = crypto::registration(&key, &actor, "/status")
             .ok_or_else(|| plain_libs::anyhow::anyhow!("Invalid peer key"))?;

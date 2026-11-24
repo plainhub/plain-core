@@ -17,8 +17,8 @@ fn fixture() -> (plain_libs::temporary::TempDir, crate::server::ContentServer) {
     prefs.set("device_name", "Actual tablet").unwrap();
     prefs
         .set(
-            "signature_key_pair",
-            plain_libs::utils::base64::base64_encode(&key),
+            "signature_private_key",
+            plain_libs::utils::base64::base64_encode(&key[..32]),
         )
         .unwrap();
     let server = crate::server::ContentServer::start(
@@ -38,6 +38,8 @@ fn add_peer(state: &ServerState, id: &str, paired: bool) {
         Some(2443),
         plain_rs::features::chat::enums::DeviceType::Tablet,
     );
+    peer.encryption_public_key = Some(plain_libs::crypto::hpke::public_key(&[22; 32]));
+    peer.public_key = plain_libs::utils::base64::base64_encode(&[9; 32]);
     if paired {
         peer.key = plain_libs::utils::base64::base64_encode(&[8; 32]);
         peer.status = plain_rs::features::chat::enums::PeerStatus::Paired;
@@ -60,7 +62,7 @@ async fn signed_invites_ack_keys_and_deleted_broadcast_use_rust_snapshot() {
     let (generation, mut rx) = crate::test_support::HostRequests::connect(&state.host);
     let host = state.host.clone();
     let prefs = state.prefs.clone();
-    let channel_key = channel.key.clone();
+    let actor = state.native_client_id().unwrap();
     let channel_id = channel.id.clone();
     let ble = state.ble_transport.clone();
     let responder = tokio::spawn(async move {
@@ -71,28 +73,21 @@ async fn signed_invites_ack_keys_and_deleted_broadcast_use_rust_snapshot() {
                 "peerTransportCapabilities" => json!(["BLE"]),
                 "peerTransportBleExchange" => {
                     let p = &req["params"];
-                    let key = if p["peer"]["id"] == "paired" {
-                        vec![8; 32]
-                    } else {
-                        plain_libs::utils::base64::base64_decode(&channel_key)
-                    };
-                    let body = plain_rs::features::services::peers::ble_transport::test_peer_wire(
-                        &ble, p, &key,
-                    );
-                    let pieces: plain_rs::infrastructure::transport::graphql_request::SignedEnvelope = plain_libs::serde_json::from_str(&body).unwrap();
+                    let plain_rs::infrastructure::protocols::ble::Request::PeerGraphql { body, channel_id: cid, .. } = ble.request_for_test(p) else { panic!("Expected peer request") };
+                    let id = p["peer"]["id"].as_str().unwrap();
                     let public = plain_libs::utils::base64::base64_encode(
-                        &plain_rs::features::services::peers::peer_wire::signing_keypair(&prefs)
-                            .unwrap()[32..],
+                        &plain_rs::features::prefs::security::signing_keypair(&prefs).unwrap()[32..],
                     );
-                    assert!(plain_libs::crypto::ed25519_verify(
-                        &public,
-                        &pieces.signing_bytes(if p["peer"]["id"] == "paired" {
-                            ""
-                        } else {
-                            &channel_id
-                        }),
-                        &pieces.signature
-                    ));
+                    let (body, key) = if cid.is_empty() {
+                        let key = [8; 32];
+                        let body = plain_rs::features::services::peers::ble_transport::test_peer_wire(&ble, p, &key);
+                        (body, key)
+                    } else {
+                        plain_rs::features::services::peers::ble_transport::test_channel_wire(
+                            &body, &[22; 32], &cid, &actor, id, &public,
+                        )
+                    };
+                    let pieces: plain_rs::infrastructure::transport::graphql_request::SignedEnvelope = plain_libs::serde_json::from_str(&body).unwrap();
                     let wire: Value = plain_libs::serde_json::from_str(&body).unwrap();
                     let field = [
                         "notifyChannelInvite",
@@ -109,7 +104,7 @@ async fn signed_invites_ack_keys_and_deleted_broadcast_use_rust_snapshot() {
                             "COMPUTER"
                         );
                     }
-                    if p["peer"]["id"] == "paired" {
+                    if field == "notifyChannelInvite" {
                         assert!(
                             matches!(ble.request_for_test(p), plain_rs::infrastructure::protocols::ble::Request::PeerGraphql { channel_id, .. } if channel_id.is_empty())
                         );
@@ -325,6 +320,9 @@ async fn peer_key_changes_before_physical_send_are_rejected_and_accept_leave_dec
         "Peer changed before send"
     );
     let host = state.host.clone();
+    let actor = state.native_client_id().unwrap();
+    let sender = plain_rs::features::prefs::security::get_entry(&state.prefs, "signature_public_key")
+        .unwrap().unwrap().as_str().unwrap().to_owned();
     let ble = state.ble_transport.clone();
     let responder = tokio::spawn(async move {
         let mut kinds = Vec::new();
@@ -333,10 +331,10 @@ async fn peer_key_changes_before_physical_send_are_rejected_and_accept_leave_dec
             let result = match req["method"].as_str().unwrap() {
                 "peerTransportCapabilities" => json!(["BLE"]),
                 "peerTransportBleExchange" => {
-                    let body = plain_rs::features::services::peers::ble_transport::test_peer_wire(
-                        &ble,
-                        &req["params"],
-                        &[9; 32],
+                    let p = &req["params"];
+                    let plain_rs::infrastructure::protocols::ble::Request::PeerGraphql { channel_id, body, .. } = ble.request_for_test(p) else { panic!("Expected peer request") };
+                    let (body, response_key) = plain_rs::features::services::peers::ble_transport::test_channel_wire(
+                        &body, &[22; 32], &channel_id, &actor, "owner", &sender,
                     );
                     let wire: Value = plain_libs::serde_json::from_str::<Value>(&body).unwrap();
                     let query = wire["query"].as_str().unwrap();
@@ -351,7 +349,7 @@ async fn peer_key_changes_before_physical_send_are_rejected_and_accept_leave_dec
                         &ble,
                         &req["params"],
                         json!({"data":{(field):true}}),
-                        &[9; 32],
+                        &response_key,
                     )
                 }
                 method => panic!("Unexpected {method}"),

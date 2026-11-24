@@ -15,20 +15,20 @@ fn channel_snapshots_include_each_member_once_and_sign_typed_variables() {
         DeviceType::Unknown,
     );
     peer.public_key = base64_encode(&[8; 32]);
+    peer.encryption_public_key = Some([40; 32]);
     peers::save(&db, &[peer], SaveMode::Insert).unwrap();
-    let mut channel = DChannel::new("Group", "owner");
-    channel.key = base64_encode(&[7; 32]);
+    let channel = DChannel::new("Group", "owner");
     let state = snapshot(
         &db,
         &channel,
         "owner",
         "Owner".into(),
         DeviceType::Computer,
-        &public,
+        &keys,
+        &[41; 32],
         vec![
             ChannelMember::new("owner"),
             ChannelMember::pending("paired"),
-            ChannelMember::new("missing"),
         ],
     )
     .unwrap();
@@ -42,7 +42,7 @@ fn channel_snapshots_include_each_member_once_and_sign_typed_variables() {
     .unwrap();
     assert!(plain_libs::crypto::ed25519_verify(
         &base64_encode(&public),
-        &envelope.signing_bytes(""),
+        &envelope.signing_bytes("", None),
         &envelope.signature
     ));
     assert!(
@@ -55,10 +55,9 @@ fn channel_snapshots_include_each_member_once_and_sign_typed_variables() {
         vars,
         json!({
             "channelId":channel.id,
-            "input":{"channelKey":channel.key,"state":{"name":"Group","version":channel.version,"members":[
-                {"peerId":"owner","status":"JOINED","name":"Owner","deviceType":"COMPUTER","publicKey":base64_encode(&public)},
-                {"peerId":"paired","status":"PENDING","name":"Paired member","deviceType":"OTHER","ip":"","publicKey":base64_encode(&[8;32]),"port":1234},
-                {"peerId":"missing","status":"JOINED"}
+            "input":{"state":{"name":"Group","version":channel.version,"signature":state.signature,"members":[
+                {"peerId":"owner","status":"JOINED","name":"Owner","deviceType":"COMPUTER","signaturePublicKey":base64_encode(&public),"encryptionPublicKey":base64_encode(&[41;32])},
+                {"peerId":"paired","status":"PENDING","name":"Paired member","deviceType":"OTHER","ip":"","signaturePublicKey":base64_encode(&[8;32]),"encryptionPublicKey":base64_encode(&[40;32]),"port":1234}
             ]}}
         })
     );

@@ -230,8 +230,8 @@ fn chat_fixture() -> (plain_libs::temporary::TempDir, crate::server::ContentServ
         .runtime_state()
         .prefs
         .set(
-            "signature_key_pair",
-            plain_libs::utils::base64::base64_encode(&key),
+            "signature_private_key",
+            plain_libs::utils::base64::base64_encode(&key[..32]),
         )
         .unwrap();
     (dir, server)
@@ -492,6 +492,8 @@ async fn channel_roots_read_current_store_and_share_runtime_mutations_without_ho
     );
     peer.status = plain_rs::features::chat::enums::PeerStatus::Paired;
     peer.key = plain_libs::utils::base64::base64_encode(&[7; 32]);
+    peer.public_key = plain_libs::utils::base64::base64_encode(&[19; 32]);
+    peer.encryption_public_key = Some(plain_libs::crypto::hpke::public_key(&[22; 32]));
     plain_rs::infrastructure::db::chat_store::peers::save(
         &state.db,
         &[peer],
@@ -652,4 +654,206 @@ async fn channel_action_projection_matches_rust_event_projection_without_host_ca
         row["actions"],
         json!({"isOwner":false,"canRename":false,"canManageMembers":false,"canLeave":true,"canDelete":false})
     );
+}
+
+#[cfg(feature = "http_transport")]
+#[tokio::test]
+async fn pull_refresh_returns_cached_channels_then_applies_the_owners_signed_snapshot() {
+    use plain_rs::features::chat::channels::messages::ChannelMember;
+    use plain_rs::infrastructure::db::chat_store::{SaveMode, channels, peers};
+
+    let (_member_dir, member) = channel_fixture();
+    let (_owner_dir, owner) = channel_fixture();
+    let member_state = member.runtime_state();
+    let owner_state = owner.runtime_state();
+    let member_id = member_state.native_client_id().unwrap();
+    let owner_id = owner_state.native_client_id().unwrap();
+    let (cert, key) = plain_libs::tls::generate_pem(&["localhost".into()]).unwrap();
+    let (_, port) = owner.start_public(0, 0, cert, key).await.unwrap();
+
+    peers::save(&member_state.db, &[channel_peer(&owner_state, Some(port))], SaveMode::Insert).unwrap();
+    peers::save(&owner_state.db, &[channel_peer(&member_state, None)], SaveMode::Insert).unwrap();
+    let mut stale = plain_rs::features::chat::channels::state::create(&owner_state.db, &owner_id, "Before").unwrap();
+    stale.members = plain_libs::serde_json::to_string(&[ChannelMember::new(&owner_id), ChannelMember::new(&member_id)]).unwrap();
+    channels::save(&member_state.db, std::slice::from_ref(&stale), SaveMode::Insert).unwrap();
+    let mut fresh = stale.clone();
+    fresh.version += 1;
+    fresh.name = "After".into();
+    channels::save(&owner_state.db, &[fresh], SaveMode::Update).unwrap();
+
+    let mut events = member_state.events.subscribe();
+    let normal = channel_query(&member_state, "{chatChannels { name version }}").await;
+    assert_eq!(normal["data"]["chatChannels"][0]["name"], "Before");
+    assert!(events.try_recv().is_err());
+    let refreshed = channel_query(&member_state, "{chatChannels(refreshFromOwners:true) { name version }}").await;
+    assert_eq!(refreshed["data"]["chatChannels"][0]["name"], "Before", "{refreshed}");
+    let updated = tokio::time::timeout(std::time::Duration::from_secs(3), async {
+        loop {
+            let event = events.recv().await.unwrap();
+            if event.event_type == plain_rs::features::chat::events::WS_CHANNELS_UPDATED {
+                break event;
+            }
+        }
+    }).await.unwrap();
+    let update: Value = plain_libs::serde_json::from_str(&updated.payload).unwrap();
+    assert_eq!(update["channels"][0]["name"], "After");
+    assert_eq!(channels::get(&member_state.db, &stale.id).unwrap().unwrap().version, stale.version + 1);
+    plain_rs::features::services::chat::channel_runtime::refresh_from_owners(&member_state).await.unwrap();
+    assert!(events.try_recv().is_err());
+    let mut incomplete = channels::get(&owner_state.db, &stale.id).unwrap().unwrap();
+    incomplete.members = plain_libs::serde_json::to_string(&[
+        ChannelMember::new(&owner_id), ChannelMember::new(&member_id), ChannelMember::new("missing-peer"),
+    ]).unwrap();
+    channels::save(&owner_state.db, &[incomplete], SaveMode::Update).unwrap();
+    plain_rs::features::services::chat::channel_runtime::refresh_from_owners(&member_state).await.unwrap();
+    assert_eq!(channels::get(&member_state.db, &stale.id).unwrap().unwrap().status, stale.status);
+    assert!(events.try_recv().is_err());
+    owner_state.db.with_conn(|conn| conn.execute("DELETE FROM chat_channels WHERE id=?1", [&stale.id])).unwrap();
+    plain_rs::features::services::chat::channel_runtime::refresh_from_owners(&member_state).await.unwrap();
+    let removed = channels::get(&member_state.db, &stale.id).unwrap().unwrap();
+    assert_eq!(removed.status, plain_rs::features::chat::enums::ChannelStatus::Kicked);
+    assert_eq!(removed.version, stale.version + 1);
+    assert!(events.try_recv().is_ok());
+    member.shutdown().await;
+    owner.shutdown().await;
+}
+
+#[cfg(feature = "http_transport")]
+fn channel_peer(state: &crate::server::ServerState, port: Option<u16>) -> plain_rs::infrastructure::db::DPeer {
+    use plain_libs::utils::base64::base64_encode;
+    use plain_rs::features::chat::enums::{DeviceType, PeerStatus};
+    use plain_rs::features::prefs::security;
+    let mut peer = plain_rs::infrastructure::db::DPeer::new(
+        &state.native_client_id().unwrap(), "Fixture", "127.0.0.1", port, DeviceType::Computer,
+    );
+    peer.status = PeerStatus::Channel;
+    peer.encryption_public_key = Some(security::encryption_public_key(&state.prefs).unwrap());
+    peer.public_key = base64_encode(&security::signing_keypair(&state.prefs).unwrap()[32..]);
+    peer
+}
+
+#[cfg(feature = "http_transport")]
+#[tokio::test]
+async fn channel_attachment_links_keep_the_bytes_of_each_actual_send() {
+    use plain_rs::features::chat::channels::messages::ChannelMember;
+    use plain_rs::features::chat::enums::ChatStatus;
+    use plain_rs::features::services::chat::chat_actions;
+    use plain_rs::infrastructure::db::chat_store::{SaveMode, channels, peers};
+
+    let (_sender_dir, sender) = channel_fixture();
+    let (_receiver_dir, receiver) = channel_fixture();
+    let sender_state = sender.runtime_state();
+    let receiver_state = receiver.runtime_state();
+    let (cert, key) = plain_libs::tls::generate_pem(&["localhost".into()]).unwrap();
+    let (_, sender_port) = sender.start_public(0, 0, cert.clone(), key.clone()).await.unwrap();
+    let (_, receiver_port) = receiver.start_public(0, 0, cert, key).await.unwrap();
+    peers::save(&sender_state.db, &[channel_peer(&receiver_state, Some(receiver_port))], SaveMode::Insert).unwrap();
+    peers::save(&receiver_state.db, &[channel_peer(&sender_state, Some(sender_port))], SaveMode::Insert).unwrap();
+    let sender_id = sender_state.native_client_id().unwrap();
+    let receiver_id = receiver_state.native_client_id().unwrap();
+    let mut channel = plain_rs::features::chat::channels::state::create(&sender_state.db, &sender_id, "Attachments").unwrap();
+    channel.members = plain_libs::serde_json::to_string(&[ChannelMember::new(&sender_id), ChannelMember::new(&receiver_id)]).unwrap();
+    channels::save(&sender_state.db, std::slice::from_ref(&channel), SaveMode::Update).unwrap();
+    channels::save(&receiver_state.db, std::slice::from_ref(&channel), SaveMode::Insert).unwrap();
+    let source = plain_libs::temporary::tempdir().unwrap();
+    let path = source.path().join("fixture.txt");
+    let client = plain_libs::protocols::http_client::builder()
+        .no_proxy().danger_accept_invalid_certs(true).build().unwrap();
+    let mut links = Vec::new();
+    let mut receiver_events = receiver_state.events.subscribe();
+    for (text, bytes) in [("first", b"first"), ("later", b"later"), ("entry", b"entry")] {
+        let uri = if text == "entry" {
+            use std::io::Write;
+            let archive = source.path().join("fixture.zip");
+            let mut zip = plain_libs::zip::ZipWriter::new(std::fs::File::create(&archive).unwrap());
+            zip.start_file("file.txt", plain_libs::zip::write::SimpleFileOptions::default()).unwrap();
+            zip.write_all(bytes).unwrap();
+            zip.finish().unwrap();
+            format!("{}!zip!/file.txt", archive.display())
+        } else {
+            std::fs::write(&path, bytes).unwrap();
+            path.display().to_string()
+        };
+        let attachment = json!({"type":"FILE","attachment":{"id":"file","uri":uri,"size":bytes.len(),
+            "durationMs":0,"width":0,"height":0,"summary":"","fileName":"fixture.txt"}});
+        if text == "entry" {
+            let duplicate = json!({"type":"MESSAGE","value":{"format":"PLAIN",
+                "items":[attachment.clone(), attachment.clone()]}}).to_string();
+            let err = chat_actions::send_many(&sender_state, vec![format!("channel:{}", channel.id)], duplicate)
+                .await.unwrap_err();
+            assert_eq!(err.to_string(), "Chat attachment IDs must be unique");
+        }
+        let content = json!({"type":"MESSAGE","value":{"format":"PLAIN","text":text,"items":[attachment]}}).to_string();
+        let sent = chat_actions::send_many(&sender_state, vec![format!("channel:{}", channel.id)], content)
+            .await.unwrap();
+        assert_eq!(sent[0].status, ChatStatus::Sent, "{:?}", sent[0].status_data);
+        tokio::time::timeout(std::time::Duration::from_secs(8), async {
+            loop {
+                let event = receiver_events.recv().await.unwrap();
+                if event.event_type != plain_rs::features::chat::events::WS_MESSAGE_CREATED
+                    && event.event_type != plain_rs::features::chat::events::WS_MESSAGE_UPDATED { continue; }
+                let rows: Value = plain_libs::serde_json::from_str(&event.payload).unwrap();
+                let content: Value = plain_libs::serde_json::from_str(rows[0]["content"].as_str().unwrap()).unwrap();
+                if content["value"]["text"] != text { continue; }
+                let uri = content["value"]["items"][0]["attachment"]["uri"].as_str().unwrap();
+                if let Some(link) = uri.strip_prefix("fsid:") {
+                    links.push(link.to_owned());
+                } else if let Some(suffix) = uri.strip_prefix("fid:") {
+                    let store = plain_rs::features::files::app_files::FileStore::new(
+                        receiver_state.db.clone(), receiver_state.directory.clone(),
+                    );
+                    assert_eq!(std::fs::read(store.resolve(suffix).unwrap()).unwrap(), bytes);
+                    break;
+                }
+            }
+        }).await.unwrap();
+        if text == "first" {
+            std::fs::remove_file(&path).unwrap();
+            let retry = plain_rs::features::services::chat::chat_delivery::deliver_observed(
+                &sender_state, &sent[0].id, Some(vec![receiver_id.clone()]),
+                plain_rs::infrastructure::transport::router::Attempt::Retry, |_| {},
+            ).await.unwrap();
+            assert_eq!(retry.chat.unwrap().status, ChatStatus::Sent);
+            assert_eq!(receiver_state.db.get_all_chats().len(), 1);
+        }
+    }
+    assert_eq!(links.len(), 3);
+    for (link, bytes) in links.iter().zip([b"first", b"later", b"entry"]) {
+        let url = plain_rs::features::services::files::links::download_url(link);
+        let response = client.get(format!("https://127.0.0.1:{sender_port}{url}")).send().await.unwrap();
+        assert!(response.status().is_success());
+        assert_eq!(response.bytes().await.unwrap().as_ref(), bytes);
+    }
+    sender.shutdown().await;
+    receiver.shutdown().await;
+}
+
+#[cfg(feature = "http_transport")]
+#[tokio::test]
+async fn remote_channel_attachment_import_requires_storage_before_creating_a_message() {
+    let (_dir, server) = channel_fixture();
+    let state = server.runtime_state();
+    state.prefs.set("api_permissions", Vec::<String>::new()).unwrap();
+    let result = channel_query(&state, r#"mutation {
+        sendChatItems(targets:["channel:fixture"],content:{message:{format:PLAIN,items:[
+            {type:FILE,attachment:{id:"file",uri:"/fixture.txt",size:1}}
+        ]}}){id}
+    }"#).await;
+    assert_eq!(result["errors"][0]["message"], "NO_PERMISSION", "{result}");
+    assert!(state.db.get_all_chats().is_empty());
+    let content = json!({"type":"MESSAGE","value":{"format":"PLAIN","items":[
+        {"type":"FILE","attachment":{"id":"file","uri":"/fixture.txt","size":1}}
+    ]}});
+    let row = plain_rs::features::chat::messages::message_lifecycle::create_many(
+        &state.db, &[(String::new(), "fixture".into())], &content.to_string(),
+    ).unwrap().remove(0);
+    for operation in [
+        format!(r#"retryChatItem(id:"{}"){{id}}"#, row.id),
+        format!(r#"forwardChatItems(id:"{}",targets:["channel:fixture"]){{id}}"#, row.id),
+    ] {
+        let result = channel_query(&state, &format!("mutation {{ {operation} }}")).await;
+        assert_eq!(result["errors"][0]["message"], "NO_PERMISSION", "{result}");
+        assert_eq!(state.db.get_all_chats().len(), 1);
+    }
+    server.shutdown().await;
 }

@@ -248,10 +248,8 @@ async fn authenticated_developer_apis_follow_mode_changes_without_relogin() {
             if enabled {
                 assert!(result.get("errors").is_none(), "{document}: {result}");
                 if document == "{prefs}" {
-                    assert_eq!(
-                        result["data"]["prefs"],
-                        Value::Object(state.prefs.entries().into_iter().collect())
-                    );
+                    let expected = Value::Object(state.prefs.entries().into_iter().collect());
+                    assert!(result["data"]["prefs"] == expected, "Stored preferences differ");
                 }
             } else {
                 assert_eq!(

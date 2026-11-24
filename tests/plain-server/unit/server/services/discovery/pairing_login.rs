@@ -125,7 +125,7 @@ async fn completed_without_another_wait(
 async fn register_target(state: &ServerState, remote: &ServerState) -> String {
     let id = remote.native_client_id().unwrap();
     let key =
-        plain_rs::features::services::peers::peer_wire::signing_keypair(&remote.prefs).unwrap();
+        plain_rs::features::prefs::security::signing_keypair(&remote.prefs).unwrap();
     state
         .nearby_devices
         .observe(
@@ -468,19 +468,17 @@ async fn known_key_mismatch_preserves_existing_grants() {
     let peer_id = register_target(&state, &other).await;
     let mut notices = state.events.subscribe();
     let remote_id = other.native_client_id().unwrap();
-    state
-        .db
-        .login_peer(
-            &remote_id,
-            "Previous",
-            "127.0.0.1",
-            port,
-            plain_rs::features::chat::enums::DeviceType::Computer,
-            &base64_encode(&[73; 32]),
-            &base64_encode(&[9; 32]),
-            &base64_encode(&[8; 32]),
-        )
-        .unwrap();
+    plain_rs::features::peers::pairing::peer_store::save_confirmed(
+        &state.db,
+        plain_rs::features::peers::pairing::peer_store::Facts {
+            id: remote_id.clone(), name: "Previous".into(), ip: "127.0.0.1".into(),
+            port: port, device_type: plain_rs::features::chat::enums::DeviceType::Computer,
+            key: base64_encode(&[8; 32]), public_key: base64_encode(&[9; 32]),
+            encryption_public_key: plain_libs::utils::base64::base64_encode(&[32; 32]),
+        },
+        None,
+        Some(&base64_encode(&[73; 32])),
+    ).unwrap();
     assert!(
         pairing_attempts::start(
             &state,
@@ -592,20 +590,18 @@ async fn a_local_commit_failure_preserves_the_old_row_and_reports_the_remote_gra
         .unwrap();
     let remote_id = other.native_client_id().unwrap();
     let signing =
-        plain_rs::features::services::peers::peer_wire::signing_keypair(&other.prefs).unwrap();
-    state
-        .db
-        .login_peer(
-            &remote_id,
-            "Previous",
-            "127.0.0.1",
-            port,
-            plain_rs::features::chat::enums::DeviceType::Computer,
-            &base64_encode(&[73; 32]),
-            &base64_encode(&signing[32..]),
-            &base64_encode(&[7; 32]),
-        )
-        .unwrap();
+        plain_rs::features::prefs::security::signing_keypair(&other.prefs).unwrap();
+    plain_rs::features::peers::pairing::peer_store::save_confirmed(
+        &state.db,
+        plain_rs::features::peers::pairing::peer_store::Facts {
+            id: remote_id.clone(), name: "Previous".into(), ip: "127.0.0.1".into(),
+            port: port, device_type: plain_rs::features::chat::enums::DeviceType::Computer,
+            key: base64_encode(&[7; 32]), public_key: base64_encode(&signing[32..]),
+            encryption_public_key: base64_encode(&plain_rs::features::prefs::security::encryption_public_key(&other.prefs).unwrap()),
+        },
+        None,
+        Some(&base64_encode(&[73; 32])),
+    ).unwrap();
     state.db.with_conn(|conn| conn.execute_batch("CREATE TRIGGER fail_local_pair BEFORE UPDATE ON peers BEGIN SELECT RAISE(ABORT,'fixture local failure'); END;")).unwrap();
     let mut events = ConfirmationCallbacks::new(&other);
     assert!(
@@ -723,8 +719,21 @@ async fn web_management_pairs_by_device_id_and_keeps_the_grant_on_a() {
     notice(&mut notices, "PAIRING_COMPLETED").await;
     let peer = peers::get(&a_state.db, &b_id).unwrap().unwrap();
     let grant = b_state.db.session_get(&a_id).unwrap().unwrap();
+    let encryption_key = |prefs: &plain_rs::features::prefs::Prefs| {
+        let key = prefs.get::<String>("encryption_private_key").unwrap().unwrap();
+        plain_libs::crypto::hpke::public_key(&base64_decode(&key).try_into().unwrap())
+    };
+    assert_eq!(peer.encryption_public_key, Some(encryption_key(&b_state.prefs)));
+    assert_eq!(peers::get(&b_state.db, &a_id).unwrap().unwrap().encryption_public_key,
+        Some(encryption_key(&a_state.prefs)));
     assert!(!peer.token.is_empty());
     assert_eq!(peer.token, grant.token);
+    use plain_rs::features::services::chat::channel_runtime::{self, Request};
+    let created = channel_runtime::execute(&a_state, Request::Create { name: "Fixture channel".into() }).await.unwrap();
+    let channel_id = created["channel"]["id"].as_str().unwrap().to_owned();
+    let invite = channel_runtime::execute(&a_state, Request::Invite { id: channel_id.clone(), peer: b_id }).await.unwrap();
+    assert_eq!(invite["response"]["data"]["notifyChannelInvite"], true);
+    assert!(plain_rs::infrastructure::db::chat_store::channels::get(&b_state.db, &channel_id).unwrap().is_some());
     assert!(
         a_state
             .db
@@ -786,4 +795,48 @@ async fn configured_password_can_complete_without_manual_approval_when_policy_al
     assert_eq!(base64_decode(&peer.token).len(), 32);
     local.shutdown().await;
     remote.shutdown().await;
+}
+
+#[cfg(feature = "http_transport")]
+#[tokio::test]
+async fn native_management_rejects_a_changed_encryption_key_at_either_peer() {
+    use plain_rs::features::chat::enums::DeviceType;
+    use plain_rs::features::peers::pairing::peer_store::{self, Facts};
+    use plain_rs::features::prefs::security;
+
+    for pin_at_initiator in [true, false] {
+        let (_local_dir, local, local_port) = server().await;
+        let (_remote_dir, remote, remote_port) =
+            server_with_policy(crate::server::PairingApproval::FollowPasswordLogin).await;
+        let state = local.runtime_state();
+        let other = remote.runtime_state();
+        let peer_id = register_target(&state, &other).await;
+        let (holder, target, port) = if pin_at_initiator {
+            (&state, &other, remote_port)
+        } else {
+            (&other, &state, local_port)
+        };
+        let id = target.native_client_id().unwrap();
+        let pin = plain_libs::crypto::hpke::public_key(&[92; 32]);
+        peer_store::save(&holder.db, Facts {
+            id: id.clone(), name: "Fixture".into(), ip: "127.0.0.1".into(), port,
+            device_type: DeviceType::Computer, key: base64_encode(&[8; 32]),
+            public_key: base64_encode(&security::signing_keypair(&target.prefs).unwrap()[32..]),
+            encryption_public_key: base64_encode(&pin),
+        }).unwrap();
+        security::set_password_login(&other.prefs, "fixture-password").unwrap();
+        other.prefs.set("login_require_approval", false).unwrap();
+        let mut notices = state.events.subscribe();
+        pairing_attempts::start(&state, peer_id, pairing_attempts::Mode::Manage,
+            Some("fixture-password".into()), None).await.unwrap();
+        notice(&mut notices, "PAIRING_FAILED").await;
+        let retained = holder.db.get_peer_by_id(&id).unwrap();
+        assert_eq!(retained.encryption_public_key, Some(pin));
+        assert!(retained.token.is_empty());
+        if !pin_at_initiator {
+            assert!(other.db.session_get(&state.native_client_id().unwrap()).unwrap().is_none());
+        }
+        local.shutdown().await;
+        remote.shutdown().await;
+    }
 }

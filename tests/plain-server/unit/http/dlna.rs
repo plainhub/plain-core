@@ -13,8 +13,8 @@ fn fixture() -> (plain_libs::temporary::TempDir, crate::server::ContentServer) {
     let (key, _public) = plain_libs::crypto::ed25519_generate();
     prefs
         .set(
-            "signature_key_pair",
-            plain_libs::utils::base64::base64_encode(&key),
+            "signature_private_key",
+            plain_libs::utils::base64::base64_encode(&key[..32]),
         )
         .unwrap();
     let server = crate::server::ContentServer::start(

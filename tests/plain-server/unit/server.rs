@@ -183,7 +183,8 @@ async fn core_startup_persists_complete_identity_and_regenerates_the_native_sess
     let first = prefs.entries();
     for key in [
         CLIENT_ID,
-        SIGNATURE_KEY_PAIR,
+        SIGNATURE_PRIVATE_KEY,
+        ENCRYPTION_PRIVATE_KEY,
         MASTER_SECRET,
         MDNS_HOSTNAME,
     ] {

@@ -38,8 +38,20 @@ impl ChatQuery {
         )
     }
 
-    fn chat_channels(&self, ctx: &Context<'_>) -> plain_graphql::Result<Vec<ChatChannel>> {
+    fn chat_channels(
+        &self,
+        ctx: &Context<'_>,
+        #[graphql(default)] refresh_from_owners: bool,
+    ) -> plain_graphql::Result<Vec<ChatChannel>> {
         let facts = plain_rs::features::chat::events::public_channels(db(ctx)?, &actor(ctx)?)?;
+        if refresh_from_owners {
+            let state = ctx.data::<crate::server::ServerState>()?.clone();
+            tokio::spawn(async move {
+                if let Err(error) = plain_rs::features::services::chat::channel_runtime::refresh_from_owners(&state).await {
+                    log::debug!("Refresh channels: {error}");
+                }
+            });
+        }
         Ok(rows(&facts, channel))
     }
 }

@@ -31,7 +31,6 @@ pub mod clipboard;
 pub mod subscriptions;
 
 pub mod peer_address;
-pub mod peer_wire;
 
 pub mod ble_transport;
 pub mod status_runtime;

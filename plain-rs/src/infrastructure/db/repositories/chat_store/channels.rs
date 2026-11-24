@@ -1,4 +1,3 @@
-use crate::infrastructure::db::key_blob;
 use crate::infrastructure::db::DChannel;
 use crate::infrastructure::db::Db;
 use crate::infrastructure::db::repositories::channel::CHANNEL_COLS;
@@ -38,8 +37,8 @@ pub fn save(db: &Db, rows: &[DChannel], mode: SaveMode) -> Result<()> {
     }
     db.with_conn(|c|->Result<()>{ let tx=c.unchecked_transaction()?;
  for row in rows {
-  let sql=match mode { SaveMode::Insert=>"INSERT INTO chat_channels(id,name,owner_id,members,key,version,status,created_at,updated_at) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9)", SaveMode::Update=>"UPDATE chat_channels SET name=?2,owner_id=?3,members=?4,key=?5,version=?6,status=?7,created_at=?8,updated_at=?9 WHERE id=?1",SaveMode::Upsert=>"INSERT INTO chat_channels(id,name,owner_id,members,key,version,status,created_at,updated_at) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9) ON CONFLICT(id) DO UPDATE SET name=excluded.name,owner_id=excluded.owner_id,members=excluded.members,key=excluded.key,version=excluded.version,status=excluded.status,updated_at=excluded.updated_at" };
-  let changed=tx.execute(sql,params![row.id,row.name,row.owner_id.as_deref().filter(|value|!value.is_empty()),row.members,key_blob::optional(&row.key)?,row.version,row.status,plain_libs::utils::dbtime::normalize(&row.created_at)?,plain_libs::utils::dbtime::normalize(&row.updated_at)?])?;
+  let sql=match mode { SaveMode::Insert=>"INSERT INTO chat_channels(id,name,owner_id,members,version,status,created_at,updated_at) VALUES(?1,?2,?3,?4,?5,?6,?7,?8)", SaveMode::Update=>"UPDATE chat_channels SET name=?2,owner_id=?3,members=?4,version=?5,status=?6,created_at=?7,updated_at=?8 WHERE id=?1",SaveMode::Upsert=>"INSERT INTO chat_channels(id,name,owner_id,members,version,status,created_at,updated_at) VALUES(?1,?2,?3,?4,?5,?6,?7,?8) ON CONFLICT(id) DO UPDATE SET name=excluded.name,owner_id=excluded.owner_id,members=excluded.members,version=excluded.version,status=excluded.status,updated_at=excluded.updated_at" };
+  let changed=tx.execute(sql,params![row.id,row.name,row.owner_id.as_deref().filter(|value|!value.is_empty()),row.members,row.version,row.status,plain_libs::utils::dbtime::normalize(&row.created_at)?,plain_libs::utils::dbtime::normalize(&row.updated_at)?])?;
   if changed!=1 { bail!("channels record missing"); }
  } tx.commit()?; Ok(()) })
 }
@@ -67,7 +66,7 @@ pub fn patch(db: &Db, before: &DChannel, after: &DChannel) -> Result<DChannel> {
     }
     db.with_conn(|c| -> Result<DChannel> {
         let tx=c.unchecked_transaction()?;
-        if tx.execute("UPDATE chat_channels SET name=?2,owner_id=?3,members=?4,key=?5,version=?6,status=?7,updated_at=?8 WHERE id=?1 AND version=?9 AND updated_at=?10",params![after.id,after.name,after.owner_id.as_deref().filter(|value|!value.is_empty()),after.members,key_blob::optional(&after.key)?,after.version,after.status,plain_libs::utils::dbtime::normalize(&after.updated_at)?,before.version,plain_libs::utils::dbtime::normalize(&before.updated_at)?])?!=1 { bail!("channel changed during mutation"); }
+        if tx.execute("UPDATE chat_channels SET name=?2,owner_id=?3,members=?4,version=?5,status=?6,updated_at=?7 WHERE id=?1 AND version=?8 AND updated_at=?9",params![after.id,after.name,after.owner_id.as_deref().filter(|value|!value.is_empty()),after.members,after.version,after.status,plain_libs::utils::dbtime::normalize(&after.updated_at)?,before.version,plain_libs::utils::dbtime::normalize(&before.updated_at)?])?!=1 { bail!("channel changed during mutation"); }
         let row=tx.query_row(&format!("SELECT {CHANNEL_COLS} FROM chat_channels WHERE id=?1"),[&after.id],row_to_channel)?;
         tx.commit()?;
         Ok(row)

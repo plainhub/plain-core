@@ -187,8 +187,8 @@ async fn retry_returns_pending_before_platform_transport_completes() {
     state
         .prefs
         .set(
-            "signature_key_pair",
-            plain_libs::utils::base64::base64_encode(&kp),
+            "signature_private_key",
+            plain_libs::utils::base64::base64_encode(&kp[..32]),
         )
         .unwrap();
     let mut remote = plain_rs::infrastructure::db::DPeer::new(

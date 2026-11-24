@@ -181,8 +181,8 @@ async fn rust_outgoing_reconnects_same_address_without_native_and_stops_without_
         prefs.set("client_id", id).unwrap();
         prefs
             .set(
-                "signature_key_pair",
-                plain_libs::utils::base64::base64_encode(&kp),
+                "signature_private_key",
+                plain_libs::utils::base64::base64_encode(&kp[..32]),
             )
             .unwrap();
         (prefs, pk.to_vec())

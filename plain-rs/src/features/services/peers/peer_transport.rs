@@ -1,3 +1,4 @@
+use crate::infrastructure::transport::contract::PeerDispatch;
 use crate::infrastructure::db::DPeer;
 use crate::infrastructure::transport::router::Attempt;
 use crate::infrastructure::transport::router::Outcome;
@@ -127,11 +128,13 @@ pub async fn send_checked(
     body: &str,
     validate: impl Fn() -> Result<(), String>,
 ) -> Result<Value, String> {
+    let client_id = state.native_client_id()?;
+    let signing_key = crate::features::prefs::security::signing_keypair(&state.prefs)
+        .map_err(|error| error.to_string())?;
+    let dispatch = PeerDispatch { peer, client_id: &client_id, channel_id, key, signing_key: &signing_key, message_id: None };
     send_checked_with_attempt(
         state,
-        peer,
-        channel_id,
-        key,
+        &dispatch,
         || Ok(Cow::Borrowed(body)),
         Attempt::Automatic,
         None,
@@ -141,17 +144,13 @@ pub async fn send_checked(
 }
 pub(crate) async fn send_chat(
     state: &CoreRuntime,
-    peer: &DPeer,
-    channel_id: &str,
-    key: &[u8],
+    dispatch: &PeerDispatch<'_>,
     sign: impl Fn() -> Result<String, String>,
     attempt: Attempt,
 ) -> Result<Value, String> {
     send_checked_with_attempt(
         state,
-        peer,
-        channel_id,
-        key,
+        dispatch,
         || sign().map(Cow::Owned),
         attempt,
         Some(&state.chat_lanes),
@@ -162,15 +161,14 @@ pub(crate) async fn send_chat(
 
 async fn send_checked_with_attempt<'a>(
     state: &CoreRuntime,
-    peer: &DPeer,
-    channel_id: &str,
-    key: &[u8],
+    dispatch: &PeerDispatch<'_>,
     body: impl Fn() -> Result<Cow<'a, str>, String>,
     attempt: Attempt,
     lanes: Option<&ChatLanes>,
     validate: impl Fn() -> Result<(), String>,
 ) -> Result<Value, String> {
-    if key.len() != 32 {
+    let peer = dispatch.peer;
+    if dispatch.key.len() != 32 {
         return Err("Invalid peer transport key".into());
     }
     if *state.stop.borrow() {
@@ -227,7 +225,7 @@ async fn send_checked_with_attempt<'a>(
         if pending.ticket.transport == TransportType::Lan {
             let response = tokio::select! {
                 _ = stop.changed() => return Err("Core stopped".into()),
-                result = spend(&mut budget, crate::features::services::peers::peer_lan::send(state, peer, channel_id, key, &body, &validate)) => result?,
+                result = spend(&mut budget, crate::features::services::peers::peer_lan::send(state, dispatch, &body, &validate)) => result?,
             };
             match response {
                 Ok(response) => {
@@ -266,13 +264,13 @@ async fn send_checked_with_attempt<'a>(
             match pending.ticket.transport {
                 TransportType::Aware => {
                     crate::features::services::peers::peer_sdk::aware_send(
-                        state, peer, channel_id, key, &body,
+                        state, dispatch, &body,
                     )
                     .await
                 }
                 TransportType::Ble => {
                     crate::features::services::peers::peer_sdk::ble_send(
-                        state, peer, channel_id, key, &body,
+                        state, dispatch, &body,
                     )
                     .await
                 }

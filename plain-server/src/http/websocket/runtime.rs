@@ -337,7 +337,7 @@ async fn run(
                                         plain_rs::features::prefs::pref_keys::CLIENT_ID,
                                         String::new(),
                                     );
-                                    let signing = plain_rs::features::services::peers::peer_wire::signing_keypair(&state.prefs)?;
+                                    let signing = plain_rs::features::prefs::security::signing_keypair(&state.prefs)?;
                                     let now = plain_libs::chrono::Utc::now().timestamp_millis() as u64;
                                     let (pending, response) = confirmation_channel::ServerHandshake::start(
                                         &params.cid,

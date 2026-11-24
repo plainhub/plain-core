@@ -109,8 +109,8 @@ async fn auth_confirmation_uses_host_callbacks_and_returns_the_hosts_decision_to
     let (private, _) = plain_libs::crypto::ed25519_generate();
     prefs
         .set(
-            "signature_key_pair",
-            plain_libs::utils::base64::base64_encode(&private),
+            "signature_private_key",
+            plain_libs::utils::base64::base64_encode(&private[..32]),
         )
         .unwrap();
     plain_rs::features::prefs::security::set_entry(

@@ -5,20 +5,21 @@ use super::*;
 fn malformed_peer_metadata_is_rejected_instead_of_skipping_pairing() {
     let metadata = json!({"appName":"Fixture","appVersion":"1","osName":"Linux","osVersion":"1"});
     assert!(validate_metadata(&metadata).is_ok());
-    let mut paired = metadata.clone();
-    paired["peer"] = json!({"deviceName":"Fixture","signaturePublicKey":plain_libs::utils::base64::base64_encode(&[7;32]),"port":8080,"deviceType":"PHONE","ips":["127.0.0.1"]});
+    let peer = json!({"deviceName":"Fixture","signaturePublicKey":plain_libs::utils::base64::base64_encode(&[7;32]),
+        "encryptionPublicKey":plain_libs::utils::base64::base64_encode(&[8;32]),"port":8080,"deviceType":"PHONE","ips":["127.0.0.1"]});
+    let mut paired = metadata;
+    paired["peer"] = peer.clone();
     assert!(validate_metadata(&paired).is_ok());
-    let mut paired = metadata.clone();
-    paired["peer"] = json!({"deviceName":"Fixture","signaturePublicKey":plain_libs::utils::base64::base64_encode(&[7;32]),"port":8080,"deviceType":"PHONE","ips":["127.0.0.1"]});
-    assert!(validate_metadata(&paired).is_ok());
-    for peer in [
-        json!({"deviceName":"Fixture","signaturePublicKey":"bad","port":8080,"deviceType":"PHONE","ips":[]}),
-        json!({"deviceName":"Fixture","signaturePublicKey":plain_libs::utils::base64::base64_encode(&[7;32]),"port":0,"deviceType":"PHONE","ips":[]}),
-        json!({"deviceName":"Fixture","signaturePublicKey":plain_libs::utils::base64::base64_encode(&[7;32]),"port":-1,"deviceType":"PHONE","ips":[]}),
+    for (key, invalid) in [
+        ("signaturePublicKey", json!("bad")),
+        ("encryptionPublicKey", json!("bad")),
+        ("encryptionPublicKey", Value::Null),
+        ("port", json!(0)),
+        ("port", json!(-1)),
     ] {
-        let mut invalid = metadata.clone();
-        invalid["peer"] = peer;
-        assert!(validate_metadata(&invalid).is_err());
+        paired["peer"] = peer.clone();
+        paired["peer"][key] = invalid;
+        assert!(validate_metadata(&paired).is_err(), "{key}");
     }
 }
 

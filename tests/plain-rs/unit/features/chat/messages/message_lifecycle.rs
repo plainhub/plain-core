@@ -170,8 +170,6 @@ fn channel_reception_requires_current_joined_membership_before_consuming_receipt
     let db = db();
     let mut channel =
         crate::features::chat::channels::state::create(&db, "owner", "Fixture").unwrap();
-    let signature = plain_libs::utils::base64::base64_encode(&[19; 64]);
-    let timestamp = crate::features::peers::pairing::now_ms();
     for members in [
         plain_libs::serde_json::to_string(&[ChannelMember::new("owner")]).unwrap(),
         plain_libs::serde_json::to_string(&[ChannelMember::new("owner"), ChannelMember::pending("peer")])
@@ -185,7 +183,7 @@ fn channel_reception_requires_current_joined_membership_before_consuming_receipt
             )
         })
         .unwrap();
-        assert!(receive(&db, "peer", &channel.id, TEXT, &signature, timestamp).is_err());
+        assert!(receive_channel(&db, "owner", "peer", &channel.id, "message", TEXT).is_err());
         db.with_conn(|connection| -> plain_libs::anyhow::Result<()> {
             assert_eq!(
                 connection
@@ -204,7 +202,7 @@ fn channel_reception_requires_current_joined_membership_before_consuming_receipt
     channel.members =
         plain_libs::serde_json::to_string(&[ChannelMember::new("owner"), ChannelMember::new("peer")]).unwrap();
     channels::save(&db, std::slice::from_ref(&channel), SaveMode::Update).unwrap();
-    let received = receive(&db, "peer", &channel.id, TEXT, &signature, timestamp)
+    let received = receive_channel(&db, "owner", "peer", &channel.id, "message", TEXT)
         .unwrap()
         .unwrap();
     assert_eq!(
@@ -212,21 +210,14 @@ fn channel_reception_requires_current_joined_membership_before_consuming_receipt
         Some(channel.id.as_str())
     );
     assert!(
-        receive(&db, "peer", &channel.id, TEXT, &signature, timestamp)
+        receive_channel(&db, "owner", "peer", &channel.id, "message", TEXT)
             .unwrap()
             .is_none()
     );
     channel.members = plain_libs::serde_json::to_string(&[ChannelMember::new("owner")]).unwrap();
     channels::save(&db, std::slice::from_ref(&channel), SaveMode::Update).unwrap();
     assert!(
-        receive(
-            &db,
-            "peer",
-            &channel.id,
-            TEXT,
-            &plain_libs::utils::base64::base64_encode(&[20; 64]),
-            timestamp
-        )
+        receive_channel(&db, "owner", "peer", &channel.id, "next-message", TEXT)
         .is_err()
     );
     db.with_conn(|connection| -> plain_libs::anyhow::Result<()> {

@@ -48,20 +48,6 @@ fn local_request_pages_are_bounded_and_never_expose_request_secrets() {
 }
 
 #[test]
-fn peer_blocks_are_only_accepted_when_usable() {
-    let good = json!({"port": 8080, "signaturePublicKey": plain_libs::utils::base64::base64_encode(&[7u8; 32])});
-    assert!(peer_chat_paired(&json!({"peer": good})));
-    assert!(!peer_chat_paired(&json!({})));
-    assert!(!peer_chat_paired(&json!({"peer": null})));
-    assert!(!peer_chat_paired(
-        &json!({"peer": {"port": 0, "signaturePublicKey": ""}})
-    ));
-    assert!(!peer_chat_paired(
-        &json!({"peer": {"port": 8080, "signaturePublicKey": "not-a-key"}})
-    ));
-}
-
-#[test]
 fn login_attempts_are_rate_limited_per_key() {
     let mut attempts = LoginAttempts::default();
     for _ in 0..LOGIN_ATTEMPT_LIMIT {
@@ -221,7 +207,7 @@ async fn browser_login(
             panic!("signed hello required")
         };
         let public =
-            plain_rs::features::services::peers::peer_wire::signing_keypair(&state.prefs).unwrap();
+            plain_rs::features::prefs::security::signing_keypair(&state.prefs).unwrap();
         let channel = client
             .accept(
                 &plain_libs::serde_json::from_str(&hello).unwrap(),

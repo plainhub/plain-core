@@ -15,8 +15,8 @@ fn fixture(id: &str) -> (plain_libs::temporary::TempDir, crate::server::ContentS
     prefs.set("client_id", id).unwrap();
     prefs
         .set(
-            "signature_key_pair",
-            plain_libs::utils::base64::base64_encode(&key),
+            "signature_private_key",
+            plain_libs::utils::base64::base64_encode(&key[..32]),
         )
         .unwrap();
     let server = crate::server::ContentServer::start(
@@ -88,7 +88,7 @@ async fn public_nearby_endpoint_runs_pairing_parser_in_rust() {
     assert_eq!(health.text().await.unwrap(), "OK");
     let state = server.runtime_state();
     let recipient_key =
-        plain_rs::features::services::peers::peer_wire::signing_keypair(&state.prefs).unwrap();
+        plain_rs::features::prefs::security::signing_keypair(&state.prefs).unwrap();
     let (sender_key, sender_public_key) = plain_libs::crypto::ed25519_generate();
     let encode = plain_libs::utils::base64::base64_encode;
     let mut request = plain_rs::features::peers::pairing::protocol::PairingRequest {
@@ -97,6 +97,7 @@ async fn public_nearby_endpoint_runs_pairing_parser_in_rust() {
         target_public_key: encode(&recipient_key[32..]),
         from_ip: String::new(),
         payload: plain_rs::features::peers::pairing::protocol::PairingRequestPayload {
+            encryption_public_key: plain_libs::utils::base64::base64_encode(&[41; 32]),
             from_name: "Fixture".into(),
             port: 2443,
             device_type: plain_rs::features::chat::enums::DeviceType::Phone,
@@ -418,7 +419,7 @@ async fn first_nearby_chat_pairing_waits_for_matching_code_approval_without_qr()
     let (_, port) = b.start_public(0, 0, cert, cert_key).await.unwrap();
     let a_state = a.runtime_state();
     let b_state = b.runtime_state();
-    let b_key = plain_rs::features::services::peers::peer_wire::signing_keypair(&b_state.prefs).unwrap();
+    let b_key = plain_rs::features::prefs::security::signing_keypair(&b_state.prefs).unwrap();
     a_state.nearby_devices.observe(NearbyDevice {
         id: b_id.into(),
         name: "Nearby fixture".into(),

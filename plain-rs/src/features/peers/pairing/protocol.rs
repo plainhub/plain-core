@@ -23,6 +23,7 @@ pub struct PairingRequestPayload {
     pub device_type: DeviceType,
     pub ecdh_public_key: String,
     pub signature_public_key: String,
+    pub encryption_public_key: String,
     pub timestamp: i64,
     #[serde(default)]
     pub ips: Vec<String>,
@@ -49,6 +50,7 @@ impl PairingRequest {
             SignaturePurpose::PairRequest,
             self.from_id,
             self.payload.signature_public_key,
+            self.payload.encryption_public_key,
             self.to_id,
             self.target_public_key,
             self.payload.from_name,
@@ -67,6 +69,7 @@ impl PairingRequest {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PairingAccept {
     pub request_id: String,
+    pub encryption_public_key: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub signature_public_key: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -88,6 +91,7 @@ impl PairingAccept {
             SignaturePurpose::PairingAccept,
             self.request_id,
             self.signature_public_key,
+            self.encryption_public_key,
             self.from_name,
             self.port,
             self.device_type.as_str(),

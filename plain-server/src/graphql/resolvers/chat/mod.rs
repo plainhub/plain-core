@@ -48,7 +48,6 @@ pub struct ChatChannelActions {
 }
 
 #[derive(SimpleObject, Clone, Debug)]
-#[graphql(complex)]
 pub struct ChatChannel {
     pub actions: ChatChannelActions,
     pub id: plain_graphql::ID,
@@ -66,21 +65,6 @@ pub struct ChatChannel {
     pub updated_at: Instant,
 }
 
-#[plain_graphql::ComplexObject]
-impl ChatChannel {
-    #[graphql(guard = "crate::http::auth::public_gate::LocalOwner")]
-    async fn key(&self, ctx: &Context<'_>) -> plain_graphql::Result<String> {
-        let db = db(ctx)?.clone();
-        let id = self.id.clone();
-        let row = tokio::task::spawn_blocking(move || {
-            plain_rs::infrastructure::db::chat_store::channels::get(&db, &id)
-        })
-        .await??;
-        Ok(row
-            .ok_or_else(|| plain_graphql::Error::new("Chat channel no longer exists"))?
-            .key)
-    }
-}
 
 #[derive(SimpleObject, Clone, Debug, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -188,4 +172,40 @@ fn actor(ctx: &Context<'_>) -> plain_graphql::Result<String> {
         .get::<String>(plain_rs::features::prefs::pref_keys::CLIENT_ID)?
         .filter(|actor| !actor.is_empty())
         .ok_or_else(|| plain_graphql::Error::new("Missing client identity"))
+}
+
+fn has_channel_target(targets: &[String]) -> bool {
+    targets.iter().any(|target| {
+        plain_rs::features::chat::messages::target::parse(target)
+            .is_ok_and(|(_, channel)| !channel.is_empty())
+    })
+}
+
+fn authorize_attachment_import(ctx: &plain_graphql::Context<'_>, content: &content::ChatContent) -> plain_graphql::Result<()> {
+    if let content::ChatContent::Message(message) = content
+        && message.items.iter().any(|item| !item.attachment.uri.starts_with("fid:"))
+    {
+        crate::http::auth::public_gate::require(
+            ctx, &ctx.data::<crate::server::ServerState>()?.prefs,
+            &[plain_rs::features::access::AccessFeature::Files],
+        )?;
+    }
+    Ok(())
+}
+
+fn authorize_stored_attachment_import(
+    ctx: &plain_graphql::Context<'_>, id: &str, targets: Option<&[String]>,
+) -> plain_graphql::Result<()> {
+    if crate::http::auth::public_gate::is_local(ctx)
+        || targets.is_some_and(|targets| !has_channel_target(targets))
+    {
+        return Ok(());
+    }
+    let db = &ctx.data::<crate::server::ServerState>()?.db;
+    if let Some(chat) = plain_rs::infrastructure::db::chat_store::messages::get(db, id)?
+        && (targets.is_some() || chat.channel_id.is_some())
+    {
+        authorize_attachment_import(ctx, &plain_libs::serde_json::from_str(&chat.content)?)?;
+    }
+    Ok(())
 }

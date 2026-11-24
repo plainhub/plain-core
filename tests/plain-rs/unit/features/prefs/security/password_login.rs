@@ -86,21 +86,19 @@ fn password_replacement_rotates_opaque_identity_without_changing_device_identity
     let directory = plain_libs::temporary::tempdir().unwrap();
     let prefs = Prefs::load(&directory.path().join("prefs.json")).unwrap();
     bootstrap(&prefs).unwrap();
-    let identity = prefs.get::<String>(SIGNATURE_KEY_PAIR).unwrap();
+    let identity = prefs.get::<String>(SIGNATURE_PRIVATE_KEY).unwrap();
     set_password_login(&prefs, "first-password").unwrap();
     let first = opaque_public_key(&prefs).unwrap();
     set_password_login(&prefs, "second-password").unwrap();
     assert_ne!(opaque_public_key(&prefs).unwrap(), first);
-    assert_eq!(prefs.get::<String>(SIGNATURE_KEY_PAIR).unwrap(), identity);
+    assert_eq!(prefs.get::<String>(SIGNATURE_PRIVATE_KEY).unwrap(), identity);
 }
 
 fn authenticate(prefs: &Prefs, password: &str) -> bool {
     let Ok(Some(credential)) = password_credential(prefs) else {
         return false;
     };
-    let identity = plain_libs::utils::base64::base64_decode(
-        &prefs.get::<String>(SIGNATURE_KEY_PAIR).unwrap().unwrap(),
-    );
+    let identity = signing_keypair(prefs).unwrap();
     let setup = plain_libs::utils::base64::base64_decode(&credential.setup);
     let record = plain_libs::utils::base64::base64_decode(&credential.record);
     let Ok(server_key) = plain_libs::auth::server::public_key(&setup) else {

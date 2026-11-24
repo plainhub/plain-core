@@ -35,7 +35,7 @@ impl ChannelMember {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MemberSnapshot {
     pub peer_id: String,
@@ -46,25 +46,31 @@ pub struct MemberSnapshot {
     pub device_type: Option<DeviceType>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ip: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub public_key: Option<String>,
+    pub signature_public_key: String,
+    pub encryption_public_key: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub port: Option<u16>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct State {
     pub name: String,
     pub version: i64,
     pub members: Vec<MemberSnapshot>,
+    pub signature: String,
+}
+
+impl State {
+    pub(crate) fn signing_bytes(&self, channel_id: &str) -> Vec<u8> {
+        plain_libs::serde_json::json!(["channel-roster", channel_id, self.version, self.name, self.members])
+            .to_string()
+            .into_bytes()
+    }
 }
 
 pub enum Notification {
-    Invite {
-        channel_key: String,
-        state: State,
-    },
+    Invite(State),
     StateChanged(State),
     MemberRemoved {
         removed_peer_id: String,
@@ -72,6 +78,10 @@ pub enum Notification {
     },
     Deleted {
         version: i64,
+    },
+    Unavailable {
+        version: i64,
+        updated_at: String,
     },
     InviteResponse {
         accept: bool,

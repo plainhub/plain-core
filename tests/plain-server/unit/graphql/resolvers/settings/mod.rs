@@ -315,38 +315,46 @@ async fn file_index_configuration_is_not_stored_in_preferences() {
 }
 
 #[tokio::test]
-async fn full_preferences_require_live_developer_mode_and_include_every_stored_key() {
+async fn full_preferences_return_raw_values_only_in_developer_mode() {
     let (_directory, schema) = fixture(|method, _| panic!("Unexpected host call: {method}"));
     let prefs = schema.data::<Arc<Prefs>>().unwrap();
     prefs.set("master_secret", "generated-test-secret").unwrap();
     prefs.set("http_port", 8080).unwrap();
     prefs.set("dark_theme", 99).unwrap();
+    prefs.set("signature_private_key", "synthetic signing seed").unwrap();
+    prefs.set("encryption_private_key", "synthetic encryption seed").unwrap();
     for enabled in [false, true, false] {
         prefs.set("developer_mode", enabled).unwrap();
         for origin in [
             crate::graphql::executor::RequestOrigin::Local,
             crate::graphql::executor::RequestOrigin::Remote,
         ] {
-            let response = schema
-                .execute(plain_graphql::Request::new("{prefs}").data(origin))
-                .await;
-            if enabled {
-                assert!(response.errors.is_empty(), "{:?}", response.errors);
-                assert_eq!(
-                    response.data.into_json().unwrap()["prefs"],
-                    Value::Object(prefs.entries().into_iter().collect())
-                );
-            } else {
-                assert_eq!(response.errors.len(), 1);
-                assert_eq!(
-                    response.errors[0].message,
-                    "No permission: developer mode is disabled"
-                );
+            for document in ["{prefs}", "{prefs(keys:null)}"] {
+                let response = schema
+                    .execute(plain_graphql::Request::new(document).data(origin))
+                    .await;
+                if enabled {
+                    assert!(response.errors.is_empty(), "{:?}", response.errors);
+                    let values = response.data.into_json().unwrap();
+                    for key in ["signature_private_key", "encryption_private_key", "master_secret"] {
+                        assert!(values["prefs"].get(key).is_some(), "{document}: missing {key}");
+                    }
+                    let expected = Value::Object(prefs.entries().into_iter().collect());
+                    assert!(values["prefs"] == expected, "{document}: stored values differ");
+                } else {
+                    assert_eq!(response.errors.len(), 1);
+                    assert_eq!(
+                        response.errors[0].message,
+                        "No permission: developer mode is disabled"
+                    );
+                }
             }
         }
     }
     for document in [
         r#"{prefs(keys:["master_secret"])}"#,
+        r#"{prefs(keys:["signature_private_key"])}"#,
+        r#"{prefs(keys:["encryption_private_key"])}"#,
         r#"{prefs(keys:["developer_mode"])}"#,
     ] {
         let response = schema.execute(document).await;
@@ -358,7 +366,7 @@ async fn full_preferences_require_live_developer_mode_and_include_every_stored_k
 }
 
 #[tokio::test]
-async fn developer_mode_allows_removing_any_stored_key_for_each_origin() {
+async fn developer_mode_removes_stored_keys_except_rust_only_values() {
     let (directory, schema) = fixture(|method, _| panic!("Unexpected host call: {method}"));
     for origin in [
         crate::graphql::executor::RequestOrigin::Local,
@@ -367,7 +375,8 @@ async fn developer_mode_allows_removing_any_stored_key_for_each_origin() {
         for key in [
             "adb_token",
             "master_secret",
-            "signature_key_pair",
+            "signature_private_key",
+            "encryption_private_key",
             "client_id",
             "http_port",
             "auto_check_update",
@@ -395,7 +404,10 @@ async fn developer_mode_allows_removing_any_stored_key_for_each_origin() {
                         .data(prefs.clone()),
                     )
                     .await;
-                if enabled {
+                if enabled && matches!(key, "signature_private_key" | "encryption_private_key" | "adb_token" | "master_secret" | "client_id") {
+                    assert_eq!(response.errors[0].message, "Preference is not accessible");
+                    assert_eq!(prefs.get::<Value>(key).unwrap(), Some(value.clone()));
+                } else if enabled {
                     assert!(response.errors.is_empty(), "{key}: {:?}", response.errors);
                     assert_eq!(response.data.into_json().unwrap()["removePref"], true);
                     assert!(prefs.get::<Value>(key).unwrap().is_none(), "{key}");

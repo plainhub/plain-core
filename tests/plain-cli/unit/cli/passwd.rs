@@ -34,9 +34,7 @@ fn authenticate(prefs: &plain_rs::features::prefs::Prefs, password: &str) -> boo
     else {
         return false;
     };
-    let identity = plain_libs::utils::base64::base64_decode(
-        &prefs.get::<String>("signature_key_pair").unwrap().unwrap(),
-    );
+    let identity = plain_rs::features::prefs::security::signing_keypair(prefs).unwrap();
     let setup = plain_libs::utils::base64::base64_decode(&credential.setup);
     let record = plain_libs::utils::base64::base64_decode(&credential.record);
     let Ok(server_key) = plain_libs::auth::server::public_key(&setup) else {
@@ -77,7 +75,7 @@ async fn running_password_updates_use_exact_values_and_preserve_identity_and_oth
     let identity = core
         .runtime()
         .prefs
-        .get::<String>("signature_key_pair")
+        .get::<String>("signature_private_key")
         .unwrap();
     let mut events = core.runtime().events.subscribe();
     let exact = "  exact π password!  ";
@@ -114,7 +112,7 @@ async fn running_password_updates_use_exact_values_and_preserve_identity_and_oth
     assert_eq!(
         core.runtime()
             .prefs
-            .get::<String>("signature_key_pair")
+            .get::<String>("signature_private_key")
             .unwrap(),
         identity
     );

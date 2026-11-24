@@ -3,7 +3,6 @@ use crate::server::ServerState;
 use plain_libs::serde_json::{Value, json};
 use plain_rs::features::prefs::security::PasswordType;
 use plain_rs::infrastructure::db::{AuditEventClient, SessionRow};
-use sha2::{Digest, Sha256};
 use std::{
     collections::HashMap,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
@@ -402,6 +401,7 @@ struct LoginMetadata {
 struct PeerMetadata {
     device_name: String,
     signature_public_key: String,
+    encryption_public_key: String,
     port: u16,
     device_type: plain_rs::features::chat::enums::DeviceType,
     ips: Vec<String>,
@@ -416,7 +416,8 @@ fn validate_metadata(request: &Value) -> plain_libs::anyhow::Result<LoginMetadat
                     .iter()
                     .all(|ip| ip.parse::<std::net::IpAddr>().is_ok())
                 && plain_libs::utils::base64::base64_decode_checked(&peer.signature_public_key)
-                    .is_ok_and(|key| key.len() == 32),
+                    .is_ok_and(|key| key.len() == 32)
+                && plain_rs::features::peers::pairing::peer_store::encryption_key(&peer.encryption_public_key).is_ok(),
             AuthErrorCode::InvalidLoginRequest
         );
     }
@@ -424,12 +425,7 @@ fn validate_metadata(request: &Value) -> plain_libs::anyhow::Result<LoginMetadat
 }
 
 fn peer_chat_paired(request: &Value) -> bool {
-    let Some(peer) = request.get("peer").filter(|value| !value.is_null()) else {
-        return false;
-    };
-    let port = peer.get("port").and_then(Value::as_u64).unwrap_or(0);
-    let key = text(peer, "signaturePublicKey");
-    port >= 1 && port <= 65535 && plain_libs::utils::base64::base64_decode(&key).len() == 32
+    request["peer"].is_object()
 }
 
 async fn issue(state: &ServerState, request: &Pending) -> plain_libs::anyhow::Result<Value> {
@@ -444,44 +440,35 @@ async fn issue(state: &ServerState, request: &Pending) -> plain_libs::anyhow::Re
         LoginChannel::Confirmation(c) => c.api_key().to_vec(),
     };
     let token = plain_libs::utils::base64::base64_encode(&shared);
-    let response =
+    let mut response =
         json!({"deviceId":device_client_id,"status":"COMPLETED","chatPaired":chat_paired});
-    if chat_paired {
-        let id = &request.client_id;
-        let offered_key = text(&request.request["peer"], "signaturePublicKey");
-        if let Some(saved) = plain_rs::infrastructure::db::chat_store::peers::get(&state.db, id)? {
-            plain_libs::anyhow::ensure!(
-                saved.public_key.is_empty() || saved.public_key == offered_key,
-                AuthErrorCode::PeerIdentityChanged
-            );
+    use plain_rs::features::peers::pairing::peer_store::{self, Facts};
+    let peer = if chat_paired {
+        let peer: PeerMetadata = plain_libs::serde_json::from_value(request.request["peer"].clone())?;
+        let facts = Facts {
+            id: request.client_id.clone(),
+            name: peer.device_name,
+            ip: request.client_ip.clone(),
+            port: peer.port,
+            device_type: peer.device_type,
+            key: plain_rs::features::peers::pairing::security::login_chat_key(&shared),
+            public_key: peer.signature_public_key,
+            encryption_public_key: peer.encryption_public_key,
+        };
+        if let Some(saved) = plain_rs::infrastructure::db::chat_store::peers::get(&state.db, &facts.id)? {
+            facts.verify_peer(&saved).map_err(|_| AuthErrorCode::PeerIdentityChanged)?;
         }
-    }
-    let frame = request
-        .protection
-        .encrypt_response(&plain_libs::serde_json::to_vec(&response)?)?;
-    let client = login_client(
-        state,
-        &request.client_id,
-        &request.client_ip,
-        &request.request,
-    )?;
+        let encryption = plain_rs::features::prefs::security::encryption_public_key(&state.prefs)?;
+        response["encryptionPublicKey"] = json!(plain_libs::utils::base64::base64_encode(&encryption));
+        Some(facts)
+    } else {
+        None
+    };
+    let frame = request.protection.encrypt_response(&plain_libs::serde_json::to_vec(&response)?)?;
+    let client = login_client(state, &request.client_id, &request.client_ip, &request.request)?;
     persist(state, request, &token)?;
-    if chat_paired {
-        let peer = &request.request["peer"];
-        let mut material = b"chat-pairing".to_vec();
-        material.extend(&shared);
-        plain_rs::features::peers::pairing::peer_store::save(
-            &state.db,
-            plain_rs::features::peers::pairing::peer_store::Facts {
-                id: request.client_id.clone(),
-                name: text(peer, "deviceName"),
-                ip: request.client_ip.clone(),
-                port: peer["port"].as_u64().unwrap() as u16,
-                device_type: plain_libs::serde_json::from_value(peer["deviceType"].clone())?,
-                key: plain_libs::utils::base64::base64_encode(&Sha256::digest(&material)),
-                public_key: text(peer, "signaturePublicKey"),
-            },
-        )?;
+    if let Some(facts) = peer {
+        peer_store::save(&state.db, facts)?;
     }
     state
         .audit_events

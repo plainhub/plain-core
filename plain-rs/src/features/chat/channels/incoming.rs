@@ -54,6 +54,26 @@ fn validate_version(version: i64) -> Result<()> {
     Ok(())
 }
 
+fn verify_roster(
+    state: &State,
+    id: &str,
+    owner: &crate::infrastructure::db::DPeer,
+) -> Result<()> {
+    validate_version(state.version)?;
+    if !state.members.iter().any(|member| {
+        member.peer_id == owner.id
+            && member.status == MemberStatus::Joined
+            && crate::features::peers::pairing::security::same_public_key(&member.signature_public_key, &owner.public_key)
+    }) || !plain_libs::crypto::ed25519_verify(
+        &owner.public_key,
+        &state.signing_bytes(id),
+        &state.signature,
+    ) {
+        bail!("Invalid channel roster signature");
+    }
+    Ok(())
+}
+
 fn advance(channel: &mut DChannel) -> Result<()> {
     channel.version = channel
         .version
@@ -88,29 +108,12 @@ pub fn receive(
             ..Default::default()
         };
         match notification {
-            Notification::Invite { channel_key, state } => {
-                validate_version(state.version)?;
+            Notification::Invite(state) => {
                 let owner = store::peer(&tx, from)?
                     .ok_or_else(|| plain_libs::anyhow::anyhow!("Unknown invite owner"))?;
-                if let Some(public_key) = state
-                    .members
-                    .iter()
-                    .find(|member| member.peer_id == from)
-                    .and_then(|member| member.public_key.as_deref())
-                    && plain_libs::utils::base64::base64_decode(public_key)
-                        != plain_libs::utils::base64::base64_decode(&owner.public_key)
-                {
-                    bail!("Invite owner public key mismatch");
-                }
-                if plain_libs::utils::base64::base64_decode(&channel_key).len() != 32 {
-                    bail!("Invalid channel key");
-                }
+                verify_roster(&state, id, &owner)?;
                 let members = roster(&state)?;
                 if !state
-                    .members
-                    .iter()
-                    .any(|m| m.peer_id == from && m.status == MemberStatus::Joined)
-                    || !state
                         .members
                         .iter()
                         .any(|m| m.peer_id == actor && m.status == MemberStatus::Pending)
@@ -139,7 +142,6 @@ pub fn receive(
                 };
                 store::ensure_peers(&tx, &state.members, actor)?;
                 channel.name = state.name;
-                channel.key = channel_key;
                 channel.members = members;
                 channel.version = state.version;
                 channel.status = ChannelStatus::Joined;
@@ -158,12 +160,14 @@ pub fn receive(
                 result.channel = Some(channel);
             }
             Notification::StateChanged(state) => {
-                validate_version(state.version)?;
                 let mut channel =
                     current.ok_or_else(|| plain_libs::anyhow::anyhow!("Unknown channel"))?;
                 if channel.owner_id.as_deref() != Some(from) {
                     bail!("Update sender is not owner");
                 }
+                let owner = store::peer(&tx, from)?
+                    .ok_or_else(|| plain_libs::anyhow::anyhow!("Unknown channel owner"))?;
+                verify_roster(&state, id, &owner)?;
                 if state.version <= channel.version {
                     return Ok(result);
                 }
@@ -176,8 +180,20 @@ pub fn receive(
                 store::save(&tx, &channel, false)?;
                 result.channel = Some(channel);
             }
-            Notification::MemberRemoved { version, .. } | Notification::Deleted { version } => {
+            Notification::MemberRemoved { version, .. }
+            | Notification::Deleted { version }
+            | Notification::Unavailable { version, .. } => {
                 validate_version(version)?;
+                if let Notification::Unavailable { ref updated_at, .. } = notification
+                    && !current.as_ref().is_some_and(|channel| {
+                        channel.owner_id.as_deref() == Some(from)
+                            && channel.status == ChannelStatus::Joined
+                            && channel.version == version
+                            && channel.updated_at == *updated_at
+                    })
+                {
+                    return Ok(result);
+                }
                 if let Some(mut channel) = current {
                     if channel.owner_id.as_deref() != Some(from) {
                         bail!("Kick sender is not owner");

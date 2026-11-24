@@ -4,7 +4,7 @@ use plain_libs::serde_json::json;
 #[test]
 fn ble_associations_match_signature_and_cleanup_without_consuming_replacements() {
     let runtime = Runtime::default();
-    let mut request:PairingRequest=plain_libs::serde_json::from_value(json!({"toId":"706c6169-0001-8000-8000-000000000001","targetPublicKey":"key","fromId":"peer","fromName":"fixture","port":2443,"deviceType":"PHONE","ecdhPublicKey":"","signaturePublicKey":"","timestamp":1,"ips":[],"signature":"first","awareSupported":false})).unwrap();
+    let mut request:PairingRequest=plain_libs::serde_json::from_value(json!({"toId":"706c6169-0001-8000-8000-000000000001","targetPublicKey":"key","fromId":"peer","fromName":"fixture","port":2443,"deviceType":"PHONE","encryptionPublicKey":plain_libs::utils::base64::base64_encode(&[41; 32]),"ecdhPublicKey":"","signaturePublicKey":"","timestamp":1,"ips":[],"signature":"first","awareSupported":false})).unwrap();
     runtime.remember(&request, "mac-first").unwrap();
     request.payload.signature = "second".into();
     runtime.remember(&request, "mac-second").unwrap();
@@ -25,8 +25,8 @@ fn fixture(id: &str) -> (plain_libs::temporary::TempDir, crate::test_runtime::Co
     prefs.set("client_id", id).unwrap();
     prefs
         .set(
-            "signature_key_pair",
-            plain_libs::utils::base64::base64_encode(&key),
+            "signature_private_key",
+            plain_libs::utils::base64::base64_encode(&key[..32]),
         )
         .unwrap();
     let server = crate::test_runtime::Core::start(
@@ -55,7 +55,7 @@ async fn expired_incoming_request_rejects_both_decisions_without_pairing() {
     let target = Target {
         device_id: "706c6169-0001-8000-8000-000000000001".into(),
         device_public_key: plain_libs::utils::base64::base64_encode(
-            &crate::features::services::peers::peer_wire::signing_keypair(&state.prefs).unwrap()
+            &crate::features::prefs::security::signing_keypair(&state.prefs).unwrap()
                 [32..],
         ),
         device_name: "Local".into(),
@@ -143,7 +143,7 @@ async fn incoming_ble_response_uses_matching_address_and_shared_handshake_exactl
     let target = Target {
         device_id: "706c6169-0001-8000-8000-000000000001".into(),
         device_public_key: plain_libs::utils::base64::base64_encode(
-            &crate::features::services::peers::peer_wire::signing_keypair(&state.prefs).unwrap()
+            &crate::features::prefs::security::signing_keypair(&state.prefs).unwrap()
                 [32..],
         ),
         device_name: "Local".into(),
@@ -452,7 +452,7 @@ async fn pairing_key_goes_only_to_the_host_and_is_redelivered_after_disconnect()
 async fn incoming_ble_message_succeeds_when_lan_address_is_invalid() {
     let (_directory, server) = fixture("706c6169-0001-8000-8000-000000000001");
     let state = server.runtime_state();
-    let request: PairingRequest = plain_libs::serde_json::from_value(json!({"toId":"706c6169-0001-8000-8000-000000000001","targetPublicKey":"key","fromId":"peer","fromName":"Fixture","port":2443,"deviceType":"PHONE","ecdhPublicKey":"","signaturePublicKey":"","timestamp":1,"ips":[],"signature":"request","awareSupported":false})).unwrap();
+    let request: PairingRequest = plain_libs::serde_json::from_value(json!({"toId":"706c6169-0001-8000-8000-000000000001","targetPublicKey":"key","fromId":"peer","fromName":"Fixture","port":2443,"deviceType":"PHONE","encryptionPublicKey":plain_libs::utils::base64::base64_encode(&[41; 32]),"ecdhPublicKey":"","signaturePublicKey":"","timestamp":1,"ips":[],"signature":"request","awareSupported":false})).unwrap();
     state
         .pairing_runtime
         .remember(&request, "fixture-ble")

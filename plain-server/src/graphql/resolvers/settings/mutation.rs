@@ -5,7 +5,7 @@ use plain_graphql::Json;
 use super::authorize;
 use plain_graphql::Object;
 use plain_libs::serde_json::Value;
-use plain_rs::features::prefs::pref_keys::RECENT_SELECTED_DIRS;
+use plain_rs::features::prefs::pref_keys::{PrefAccess, RECENT_SELECTED_DIRS, access};
 
 #[derive(Default)]
 pub struct PrefsMutation;
@@ -24,6 +24,9 @@ impl PrefsMutation {
 
     async fn remove_pref(&self, ctx: &Context<'_>, key: String) -> plain_graphql::Result<bool> {
         super::super::common::require_developer_mode(ctx)?;
+        if access(&key) == Some(PrefAccess::RustOnly) {
+            return Err(plain_graphql::Error::new("Preference is not accessible"));
+        }
         if key == RECENT_SELECTED_DIRS {
             authorize(ctx, &key).await?;
         }

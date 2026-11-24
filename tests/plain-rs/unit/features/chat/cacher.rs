@@ -27,6 +27,7 @@ fn seed_peer(db: &Db, id: &str) {
     let now = crate::infrastructure::db::now_iso();
     let peer = DPeer {
         id: id.to_string(),
+        encryption_public_key: None,
         name: id.to_string(),
         ip: String::new(),
         key: String::new(),

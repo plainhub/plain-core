@@ -90,6 +90,26 @@ pub fn test_peer_wire(
     )
     .unwrap()
 }
+
+#[cfg(any(test, feature = "test-seams"))]
+pub fn test_channel_wire(
+    body: &[u8], key: &[u8; 32], channel: &str, from: &str, to: &str, public_key: &str,
+) -> (String, [u8; 32]) {
+    use crate::infrastructure::transport::{channel_request, graphql_request::SignedEnvelope};
+    let (plain, response_key) = channel_request::open(key, channel, body).unwrap();
+    let request: SignedEnvelope = plain_libs::serde_json::from_slice(&plain).unwrap();
+    assert!(plain_libs::crypto::ed25519_verify(
+        public_key, &request.signing_bytes(channel, Some((from, to))), &request.signature,
+    ));
+    (String::from_utf8(plain).unwrap(), response_key)
+}
+
+#[cfg(any(test, feature = "test-seams"))]
+pub fn test_seal_peer_request(
+    dispatch: &crate::infrastructure::transport::contract::PeerDispatch<'_>, body: &str,
+) -> (Vec<u8>, [u8; 32]) {
+    dispatch.seal(body).unwrap()
+}
 #[cfg(any(test, feature = "test-seams"))]
 pub fn test_reply(
     runtime: &Runtime,

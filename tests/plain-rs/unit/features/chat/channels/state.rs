@@ -37,14 +37,12 @@ fn owner_cannot_remove_itself_or_change_membership_on_failure() {
                 after.version,
                 after.updated_at,
                 after.owner_id,
-                after.key
             ),
             (
                 before.members,
                 before.version,
                 before.updated_at,
                 before.owner_id,
-                before.key
             )
         );
     }
@@ -88,10 +86,6 @@ fn creation_mutations_and_invite_validation_preserve_credentials_and_version_rul
     assert_eq!(channel.name, "中文 group");
     assert_eq!(channel.version, 1);
     assert_eq!(
-        plain_libs::utils::base64::base64_decode(&channel.key).len(),
-        32
-    );
-    assert_eq!(
         plain_libs::serde_json::from_str::<Vec<ChannelMember>>(&channel.members).unwrap(),
         vec![ChannelMember::new("owner")]
     );
@@ -117,7 +111,6 @@ fn creation_mutations_and_invite_validation_preserve_credentials_and_version_rul
     )
     .unwrap();
     assert_eq!(invited.version, 2);
-    assert_eq!(invited.key, channel.key);
     assert_eq!(invited.created_at, channel.created_at);
     assert!(
         apply(
@@ -195,7 +188,6 @@ fn creation_mutations_and_invite_validation_preserve_credentials_and_version_rul
     )
     .unwrap();
     assert_eq!(removed.version, 4);
-    assert_eq!(removed.key, channel.key);
     assert!(
         apply(
             &db,
@@ -291,5 +283,4 @@ fn concurrent_member_actions_read_current_state_and_do_not_lose_members() {
             .len(),
         13
     );
-    assert_eq!(result.key, channel.key);
 }

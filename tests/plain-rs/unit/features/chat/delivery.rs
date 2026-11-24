@@ -25,14 +25,13 @@ impl PeerTransport for Transport {
     }
     async fn message(
         &self,
-        peer: &DPeer,
-        _: &str,
-        channel_id: &str,
-        key: &[u8],
+        dispatch: &PeerDispatch<'_>,
         body: &str,
     ) -> std::result::Result<(), String> {
+        let peer = dispatch.peer;
+        let channel_id = dispatch.channel_id;
         self.calls.fetch_add(1, Ordering::SeqCst);
-        assert_eq!(key, &[7; 32]);
+        assert_eq!(dispatch.key, if channel_id.is_empty() { &[7; 32] } else { &[41; 32] });
         let graphql: Value = plain_libs::serde_json::from_str(&body).unwrap();
         let content: Value =
             plain_libs::serde_json::from_str(graphql["variables"]["content"].as_str().unwrap()).unwrap();
@@ -60,6 +59,7 @@ fn setup() -> (Db, Vec<u8>) {
     for id in ["peer", "offline", "unpaired"] {
         let mut peer = DPeer::new(id, id, "", None, DeviceType::Phone);
         peer.key = base64_encode(&[7; 32]);
+        peer.encryption_public_key = Some([41; 32]);
         peer.status = if id == "unpaired" {
             PeerStatus::Unpaired
         } else {
@@ -82,7 +82,7 @@ async fn attachment_delivery_uses_runtime_credentials_without_a_session_row() {
         async fn post<'a>(&'a self, _: &'a str, _: &'a str, _: Option<&'a str>, _: &'a [u8]) -> std::result::Result<Vec<u8>, String> {
             unreachable!()
         }
-        async fn message(&self, _: &DPeer, _: &str, _: &str, _: &[u8], body: &str) -> std::result::Result<(), String> {
+        async fn message(&self, _: &PeerDispatch<'_>, body: &str) -> std::result::Result<(), String> {
             self.calls.fetch_add(1, Ordering::SeqCst);
             let wire: Value = plain_libs::serde_json::from_str(body).unwrap();
             let content: Value = plain_libs::serde_json::from_str(wire["variables"]["content"].as_str().unwrap()).unwrap();
@@ -154,7 +154,7 @@ async fn routing_uses_current_db_and_retries_only_current_joined_members() {
     );
     let mut channel = crate::infrastructure::db::DChannel::new("group", "706c6169-1ac2-825a-8c79-0951ec181d4a");
     channel.id = "group".into();
-    channel.key = base64_encode(&[7; 32]);
+
     channel.members=json!([{"peerId":"706c6169-1ac2-825a-8c79-0951ec181d4a","status":"JOINED"},{"peerId":"peer","status":"JOINED"},{"peerId":"offline","status":"JOINED"},{"peerId":"pending","status":"PENDING"}]).to_string();
     channels::save(&db, &[channel.clone()], SaveMode::Insert).unwrap();
     let group = message_lifecycle::create(&db, "", "group", TEXT).unwrap();
@@ -313,10 +313,7 @@ async fn concurrent_sends_serialize_and_reload_content_after_old_attempt_finishe
         }
         async fn message(
             &self,
-            _: &DPeer,
-            _: &str,
-            _: &str,
-            _: &[u8],
+            _: &PeerDispatch<'_>,
             body: &str,
         ) -> std::result::Result<(), String> {
             if self.calls.fetch_add(1, Ordering::SeqCst) == 0 {
@@ -369,7 +366,8 @@ async fn channel_delivers_to_online_members_while_first_member_waits() {
         async fn post<'a>(&'a self, _: &'a str, _: &'a str, _: Option<&'a str>, _: &'a [u8]) -> std::result::Result<Vec<u8>, String> {
             unreachable!()
         }
-        async fn message(&self, peer: &DPeer, _: &str, _: &str, _: &[u8], _: &str) -> std::result::Result<(), String> {
+        async fn message(&self, dispatch: &PeerDispatch<'_>, _: &str) -> std::result::Result<(), String> {
+            let peer = dispatch.peer;
             if peer.id == "offline" {
                 self.release.notified().await;
                 return Err("offline".into());
@@ -380,9 +378,9 @@ async fn channel_delivers_to_online_members_while_first_member_waits() {
     }
     let (db, key) = setup();
     let client = "706c6169-1ac2-825a-8c79-0951ec181d4a";
-    let mut channel = crate::infrastructure::db::DChannel::new("group", client);
+    let mut channel = crate::infrastructure::db::DChannel::new("group", "offline");
     channel.id = "concurrent-group".into();
-    channel.key = base64_encode(&[7; 32]);
+
     channel.members = json!([
         {"peerId":client,"status":"JOINED"},
         {"peerId":"offline","status":"JOINED"},
@@ -420,7 +418,7 @@ async fn different_messages_to_the_same_device_keep_their_order() {
         async fn post<'a>(&'a self, _: &'a str, _: &'a str, _: Option<&'a str>, _: &'a [u8]) -> std::result::Result<Vec<u8>, String> {
             unreachable!()
         }
-        async fn message(&self, _: &DPeer, _: &str, _: &str, _: &[u8], body: &str) -> std::result::Result<(), String> {
+        async fn message(&self, _: &PeerDispatch<'_>, body: &str) -> std::result::Result<(), String> {
             let wire: Value = plain_libs::serde_json::from_str(body).unwrap();
             let msg: Value = plain_libs::serde_json::from_str(wire["variables"]["content"].as_str().unwrap()).unwrap();
             let text = msg["value"]["text"].as_str().unwrap();

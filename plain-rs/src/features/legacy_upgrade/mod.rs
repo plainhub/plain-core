@@ -122,13 +122,13 @@ impl LegacyStorage {
             let signing_key = values
                 .signature_key_pair
                 .as_deref()
-                .map(convert_keypair)
+                .map(signing_seed)
                 .transpose()?;
             prefs.update(|values| {
                 values.insert(pref_keys::CLIENT_ID.to_owned(), Value::String(id));
                 if let Some(signing_key) = signing_key {
                     values.insert(
-                        pref_keys::SIGNATURE_KEY_PAIR.to_owned(),
+                        pref_keys::SIGNATURE_PRIVATE_KEY.to_owned(),
                         Value::String(signing_key),
                     );
                 }
@@ -268,7 +268,7 @@ fn complete_onboarding(conn: &Connection) -> Result<()> {
     )?)
 }
 
-fn convert_keypair(json: &str) -> Result<String> {
+fn signing_seed(json: &str) -> Result<String> {
     #[derive(Deserialize)]
     #[serde(rename_all = "camelCase")]
     struct Keypair {
@@ -277,19 +277,15 @@ fn convert_keypair(json: &str) -> Result<String> {
     }
 
     let keypair: Keypair = plain_libs::serde_json::from_str(json)?;
-    let private = base64_decode_checked(&keypair.private_key)?;
+    let private: [u8; 32] = base64_decode_checked(&keypair.private_key)?
+        .try_into()
+        .map_err(|_| plain_libs::anyhow::anyhow!("Invalid legacy signing key length"))?;
     let public = base64_decode_checked(&keypair.public_key)?;
     ensure!(
-        private.len() == 32 && public.len() == 32,
-        "Invalid legacy signing key length"
-    );
-    let mut combined = private;
-    combined.extend(&public);
-    ensure!(
-        plain_libs::crypto::ed25519_public_from_keypair(&combined).is_some(),
+        plain_libs::crypto::ed25519_keypair_from_seed(&private)[32..] == public,
         "Invalid legacy signing keypair"
     );
-    Ok(base64_encode(&combined))
+    Ok(base64_encode(&private))
 }
 
 #[cfg(test)]

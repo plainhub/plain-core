@@ -31,18 +31,25 @@ pub(crate) async fn execute(
     channel_id: &str,
     body: &[u8],
 ) -> (u16, Vec<u8>) {
-    let authenticated = match plain_rs::infrastructure::transport::auth::authenticate(
-        &state.db, client_id, channel_id, body,
-    ) {
+    use plain_rs::infrastructure::transport::auth;
+    let result = if channel_id.is_empty() {
+        auth::authenticate(&state.db, client_id, channel_id, body)
+    } else {
+        auth::authenticate_channel(&state.db, &state.prefs, client_id, channel_id, body)
+    };
+    let authenticated = match result {
         Ok(authenticated) => authenticated,
         Err(error) => return (error.http_status(), vec![]),
     };
-    let request = match plain_libs::serde_json::from_str::<plain_graphql::Request>(
+    let mut request = match plain_libs::serde_json::from_str::<plain_graphql::Request>(
         &authenticated.graphql_json,
     ) {
         Ok(request) => request,
         Err(_) => return (400, vec![]),
     };
+    if authenticated.message_id.is_some() && !is_channel_delivery(&mut request) {
+        return (400, vec![]);
+    }
     let key = authenticated.key.clone();
     let response = state
         .peer_schema
@@ -61,6 +68,32 @@ pub(crate) async fn execute(
             .unwrap_or((500, vec![])),
         Err(_) => (500, vec![]),
     }
+}
+
+fn is_channel_delivery(request: &mut plain_graphql::Request) -> bool {
+    use plain_graphql::parser::types::OperationType;
+    use plain_graphql::parser::types::Selection;
+    let Ok(document) = request.parsed_query() else { return false };
+    let mut operations = document.operations.iter();
+    let Some((_, operation)) = operations.next() else { return false };
+    if operations.next().is_some() || operation.node.ty != OperationType::Mutation {
+        return false;
+    }
+    let mut selections = &operation.node.selection_set.node.items;
+    let mut visited = std::collections::HashSet::new();
+    while let [selection] = selections.as_slice() {
+        match &selection.node {
+            Selection::Field(field) => return field.node.name.node.as_str() == "createChatItem",
+            Selection::InlineFragment(fragment) => selections = &fragment.node.selection_set.node.items,
+            Selection::FragmentSpread(spread) => {
+                let name = &spread.node.fragment_name.node;
+                let Some(fragment) = document.fragments.get(name) else { return false };
+                if !visited.insert(name) { return false; }
+                selections = &fragment.node.selection_set.node.items;
+            }
+        }
+    }
+    false
 }
 
 #[cfg(test)]

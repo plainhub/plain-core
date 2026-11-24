@@ -6,7 +6,7 @@ use crate::infrastructure::db::Db;
 use crate::infrastructure::db::chat_store::channels;
 use crate::infrastructure::db::chat_store::messages;
 use crate::infrastructure::db::chat_store::peers;
-use crate::infrastructure::transport::contract::PeerTransport;
+use crate::infrastructure::transport::contract::{PeerDispatch, PeerTransport};
 use crate::infrastructure::transport::contract::chat_item_request;
 use plain_libs::anyhow::{Result, bail};
 use std::{
@@ -49,6 +49,7 @@ impl Delivery {
         locks.insert(id.into(), Arc::downgrade(&lock));
         lock
     }
+    #[cfg(test)]
     pub async fn send<T: PeerTransport>(
         &self,
         transport: &T,
@@ -57,16 +58,18 @@ impl Delivery {
         id: &str,
         recipients: Option<Vec<String>>,
     ) -> Result<Receipt> {
-        self.send_observed(transport, client_id, signing_key, id, recipients, |_| {})
-            .await
+        self.send_observed(
+            transport, client_id, signing_key, id, recipients, |chat| async { Ok(chat) }, |_| {},
+        ).await
     }
-    pub async fn send_observed<T: PeerTransport>(
+    pub async fn send_observed<T: PeerTransport, F: Future<Output = Result<DChat>> + Send>(
         &self,
         transport: &T,
         client_id: &str,
         signing_key: &[u8],
         id: &str,
         recipients: Option<Vec<String>>,
+        prepare_attachments: impl FnOnce(DChat) -> F + Send,
         pending: impl Fn(&DChat) + Send,
     ) -> Result<Receipt> {
         let lock = Self::lock_for(&self.locks, id);
@@ -90,11 +93,6 @@ impl Delivery {
                 rediscover: false,
             });
         }
-        let content = crate::features::chat::messages::content::peer_content(
-            &chat.content,
-            client_id,
-            &self.resource_token,
-        )?;
         let targets = if chat.channel_id.is_none() {
             if retry {
                 bail!("Targeted retry requires a channel");
@@ -137,6 +135,14 @@ impl Delivery {
                     .collect(),
             }
         };
+        let chat = if chat.channel_id.is_some() {
+            prepare_attachments(chat).await?
+        } else {
+            chat
+        };
+        let content = crate::features::chat::messages::content::peer_content(
+            &chat.content, client_id, &self.resource_token,
+        )?;
         let prior = if retry {
             crate::features::chat::messages::message_lifecycle::previous_delivery_results(
                 &chat, &targets,
@@ -240,30 +246,30 @@ impl Delivery {
             return Ok(result(Some("Peer not found in database".into())));
         };
         let cid = chat.channel_id.as_deref().unwrap_or_default();
-        let channel_key;
+        let message_id = (!cid.is_empty()).then_some(chat.id.as_str());
         let key = if cid.is_empty() {
             if !peer.is_paired() {
                 return Ok(result(Some("peer unpaired".into())));
             }
-            &peer.key
+            plain_libs::utils::base64::base64_decode(&peer.key)
         } else {
-            channel_key = self.channel_key_for(cid, client_id, target)?;
-            &channel_key
+            let Some(key) = peer.encryption_public_key else {
+                return Ok(result(Some("Channel member encryption key unavailable".into())));
+            };
+            key.to_vec()
         };
-        let key_bytes = plain_libs::utils::base64::base64_decode(key);
-        if key_bytes.len() != 32 {
+        if key.len() != 32 {
             return Ok(result(Some("Invalid peer transport key".into())));
         }
+        let dispatch = PeerDispatch {
+            peer: &peer, client_id, channel_id: cid, key: &key, signing_key, message_id,
+        };
         let signed = std::sync::OnceLock::<(String, tokio::time::Instant)>::new();
         let error = transport
-            .queued_message(&peer, client_id, cid, &key_bytes, || {
-                if !cid.is_empty()
-                    && self
-                        .channel_key_for(cid, client_id, target)
-                        .map_err(|e| e.to_string())?
-                        != *key
-                {
-                    return Err("Channel key changed during delivery".into());
+            .queued_message(&dispatch, || {
+                if !cid.is_empty() {
+                    self.require_joined(cid, client_id, target)
+                        .map_err(|e| e.to_string())?;
                 }
                 if let Some((request, issued)) = signed.get() {
                     if issued.elapsed().as_millis()
@@ -284,7 +290,7 @@ impl Delivery {
         Ok(result(error))
     }
 
-    fn channel_key_for(&self, cid: &str, client_id: &str, target: &str) -> Result<String> {
+    fn require_joined(&self, cid: &str, client_id: &str, target: &str) -> Result<()> {
         let channel = channels::get(&self.db, cid)?
             .ok_or_else(|| plain_libs::anyhow::anyhow!("Channel unavailable during delivery"))?;
         let members: Vec<ChannelMember> = plain_libs::serde_json::from_str(&channel.members)?;
@@ -296,7 +302,7 @@ impl Delivery {
         {
             bail!("Channel membership changed during delivery");
         }
-        Ok(channel.key)
+        Ok(())
     }
     fn finish(
         &self,
@@ -317,6 +323,5 @@ impl Delivery {
 #[path = "../../../../tests/plain-rs/unit/features/chat/delivery.rs"]
 mod tests;
 
-mod receiver;
 
 mod sender;

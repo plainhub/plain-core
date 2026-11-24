@@ -8,8 +8,8 @@ fn fixture(id: &str) -> (plain_libs::temporary::TempDir, crate::test_runtime::Co
     prefs.set("client_id", id).unwrap();
     prefs
         .set(
-            "signature_key_pair",
-            plain_libs::utils::base64::base64_encode(&key),
+            "signature_private_key",
+            plain_libs::utils::base64::base64_encode(&key[..32]),
         )
         .unwrap();
     let server = crate::test_runtime::Core::start(
@@ -87,7 +87,7 @@ async fn ble_initiator_signs_filters_notifications_commits_shared_key_and_closes
                             let request = crate::features::peers::pairing::protocol::PairingRequest {
                                 to_id: "706c6169-0001-8000-8000-000000000002".into(),
                                 target_public_key: plain_libs::utils::base64::base64_encode(
-                                    &crate::features::services::peers::peer_wire::signing_keypair(&remote_state.prefs).unwrap()[32..],
+                                    &crate::features::prefs::security::signing_keypair(&remote_state.prefs).unwrap()[32..],
                                 ),
                                 from_id: "706c6169-0001-8000-8000-000000000001".into(),
                                 from_ip: String::new(),
@@ -145,7 +145,7 @@ async fn ble_initiator_signs_filters_notifications_commits_shared_key_and_closes
     });
     let mut remote_target = target("706c6169-0001-8000-8000-000000000002");
     remote_target.device_public_key = plain_libs::utils::base64::base64_encode(
-        &crate::features::services::peers::peer_wire::signing_keypair(&other.prefs).unwrap()[32..],
+        &crate::features::prefs::security::signing_keypair(&other.prefs).unwrap()[32..],
     );
     let first = start(&state, remote_target.clone(), device(), None).unwrap();
     assert_eq!(state.pairing.states()[0].1, "STARTING");

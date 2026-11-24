@@ -1,4 +1,4 @@
-use crate::infrastructure::db::DPeer;
+use crate::infrastructure::transport::contract::PeerDispatch;
 use crate::runtime::Runtime as CoreRuntime;
 use plain_libs::anyhow::{Result, ensure};
 use futures_util::StreamExt;
@@ -28,9 +28,7 @@ pub enum Failure {
 }
 pub async fn send(
     state: &CoreRuntime,
-    peer: &DPeer,
-    channel: &str,
-    key: &[u8],
+    dispatch: &PeerDispatch<'_>,
     body: &str,
     validate: impl Fn() -> Result<(), String>,
 ) -> Result<Value, Failure> {
@@ -43,21 +41,9 @@ pub async fn send(
         .map_err(|e| Failure::Fatal(e.to_string()))?;
     validate().map_err(Failure::Fatal)?;
     let peer =
-        crate::features::services::peers::peer_address::current_identity(&state.db, &peer.id, peer)
+        crate::features::services::peers::peer_address::current_identity(&state.db, &dispatch.peer.id, dispatch.peer)
             .map_err(|e| Failure::Fatal(e.to_string()))?;
-    let actor = state
-        .prefs
-        .get::<String>(crate::features::prefs::pref_keys::CLIENT_ID)
-        .map_err(|e| Failure::Fatal(e.to_string()))?
-        .filter(|id| !id.is_empty())
-        .ok_or_else(|| Failure::Fatal("Missing peer actor".into()))?;
-    let cipher = crate::infrastructure::transport::http_request::encrypt_raw(
-        key,
-        "POST",
-        "/peer_graphql",
-        body.as_bytes(),
-    )
-    .ok_or_else(|| Failure::Fatal("Invalid peer encryption key".into()))?;
+    let (cipher, response_key) = dispatch.seal(body).map_err(Failure::Fatal)?;
     let context = crate::infrastructure::transport::http_response::Context::new(&cipher);
     let response = state
         .lan
@@ -68,8 +54,8 @@ pub async fn send(
         )
         .timeout(Duration::from_secs(10))
         .header("content-type", "application/octet-stream")
-        .header("c-id", actor)
-        .header("c-cid", channel)
+        .header("c-id", dispatch.client_id)
+        .header("c-cid", dispatch.channel_id)
         .body(cipher)
         .send()
         .await
@@ -85,7 +71,7 @@ pub async fn send(
         .await
         .map_err(|e| Failure::Fatal(e.to_string()))?;
     let plain = context
-        .decrypt(key, &bytes)
+        .decrypt(&response_key, &bytes)
         .ok_or_else(|| Failure::Fatal("Failed to authenticate peer response".into()))?;
     if !status.is_success() {
         return Ok(json!({"data":null,"errors":[{"message":format!("Peer HTTP {status}")}]}));

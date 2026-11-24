@@ -152,8 +152,15 @@ fn fixture(root: &Path) -> (LegacyStorage, PathBuf, String) {
     )
     .unwrap();
 
+    let legacy_seed = [0x38; 32];
+    let legacy_signing = plain_libs::crypto::ed25519_keypair_from_seed(&legacy_seed);
+    let signature_key_pair = json!({
+        "privateKey": base64_encode(&legacy_seed),
+        "publicKey": base64_encode(&legacy_signing[32..]),
+    }).to_string();
     let preferences = [
         ("client_id", "9ix"),
+        ("signature_key_pair", &signature_key_pair),
         ("scan_history", r#"["new","old"]"#),
         ("quick_note_draft", "old note draft"),
         ("chat_input_text", "old global chat draft"),
@@ -162,8 +169,15 @@ fn fixture(root: &Path) -> (LegacyStorage, PathBuf, String) {
     .into_iter()
     .flat_map(|(key, value)| {
         fn string(number: u8, value: &[u8]) -> Vec<u8> {
-            assert!(value.len() < 128);
-            [vec![(number << 3) | 2, value.len() as u8], value.to_vec()].concat()
+            let mut prefix = vec![(number << 3) | 2];
+            let mut length = value.len();
+            while length >= 128 {
+                prefix.push((length as u8 & 0x7f) | 0x80);
+                length >>= 7;
+            }
+            prefix.push(length as u8);
+            prefix.extend_from_slice(value);
+            prefix
         }
         string(
             1,
@@ -198,6 +212,11 @@ fn startup_migrates_existing_identity_and_renames_legacy_settings() {
             .as_deref(),
         Some(LOCAL)
     );
+    let reloaded = Prefs::load(&prefs_path).unwrap();
+    let signing = crate::features::prefs::security::signing_keypair(&reloaded).unwrap();
+    assert_eq!(signing, plain_libs::crypto::ed25519_keypair_from_seed(&[0x38; 32]));
+    assert_eq!(reloaded.get::<String>(pref_keys::SIGNATURE_PRIVATE_KEY).unwrap(),
+        Some(base64_encode(&[0x38; 32])));
     assert!(!storage.preferences().exists());
     assert_eq!(
         std::fs::read(storage.backup_preferences()).unwrap(),
@@ -266,10 +285,7 @@ fn deferred_import_reads_backup_and_deletes_only_the_imported_data() {
             })
             .unwrap();
         assert_eq!(peer_key, [0x45; 32]);
-        assert_eq!(
-            conn.query_row("SELECT key FROM chat_channels", [], |row| row.get::<_, [u8; 32]>(0)).unwrap(),
-            [0x45; 32]
-        );
+        assert!(conn.prepare("SELECT key FROM chat_channels").is_err());
         assert_eq!(
             conn.query_row("SELECT url_token FROM shares", [], |row| row.get::<_, [u8; 32]>(0)).unwrap(),
             [0x46; 32]

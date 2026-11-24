@@ -11,6 +11,7 @@ pub use update::{ReleaseInfo, UpdateInfo, UpdatePatch};
 
 use super::{Prefs, PrefsError, Result};
 use keys::*;
+use plain_libs::utils::base64::{base64_decode_checked, base64_encode};
 use serde::{Deserialize, Serialize};
 use plain_libs::serde_json::{Map, Value, json};
 
@@ -58,6 +59,26 @@ fn ensure(map: &mut Map<String, Value>, key: &str, make: impl FnOnce() -> String
     }
     Ok(())
 }
+
+fn decode_private_key(value: &str) -> Result<[u8; 32]> {
+    base64_decode_checked(value)
+        .ok()
+        .and_then(|bytes| bytes.try_into().ok())
+        .ok_or_else(|| PrefsError::Decode(
+            <plain_libs::serde_json::Error as serde::de::Error>::custom("Invalid device private key"),
+        ))
+}
+
+fn ensure_private_key(map: &mut Map<String, Value>, key: &str) -> Result<[u8; 32]> {
+    if let Some(value) = map.get(key) {
+        let value: String = plain_libs::serde_json::from_value(value.clone()).map_err(PrefsError::Decode)?;
+        return decode_private_key(&value);
+    }
+    let mut secret = [0; 32];
+    plain_libs::crypto::gen_random(&mut secret);
+    put(map, key, base64_encode(&secret))?;
+    Ok(secret)
+}
 fn random_label(alphabet: &[u8], length: usize) -> String {
     use rand::RngExt;
     let mut rng = rand::rng();
@@ -77,9 +98,9 @@ pub fn bootstrap(prefs: &Prefs) -> Result<()> {
     password_type(prefs)?;
     prefs.update(|map| {
         ensure(map, CLIENT_ID, crate::features::client_identity::generate)?;
-        ensure(map, SIGNATURE_KEY_PAIR, || {
-            plain_libs::utils::base64::base64_encode(&plain_libs::crypto::ed25519_generate().0)
-        })?;
+        ensure_private_key(map, SIGNATURE_PRIVATE_KEY)?;
+        ensure_private_key(map, ENCRYPTION_PRIVATE_KEY)?;
+        map.remove("signature_key_pair");
         ensure(map, MASTER_SECRET, plain_libs::crypto::gen_token)?;
         ensure(map, MDNS_HOSTNAME, generate_mdns_hostname)?;
         if !map.contains_key(PASSWORD_TYPE) {
@@ -136,6 +157,7 @@ pub fn set_entry(prefs: &Prefs, key: &str, value: Value) -> plain_libs::anyhow::
     if key == SKIP_VERSION {
         plain_libs::anyhow::ensure!(value.is_string(), "Invalid skipped version");
     }
+    plain_libs::anyhow::ensure!(access(key) != Some(PrefAccess::RustOnly), "Rust-only preference");
     let command = match key {
         PASSWORD => Some(Command::SetPassword {
             password: plain_libs::serde_json::from_value(value.clone())?,
@@ -155,9 +177,6 @@ pub fn set_entry(prefs: &Prefs, key: &str, value: Value) -> plain_libs::anyhow::
         API_PERMISSIONS => Some(Command::SetApiPermissions {
             permissions: plain_libs::serde_json::from_value(value.clone())?,
         }),
-        CLIENT_ID | SIGNATURE_KEY_PAIR | MASTER_SECRET | ADB_TOKEN => {
-            plain_libs::anyhow::bail!("Rust-only preference")
-        }
         _ => None,
     };
     if let Some(command) = command {
@@ -191,31 +210,32 @@ pub fn remove_entry(prefs: &Prefs, key: &str) -> Result<bool> {
 }
 
 pub fn ensure_signing_keypair(prefs: &Prefs) -> plain_libs::anyhow::Result<Vec<u8>> {
-    prefs.update(|map| {
-        ensure(map, SIGNATURE_KEY_PAIR, || {
-            plain_libs::utils::base64::base64_encode(&plain_libs::crypto::ed25519_generate().0)
-        })
-    })?;
-    signing_keypair(prefs)
+    let seed = prefs.update(|map| ensure_private_key(map, SIGNATURE_PRIVATE_KEY))?;
+    Ok(plain_libs::crypto::ed25519_keypair_from_seed(&seed).to_vec())
 }
 
 pub fn signing_keypair(prefs: &Prefs) -> plain_libs::anyhow::Result<Vec<u8>> {
-    let raw = prefs
-        .get::<String>(SIGNATURE_KEY_PAIR)?
-        .ok_or_else(|| plain_libs::anyhow::anyhow!("Missing signing identity"))?;
-    let bytes = plain_libs::utils::base64::base64_decode_checked(&raw)?;
-    plain_libs::anyhow::ensure!(
-        plain_libs::crypto::ed25519_public_from_keypair(&bytes).is_some(),
-        "Invalid signing identity"
-    );
-    Ok(bytes)
+    let seed = private_key(prefs, SIGNATURE_PRIVATE_KEY)?;
+    Ok(plain_libs::crypto::ed25519_keypair_from_seed(&seed).to_vec())
+}
+
+fn private_key(prefs: &Prefs, key: &str) -> plain_libs::anyhow::Result<[u8; 32]> {
+    let raw = prefs.get::<String>(key)?
+        .ok_or_else(|| plain_libs::anyhow::anyhow!("Missing device private key"))?;
+    Ok(decode_private_key(&raw)?)
+}
+
+pub(crate) fn encryption_private_key(prefs: &Prefs) -> plain_libs::anyhow::Result<[u8; 32]> {
+    private_key(prefs, ENCRYPTION_PRIVATE_KEY)
+}
+
+pub fn encryption_public_key(prefs: &Prefs) -> plain_libs::anyhow::Result<[u8; 32]> {
+    Ok(plain_libs::crypto::hpke::public_key(&encryption_private_key(prefs)?))
 }
 
 fn signature_public_key(prefs: &Prefs) -> plain_libs::anyhow::Result<String> {
     let keypair = signing_keypair(prefs)?;
-    Ok(plain_libs::utils::base64::base64_encode(
-        &plain_libs::crypto::ed25519_public_from_keypair(&keypair).unwrap(),
-    ))
+    Ok(base64_encode(&keypair[32..]))
 }
 
 pub fn get_entry(prefs: &Prefs, key: &str) -> plain_libs::anyhow::Result<Option<Value>> {

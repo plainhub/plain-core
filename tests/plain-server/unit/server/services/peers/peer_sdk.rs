@@ -19,8 +19,8 @@ fn root(id: &str) -> (plain_libs::temporary::TempDir, ContentServer, Vec<u8>, St
     let (kp, _pk) = plain_libs::crypto::ed25519_generate();
     prefs
         .set(
-            "signature_key_pair",
-            plain_libs::utils::base64::base64_encode(&kp),
+            "signature_private_key",
+            plain_libs::utils::base64::base64_encode(&kp[..32]),
         )
         .unwrap();
     let token = plain_libs::utils::base64::base64_encode(&[3; 32]);
@@ -171,7 +171,12 @@ async fn aware_host_only_moves_raw_socket_bytes_rust_performs_tls_crypto_and_gra
     let result = tokio::time::timeout(
         std::time::Duration::from_secs(10),
         plain_rs::features::services::peers::peer_sdk::aware_send(
-            &state, &remote, "", &[7; 32], &wire,
+            &state,
+            &plain_rs::infrastructure::transport::contract::PeerDispatch {
+                peer: &remote, client_id: &state.native_client_id().unwrap(), channel_id: "",
+                key: &[7; 32], signing_key: &kp, message_id: None,
+            },
+            &wire,
         ),
     )
     .await

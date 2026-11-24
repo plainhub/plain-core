@@ -11,8 +11,8 @@ fn fixture() -> (plain_libs::temporary::TempDir, crate::test_runtime::Core) {
     prefs.set("device_name", "Actual tablet").unwrap();
     prefs
         .set(
-            "signature_key_pair",
-            plain_libs::utils::base64::base64_encode(&key),
+            "signature_private_key",
+            plain_libs::utils::base64::base64_encode(&key[..32]),
         )
         .unwrap();
     let server = crate::test_runtime::Core::start(

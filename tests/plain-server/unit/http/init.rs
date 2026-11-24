@@ -171,7 +171,7 @@ async fn unauthenticated_init_never_returns_or_rotates_passwords_and_reports_exp
         plain_libs::serde_json::json!("preserved-password"),
     )
     .unwrap();
-    plain_rs::features::services::peers::peer_wire::signing_keypair(&state.prefs).unwrap();
+    plain_rs::features::prefs::security::signing_keypair(&state.prefs).unwrap();
     for mode in ["FIXED", "NONE"] {
         state.prefs.set("password_type", mode).unwrap();
         let before = std::fs::read(directory.path().join("prefs.json")).unwrap();

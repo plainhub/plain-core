@@ -60,6 +60,7 @@ pub fn parse(code: &str) -> Result<Payload> {
                 .iter()
                 .all(|ip| ip.parse::<std::net::IpAddr>().is_ok())
             && plain_libs::utils::base64::base64_decode(&body.ecdh_public_key).len() == 65
+            && plain_libs::utils::base64::base64_decode(&body.encryption_public_key).len() == 32
             && timestamp_ok(body.timestamp)
             && plain_libs::crypto::ed25519_verify(
                 &body.signature_public_key,

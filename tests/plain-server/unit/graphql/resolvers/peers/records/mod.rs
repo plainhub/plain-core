@@ -29,12 +29,12 @@ async fn native_main_record_queries_preserve_addresses_keys_members_and_checked_
     peers::save(&state.db, &[peer.clone()], SaveMode::Insert).unwrap();
     let mut channel = DChannel::new("Channel", "706c6169-1dfd-8b72-82bb-3ad00a9928ca");
     channel.id = "channel".into();
-    channel.key = plain_libs::utils::base64::base64_encode(&[62; 32]);
+
     channel.members = r#"[{"peerId":"peer","status":"JOINED"}]"#.into();
     channel.version = 5000000001;
     channels::save(&state.db, &[channel], SaveMode::Insert).unwrap();
     let native = server.native_graphql().unwrap();
-    let response=native.execute(Request::new(r#"{ peers { id ip port key } chatChannels { key ownerId members { peerId status } version } }"#)).await;
+    let response=native.execute(Request::new(r#"{ peers { id ip port key } chatChannels { ownerId members { peerId status } version } }"#)).await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     let data = response.data.into_json().unwrap();
     assert_eq!(data["peers"][0]["key"], peer.key);
@@ -43,7 +43,6 @@ async fn native_main_record_queries_preserve_addresses_keys_members_and_checked_
     assert!(data["peers"][0].get("address").is_none());
     assert_eq!(data["peers"].as_array().unwrap().len(), 1);
     assert_eq!(data["chatChannels"][0]["version"], 5000000001_i64);
-    assert_eq!(data["chatChannels"][0]["key"], plain_libs::utils::base64::base64_encode(&[62; 32]));
     assert_eq!(data["chatChannels"][0]["members"][0]["peerId"], "peer");
     let request = || Request::new(r#"{ peerFileUrl(peerId: "peer", fileId: "a +?#%") }"#);
     let response = native.execute(request()).await;
@@ -96,19 +95,17 @@ async fn main_login_and_logout_preserve_pairing_and_live_proxy_addresses() {
             .and_then(|peer| peer.base_url())
     };
     assert_eq!(resolve("peer-a"), None);
-    state
-        .db
-        .login_peer(
-            "peer-a",
-            "Peer A",
-            "127.0.0.1",
-            9443,
-            DeviceType::Computer,
-            &plain_libs::utils::base64::base64_encode(&[63; 32]),
-            &plain_libs::utils::base64::base64_encode(&[64; 32]),
-            &plain_libs::utils::base64::base64_encode(&[65; 32]),
-        )
-        .unwrap();
+    plain_rs::features::peers::pairing::peer_store::save_confirmed(
+        &state.db,
+        plain_rs::features::peers::pairing::peer_store::Facts {
+            id: "peer-a".into(), name: "Peer A".into(), ip: "127.0.0.1".into(),
+            port: 9443, device_type: DeviceType::Computer,
+            key: plain_libs::utils::base64::base64_encode(&[65; 32]), public_key: plain_libs::utils::base64::base64_encode(&[64; 32]),
+            encryption_public_key: plain_libs::utils::base64::base64_encode(&[32; 32]),
+        },
+        None,
+        Some(&plain_libs::utils::base64::base64_encode(&[63; 32])),
+    ).unwrap();
     assert_eq!(resolve("peer-a"), Some("https://127.0.0.1:9443".into()));
     let query = "{peers{id name port token publicKey online}}";
     let response = executor.execute(plain_graphql::Request::new(query)).await;
@@ -162,19 +159,17 @@ async fn remote_requests_cannot_access_or_change_local_login_sessions() {
     let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::server::ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state();
-    state
-        .db
-        .login_peer(
-            "706c6169-1dfd-8b72-82bb-3ad00a9928ca",
-            "Fixture",
-            "127.0.0.1",
-            9443,
-            DeviceType::Computer,
-            &plain_libs::utils::base64::base64_encode(&[66; 32]),
-            &plain_libs::utils::base64::base64_encode(&[64; 32]),
-            &plain_libs::utils::base64::base64_encode(&[67; 32]),
-        )
-        .unwrap();
+    plain_rs::features::peers::pairing::peer_store::save_confirmed(
+        &state.db,
+        plain_rs::features::peers::pairing::peer_store::Facts {
+            id: "706c6169-1dfd-8b72-82bb-3ad00a9928ca".into(), name: "Fixture".into(), ip: "127.0.0.1".into(),
+            port: 9443, device_type: DeviceType::Computer,
+            key: plain_libs::utils::base64::base64_encode(&[67; 32]), public_key: plain_libs::utils::base64::base64_encode(&[64; 32]),
+            encryption_public_key: plain_libs::utils::base64::base64_encode(&[32; 32]),
+        },
+        None,
+        Some(&plain_libs::utils::base64::base64_encode(&[66; 32])),
+    ).unwrap();
     for document in [
         "{peers{token}}",
         r#"mutation{pairPeer(peerId:"peer",input:{ mode:MANAGE})}"#,

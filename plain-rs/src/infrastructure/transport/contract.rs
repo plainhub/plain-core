@@ -1,24 +1,43 @@
 //! Outgoing peer-to-peer delivery over HTTPS `/peer_graphql`.
 //!
-//! The wire protocol (Ed25519-signed GraphQL JSON, XChaCha20-Poly1305
-//! body, `c-id`/`c-cid` headers, encrypted response) lives here; the
+//! The wire protocol (Ed25519-signed GraphQL JSON, authenticated encryption,
+//! `c-id`/`c-cid` headers, encrypted response) lives here; the
 //! actual HTTP POST is the app's job via the [`PeerTransport`] trait —
 //! Native hosts use the shared async HTTP client.
 
 use plain_libs::serde_json::json;
 
-use plain_libs::crypto::ed25519_sign;
 use plain_libs::utils::http_url::build_url;
 
 use crate::infrastructure::db::DPeer;
 
 pub(crate) const CHAT_DELIVERY_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(20);
 
-/// The one transport seam of the chat stack: POST an encrypted body to a
-/// peer URL with the `c-id` / `c-cid` headers and return the raw response
-/// bytes. Implementations own their HTTP client, TLS policy (peers use
-/// self-signed certs — certificate verification must be disabled) and
-/// timeouts.
+pub struct PeerDispatch<'a> {
+    pub peer: &'a DPeer,
+    pub client_id: &'a str,
+    pub channel_id: &'a str,
+    pub key: &'a [u8],
+    pub signing_key: &'a [u8],
+    pub message_id: Option<&'a str>,
+}
+
+impl PeerDispatch<'_> {
+    pub(crate) fn seal(&self, payload: &str) -> Result<(Vec<u8>, [u8; 32]), String> {
+        let key: &[u8; 32] = self.key.try_into().map_err(|_| "Invalid peer encryption key")?;
+        let sealed = if self.channel_id.is_empty() {
+            super::http_request::encrypt_raw(key, "POST", "/peer_graphql", payload.as_bytes())
+                .map(|body| (body, *key))
+        } else {
+            super::channel_request::seal(
+                key, self.channel_id, self.client_id, &self.peer.id,
+                self.message_id, self.signing_key, payload.as_bytes(),
+            )
+        };
+        sealed.ok_or_else(|| "Invalid peer encryption key".to_owned())
+    }
+}
+
 pub trait PeerTransport: Send + Sync {
     fn post<'a>(
         &'a self,
@@ -27,49 +46,29 @@ pub trait PeerTransport: Send + Sync {
         channel_id: Option<&'a str>,
         body: &'a [u8],
     ) -> impl std::future::Future<Output = Result<Vec<u8>, String>> + Send;
+
     fn message(
         &self,
-        peer: &DPeer,
-        client_id: &str,
-        channel_id: &str,
-        key: &[u8],
+        dispatch: &PeerDispatch<'_>,
         body: &str,
     ) -> impl std::future::Future<Output = Result<(), String>> + Send {
-        async move {
-            deliver_signed(
-                self,
-                &peer_graphql_urls(peer),
-                key,
-                client_id,
-                body,
-                (!channel_id.is_empty()).then_some(channel_id),
-            )
-            .await
-        }
+        async move { deliver_signed(self, dispatch, body).await }
     }
 
     fn queued_message(
         &self,
-        peer: &DPeer,
-        client_id: &str,
-        channel_id: &str,
-        key: &[u8],
+        dispatch: &PeerDispatch<'_>,
         sign: impl Fn() -> Result<String, String> + Send + Sync,
     ) -> impl std::future::Future<Output = Result<(), String>> + Send {
         async move {
             let body = sign()?;
-            tokio::time::timeout(
-                CHAT_DELIVERY_TIMEOUT,
-                self.message(peer, client_id, channel_id, key, &body),
-            )
-            .await
-            .map_err(|_| "Peer delivery unconfirmed after 20s".to_string())?
+            tokio::time::timeout(CHAT_DELIVERY_TIMEOUT, self.message(dispatch, &body))
+                .await
+                .map_err(|_| "Peer delivery unconfirmed after 20s".to_string())?
         }
     }
 }
 
-/// Blanket forwarding impl so callers can pass `&Arc<T>` where `&T` is
-/// expected (the service holds the transport behind an Arc).
 impl<T: PeerTransport> PeerTransport for std::sync::Arc<T> {
     fn post<'a>(
         &'a self,
@@ -80,30 +79,17 @@ impl<T: PeerTransport> PeerTransport for std::sync::Arc<T> {
     ) -> impl std::future::Future<Output = Result<Vec<u8>, String>> + Send {
         (**self).post(url, client_id, channel_id, body)
     }
-    async fn message(
-        &self,
-        peer: &DPeer,
-        client_id: &str,
-        channel_id: &str,
-        key: &[u8],
-        body: &str,
-    ) -> Result<(), String> {
-        (**self)
-            .message(peer, client_id, channel_id, key, body)
-            .await
+
+    async fn message(&self, dispatch: &PeerDispatch<'_>, body: &str) -> Result<(), String> {
+        (**self).message(dispatch, body).await
     }
 
     async fn queued_message(
         &self,
-        peer: &DPeer,
-        client_id: &str,
-        channel_id: &str,
-        key: &[u8],
+        dispatch: &PeerDispatch<'_>,
         sign: impl Fn() -> Result<String, String> + Send + Sync,
     ) -> Result<(), String> {
-        (**self)
-            .queued_message(peer, client_id, channel_id, key, sign)
-            .await
+        (**self).queued_message(dispatch, sign).await
     }
 }
 
@@ -121,55 +107,18 @@ pub fn peer_graphql_urls(peer: &DPeer) -> Vec<String> {
         .collect()
 }
 
-/// POST a `createChatItem` GraphQL request to `peer_graphql_urls`, trying
-/// each URL in order and returning `Ok(())` on the first successful
-/// delivery. Payload format: XChaCha20-Poly1305 over
-/// a signed JSON envelope containing the shared UUIDv7 GraphQL request.
-pub async fn deliver_to_peer<T: PeerTransport>(
+async fn deliver_signed<T: PeerTransport + ?Sized>(
     transport: &T,
-    peer_graphql_urls: &[String],
-    key: &[u8],
-    client_id: &str,
-    kp_bytes: &[u8],
-    content: &str,
-    channel_id: Option<&str>,
-) -> Result<(), String> {
-    let payload = chat_item_request(kp_bytes, content, channel_id.unwrap_or_default())?;
-
-    deliver_signed(
-        transport,
-        peer_graphql_urls,
-        key,
-        client_id,
-        &payload,
-        channel_id,
-    )
-    .await
-}
-
-pub async fn deliver_signed<T: PeerTransport + ?Sized>(
-    transport: &T,
-    peer_graphql_urls: &[String],
-    key: &[u8],
-    client_id: &str,
+    dispatch: &PeerDispatch<'_>,
     payload: &str,
-    channel_id: Option<&str>,
 ) -> Result<(), String> {
-    let Some(encrypted) = crate::infrastructure::transport::http_request::encrypt_raw(
-        key,
-        "POST",
-        "/peer_graphql",
-        payload.as_bytes(),
-    ) else {
-        return Err("encrypt failed".to_string());
-    };
-
+    let (encrypted, key) = dispatch.seal(payload)?;
     let context = crate::infrastructure::transport::http_response::Context::new(&encrypted);
     let mut errors = Vec::new();
 
-    for peer_graphql_url in peer_graphql_urls {
+    for peer_graphql_url in peer_graphql_urls(dispatch.peer) {
         let response = match transport
-            .post(peer_graphql_url, client_id, channel_id, &encrypted)
+            .post(&peer_graphql_url, dispatch.client_id, (!dispatch.channel_id.is_empty()).then_some(dispatch.channel_id), &encrypted)
             .await
         {
             Ok(bytes) => bytes,
@@ -179,7 +128,7 @@ pub async fn deliver_signed<T: PeerTransport + ?Sized>(
                 continue;
             }
         };
-        let Some(decrypted) = context.decrypt(key, &response) else {
+        let Some(decrypted) = context.decrypt(&key, &response) else {
             log::warn!("deliver_to_peer failed decrypting response from {peer_graphql_url}");
             errors.push(format!("{peer_graphql_url}: failed decrypting response"));
             continue;
@@ -233,6 +182,7 @@ pub fn signed_request(
 ) -> Result<String, String> {
     let mut request = super::graphql_request::SignedEnvelope {
         signature: String::new(),
+        message_id: None,
         request_id: crate::features::record_id::generate(),
         query: query.to_owned(),
         variables: match variables {
@@ -240,16 +190,8 @@ pub fn signed_request(
             _ => return Err("Expected GraphQL variables object".into()),
         },
     };
-    let signed = request.signing_bytes(channel_id);
-    request.signature = ed25519_sign(kp_bytes, &signed);
-    if kp_bytes.len() != 64
-        || !plain_libs::crypto::ed25519_verify(
-            &plain_libs::utils::base64::base64_encode(&kp_bytes[32..]),
-            &signed,
-            &request.signature,
-        )
-    {
-        return Err("Invalid peer signing keypair".into());
+    if channel_id.is_empty() {
+        request.sign(kp_bytes, channel_id, None)?;
     }
     plain_libs::serde_json::to_string(&request).map_err(|e| e.to_string())
 }

@@ -199,7 +199,7 @@ async fn generic_writes_and_removals_reject_unknown_and_rust_owned_keys() {
         for key in [
             "main_state:peer",
             "client_id",
-            "signature_key_pair",
+            "signature_private_key",
             "../preferences",
             "key with spaces",
         ] {

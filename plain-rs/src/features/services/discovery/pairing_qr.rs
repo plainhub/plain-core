@@ -11,7 +11,7 @@ use crate::features::{
         protocol::{PairingAccept, PairingRequest, PairingRequestPayload},
         sessions::RESPONSE_TIMEOUT,
     },
-    services::peers::peer_wire::signing_keypair,
+    prefs::security::signing_keypair,
 };
 use crate::infrastructure::signature::SignaturePurpose;
 use crate::runtime::Runtime;
@@ -128,6 +128,9 @@ pub fn create_display(
             device_type: device.device_type,
             ips: device.ips,
             signature_public_key: base64_encode(&key[32..]),
+            encryption_public_key: base64_encode(
+                &crate::features::prefs::security::encryption_public_key(&state.prefs)?,
+            ),
             ecdh_public_key: base64_encode(&ecdh.public_key_bytes),
             timestamp: now_ms(),
             signature: String::new(),
@@ -198,6 +201,9 @@ fn prepare_response(
     let mut response = PairingAccept {
         request_id: id.clone(),
         signature_public_key: Some(base64_encode(&key[32..])),
+        encryption_public_key: base64_encode(
+            &crate::features::prefs::security::encryption_public_key(&state.prefs)?,
+        ),
         from_name: Some(device.name),
         port: device.port,
         device_type: device.device_type,
@@ -216,6 +222,7 @@ fn prepare_response(
         device_type: request.payload.device_type,
         key: base64_encode(&chat_key(&shared, request, &response)),
         public_key: request.payload.signature_public_key.clone(),
+        encryption_public_key: request.payload.encryption_public_key.clone(),
     };
     scanned.insert(
         id,
@@ -281,6 +288,7 @@ pub(super) fn complete(
             && request.from_id != sender
             && !name.trim().is_empty()
             && response.port != 0
+            && crate::features::peers::pairing::peer_store::encryption_key(&response.encryption_public_key).is_ok()
             && ed25519_verify(
                 key,
                 &response_input(request, &response, sender),
@@ -308,6 +316,7 @@ pub(super) fn complete(
             device_type: response.device_type,
             key: base64_encode(&chat_key(&shared, request, &response)),
             public_key: key.to_owned(),
+            encryption_public_key: response.encryption_public_key.clone(),
         },
         previous.as_ref().map(|peer| peer.public_key.as_str()),
         &address,

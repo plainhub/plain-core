@@ -140,11 +140,15 @@ async fn authenticated_reply_accepts_discovery_refresh_and_rejects_revoked_pairi
 }
 #[tokio::test]
 async fn rust_falls_back_from_unavailable_socket_and_authenticates_raw_ble_business_errors() {
+    const QUERY: &str = "{ __typename }";
     let (_dir, server, state) = state();
     let host = state.host.clone();
     let (generation, mut receiver) = crate::test_support::HostRequests::connect(&host);
     let ble = state.ble_transport.clone();
     let expected_client_id = state.native_client_id().unwrap();
+    let sender_public = crate::features::prefs::security::get_entry(&state.prefs, "signature_public_key")
+        .unwrap().unwrap().as_str().unwrap().to_owned();
+    let recipient = peer().id;
     let responder = tokio::spawn(async move {
         while let Some(request) = receiver.recv().await {
             let response = match request["method"].as_str().unwrap() {
@@ -180,20 +184,16 @@ async fn rust_falls_back_from_unavailable_socket_and_authenticates_raw_ble_busin
                     };
                     assert_eq!(client_id, expected_client_id);
                     assert_eq!(channel_id, "channel");
-                    assert_eq!(
-                        crate::infrastructure::transport::http_request::decrypt_raw(
-                            &[7; 32],
-                            "POST",
-                            "/peer_graphql",
-                            &body
-                        )
-                        .unwrap(),
-                        b"signed request"
+                    let (plain, response_key) = crate::features::services::peers::ble_transport::test_channel_wire(
+                        &body, &[7; 32], &channel_id, &client_id, &recipient, &sender_public,
                     );
+                    let payload: plain_libs::serde_json::Value =
+                        plain_libs::serde_json::from_str(&plain).unwrap();
+                    assert_eq!(payload["query"], QUERY);
                     let bytes =
                         crate::infrastructure::transport::http_response::Context::new(&body)
                             .encrypt(
-                                &[7; 32],
+                                &response_key,
                                 br#"{"errors":[{"message":"business rejection"}]}"#,
                             )
                             .unwrap();
@@ -204,7 +204,10 @@ async fn rust_falls_back_from_unavailable_socket_and_authenticates_raw_ble_busin
             host.reply(generation, response).unwrap();
         }
     });
-    let response = send(&state, &peer(), "channel", &[7; 32], "signed request")
+    let request = crate::infrastructure::transport::contract::signed_request(
+        &[], QUERY, json!({}), "channel",
+    ).unwrap();
+    let response = send(&state, &peer(), "channel", &plain_libs::crypto::hpke::public_key(&[7; 32]), &request)
         .await
         .unwrap();
     assert_eq!(response["errors"][0]["message"], "business rejection");
@@ -272,8 +275,12 @@ async fn queued_ble_chat_does_not_sign_or_send_until_its_slot_opens() {
     peers::save(&state.db, &[second.clone()], crate::infrastructure::db::chat_store::SaveMode::Insert).unwrap();
     let (generation, mut requests) = crate::test_support::HostRequests::connect(&state.host);
     let signed = std::sync::atomic::AtomicUsize::new(0);
-    let mut a = std::pin::pin!(send_chat(&state, &first, "", &[7; 32], || Ok("first".into()), Attempt::Automatic));
-    let mut b = std::pin::pin!(send_chat(&state, &second, "", &[7; 32], || {
+    let actor = state.native_client_id().unwrap();
+    let dispatch = |peer| PeerDispatch { peer, client_id: &actor, channel_id: "", key: &[7; 32], signing_key: &[], message_id: None };
+    let first_dispatch = dispatch(&first);
+    let second_dispatch = dispatch(&second);
+    let mut a = std::pin::pin!(send_chat(&state, &first_dispatch, || Ok("first".into()), Attempt::Automatic));
+    let mut b = std::pin::pin!(send_chat(&state, &second_dispatch, || {
         signed.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         Ok("second".into())
     }, Attempt::Automatic));

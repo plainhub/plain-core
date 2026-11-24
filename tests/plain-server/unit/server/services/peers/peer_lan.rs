@@ -22,8 +22,8 @@ fn root(
     let (kp, _pk) = plain_libs::crypto::ed25519_generate();
     prefs
         .set(
-            "signature_key_pair",
-            plain_libs::utils::base64::base64_encode(&kp),
+            "signature_private_key",
+            plain_libs::utils::base64::base64_encode(&kp[..32]),
         )
         .unwrap();
     let token = plain_libs::utils::base64::base64_encode(&[3; 32]);
@@ -82,9 +82,10 @@ async fn direct_tls_peer_exchange_uses_xchacha_and_current_identity_without_host
     assert!(matches!(
         send(
             &a.runtime_state().core,
-            &remote,
-            "",
-            &[7; 32],
+            &plain_rs::infrastructure::transport::contract::PeerDispatch {
+                peer: &remote, client_id: &a.runtime_state().native_client_id().unwrap(),
+                channel_id: "", key: &[7; 32], signing_key: &kp, message_id: None,
+            },
             &wire,
             || Ok(())
         )

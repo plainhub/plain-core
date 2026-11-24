@@ -1,3 +1,4 @@
+use crate::features::peers::pairing::security::same_public_key;
 use crate::features::services::discovery::pairing_error::PairingFailure;
 use crate::features::services::discovery::pairing_attempts::Resolved;
 use crate::runtime::Runtime as CoreRuntime;
@@ -48,7 +49,8 @@ pub(super) async fn run(
         .to_owned();
     if let Some(saved) = saved
         .as_ref()
-        .filter(|p| !p.token.is_empty() && p.is_paired() && p.public_key == public_key)
+        .filter(|p| !p.token.is_empty() && p.is_paired() && same_public_key(&p.public_key, &public_key)
+            && p.encryption_public_key.is_some())
     {
         if let Ok(metadata) = metadata(state, base, &client_id, &base64_decode(&saved.token)).await
         {
@@ -96,7 +98,7 @@ pub(super) async fn run(
         PairingFailure::PasswordRequired
     );
     if saved.as_ref().is_some_and(|peer| {
-        !peer.public_key.is_empty() && peer.public_key != public_key
+        !peer.public_key.is_empty() && !same_public_key(&peer.public_key, &public_key)
     }) {
         let digest: [u8; 32] = Sha256::digest(base64_decode(&public_key)).into();
         let code = super::super::confirmation_channel::verification_code(&digest);
@@ -127,12 +129,14 @@ pub(super) async fn run(
     };
     let local = crate::features::services::discovery::pairing_runtime::local_device(state).await?;
     ensure!(local.port != 0, PairingFailure::ChatPairingUnavailable);
-    let signing = crate::features::services::peers::peer_wire::signing_keypair(&state.prefs)?;
+    let signing = crate::features::prefs::security::signing_keypair(&state.prefs)?;
+    let encryption = crate::features::prefs::security::encryption_public_key(&state.prefs)?;
     let startup = state.host.startup();
     let request = json!({
         "appName":"PlainApp","appVersion":startup.app_version,
         "osName":startup.os_name,"osVersion":startup.os_version,
-        "peer":{"deviceName":local.name,"port":local.port,"deviceType":local.device_type,"ips":local.ips,"signaturePublicKey":base64_encode(&signing[32..])}
+        "peer":{"deviceName":local.name,"port":local.port,"deviceType":local.device_type,"ips":local.ips,
+            "signaturePublicKey":base64_encode(&signing[32..]),"encryptionPublicKey":base64_encode(&encryption)}
     });
     let mut url = base.join("auth")?;
     url.set_scheme(if base.scheme() == "https" {
@@ -278,9 +282,7 @@ pub(super) async fn run(
         text(&metadata, "clientId")? == remote_id,
         PairingFailure::PeerIdentityChanged
     );
-    let mut material = b"chat-pairing".to_vec();
-    material.extend(shared);
-    let chat_key = base64_encode(&Sha256::digest(material));
+    let chat_key = crate::features::peers::pairing::security::login_chat_key(&shared);
     let token = base64_encode(&shared);
     let _commit = state.pairing_runtime.commit.lock().unwrap();
     ensure!(
@@ -305,32 +307,28 @@ pub(super) async fn run(
     } else {
         target.target.device_port
     };
-    state
-        .db
-        .login_peer_confirmed(
-            &remote_id,
-            text(&metadata, "deviceName")?,
-            base.host_str().unwrap_or_default().trim_matches(&['[', ']'][..]),
+    use crate::features::peers::pairing::peer_store::{self, Facts};
+    let peer = peer_store::save_confirmed(
+        &state.db,
+        Facts {
+            id: remote_id,
+            name: text(&metadata, "deviceName")?.into(),
+            ip: base.host_str().unwrap_or_default().trim_matches(&['[', ']'][..]).into(),
             port,
             device_type,
-            &token,
-            &public_key,
-            &chat_key,
-            saved
-                .as_ref()
-                .map(|p| p.public_key.as_str())
-                .unwrap_or_default(),
-        )
-        .map_err(|_| plain_libs::anyhow::anyhow!("Failed to save paired device"))?;
-
-    if let Some(peer) = crate::infrastructure::db::chat_store::peers::get(&state.db, &remote_id)? {
-        crate::features::services::discovery::pairing_runtime::success(
-            state,
-            &plain_libs::serde_json::to_value(&peer)?,
-            &peer.ip,
-            None,
-        );
-    }
+            key: chat_key,
+            public_key,
+            encryption_public_key: text(&response, "encryptionPublicKey")?.into(),
+        },
+        saved.as_ref().map(|peer| peer.public_key.as_str()),
+        Some(&token),
+    )?;
+    crate::features::services::discovery::pairing_runtime::success(
+        state,
+        &plain_libs::serde_json::to_value(&peer)?,
+        &peer.ip,
+        None,
+    );
     Ok(())
 }
 fn text<'a>(value: &'a Value, field: &str) -> Result<&'a str> {
@@ -341,7 +339,7 @@ fn text<'a>(value: &'a Value, field: &str) -> Result<&'a str> {
 fn check_identity(expected_id: &str, expected_key: &str, id: &str, key: &str) -> Result<()> {
     ensure!(
         (expected_id.is_empty() || expected_id == id)
-            && (expected_key.is_empty() || expected_key == key),
+            && (expected_key.is_empty() || same_public_key(expected_key, key)),
         PairingFailure::PeerIdentityChanged
     );
     Ok(())

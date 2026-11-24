@@ -5,7 +5,7 @@ use plain_rs::infrastructure::protocols::graphql::events::EventSpec;
 pub(crate) fn spec(request: &Request) -> Result<&'static EventSpec, String> {
     use plain_graphql::parser::{
         parse_query,
-        types::{OperationType, Selection},
+        types::OperationType,
     };
     let document = parse_query(&request.query).map_err(|error| error.to_string())?;
     let operations = document
@@ -21,37 +21,7 @@ pub(crate) fn spec(request: &Request) -> Result<&'static EventSpec, String> {
     if operations.len() != 1 || operations[0].1.node.ty != OperationType::Subscription {
         return Err("Subscription document required".into());
     }
-    let mut pending = operations[0]
-        .1
-        .node
-        .selection_set
-        .node
-        .items
-        .iter()
-        .collect::<Vec<_>>();
-    let mut visited = std::collections::HashSet::new();
-    let mut names = std::collections::HashSet::new();
-    while let Some(selection) = pending.pop() {
-        match &selection.node {
-            Selection::Field(field) => {
-                names.insert((
-                    field.node.response_key().node.as_str(),
-                    field.node.name.node.as_str(),
-                ));
-            }
-            Selection::InlineFragment(fragment) => {
-                pending.extend(&fragment.node.selection_set.node.items)
-            }
-            Selection::FragmentSpread(spread) => {
-                let name = &spread.node.fragment_name.node;
-                if visited.insert(name.clone()) {
-                    if let Some(fragment) = document.fragments.get(name) {
-                        pending.extend(&fragment.node.selection_set.node.items);
-                    }
-                }
-            }
-        }
-    }
+    let names = crate::graphql::executor::root_fields(&document, &operations[0].1.node);
     if names.len() != 1 {
         return Err("Subscription requires one root field".into());
     }

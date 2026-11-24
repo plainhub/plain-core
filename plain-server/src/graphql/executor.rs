@@ -196,10 +196,47 @@ pub async fn execute_graphql<
     response
 }
 
+pub(crate) fn root_fields<'a>(
+    document: &'a plain_graphql::parser::types::ExecutableDocument,
+    operation: &'a plain_graphql::parser::types::OperationDefinition,
+) -> std::collections::HashSet<(&'a str, &'a str)> {
+    use plain_graphql::parser::types::Selection;
+    let mut pending = operation
+        .selection_set
+        .node
+        .items
+        .iter()
+        .collect::<Vec<_>>();
+    let mut visited = std::collections::HashSet::new();
+    let mut names = std::collections::HashSet::new();
+    while let Some(selection) = pending.pop() {
+        match &selection.node {
+            Selection::Field(field) => {
+                names.insert((
+                    field.node.response_key().node.as_str(),
+                    field.node.name.node.as_str(),
+                ));
+            }
+            Selection::InlineFragment(fragment) => {
+                pending.extend(&fragment.node.selection_set.node.items)
+            }
+            Selection::FragmentSpread(spread) => {
+                let name = &spread.node.fragment_name.node;
+                if visited.insert(name.clone()) {
+                    if let Some(fragment) = document.fragments.get(name) {
+                        pending.extend(&fragment.node.selection_set.node.items);
+                    }
+                }
+            }
+        }
+    }
+    names
+}
+
 pub(crate) fn content_changes(request: &Request) -> bool {
     use plain_graphql::parser::{
         parse_query,
-        types::{OperationType, Selection},
+        types::OperationType,
     };
     let Ok(document) = parse_query(&request.query) else {
         return false;
@@ -217,64 +254,36 @@ pub(crate) fn content_changes(request: &Request) -> bool {
             if operation.node.ty != OperationType::Mutation {
                 return false;
             }
-            let mut pending = operation
-                .node
-                .selection_set
-                .node
-                .items
-                .iter()
-                .collect::<Vec<_>>();
-            let mut visited = std::collections::HashSet::new();
-            while let Some(selection) = pending.pop() {
-                match &selection.node {
-                    Selection::Field(field) => {
-                        if !matches!(
-                            field.node.name.node.as_str(),
-                            "setClipboard"
-                                | "deleteClipboardItems"
-                                | "saveMediaPlayProgress"
-                                | "sendChatItems"
-                                | "forwardChatItems"
-                                | "sendShare"
-                                | "sendFolderShare"
-                                | "renameFile"
-                                | "copyFile"
-                                | "moveFile"
-                                | "copyFileToDirectory"
-                                | "createFileTask"
-                                | "cacheZipEntry"
-                                | "exportAppLogs"
-                                | "clearAppCache"
-                                | "syncFeeds"
-                                | "startDiscovery"
-                                | "stopDiscovery"
-                                | "deleteMediaItems"
-                                | "trashMediaItems"
-                                | "restoreMediaItems"
-                                | "moveMediaItems"
-                                | "broadcastImageEditorUpdate"
-                                | "setPomodoroRemainingTime"
-                                | "startPomodoro"
-                                | "pausePomodoro"
-                                | "stopPomodoro"
-                        ) {
-                            return true;
-                        }
-                    }
-                    Selection::InlineFragment(fragment) => {
-                        pending.extend(&fragment.node.selection_set.node.items)
-                    }
-                    Selection::FragmentSpread(spread) => {
-                        let name = &spread.node.fragment_name.node;
-                        if visited.insert(name.clone()) {
-                            if let Some(fragment) = document.fragments.get(name) {
-                                pending.extend(&fragment.node.selection_set.node.items);
-                            }
-                        }
-                    }
-                }
-            }
-            false
+            root_fields(&document, &operation.node).into_iter().any(|(_, field)| {
+                !matches!(field, "setClipboard"
+                    | "deleteClipboardItems"
+                    | "saveMediaPlayProgress"
+                    | "sendChatItems"
+                    | "forwardChatItems"
+                    | "sendShare"
+                    | "sendFolderShare"
+                    | "renameFile"
+                    | "copyFile"
+                    | "moveFile"
+                    | "copyFileToDirectory"
+                    | "createFileTask"
+                    | "cacheZipEntry"
+                    | "exportAppLogs"
+                    | "clearAppCache"
+                    | "syncFeeds"
+                    | "startDiscovery"
+                    | "stopDiscovery"
+                    | "deleteMediaItems"
+                    | "trashMediaItems"
+                    | "restoreMediaItems"
+                    | "moveMediaItems"
+                    | "broadcastImageEditorUpdate"
+                    | "setPomodoroRemainingTime"
+                    | "startPomodoro"
+                    | "pausePomodoro"
+                    | "stopPomodoro"
+                )
+            })
         })
 }
 

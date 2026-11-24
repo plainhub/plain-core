@@ -114,7 +114,7 @@ CREATE INDEX IF NOT EXISTS idx_chats_channel_id ON chats(channel_id);
 CREATE TABLE IF NOT EXISTS chat_receipts (
     receipt_id TEXT NOT NULL PRIMARY KEY CHECK(length(receipt_id)>0),
     peer_id TEXT NOT NULL,
-    sent_at TEXT NOT NULL
+    sent_at TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_chat_receipts_sent_at ON chat_receipts(sent_at);
@@ -122,7 +122,6 @@ CREATE INDEX IF NOT EXISTS idx_chat_receipts_sent_at ON chat_receipts(sent_at);
 CREATE TABLE IF NOT EXISTS chat_channels (
     id TEXT NOT NULL CHECK(length(id)>0),
     name TEXT NOT NULL,
-    key BLOB CHECK(key IS NULL OR (typeof(key)='blob' AND length(key)=32)),
     owner_id TEXT,
     members TEXT NOT NULL,
     version INTEGER NOT NULL CHECK(version>=0) DEFAULT 0,
@@ -345,7 +344,8 @@ CREATE TABLE IF NOT EXISTS peers (
     name TEXT NOT NULL,
     ip TEXT NOT NULL,
     chat_token BLOB CHECK(chat_token IS NULL OR (typeof(chat_token)='blob' AND length(chat_token)=32)),
-    public_key BLOB CHECK(public_key IS NULL OR (typeof(public_key)='blob' AND length(public_key)=32)),
+    signature_public_key BLOB CHECK(signature_public_key IS NULL OR (typeof(signature_public_key)='blob' AND length(signature_public_key)=32)),
+    encryption_public_key BLOB CHECK(encryption_public_key IS NULL OR (typeof(encryption_public_key)='blob' AND length(encryption_public_key)=32)),
     status TEXT NOT NULL CHECK(status IN ('PAIRED','UNPAIRED','CHANNEL')),
     port INTEGER CHECK(port BETWEEN 1 AND 65535),
     device_type TEXT NOT NULL CHECK(device_type IN ('PHONE','TABLET','COMPUTER','TV','NAS','OTHER','UNKNOWN')),

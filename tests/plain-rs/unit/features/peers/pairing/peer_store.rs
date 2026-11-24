@@ -8,6 +8,7 @@ fn facts() -> Facts {
         device_type: DeviceType::Phone,
         key: plain_libs::utils::base64::base64_encode(&[1; 32]),
         public_key: plain_libs::utils::base64::base64_encode(&[2; 32]),
+        encryption_public_key: plain_libs::utils::base64::base64_encode(&[41; 32]),
     }
 }
 #[test]
@@ -53,6 +54,36 @@ fn a_known_signing_identity_cannot_be_replaced_by_repairing() {
 }
 
 #[test]
+fn a_known_encryption_key_cannot_be_replaced_by_repairing() {
+    let db = Db::open(std::path::Path::new(":memory:")).unwrap();
+    let previous = save(&db, facts()).unwrap();
+    let mut replacement = facts();
+    replacement.encryption_public_key = plain_libs::utils::base64::base64_encode(&[42; 32]);
+    assert!(save(&db, replacement.clone()).is_err());
+    replacement.public_key = replacement.public_key.trim_end_matches('=').to_owned();
+    assert!(save_confirmed(&db, replacement, Some(&previous.public_key), None).is_err());
+    assert_eq!(db.get_peer_by_id("peer").unwrap().encryption_public_key, previous.encryption_public_key);
+}
+
+#[test]
+fn confirmed_signing_identity_updates_both_keys_and_the_management_grant() {
+    let db = Db::open(std::path::Path::new(":memory:")).unwrap();
+    let previous = save(&db, facts()).unwrap();
+    let encode = plain_libs::utils::base64::base64_encode;
+    let mut replacement = facts();
+    replacement.public_key = encode(&[9; 32]);
+    replacement.encryption_public_key = encode(&[10; 32]);
+    let token = encode(&[11; 32]);
+    let updated = save_confirmed(
+        &db, replacement.clone(), Some(&previous.public_key), Some(&token),
+    ).unwrap();
+    assert_eq!(updated.public_key, replacement.public_key);
+    assert_eq!(updated.encryption_public_key, Some([10; 32]));
+    assert_eq!(updated.token, token);
+    assert!(save_confirmed(&db, replacement, Some(&previous.public_key), None).is_err());
+}
+
+#[test]
 fn unpair_removes_management_access_before_chat_only_repairing_and_preserves_history() {
     let db = Db::open(std::path::Path::new(":memory:")).unwrap();
     let original = save(&db, facts()).unwrap();
@@ -93,4 +124,14 @@ fn unpair_removes_management_access_before_chat_only_repairing_and_preserves_his
             .content,
         chat.content
     );
+}
+
+
+#[test]
+fn pairing_rejects_unusable_encryption_key_before_creating_peer() {
+    let db = Db::open(std::path::Path::new(":memory:")).unwrap();
+    let mut peer = facts();
+    peer.encryption_public_key = plain_libs::utils::base64::base64_encode(&[0; 32]);
+    assert!(save(&db, peer).is_err());
+    assert!(crate::infrastructure::db::chat_store::peers::get(&db, "peer").unwrap().is_none());
 }

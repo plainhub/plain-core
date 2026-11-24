@@ -17,12 +17,9 @@ use tokio::sync::broadcast;
 
 use crate::features::chat::cacher::ChatCacher;
 use crate::features::chat::enums::DeviceType;
-use crate::features::chat::events::ChannelKeyCache;
 use crate::features::chat::events::ChatEvent;
 use crate::features::chat::events::PeerKeyCache;
-use crate::features::chat::events::load_key_cache;
-use crate::features::chat::events::new_channel_key_cache;
-use crate::features::chat::events::new_peer_key_cache;
+use crate::features::chat::events::{new_peer_key_cache, refresh_peer_key_cache};
 use crate::infrastructure::db::DChat;
 use crate::infrastructure::db::Db;
 use crate::infrastructure::transport::contract::PeerTransport;
@@ -97,7 +94,6 @@ pub struct ChatService<T: PeerTransport> {
     pub transport: Arc<T>,
     pub event_tx: broadcast::Sender<ChatEvent>,
     pub peer_key_cache: PeerKeyCache,
-    pub channel_key_cache: ChannelKeyCache,
     pub hooks: Arc<dyn ChatHooks>,
     pub link_previews: LinkPreviewFn,
 }
@@ -115,10 +111,9 @@ impl<T: PeerTransport + 'static> ChatService<T> {
     ) -> Self {
         let (event_tx, _) = broadcast::channel(256);
         let peer_key_cache = new_peer_key_cache();
-        let channel_key_cache = new_channel_key_cache();
         let cacher = ChatCacher::new();
         cacher.load(&db);
-        load_key_cache(&db, &peer_key_cache, &channel_key_cache);
+        refresh_peer_key_cache(&db, &peer_key_cache);
         Self {
             delivery: std::sync::Arc::new(crate::features::chat::delivery::Delivery::new(
                 db.clone(),
@@ -132,7 +127,6 @@ impl<T: PeerTransport + 'static> ChatService<T> {
             transport,
             event_tx,
             peer_key_cache,
-            channel_key_cache,
             hooks,
             link_previews,
         }

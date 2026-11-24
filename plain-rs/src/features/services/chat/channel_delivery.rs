@@ -1,4 +1,4 @@
-use crate::features::chat::channels::messages::ChannelMember;
+use crate::features::chat::channels::messages::{ChannelMember, State};
 use crate::features::chat::channels::outgoing::{self, Action};
 use crate::infrastructure::db::DChannel;
 use crate::infrastructure::db::chat_store::channels;
@@ -6,7 +6,6 @@ use crate::infrastructure::db::chat_store::peers;
 use crate::runtime::Runtime as CoreRuntime;
 use plain_libs::anyhow::{Result, ensure};
 use plain_libs::serde_json::{Value, json};
-use plain_libs::utils::base64::base64_decode;
 
 pub fn rejected(message: impl ToString) -> Value {
     json!({"errors":[{"message":message.to_string()}]})
@@ -19,6 +18,26 @@ fn current(state: &CoreRuntime, channel: &DChannel, removed: bool) -> Result<boo
         row.as_ref() == Some(channel)
     })
 }
+
+pub(super) fn snapshot(
+    state: &CoreRuntime,
+    channel: &DChannel,
+    actor: &str,
+    keypair: &[u8],
+    members: Vec<ChannelMember>,
+) -> Result<State> {
+    outgoing::snapshot(
+        &state.db,
+        channel,
+        actor,
+        crate::features::prefs::settings::snapshot(&state.prefs)?.device_name,
+        crate::features::services::discovery::discovery_advertisement::device_type(state),
+        keypair,
+        &crate::features::prefs::security::encryption_public_key(&state.prefs)?,
+        members,
+    )
+}
+
 pub async fn send(
     state: &CoreRuntime,
     channel: &DChannel,
@@ -82,23 +101,16 @@ async fn deliver(
     if targets.is_empty() {
         return Ok(response);
     }
-    let keypair = crate::features::services::peers::peer_wire::signing_keypair(&state.prefs)?;
+    let keypair = crate::features::prefs::security::signing_keypair(&state.prefs)?;
     let snapshot = if action.includes_state() {
-        Some(outgoing::snapshot(
-            &state.db,
-            channel,
-            &actor,
-            crate::features::prefs::settings::snapshot(&state.prefs)?.device_name,
-            crate::features::services::discovery::discovery_advertisement::device_type(state),
-            &keypair[32..],
-            members,
-        )?)
+        Some(snapshot(state, channel, &actor, &keypair, members)?)
     } else {
         None
     };
     let request = action.request(channel, target, snapshot.as_ref())?;
-    let direct_wire = tokio::sync::OnceCell::<String>::new();
-    let channel_wire = tokio::sync::OnceCell::<String>::new();
+    let direct = action == Action::Invite;
+    let cid = if direct { "" } else { channel.id.as_str() };
+    let wire = tokio::sync::OnceCell::<String>::new();
     for group in targets.chunks(4) {
         let results = futures_util::future::join_all(group.iter().map(|target| async {
             let _permit = state
@@ -112,20 +124,14 @@ async fn deliver(
             );
             let peer = peers::get(&state.db, target)?
                 .ok_or_else(|| plain_libs::anyhow::anyhow!("Peer not found"))?;
-            let (key, cid) = if action == Action::Invite {
-                (outgoing::pairing_key(&peer)?, "")
-            } else if peer.key.is_empty() {
-                (base64_decode(&channel.key), channel.id.as_str())
+            let key = if direct {
+                outgoing::pairing_key(&peer)?
             } else {
-                (base64_decode(&peer.key), "")
+                let public_key = peer.encryption_public_key
+                    .ok_or_else(|| plain_libs::anyhow::anyhow!("Channel member encryption key unavailable"))?;
+                public_key.to_vec()
             };
-            let wire = if cid.is_empty() {
-                &direct_wire
-            } else {
-                &channel_wire
-            }
-            .get_or_try_init(|| async { request.sign(&keypair, cid) })
-            .await?;
+            let wire = wire.get_or_try_init(|| async { request.sign(&keypair, cid) }).await?;
             let response = crate::features::services::peers::peer_transport::send_checked(
                 state,
                 &peer,

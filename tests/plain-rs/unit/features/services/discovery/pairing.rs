@@ -14,10 +14,11 @@ fn prefs(dir: &std::path::Path, id: &str) -> Prefs {
     prefs.set("client_id", id).unwrap();
     prefs
         .set(
-            "signature_key_pair",
-            plain_libs::utils::base64::base64_encode(&kp),
+            "signature_private_key",
+            plain_libs::utils::base64::base64_encode(&kp[..32]),
         )
         .unwrap();
+    crate::features::prefs::security::bootstrap(&prefs).unwrap();
     prefs
 }
 fn signed_cancel(prefs: &Prefs, request: &PairingRequest, to: &str) -> PairingCancel {

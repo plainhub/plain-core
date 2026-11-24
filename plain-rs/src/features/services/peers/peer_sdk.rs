@@ -160,20 +160,12 @@ pub async fn aware(
 }
 pub async fn aware_send(
     state: &CoreRuntime,
-    peer: &crate::infrastructure::db::DPeer,
-    channel: &str,
-    key: &[u8],
+    dispatch: &crate::infrastructure::transport::contract::PeerDispatch<'_>,
     body: &str,
 ) -> Result<Value, Failure> {
-    let encrypted = crate::infrastructure::transport::http_request::encrypt_raw(
-        key,
-        "POST",
-        "/peer_graphql",
-        body.as_bytes(),
-    )
-    .ok_or_else(|| Failure::Fatal("Invalid peer key".into()))?;
+    let (encrypted, response_key) = dispatch.seal(body).map_err(Failure::Fatal)?;
     let context = crate::infrastructure::transport::http_response::Context::new(&encrypted);
-    let response = aware(state, peer, "POST", "/peer_graphql", channel, encrypted).await?;
+    let response = aware(state, dispatch.peer, "POST", "/peer_graphql", dispatch.channel_id, encrypted).await?;
     async {
         let status = response.status;
         let _lease = response.lease;
@@ -182,7 +174,7 @@ pub async fn aware_send(
             4 * 1024 * 1024,
         )
         .await?;
-        decode_response(status, key, &context, &bytes)
+        decode_response(status, &response_key, &context, &bytes)
     }
     .await
     .map_err(|e: plain_libs::anyhow::Error| Failure::Fatal(e.to_string()))
@@ -230,32 +222,25 @@ pub fn ble_actor(state: &CoreRuntime) -> Result<String, Failure> {
 }
 pub async fn ble_send(
     state: &CoreRuntime,
-    peer: &crate::infrastructure::db::DPeer,
-    channel: &str,
-    key: &[u8],
+    dispatch: &crate::infrastructure::transport::contract::PeerDispatch<'_>,
     body: &str,
 ) -> Result<Value, Failure> {
-    let encrypted = crate::infrastructure::transport::http_request::encrypt_raw(
-        key,
-        "POST",
-        "/peer_graphql",
-        body.as_bytes(),
-    )
-    .ok_or_else(|| Failure::Fatal("Invalid peer key".into()))?;
+    let (encrypted, response_key) = dispatch.seal(body).map_err(Failure::Fatal)?;
     let context = crate::infrastructure::transport::http_response::Context::new(&encrypted);
     let response = ble(
         state,
-        peer,
+        dispatch.peer,
         crate::infrastructure::protocols::ble::Request::PeerGraphql {
-            client_id: ble_actor(state)?,
-            channel_id: channel.into(),
+            client_id: dispatch.client_id.into(),
+            channel_id: dispatch.channel_id.into(),
             body: encrypted,
         },
     )
     .await?;
     let (status, bytes) = crate::infrastructure::protocols::ble::decode_response(&response)
         .map_err(|e| Failure::Fatal(e.to_string()))?;
-    decode_response(status, key, &context, bytes).map_err(|e| Failure::Fatal(e.to_string()))
+    decode_response(status, &response_key, &context, bytes)
+        .map_err(|e| Failure::Fatal(e.to_string()))
 }
 
 struct RequestBody(Option<bytes::Bytes>);

@@ -42,6 +42,7 @@ impl ChatMutation {
         id: plain_graphql::ID,
         recipient_ids: Option<Vec<plain_graphql::ID>>,
     ) -> plain_graphql::Result<ChatItem> {
+        super::authorize_stored_attachment_import(ctx, id.as_str(), None)?;
         let row = plain_rs::features::services::chat::chat_actions::retry(
             ctx.data::<crate::server::ServerState>()?,
             id.to_string(),

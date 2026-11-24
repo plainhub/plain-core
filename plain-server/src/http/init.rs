@@ -57,7 +57,7 @@ pub(crate) async fn init(
             return StatusCode::INTERNAL_SERVER_ERROR.into_response();
         }
     };
-    let pair = match plain_rs::features::services::peers::peer_wire::signing_keypair(&state.prefs) {
+    let pair = match plain_rs::features::prefs::security::signing_keypair(&state.prefs) {
         Ok(pair) => pair,
         Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     };

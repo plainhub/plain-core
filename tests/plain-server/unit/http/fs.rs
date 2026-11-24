@@ -515,6 +515,26 @@ async fn fs_typed_attachment_and_file_references_keep_downloads_and_ranges() {
     }
 }
 
+#[tokio::test]
+async fn old_channel_attachment_link_only_downloads_the_original_file() {
+    let (_root, _core, state, _) = test_state();
+    let import = |data: &[u8]| {
+        plain_rs::features::chat::attachments::app_file_store::import_bytes(
+            &state.db, &state.directory, data, "text/plain",
+        ).unwrap()
+    };
+    let first = import(b"first attachment");
+    let old_link = file_id(&state, &format!("fid:{}", first.fid_suffix));
+    let second = import(b"new attachment");
+    let new_link = file_id(&state, &format!("fid:{}", second.fid_suffix));
+    assert_ne!(first.id, second.id);
+    for (link, expected) in [(old_link, b"first attachment".as_slice()), (new_link, b"new attachment".as_slice())] {
+        let response = call_fs(&state, &format!("id={link}&action=DOWNLOAD"), &[]).await;
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(body_bytes(response).await, expected);
+    }
+}
+
 #[cfg(feature = "media")]
 #[tokio::test]
 async fn fs_typed_image_reference_returns_decodable_thumbnail() {

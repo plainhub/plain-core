@@ -213,7 +213,7 @@ async fn management_requests_preserve_existing_key_permissions_and_frame_bounds(
         "client_id",
         "adb_token",
         "master_secret",
-        "signature_key_pair",
+        "signature_private_key",
         "unknown_key",
     ] {
         assert!(

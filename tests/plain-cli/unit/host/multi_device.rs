@@ -128,7 +128,7 @@ async fn native_password_and_approval_pairing_enables_actual_chat_and_preserves_
             port: second.port,
             remote_access: Some(true),
             signature_public_key: plain_libs::utils::base64::base64_encode(
-                &plain_rs::features::services::peers::peer_wire::signing_keypair(
+                &plain_rs::features::prefs::security::signing_keypair(
                     &remote_state.prefs,
                 )
                 .unwrap()[32..],

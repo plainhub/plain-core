@@ -12,11 +12,12 @@ use crate::utils::base64::base64_encode;
 pub fn ed25519_generate() -> ([u8; 64], [u8; 32]) {
     let mut secret = [0; 32];
     super::gen_random(&mut secret);
-    let signing_key = SigningKey::from_bytes(&secret);
-    let verifying_key = signing_key.verifying_key();
-    let sk_bytes = signing_key.to_keypair_bytes();
-    let vk_bytes = verifying_key.to_bytes();
-    (sk_bytes, vk_bytes)
+    let keypair = ed25519_keypair_from_seed(&secret);
+    (keypair, keypair[32..].try_into().unwrap())
+}
+
+pub fn ed25519_keypair_from_seed(seed: &[u8; 32]) -> [u8; 64] {
+    SigningKey::from_bytes(seed).to_keypair_bytes()
 }
 
 /// Derive the raw 32-byte verifying key from 64-byte Ed25519 keypair bytes.

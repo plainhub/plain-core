@@ -1,9 +1,10 @@
+use crate::features::peers::pairing::security::same_public_key;
 use crate::features::peers::pairing::now_ms;
 use crate::features::peers::pairing::protocol::{PairingAccept, PairingReject, PairingReply};
 use crate::features::peers::pairing::protocol::{PairingRequest, PairingRequestPayload};
 use crate::features::peers::pairing::security;
 use crate::features::prefs::Prefs;
-use crate::features::services::peers::peer_wire::signing_keypair;
+use crate::features::prefs::security::signing_keypair;
 use plain_libs::anyhow::{Result, bail};
 use plain_libs::crypto::EcdhSession;
 use serde::Deserialize;
@@ -40,6 +41,9 @@ fn request(
             device_type: device.device_type,
             ecdh_public_key: plain_libs::utils::base64::base64_encode(&ecdh.public_key_bytes),
             signature_public_key: plain_libs::utils::base64::base64_encode(&kp[32..]),
+            encryption_public_key: plain_libs::utils::base64::base64_encode(
+                &crate::features::prefs::security::encryption_public_key(prefs)?,
+            ),
             timestamp: now_ms(),
             ips: device.ips,
             signature: String::new(),
@@ -66,7 +70,7 @@ pub(super) fn response(
     let local_key = plain_libs::utils::base64::base64_encode(&kp[32..]);
     plain_libs::anyhow::ensure!(
         request.to_id == actor(prefs)?
-            && request.target_public_key == local_key,
+            && same_public_key(&request.target_public_key, &local_key),
         "Pairing target identity mismatch"
     );
     if !accepted {
@@ -78,6 +82,9 @@ pub(super) fn response(
     let mut response = PairingAccept {
         request_id: request.payload.request_id(),
         signature_public_key: None,
+        encryption_public_key: plain_libs::utils::base64::base64_encode(
+            &crate::features::prefs::security::encryption_public_key(prefs)?,
+        ),
         from_name: None,
         port: device.port,
         device_type: device.device_type,

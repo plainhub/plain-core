@@ -7,7 +7,7 @@ fn fixture(id: &str) -> (plain_libs::temporary::TempDir, crate::test_runtime::Co
     let (key, _) = plain_libs::crypto::ed25519_generate();
     prefs.set("client_id", id).unwrap();
     prefs
-        .set("signature_key_pair", base64_encode(&key))
+        .set("signature_private_key", base64_encode(&key[..32]))
         .unwrap();
     let core =
         crate::test_runtime::Core::start(dir.path(), &base64_encode(&[3; 32]), prefs).unwrap();
@@ -24,7 +24,7 @@ fn device() -> pairing::Device {
 }
 fn begin(a: &CoreRuntime, b: &CoreRuntime) -> (PairingRequest, Ticket) {
     let id = b.native_client_id().unwrap();
-    let key = crate::features::services::peers::peer_wire::signing_keypair(&b.prefs).unwrap();
+    let key = crate::features::prefs::security::signing_keypair(&b.prefs).unwrap();
     let target = Target {
         device_id: id,
         device_public_key: base64_encode(&key[32..]),

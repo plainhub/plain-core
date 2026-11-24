@@ -17,14 +17,26 @@ impl<T: PeerTransport + 'static> ChatService<T> {
         let id = chat.id.clone();
         let events = self.event_tx.clone();
         let hooks = self.hooks.clone();
+        let db = self.db.clone();
+        let directory = self.data_dir.clone();
         tokio::spawn(async move {
+            let directory = &directory;
             match delivery
-                .send(
+                .send_observed(
                     &transport,
                     &identity.client_id,
                     &plain_libs::utils::base64::base64_decode(&identity.ed25519_keypair),
                     &id,
                     None,
+                    |chat| {
+                        use crate::features::chat::attachments::outgoing::{self, Source};
+                        outgoing::import(&db, directory, chat, |uri| async move {
+                            let path = plain_libs::utils::file_uri::local_path(&uri)
+                                .map_err(plain_libs::anyhow::Error::msg)?;
+                            Ok(Source::Local(directory.join(path)))
+                        })
+                    },
+                    |_| {},
                 )
                 .await
             {

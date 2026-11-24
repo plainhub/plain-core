@@ -1,5 +1,4 @@
 input ChannelInviteInput {
-	channelKey: String!
 	state: ChannelStateInput!
 }
 
@@ -9,7 +8,8 @@ input ChannelMemberInput {
 	name: String
 	deviceType: DeviceType
 	ip: String
-	publicKey: String
+	signaturePublicKey: String!
+	encryptionPublicKey: String!
 	port: Int
 }
 
@@ -18,10 +18,29 @@ enum ChannelMemberStatus {
 	PENDING
 }
 
+type ChannelState {
+	name: String!
+	version: Long!
+	members: [ChannelStateMember!]!
+	signature: String!
+}
+
 input ChannelStateInput {
 	name: String!
 	version: Long!
 	members: [ChannelMemberInput!]!
+	signature: String!
+}
+
+type ChannelStateMember {
+	peerId: ID!
+	status: ChannelMemberStatus!
+	name: String
+	deviceType: DeviceType
+	ip: String
+	signaturePublicKey: String!
+	encryptionPublicKey: String!
+	port: Int
 }
 
 type ChatAttachment {
@@ -154,6 +173,7 @@ enum PeerStatus {
 }
 
 type Query {
+	channelState(channelId: ID!): ChannelState
 }
 
 """

@@ -236,6 +236,7 @@ fn signed_nearby_request() -> (
         from_id: "nearby-peer".into(),
         from_ip: String::new(),
         payload: plain_rs::features::peers::pairing::protocol::PairingRequestPayload {
+            encryption_public_key: plain_libs::utils::base64::base64_encode(&[41; 32]),
             from_name: "Nearby fixture".into(),
             port: 2443,
             device_type: plain_rs::features::chat::enums::DeviceType::Phone,
@@ -263,14 +264,14 @@ async fn nearby_pairing_preserves_signatures_and_the_actual_radio_return_address
     state
         .prefs
         .set(
-            "signature_key_pair",
-            plain_libs::utils::base64::base64_encode(&local_key),
+            "signature_private_key",
+            plain_libs::utils::base64::base64_encode(&local_key[..32]),
         )
         .unwrap();
     let (mut request, requester_key) = signed_nearby_request();
     request.to_id = state.native_client_id().unwrap();
     request.target_public_key = plain_libs::utils::base64::base64_encode(
-        &plain_rs::features::services::peers::peer_wire::signing_keypair(&state.prefs).unwrap()
+        &plain_rs::features::prefs::security::signing_keypair(&state.prefs).unwrap()
             [32..],
     );
     request.payload.signature =
@@ -391,7 +392,7 @@ async fn denying_an_expired_pairing_request_is_acknowledged() {
     let (mut request, key) = signed_nearby_request();
     request.to_id = state.native_client_id().unwrap();
     request.target_public_key = plain_libs::utils::base64::base64_encode(
-        &plain_rs::features::services::peers::peer_wire::signing_keypair(&state.prefs).unwrap()
+        &plain_rs::features::prefs::security::signing_keypair(&state.prefs).unwrap()
             [32..],
     );
     request.payload.signature =
@@ -437,7 +438,7 @@ async fn nearby_cancel_requires_the_matching_signed_request() {
     let (mut request, key) = signed_nearby_request();
     request.to_id = state.native_client_id().unwrap();
     request.target_public_key = plain_libs::utils::base64::base64_encode(
-        &plain_rs::features::services::peers::peer_wire::signing_keypair(&state.prefs).unwrap()
+        &plain_rs::features::prefs::security::signing_keypair(&state.prefs).unwrap()
             [32..],
     );
     request.payload.signature =

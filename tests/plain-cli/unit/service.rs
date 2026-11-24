@@ -47,7 +47,7 @@ async fn management_pairing_with_cli_requires_password_without_second_approval()
             port: remote.core.http_ports().await.unwrap().1,
             remote_access: Some(true),
             signature_public_key: plain_libs::utils::base64::base64_encode(
-                &plain_rs::features::services::peers::peer_wire::signing_keypair(
+                &plain_rs::features::prefs::security::signing_keypair(
                     &remote_state.prefs,
                 )
                 .unwrap()[32..],

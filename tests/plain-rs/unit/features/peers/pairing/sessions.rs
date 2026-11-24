@@ -101,6 +101,7 @@ fn incoming_request() -> crate::features::peers::pairing::protocol::PairingReque
         from_id: "peer".into(),
         from_ip: "127.0.0.1".into(),
         payload: crate::features::peers::pairing::protocol::PairingRequestPayload {
+            encryption_public_key: plain_libs::utils::base64::base64_encode(&[41; 32]),
             from_name: "Fixture".into(),
             port: 2443,
             device_type: crate::features::chat::enums::DeviceType::Phone,

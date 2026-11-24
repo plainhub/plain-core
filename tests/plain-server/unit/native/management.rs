@@ -273,7 +273,7 @@ async fn native_preference_reads_and_notification_changes_preserve_shared_state_
         );
     }
     for private in [
-        "signature_key_pair",
+        "signature_private_key",
         "master_secret",
         "signatureKeyPair",
         "masterSecret",

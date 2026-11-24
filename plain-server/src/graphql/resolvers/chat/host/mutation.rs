@@ -16,10 +16,14 @@ impl ChatHostMutation {
         targets: Vec<String>,
         content: ChatContentInput,
     ) -> plain_graphql::Result<Vec<ChatItem>> {
+        let content = content.content()?;
+        if super::super::has_channel_target(&targets) {
+            super::super::authorize_attachment_import(ctx, &content)?;
+        }
         Ok(chat_actions::send_many(
             ctx.data::<ServerState>()?,
             targets,
-            plain_libs::serde_json::to_string(&content.content()?)?,
+            plain_libs::serde_json::to_string(&content)?,
         )
         .await?
         .iter()
@@ -79,6 +83,7 @@ impl ChatHostMutation {
         targets: Vec<String>,
         note: Option<String>,
     ) -> plain_graphql::Result<Vec<ChatItem>> {
+        super::super::authorize_stored_attachment_import(ctx, id.as_str(), Some(&targets))?;
         Ok(chat_actions::forward_many(
             ctx.data::<ServerState>()?,
             id.as_str(),

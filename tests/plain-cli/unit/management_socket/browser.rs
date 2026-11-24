@@ -46,7 +46,7 @@ async fn browser_login(
     };
     let state = core.runtime();
     let public =
-        plain_rs::features::services::peers::peer_wire::signing_keypair(&state.prefs).unwrap();
+        plain_rs::features::prefs::security::signing_keypair(&state.prefs).unwrap();
     let channel = client
         .accept(
             &plain_libs::serde_json::from_str(&hello).unwrap(),

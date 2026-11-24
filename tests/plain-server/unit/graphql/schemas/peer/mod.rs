@@ -3,11 +3,12 @@ use plain_libs::protocols::http_client;
 use plain_libs::serde_json::Value;
 use plain_libs::serde_json::json;
 #[tokio::test]
-async fn peer_schema_preserves_required_arguments_and_empty_query() {
+async fn peer_schema_preserves_required_arguments_and_exposes_channel_state() {
     let schema = schema();
     let sdl = schema.sdl();
     for field in [
         "createChatItem(content: String!): [ChatItem!]!",
+        "channelState(channelId: ID!): ChannelState",
         "notifyChannelInvite(channelId: ID!, input: ChannelInviteInput!): Boolean!",
         "notifyChannelStateChanged(channelId: ID!, input: ChannelStateInput!): Boolean!",
         "notifyChannelMemberRemoved(channelId: ID!, removedPeerId: ID!, version: Long!): Boolean!",
@@ -41,7 +42,7 @@ async fn peer_schema_preserves_required_arguments_and_empty_query() {
     assert!(result.errors.is_empty(), "{:?}", result.errors);
     assert_eq!(
         result.data.into_json().unwrap()["__type"]["fields"],
-        json!([])
+        json!([{"name":"channelState"}])
     );
 }
 
@@ -71,8 +72,8 @@ async fn encrypted_public_and_ble_rpc_share_auth_executor_and_receipts() {
     let (local_keypair, local_public_key) = plain_libs::crypto::ed25519_generate();
     prefs
         .set(
-            "signature_key_pair",
-            plain_libs::utils::base64::base64_encode(&local_keypair),
+            "signature_private_key",
+            plain_libs::utils::base64::base64_encode(&local_keypair[..32]),
         )
         .unwrap();
     let token = plain_libs::utils::base64::base64_encode(&[5; 32]);
@@ -89,6 +90,7 @@ async fn encrypted_public_and_ble_rpc_share_auth_executor_and_receipts() {
     peer.status = PeerStatus::Paired;
     peer.key = plain_libs::utils::base64::base64_encode(&key);
     peer.public_key = plain_libs::utils::base64::base64_encode(&public_key);
+    peer.encryption_public_key = Some(plain_libs::crypto::hpke::public_key(&[22;32]));
     peers::save(&db, &[peer], SaveMode::Insert).unwrap();
     let server = ContentServer::start(dir.path(), &token, prefs.clone()).unwrap();
     let (cert_pem, cert_key) = plain_libs::tls::generate_pem(&["localhost".into()]).unwrap();
@@ -131,17 +133,14 @@ async fn encrypted_public_and_ble_rpc_share_auth_executor_and_receipts() {
                 "peerStopAware" => json!(true),
                 "peerTransportCapabilities" => json!(["BLE"]),
                 "peerTransportBleExchange" => {
-                    let wire = plain_rs::features::services::peers::ble_transport::test_peer_wire(
-                        &ble,
-                        &request["params"],
-                        &[7; 32],
+                    let plain_rs::infrastructure::protocols::ble::Request::PeerGraphql { channel_id, body, .. } =
+                        ble.request_for_test(&request["params"]) else { panic!("Expected peer request") };
+                    let (wire, response_key) = plain_rs::features::services::peers::ble_transport::test_channel_wire(
+                        &body, &[22;32], &channel_id, &advertised_client_id,
+                        "706c6169-89f1-81c6-8bc7-6b67c2ffa178",
+                        &plain_libs::utils::base64::base64_encode(&local_public_key),
                     );
                     let parts: plain_rs::infrastructure::transport::graphql_request::SignedEnvelope = plain_libs::serde_json::from_str(&wire).unwrap();
-                    assert!(plain_libs::crypto::ed25519_verify(
-                        &plain_libs::utils::base64::base64_encode(&local_public_key),
-                        &parts.signing_bytes(""),
-                        &parts.signature
-                    ));
                     let document: Value = plain_libs::serde_json::from_str(&wire).unwrap();
                     assert!(parts.query.contains("notifyChannelStateChanged"));
                     let local = document["variables"]["input"]["members"]
@@ -165,7 +164,7 @@ async fn encrypted_public_and_ble_rpc_share_auth_executor_and_receipts() {
                         &ble,
                         &request["params"],
                         json!({"data":{"notifyChannelStateChanged":true}}),
-                        &[7; 32],
+                        &response_key,
                     )
                 }
                 _ => panic!("Unexpected Host call: HTTPS must bypass httpExchange: {request}"),
@@ -357,7 +356,7 @@ async fn signed_channel_notifications_apply_once_and_enforce_route_and_recipient
     use plain_rs::infrastructure::db::DPeer;
     use plain_rs::infrastructure::db::chat_store::{SaveMode, channels, peers};
     use plain_rs::infrastructure::transport::{
-        contract::signed_request, http_request, http_response,
+        contract::{PeerDispatch, signed_request}, http_response,
     };
     let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs = std::sync::Arc::new(
@@ -372,16 +371,34 @@ async fn signed_channel_notifications_apply_once_and_enforce_route_and_recipient
     owner.key = base64_encode(&[5; 32]);
     owner.public_key = base64_encode(&public);
     owner.status = PeerStatus::Paired;
+    owner.encryption_public_key = Some(plain_libs::crypto::hpke::public_key(&[7;32]));
     peers::save(&state.db, &[owner], SaveMode::Insert).unwrap();
+    let local_seed = state.prefs.get::<String>("encryption_private_key").unwrap().unwrap();
+    let local_seed: [u8;32] = plain_libs::utils::base64::base64_decode(&local_seed).try_into().unwrap();
+    let local_key = plain_libs::crypto::hpke::public_key(&local_seed);
+    let local_signature = plain_rs::features::prefs::security::get_entry(&state.prefs, "signature_public_key")
+        .unwrap().unwrap();
+    let target = DPeer::new(&actor, "Local", "", None, DeviceType::Phone);
     let request = |query: &'static str, variables: Value, context: &'static str, key: [u8; 32]| {
         let state = &state;
         let signer = &signer;
+        let target = &target;
         async move {
             let wire = signed_request(signer, query, variables, context).unwrap();
-            let body =
-                http_request::encrypt_raw(&key, "POST", "/peer_graphql", wire.as_bytes()).unwrap();
+            let key = if context.is_empty() { key } else { local_key };
+            let dispatch = PeerDispatch { peer: target, client_id: "owner", channel_id: context,
+                key: &key, signing_key: signer, message_id: None };
+            let (body, key) = plain_rs::features::services::peers::ble_transport::test_seal_peer_request(&dispatch, &wire);
+            if context.is_empty() {
+                let plaintext = plain_rs::infrastructure::transport::http_request::decrypt_raw(
+                    &key, "POST", "/peer_graphql", &body,
+                ).unwrap();
+                assert_eq!(plaintext, wire.as_bytes());
+                assert_eq!(body.len(), 24 + plaintext.len() + 16);
+            }
             let (status, response) = execute(state, "owner", context, &body).await;
             assert_eq!(status, 200);
+            assert_eq!(execute(state, "owner", context, &body).await.0, 400);
             let data = http_response::Context::new(&body)
                 .decrypt(&key, &response)
                 .unwrap();
@@ -389,12 +406,19 @@ async fn signed_channel_notifications_apply_once_and_enforce_route_and_recipient
         }
     };
     let invitation = "mutation($channelId:ID!,$input:ChannelInviteInput!){notifyChannelInvite(channelId:$channelId,input:$input)}";
-    let snapshot = json!({"name":"Channel","version":1,"members":[
-        {"peerId":"owner","status":"JOINED","deviceType":"COMPUTER"},
-        {"peerId":actor,"status":"PENDING"},
-        {"peerId":"new-peer","status":"JOINED","deviceType":"PHONE","port":443}
+    let sign = |snapshot: &mut Value| {
+        let input = json!(["channel-roster", "channel", snapshot["version"], snapshot["name"], snapshot["members"]]);
+        snapshot["signature"] = json!(plain_libs::crypto::ed25519_sign(&signer, input.to_string().as_bytes()));
+    };
+    let (member_signer, member_signature) = plain_libs::crypto::ed25519_generate();
+    let mut snapshot = json!({"name":"Channel","version":1,"members":[
+        {"peerId":"owner","status":"JOINED","deviceType":"COMPUTER","signaturePublicKey":base64_encode(&public),
+            "encryptionPublicKey":base64_encode(&plain_libs::crypto::hpke::public_key(&[7;32]))},
+        {"peerId":actor,"status":"PENDING","signaturePublicKey":local_signature,"encryptionPublicKey":base64_encode(&local_key)},
+        {"peerId":"new-peer","status":"JOINED","deviceType":"PHONE","port":443,"signaturePublicKey":base64_encode(&member_signature),"encryptionPublicKey":base64_encode(&[83;32])}
     ]});
-    let variables = json!({"channelId":"channel","input":{"channelKey":base64_encode(&[7;32]),"state":snapshot}});
+    sign(&mut snapshot);
+    let variables = json!({"channelId":"channel","input":{"state":snapshot}});
     for _ in 0..2 {
         let accepted = request(invitation, variables.clone(), "", [5; 32]).await;
         assert_eq!(accepted["data"]["notifyChannelInvite"], true, "{accepted}");
@@ -422,12 +446,63 @@ async fn signed_channel_notifications_apply_once_and_enforce_route_and_recipient
     let mut update = snapshot;
     update["version"] = json!(2);
     update["name"] = json!("Renamed");
+    update["members"][1]["status"] = json!("JOINED");
+    sign(&mut update);
     let reply = request("mutation($input:ChannelStateInput!){notifyChannelStateChanged(channelId:\"channel\",input:$input)}", json!({"input":update}), "channel", [7;32]).await;
     assert_eq!(reply["data"]["notifyChannelStateChanged"], true, "{reply}");
     assert_eq!(
         channels::get(&state.db, "channel").unwrap().unwrap().name,
         "Renamed"
     );
+    let dispatch = PeerDispatch { peer: &target, client_id: "owner", channel_id: "channel",
+        key: &local_key, signing_key: &signer, message_id: Some("chat-message") };
+    for query in [
+        "mutation($content:String!){ createChatItem(content:$content){id} createChatItem(content:$content){id} }",
+        "{ channelState(channelId:\"channel\") { version } }",
+        "mutation { notifyChannelDeleted(channelId:\"channel\",version:3) }",
+        r#"mutation($content: String!) { createChatItem(content:$content) { id } ...Control }
+           fragment Control on Mutation { notifyChannelDeleted(channelId:"channel",version:3) }"#,
+    ] {
+        let control = signed_request(
+            &signer, query,
+            json!({"content":r#"{"type":"MESSAGE","value":{"text":"fixture","format":"PLAIN","items":[]}}"#}), "channel",
+        ).unwrap();
+        let (body, _) = plain_rs::features::services::peers::ble_transport::test_seal_peer_request(&dispatch, &control);
+        assert_eq!(execute(&state, "owner", "channel", &body).await.0, 400);
+    }
+    assert!(state.db.get_all_chats().is_empty());
+    assert_eq!(channels::get(&state.db, "channel").unwrap().unwrap().status, ChannelStatus::Joined);
+    let send_message = |id: &'static str| {
+        let state = &state;
+        let target = &target;
+        let member_signer = &member_signer;
+        async move {
+            let wire = plain_rs::infrastructure::transport::contract::chat_item_request(
+                member_signer, r#"{"type":"MESSAGE","value":{"text":"unpaired delivery","format":"PLAIN","items":[]}}"#, "channel",
+            ).unwrap();
+            let dispatch = PeerDispatch { peer: target, client_id: "new-peer", channel_id: "channel",
+                key: &local_key, signing_key: member_signer, message_id: Some(id) };
+            let (body, key) = plain_rs::features::services::peers::ble_transport::test_seal_peer_request(&dispatch, &wire);
+            let local_peer = peers::get(&state.db, "new-peer").unwrap().unwrap();
+            let (plaintext, _) = plain_rs::features::services::peers::ble_transport::test_channel_wire(
+                &body, &local_seed, "channel", "new-peer", &target.id, &local_peer.public_key,
+            );
+            assert_eq!(body.len(), 32 + plaintext.len() + 16);
+            let payload: Value = plain_libs::serde_json::from_str(&plaintext).unwrap();
+            assert_eq!(payload["messageId"], id);
+            assert!(!payload["signature"].as_str().unwrap().is_empty());
+            let (status, response) = execute(state, "new-peer", "channel", &body).await;
+            assert_eq!(status, 200);
+            let data = http_response::Context::new(&body).decrypt(&key, &response).unwrap();
+            plain_libs::serde_json::from_slice::<Value>(&data).unwrap()
+        }
+    };
+    let first = send_message("message-id").await;
+    assert_eq!(first["data"]["createChatItem"][0]["fromId"], "new-peer", "{first}");
+    let retry = send_message("message-id").await;
+    assert_eq!(retry["data"]["createChatItem"], json!([]), "{retry}");
+    assert_eq!(state.db.get_all_chats().len(), 1);
+
     let removal = "mutation($peerId:ID!){notifyChannelMemberRemoved(channelId:\"channel\",removedPeerId:$peerId,version:3)}";
     let wrong = request(removal, json!({"peerId":"different"}), "", [5; 32]).await;
     assert_eq!(
@@ -446,6 +521,9 @@ async fn signed_channel_notifications_apply_once_and_enforce_route_and_recipient
     let row = channels::get(&state.db, "channel").unwrap().unwrap();
     assert_eq!(row.status, ChannelStatus::Kicked);
     assert_eq!(row.version, 3);
+    let after_removal = send_message("fresh-message").await;
+    assert_eq!(after_removal["errors"][0]["message"], "Channel member not joined", "{after_removal}");
+    assert_eq!(state.db.get_all_chats().len(), 1);
     server.shutdown().await;
 }
 

@@ -7,6 +7,7 @@ fn sample_request() -> PairingRequest {
         from_id: "client-a".to_string(),
         from_ip: String::new(),
         payload: PairingRequestPayload {
+            encryption_public_key: plain_libs::utils::base64::base64_encode(&[41; 32]),
             from_name: "Mac".to_string(),
             port: 8443,
             device_type: crate::features::chat::enums::DeviceType::Computer,
@@ -25,7 +26,7 @@ fn request_signature_data_format_is_locked() {
     let req = sample_request();
     assert_eq!(
         req.signature_data(),
-        r#"["PAIR_REQUEST","client-a","SIGPK","receiver","AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=","Mac",8443,"COMPUTER","ECDH",1700000000000,["203.0.113.10","203.0.113.11"],false]"#
+        r#"["PAIR_REQUEST","client-a","SIGPK","KSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSk=","receiver","AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=","Mac",8443,"COMPUTER","ECDH",1700000000000,["203.0.113.10","203.0.113.11"],false]"#
     );
     // `from_ip` is stamped by the receiver and must not affect the signature.
     let mut stamped = req.clone();
@@ -40,6 +41,7 @@ fn request_signature_data_format_is_locked() {
 #[test]
 fn accept_signature_data_format_is_locked() {
     let resp = PairingAccept {
+        encryption_public_key: plain_libs::utils::base64::base64_encode(&[41; 32]),
         request_id: "REQUEST_ID".into(),
         signature_public_key: None,
         from_name: None,
@@ -52,7 +54,7 @@ fn accept_signature_data_format_is_locked() {
     };
     assert_eq!(
         resp.signature_data(),
-        r#"["PAIRING_ACCEPT","REQUEST_ID",null,null,2443,"PHONE","ECDH2",[],false]"#
+        r#"["PAIRING_ACCEPT","REQUEST_ID",null,"KSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSk=",null,2443,"PHONE","ECDH2",[],false]"#
     );
 }
 
@@ -100,7 +102,7 @@ fn request_device_enums_preserve_wire_and_signature_values() {
         assert_eq!(decoded.payload.device_type, kind);
         assert_eq!(decoded.signature_data(), request.signature_data());
         assert_eq!(
-            plain_libs::serde_json::from_str::<plain_libs::serde_json::Value>(&request.signature_data()).unwrap()[7],
+            plain_libs::serde_json::from_str::<plain_libs::serde_json::Value>(&request.signature_data()).unwrap()[8],
             kind.as_str()
         );
     }

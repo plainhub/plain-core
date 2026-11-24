@@ -27,8 +27,8 @@ fn fixture() -> (plain_libs::temporary::TempDir, ContentServer) {
     let (private, _public) = plain_libs::crypto::ed25519_generate();
     prefs
         .set(
-            "signature_key_pair",
-            plain_libs::utils::base64::base64_encode(&private),
+            "signature_private_key",
+            plain_libs::utils::base64::base64_encode(&private[..32]),
         )
         .unwrap();
     let server = ContentServer::start(
@@ -50,7 +50,7 @@ fn offer(
     use plain_rs::features::services::confirmation_channel::{Client, ServerHandshake};
     let (login, hello) = Client::start(BROWSER_ID).unwrap();
     let signing =
-        plain_rs::features::services::peers::peer_wire::signing_keypair(&state.prefs).unwrap();
+        plain_rs::features::prefs::security::signing_keypair(&state.prefs).unwrap();
     let now = plain_libs::chrono::Utc::now().timestamp_millis() as u64;
     let device_id = state.native_client_id().unwrap();
     let (channel, response) =
@@ -272,7 +272,7 @@ async fn login_pairing_and_init_preserve_rust_state_without_revealing_passwords(
     let (_dir, server) = fixture();
     let state = server.runtime_state();
     let (_, public) = plain_libs::crypto::ed25519_generate();
-    let peer = json!({"port":8443,"signaturePublicKey":plain_libs::utils::base64::base64_encode(&public),"deviceName":"Desktop","deviceType":"COMPUTER","ips":["192.0.2.1"]});
+    let peer = json!({"port":8443,"signaturePublicKey":plain_libs::utils::base64::base64_encode(&public),"encryptionPublicKey":plain_libs::utils::base64::base64_encode(&[21;32]),"deviceName":"Desktop","deviceType":"COMPUTER","ips":["192.0.2.1"]});
     let pending = ws_login::execute(&state, offer(&state, peer).0)
         .await
         .unwrap();
@@ -373,10 +373,10 @@ async fn main_schema_keeps_secrets_local_and_remote_metadata_and_resource_token_
     peers::save(&state.db, &[peer], SaveMode::Insert).unwrap();
     let mut channel = plain_rs::infrastructure::db::DChannel::new("Channel", "peer");
     channel.id = "channel".into();
-    channel.key = plain_libs::utils::base64::base64_encode(&[78; 32]);
+
     channels::save(&state.db, &[channel], SaveMode::Insert).unwrap();
     let native = server.native_graphql().unwrap();
-    let query = r#"{ sessions { clientId } peers { key token } chatChannels { key } }"#;
+    let query = r#"{ sessions { clientId } peers { key token } chatChannels { id } }"#;
     let local = native.execute(query.into()).await;
     assert!(local.errors.is_empty(), "{:?}", local.errors);
     let local = local.data.into_json().unwrap();
@@ -384,7 +384,7 @@ async fn main_schema_keeps_secrets_local_and_remote_metadata_and_resource_token_
     assert_eq!(settings["password"], "");
     assert!(settings.get("url_token").is_none());
     assert_eq!(local["peers"][0]["key"], plain_libs::utils::base64::base64_encode(&[76; 32]));
-    assert_eq!(local["chatChannels"][0]["key"], plain_libs::utils::base64::base64_encode(&[78; 32]));
+    assert_eq!(local["chatChannels"][0]["id"], "channel");
     let mut headers = HeaderMap::new();
     headers.insert("c-id", session.client_id.parse().unwrap());
     headers.insert(
@@ -424,7 +424,6 @@ async fn main_schema_keeps_secrets_local_and_remote_metadata_and_resource_token_
         "{peers{key}}",
         "{peers{token}}",
         "{peers{key}}",
-        "{chatChannels{key}}",
     ] {
         let denied = remote(&state, &headers, query).await;
         assert_eq!(

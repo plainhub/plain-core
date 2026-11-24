@@ -28,13 +28,8 @@ pub struct ChatEvent {
 }
 
 pub type PeerKeyCache = Arc<RwLock<HashMap<String, Vec<u8>>>>;
-pub type ChannelKeyCache = Arc<RwLock<HashMap<String, Vec<u8>>>>;
 
 pub fn new_peer_key_cache() -> PeerKeyCache {
-    Arc::new(RwLock::new(HashMap::new()))
-}
-
-pub fn new_channel_key_cache() -> ChannelKeyCache {
     Arc::new(RwLock::new(HashMap::new()))
 }
 
@@ -49,21 +44,6 @@ pub fn refresh_peer_key_cache(db: &Db, cache: &PeerKeyCache) {
             if raw.len() == 32 {
                 map.insert(p.id, raw);
             }
-        }
-    }
-}
-
-/// Rebuild both peer and channel key caches from the DB.
-/// Mirrors `ChatCacheManager.loadKeyCacheAsync()` in plain-app.
-pub fn load_key_cache(db: &Db, peer_cache: &PeerKeyCache, channel_cache: &ChannelKeyCache) {
-    refresh_peer_key_cache(db, peer_cache);
-
-    let mut cm = channel_cache.write().unwrap();
-    cm.clear();
-    for ch in db.get_channels_with_key() {
-        let raw = base64_decode(&ch.key);
-        if raw.len() == 32 {
-            cm.insert(ch.id, raw);
         }
     }
 }

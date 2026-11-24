@@ -43,17 +43,35 @@ pub struct SignedEnvelope {
     pub request_id: String,
     pub query: String,
     pub variables: Map<String, Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub message_id: Option<String>,
 }
 impl SignedEnvelope {
-    pub fn signing_bytes(&self, channel_id: &str) -> Vec<u8> {
-        plain_libs::serde_json::to_vec(&(
-            crate::infrastructure::signature::SignaturePurpose::PeerRequest,
-            channel_id,
-            &self.request_id,
-            &self.query,
-            &self.variables,
-        ))
-        .expect("peer signing tuple is JSON")
+    pub fn signing_bytes(&self, channel: &str, peers: Option<(&str, &str)>) -> Vec<u8> {
+        use plain_libs::serde_json::{self, json};
+        let mut fields = vec![
+            json!(crate::infrastructure::signature::SignaturePurpose::PeerRequest),
+            json!(channel),
+            json!(self.request_id),
+            json!(self.query),
+            json!(self.variables),
+        ];
+        if let Some((sender, recipient)) = peers {
+            fields.extend([json!(sender), json!(recipient), json!(self.message_id)]);
+        }
+        serde_json::to_vec(&fields).expect("peer signing fields are JSON")
+    }
+    pub(super) fn sign(
+        &mut self,
+        key: &[u8],
+        channel: &str,
+        peers: Option<(&str, &str)>,
+    ) -> Result<(), String> {
+        self.signature = plain_libs::crypto::ed25519_sign(key, &self.signing_bytes(channel, peers));
+        if self.signature.is_empty() {
+            return Err("Invalid peer signing keypair".into());
+        }
+        Ok(())
     }
     pub(super) fn graphql_json(&self) -> String {
         plain_libs::serde_json::json!({

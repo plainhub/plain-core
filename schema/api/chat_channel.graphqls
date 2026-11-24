@@ -35,7 +35,6 @@ type ChatChannel {
 	status: ChatChannelStatus!
 	createdAt: Instant!
 	updatedAt: Instant!
-	key: String!
 }
 
 type ChatChannelActions {
@@ -69,7 +68,7 @@ extend type Mutation {
 }
 
 extend type Query {
-	chatChannels: [ChatChannel!]!
+	chatChannels(refreshFromOwners: Boolean! = false): [ChatChannel!]!
 }
 
 extend type Subscription {

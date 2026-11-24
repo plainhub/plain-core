@@ -104,6 +104,9 @@ pub fn receive(
     signature: &str,
     timestamp: i64,
 ) -> Result<Option<Received>> {
+    if !channel_id.is_empty() {
+        bail!("Channel messages require a signed message ID");
+    }
     let raw = plain_libs::utils::base64::base64_decode(signature);
     let now = crate::features::peers::pairing::now_ms();
     if raw.len() != 64
@@ -112,38 +115,82 @@ pub fn receive(
     {
         bail!("Invalid message receipt");
     }
-    let receipt =
-        plain_libs::utils::base64::base64_encode(&Sha256::digest(plain_libs::serde_json::to_vec(&(
-            from_id,
-            channel_id,
-            plain_libs::utils::base64::base64_encode(&raw),
-            timestamp,
-        ))?));
-    db.with_conn(|c|->Result<Option<Received>>{
-        let tx = c.unchecked_transaction()?;
+    let input = plain_libs::serde_json::to_vec(&(from_id, channel_id, raw, timestamp))?;
+    let receipt = plain_libs::utils::base64::base64_encode(&Sha256::digest(input));
+    persist_received(db, from_id, content, None, &receipt, Some(timestamp))
+}
 
-        let peer=tx.query_row(&format!("SELECT {PEER_COLS} FROM peers WHERE id=?1"),[from_id],row_to_peer).optional()?.ok_or_else(||plain_libs::anyhow::anyhow!("invalid peer"))?;
-        let channel=if channel_id.is_empty() {None}else {
-            let channel=tx.query_row(&format!("SELECT {CHANNEL_COLS} FROM chat_channels WHERE id=?1"),[channel_id],row_to_channel).optional()?.ok_or_else(||plain_libs::anyhow::anyhow!("Unknown channel"))?;
-            if channel.status!=ChannelStatus::Joined {bail!("Channel not joined");}
-            if !channel.joined_member_ids().iter().any(|member| member == from_id) {
-                bail!("Sender is not a joined channel member");
+pub fn receive_channel(
+    db: &Db,
+    actor: &str,
+    from_id: &str,
+    channel_id: &str,
+    message_id: &str,
+    content: &str,
+) -> Result<Option<Received>> {
+    let input = plain_libs::serde_json::to_vec(&("channel", channel_id, from_id, message_id))?;
+    let receipt = plain_libs::utils::base64::base64_encode(&Sha256::digest(input));
+    persist_received(db, from_id, content, Some((channel_id, actor)), &receipt, None)
+}
+
+fn persist_received(
+    db: &Db,
+    from_id: &str,
+    content: &str,
+    target: Option<(&str, &str)>,
+    receipt: &str,
+    timestamp: Option<i64>,
+) -> Result<Option<Received>> {
+    db.with_conn(|c| -> Result<Option<Received>> {
+        let tx = c.unchecked_transaction()?;
+        let peer = tx
+            .query_row(&format!("SELECT {PEER_COLS} FROM peers WHERE id=?1"), [from_id], row_to_peer)
+            .optional()?
+            .ok_or_else(|| plain_libs::anyhow::anyhow!("Invalid peer"))?;
+        let channel = if let Some((id, actor)) = target {
+            let channel = tx
+                .query_row(&format!("SELECT {CHANNEL_COLS} FROM chat_channels WHERE id=?1"), [id], row_to_channel)
+                .optional()?
+                .ok_or_else(|| plain_libs::anyhow::anyhow!("Unknown channel"))?;
+            let joined = channel.joined_member_ids();
+            if channel.status != ChannelStatus::Joined
+                || !joined.iter().any(|id| id == from_id)
+                || !joined.iter().any(|id| id == actor)
+            {
+                bail!("Channel member not joined");
             }
             Some(channel)
+        } else {
+            None
         };
         let parsed = messages::validate_content(content)?;
         if parsed["type"] == "MESSAGE" && parsed["value"].get("linkPreviews").is_some() {
             bail!("Peer messages cannot include local link previews");
         }
-        tx.execute("DELETE FROM chat_receipts WHERE sent_at<?1",[crate::infrastructure::db::iso_from_unix_millis(now.saturating_sub(crate::infrastructure::transport::auth::TIMESTAMP_WINDOW_MS as i64))])?;
-        if tx.execute("INSERT INTO chat_receipts(receipt_id,peer_id,sent_at) VALUES(?1,?2,?3) ON CONFLICT(receipt_id) DO NOTHING",params![receipt,from_id,crate::infrastructure::db::iso_from_unix_millis(timestamp)])?==0 {tx.commit()?;
-            return Ok(None);}
-        let chat=DChat::new(from_id,if channel_id.is_empty(){"me"}else{""},channel_id,content);
-        tx.execute("INSERT INTO chats(id,from_id,to_id,channel_id,content,status,status_data,created_at,updated_at) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9)",params![chat.id,chat.from_id,chat.to_id,chat.channel_id.as_deref().filter(|value|!value.is_empty()),chat.content,chat.status,chat.status_data.as_deref().filter(|value|!value.is_empty()),chat.created_at,chat.updated_at])?;
+        if timestamp.is_some() {
+            let expires = crate::features::peers::pairing::now_ms()
+                .saturating_sub(crate::infrastructure::transport::auth::TIMESTAMP_WINDOW_MS as i64);
+            tx.execute("DELETE FROM chat_receipts WHERE sent_at<?1",
+                [crate::infrastructure::db::iso_from_unix_millis(expires)])?;
+        }
+        let sent_at = timestamp.map(crate::infrastructure::db::iso_from_unix_millis);
+        if tx.execute("INSERT INTO chat_receipts(receipt_id,peer_id,sent_at) VALUES(?1,?2,?3) ON CONFLICT(receipt_id) DO NOTHING",
+            params![receipt, from_id, sent_at])? == 0
+        {
+            tx.commit()?;
+            return Ok(None);
+        }
+        let chat = DChat::new(
+            from_id, if channel.is_some() { "" } else { "me" },
+            channel.as_ref().map_or("", |channel| channel.id.as_str()), content,
+        );
+        tx.execute("INSERT INTO chats(id,from_id,to_id,channel_id,content,status,status_data,created_at,updated_at) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9)",
+            params![chat.id,chat.from_id,chat.to_id,chat.channel_id.as_deref().filter(|value|!value.is_empty()),chat.content,chat.status,chat.status_data.as_deref().filter(|value|!value.is_empty()),chat.created_at,chat.updated_at])?;
         tx.commit()?;
-        Ok(Some(Received{chat,peer,channel}))
+        Ok(Some(Received { chat, peer, channel }))
     })
 }
+
 #[derive(serde::Deserialize)]
 struct StatusData {
     results: Option<Vec<ChannelDeliveryResult>>,

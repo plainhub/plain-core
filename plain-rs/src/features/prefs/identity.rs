@@ -1,10 +1,3 @@
-//! First-run bootstrap of the persisted device identity and server
-//! secrets — the read-or-generate-and-persist flows previously
-//! duplicated in the server (`db::server_client_id` sibling logic) and
-//! the plain-desktop Tauri shells. Key names are the plain-app
-//! Prefs contract: `client_id` / `device_name` /
-//! `signature_key_pair` / `mdns_hostname`.
-
 use crate::features::prefs::Prefs;
 
 use plain_libs::crypto::ed25519_generate;
@@ -32,9 +25,7 @@ pub fn default_device_name() -> String {
     }
 }
 
-/// Build a fresh device identity (first run). The host persists the three
-/// fields under the keys `client_id` / `device_name` /
-/// `signature_key_pair`.
+/// Build an in-memory device identity.
 pub fn generate_identity() -> AppIdentity {
     let (kp, _) = ed25519_generate();
     AppIdentity {

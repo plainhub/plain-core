@@ -254,7 +254,7 @@ async fn a_committed_folder_share_survives_a_later_delivery_error() {
     state
         .prefs
         .set(
-            crate::features::prefs::pref_keys::SIGNATURE_KEY_PAIR,
+            crate::features::prefs::pref_keys::SIGNATURE_PRIVATE_KEY,
             "invalid signing fixture",
         )
         .unwrap();

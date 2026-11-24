@@ -137,60 +137,6 @@ fn resolve_unknown_query_returns_empty() {
 }
 
 #[tokio::test]
-async fn kicked_channel_rejects_incoming_message() {
-    let dir = unique_tmp_dir("kicked-channel");
-    let db = Db::open(&dir.join("plain.db")).expect("open db");
-    let service = ChatService::new(
-        db,
-        std::sync::Arc::from(plain_libs::crypto::gen_token()),
-        std::sync::Arc::new(ChatIdentity::new("self", "Self", String::new())),
-        DeviceType::Computer,
-        dir,
-        std::sync::Arc::new(TestTransport),
-        std::sync::Arc::new(NoChatHooks),
-        no_link_previews(),
-    );
-    let mut channel = crate::infrastructure::db::DChannel::new("group", "self");
-    service
-        .db
-        .upsert_peer(&crate::infrastructure::db::DPeer::new(
-            "peer",
-            "Fixture",
-            "",
-            Some(1),
-            DeviceType::Phone,
-        ));
-    channel.status = ChannelStatus::Kicked;
-    service.db.insert_channel(&channel);
-
-    assert_eq!(
-        service
-            .receive_peer_chat(
-                "peer",
-                &channel.id,
-                "{}",
-                &plain_libs::utils::base64::base64_encode(&[7; 64]),
-                crate::features::peers::pairing::now_ms()
-            )
-            .unwrap_err(),
-        "Channel not joined"
-    );
-    assert!(service.db.get_chats_by_channel(&channel.id).is_empty());
-    assert_eq!(
-        service
-            .receive_peer_chat(
-                "peer",
-                "missing",
-                "{}",
-                &plain_libs::utils::base64::base64_encode(&[7; 64]),
-                crate::features::peers::pairing::now_ms()
-            )
-            .unwrap_err(),
-        "Unknown channel"
-    );
-}
-
-#[tokio::test]
 async fn unpaired_peer_send_fails_and_local_cache_tracks_deletion() {
     let dir = unique_tmp_dir("unpaired-send");
     let db = Db::open(&dir.join("plain.db")).expect("open db");

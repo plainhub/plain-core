@@ -1,4 +1,3 @@
-use crate::infrastructure::db::key_blob;
 use plain_libs::rusqlite::params;
 
 use crate::features::chat::channels::messages::decode_members;
@@ -7,7 +6,7 @@ use crate::infrastructure::db::DChannel;
 use crate::infrastructure::db::Db;
 
 pub(crate) const CHANNEL_COLS: &str =
-    "id,name,owner_id,members,key,version,status,created_at,updated_at";
+    "id,name,owner_id,members,version,status,created_at,updated_at";
 
 pub(crate) fn row_to_channel(row: &plain_libs::rusqlite::Row<'_>) -> plain_libs::rusqlite::Result<DChannel> {
     Ok(DChannel {
@@ -15,11 +14,10 @@ pub(crate) fn row_to_channel(row: &plain_libs::rusqlite::Row<'_>) -> plain_libs:
         name: row.get(1)?,
         owner_id: row.get(2)?,
         members: row.get(3)?,
-        key: key_blob::read_optional(row, 4)?,
-        version: row.get::<_, i64>(5)?,
-        status: row.get(6)?,
-        created_at: row.get(7)?,
-        updated_at: row.get(8)?,
+        version: row.get::<_, i64>(4)?,
+        status: row.get(5)?,
+        created_at: row.get(6)?,
+        updated_at: row.get(7)?,
     })
 }
 
@@ -54,20 +52,6 @@ impl Db {
             .unwrap_or_default()
     }
 
-    pub fn get_channels_with_key(&self) -> Vec<DChannel> {
-        let conn = self.0.lock().unwrap();
-        let mut stmt = match conn.prepare(&format!(
-            "SELECT {CHANNEL_COLS} FROM chat_channels WHERE key IS NOT NULL"
-        )) {
-            Ok(s) => s,
-            Err(_) => return vec![],
-        };
-        stmt.query_map([], row_to_channel)
-            .ok()
-            .map(|iter| iter.filter_map(|r| r.ok()).collect())
-            .unwrap_or_default()
-    }
-
     pub fn get_channel_by_id(&self, id: &str) -> Option<DChannel> {
         let conn = self.0.lock().unwrap();
         conn.query_row(
@@ -81,11 +65,11 @@ impl Db {
     pub fn insert_channel(&self, channel: &DChannel) -> plain_libs::rusqlite::Result<()> {
         let conn = self.0.lock().unwrap();
         conn.execute(
-            "INSERT INTO chat_channels (id,name,owner_id,members,key,version,status,created_at,updated_at) \
-             VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9)",
+            "INSERT INTO chat_channels (id,name,owner_id,members,version,status,created_at,updated_at) \
+             VALUES (?1,?2,?3,?4,?5,?6,?7,?8)",
             params![
                 channel.id, channel.name, channel.owner_id.as_deref().filter(|value|!value.is_empty()), channel.members,
-                key_blob::optional(&channel.key)?, channel.version, channel.status,
+                channel.version, channel.status,
                 plain_libs::utils::dbtime::normalize(&channel.created_at)?, plain_libs::utils::dbtime::normalize(&channel.updated_at)?
             ],
         ).map(|_| ())
@@ -94,9 +78,9 @@ impl Db {
     pub fn update_channel(&self, channel: &DChannel) -> plain_libs::rusqlite::Result<()> {
         let conn = self.0.lock().unwrap();
         conn.execute(
-            "UPDATE chat_channels SET name=?1,owner_id=?2,members=?3,key=?4,version=?5,status=?6,updated_at=?7 WHERE id=?8",
+            "UPDATE chat_channels SET name=?1,owner_id=?2,members=?3,version=?4,status=?5,updated_at=?6 WHERE id=?7",
             params![
-                channel.name, channel.owner_id.as_deref().filter(|value|!value.is_empty()), channel.members, key_blob::optional(&channel.key)?,
+                channel.name, channel.owner_id.as_deref().filter(|value|!value.is_empty()), channel.members,
                 channel.version, channel.status, plain_libs::utils::dbtime::normalize(&channel.updated_at)?, channel.id
             ],
         ).map(|_| ())
@@ -105,15 +89,15 @@ impl Db {
     pub fn upsert_channel(&self, channel: &DChannel) -> plain_libs::rusqlite::Result<()> {
         let conn = self.0.lock().unwrap();
         conn.execute(
-            "INSERT INTO chat_channels (id,name,owner_id,members,key,version,status,created_at,updated_at) \
-             VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9) \
+            "INSERT INTO chat_channels (id,name,owner_id,members,version,status,created_at,updated_at) \
+             VALUES (?1,?2,?3,?4,?5,?6,?7,?8) \
              ON CONFLICT(id) DO UPDATE SET \
                name=excluded.name, owner_id=excluded.owner_id, members=excluded.members, \
-               key=excluded.key, version=excluded.version, status=excluded.status, \
+               version=excluded.version, status=excluded.status, \
                updated_at=excluded.updated_at",
             params![
                 channel.id, channel.name, channel.owner_id.as_deref().filter(|value|!value.is_empty()), channel.members,
-                key_blob::optional(&channel.key)?, channel.version, channel.status,
+                channel.version, channel.status,
                 plain_libs::utils::dbtime::normalize(&channel.created_at)?, plain_libs::utils::dbtime::normalize(&channel.updated_at)?
             ],
         ).map(|_| ())

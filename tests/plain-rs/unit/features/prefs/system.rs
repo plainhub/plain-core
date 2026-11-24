@@ -105,7 +105,7 @@ fn key_value_settings_validate_protected_fields_and_patch_permissions_atomically
     for (key, value) in [
         (PASSWORD_TYPE, plain_libs::serde_json::json!(4)),
         (LOGIN_REQUIRE_APPROVAL, plain_libs::serde_json::json!("false")),
-        (SIGNATURE_KEY_PAIR, plain_libs::serde_json::json!("client-supplied")),
+        (SIGNATURE_PRIVATE_KEY, plain_libs::serde_json::json!("client-supplied")),
         (MDNS_HOSTNAME, plain_libs::serde_json::json!("invalid.example")),
     ] {
         assert!(set_entry(&prefs, key, value).is_err());
@@ -199,7 +199,7 @@ fn keyed_security_reads_preserve_snapshot_defaults_without_reading_unrelated_key
         get_entry(&prefs, SIGNATURE_PUBLIC_KEY).unwrap(),
         Some(json!(state.signature_public_key))
     );
-    prefs.set(SIGNATURE_KEY_PAIR, "invalid identity").unwrap();
+    prefs.set(SIGNATURE_PRIVATE_KEY, "invalid identity").unwrap();
     prefs.set(PASSWORD_TYPE, "invalid type").unwrap();
     prefs.set(API_PERMISSIONS, vec!["IMAGES"]).unwrap();
     assert_eq!(
@@ -212,7 +212,7 @@ fn keyed_security_reads_preserve_snapshot_defaults_without_reading_unrelated_key
     );
     assert!(get_entry(&prefs, SIGNATURE_PUBLIC_KEY).is_err());
     assert!(get_entry(&prefs, PASSWORD_TYPE).is_err());
-    for key in [MASTER_SECRET, SIGNATURE_KEY_PAIR, "unknown"] {
+    for key in [MASTER_SECRET, SIGNATURE_PRIVATE_KEY, "unknown"] {
         assert_eq!(get_entry(&prefs, key).unwrap(), None, "{key}");
     }
 }

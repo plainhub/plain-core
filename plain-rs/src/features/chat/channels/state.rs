@@ -47,7 +47,6 @@ pub fn create(db: &Db, actor: &str, name: &str) -> Result<DChannel> {
         bail!("Missing channel actor");
     }
     let mut channel = DChannel::new(name.trim(), actor);
-    channel.key = plain_libs::utils::base64::base64_encode(&plain_libs::crypto::random_bytes(32));
     channel.members = plain_libs::serde_json::to_string(&[ChannelMember::new(actor)])?;
     channels::save(db, std::slice::from_ref(&channel), SaveMode::Insert)?;
     Ok(channel)

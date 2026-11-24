@@ -1,3 +1,4 @@
+use crate::features::peers::pairing::security::same_public_key;
 use crate::features::services::discovery::pairing_error::PairingFailure;
 use crate::features::peers::pairing::{
     peer_store::{self, Facts},
@@ -75,7 +76,7 @@ pub(super) fn save_peer(
     ip: &str,
     request_id: Option<&str>,
 ) -> Result<()> {
-    let peer = peer_store::save_confirmed(&state.db, facts, previous_identity, true)?;
+    let peer = peer_store::save_confirmed(&state.db, facts, previous_identity, None)?;
     pairing_runtime::success(
         state,
         &plain_libs::serde_json::to_value(&peer)?,
@@ -102,7 +103,7 @@ impl Confirmations {
                 .map(|peer| peer.public_key);
         ensure!(
             previous_identity.as_deref().is_none_or(|key| {
-                key.is_empty() || key == ticket.target.device_public_key
+                key.is_empty() || same_public_key(key, &ticket.target.device_public_key)
             }),
             "Pairing identity mismatch"
         );
@@ -130,7 +131,7 @@ impl Confirmations {
                 .map(|p| p.public_key);
         ensure!(
             previous_identity.as_deref().is_none_or(|key| {
-                key.is_empty() || key == request.payload.signature_public_key
+                key.is_empty() || same_public_key(key, &request.payload.signature_public_key)
             }),
             "Pairing identity mismatch"
         );
@@ -233,6 +234,7 @@ impl Confirmations {
                         device_type: request.payload.device_type,
                         key: base64_encode(&chat_key(&shared, &e.request, accepted)),
                         public_key: request.payload.signature_public_key.clone(),
+                        encryption_public_key: request.payload.encryption_public_key.clone(),
                     },
                     e.previous_identity.as_deref(),
                     &target.device_ip,
@@ -329,6 +331,7 @@ impl Confirmations {
                         device_type: response.device_type,
                         key: base64_encode(&chat_key(&shared, &e.request, response)),
                         public_key: public_key.to_owned(),
+                        encryption_public_key: response.encryption_public_key.clone(),
                     },
                 ));
             }
@@ -429,7 +432,7 @@ pub fn publish_notice(
 
 pub fn publish(state: &CoreRuntime, request: PairingRequest) -> Result<()> {
     let changed = crate::infrastructure::db::chat_store::peers::get(&state.db, &request.from_id)?
-        .is_some_and(|p| p.public_key != request.payload.signature_public_key);
+        .is_some_and(|p| !same_public_key(&p.public_key, &request.payload.signature_public_key));
     publish_notice(
         state,
         &request.from_id,

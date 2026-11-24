@@ -26,6 +26,7 @@ pub fn same_identity(peer: &DPeer, expected: &DPeer) -> bool {
     peer.id == expected.id
         && peer.key == expected.key
         && peer.public_key == expected.public_key
+        && peer.encryption_public_key == expected.encryption_public_key
         && peer.status == expected.status
 }
 pub fn download_url(peer: &DPeer, file_id: &str) -> plain_libs::anyhow::Result<String> {

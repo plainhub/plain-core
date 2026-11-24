@@ -18,7 +18,7 @@ fn every_registered_key_has_the_expected_read_and_write_policy() {
         (PrefAccess::LocalOrHttpServer, "mdns_hostname"),
         (PrefAccess::LocalOrFiles, "recent_selected_dirs"),
         (PrefAccess::RemoteReadOnly, "app_home_features"),
-        (PrefAccess::RustOnly, "opaque_server_setup opaque_password_record client_id adb_token master_secret signature_key_pair"),
+        (PrefAccess::RustOnly, "opaque_server_setup opaque_password_record client_id adb_token master_secret signature_private_key encryption_private_key"),
     ];
     let expected: Vec<_> = groups
         .iter()
@@ -115,7 +115,8 @@ fn exported_constants_match_the_registered_keys() {
         CLIENT_ID,
         ADB_TOKEN,
         MASTER_SECRET,
-        SIGNATURE_KEY_PAIR,
+        SIGNATURE_PRIVATE_KEY,
+        ENCRYPTION_PRIVATE_KEY,
     ];
     assert_eq!(
         constants,

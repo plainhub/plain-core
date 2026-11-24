@@ -46,8 +46,8 @@ async fn forwarding_a_note_preserves_the_source_and_returns_real_rows_per_target
     state
         .prefs
         .set(
-            "signature_key_pair",
-            plain_libs::utils::base64::base64_encode(&signing),
+            "signature_private_key",
+            plain_libs::utils::base64::base64_encode(&signing[..32]),
         )
         .unwrap();
     let result = execute(
@@ -168,7 +168,7 @@ async fn forwarding_delivers_the_original_then_the_note_in_two_peer_messages() {
     let base64 = plain_libs::utils::base64::base64_encode;
     state
         .prefs
-        .set("signature_key_pair", base64(&signing))
+        .set("signature_private_key", base64(&signing[..32]))
         .unwrap();
     let mut peer = DPeer::new("peer", "Recipient", "", Some(443), DeviceType::Phone);
     let key = [7; 32];

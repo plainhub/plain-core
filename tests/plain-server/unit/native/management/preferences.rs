@@ -321,7 +321,7 @@ async fn keyed_native_reads_observe_committed_writes_and_reject_private_or_unkno
         selected["client_id"],
         management.get_pref("client_id").unwrap()
     );
-    for key in ["unknown", "httpPort", "master_secret", "signature_key_pair"] {
+    for key in ["unknown", "httpPort", "master_secret", "signature_private_key"] {
         assert!(management.get_pref(key).is_err(), "{key}");
         assert!(management.get_prefs(&[key.into()]).is_err(), "{key}");
     }
@@ -378,7 +378,7 @@ async fn keyed_identity_and_permission_reads_ignore_unrelated_invalid_data() {
         .unwrap();
     state
         .prefs
-        .set(keys::SIGNATURE_KEY_PAIR, "invalid signing identity")
+        .set(keys::SIGNATURE_PRIVATE_KEY, "invalid signing identity")
         .unwrap();
     state
         .store
@@ -412,7 +412,7 @@ async fn keyed_identity_and_permission_reads_ignore_unrelated_invalid_data() {
         keys::ONBOARDING_COMPLETED,
         "unknown",
         keys::MASTER_SECRET,
-        keys::SIGNATURE_KEY_PAIR,
+        keys::SIGNATURE_PRIVATE_KEY,
     ] {
         assert!(management.get_pref(key).is_err(), "{key}");
         assert!(management.get_prefs(&[key.into()]).is_err(), "{key}");

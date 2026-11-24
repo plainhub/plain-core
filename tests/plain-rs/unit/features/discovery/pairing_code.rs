@@ -13,6 +13,7 @@ fn qr_carries_a_signed_request_and_rejects_legacy_or_modified_codes() {
         to_id: String::new(),
         target_public_key: String::new(),
         payload: PairingRequestPayload {
+            encryption_public_key: plain_libs::utils::base64::base64_encode(&[41; 32]),
             from_name: "Device α + &? /".into(),
             device_type: crate::features::chat::enums::DeviceType::Phone,
             ips: vec!["192.0.2.4".into(), "2001:db8::1".into()],
