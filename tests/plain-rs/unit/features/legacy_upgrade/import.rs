@@ -62,9 +62,9 @@ fn imports_an_older_room_database_with_channel_and_pairing_references() {
     current_db.with_conn(|db| {
         assert_eq!(
             db.query_row("SELECT key FROM peers WHERE id=?1", [LOCAL], |r| r
-                .get::<_, String>(0))
+                .get::<_, [u8; 32]>(0))
                 .unwrap(),
-            pairing_key
+            [0x43; 32]
         );
         let members: String = db
             .query_row("SELECT members FROM chat_channels", [], |r| r.get(0))
@@ -111,6 +111,10 @@ fn fixture(root: &Path) -> (LegacyStorage, PathBuf, String) {
     let db = Connection::open(storage.database()).unwrap();
     db.execute_batch(include_str!("room-v25.sql")).unwrap();
     let key = base64_encode(&[0x45; 32]);
+    db.execute(
+        "INSERT INTO shares VALUES ('share','Test share','',?1,NULL,1,'[]',?2,?2)",
+        params![base64_encode(&[0x46; 32]), TIME],
+    ).unwrap();
     db.execute("INSERT INTO peers VALUES ('1y2p0ij32e8e7','Test peer','',?1,'','PAIRED',8443,'PHONE',?2,?2)", params![key, TIME]).unwrap();
     db.execute("INSERT INTO chat_channels VALUES ('channel','Test channel',?1,'me','[{\"id\":\"9ix\"},{\"id\":\"1y2p0ij32e8e7\"}]',2,'JOINED',?2,?2)", params![key, TIME]).unwrap();
     db.execute(
@@ -256,12 +260,20 @@ fn deferred_import_reads_backup_and_deletes_only_the_imported_data() {
     let deliveries: Value = serde_json::from_str(message.status_data.as_deref().unwrap()).unwrap();
     assert_eq!(deliveries["results"][0]["peerId"], PEER);
     db.with_conn(|conn| {
-        let peer_key: String = conn
+        let peer_key: [u8; 32] = conn
             .query_row("SELECT key FROM peers WHERE id=?1", [PEER], |row| {
                 row.get(0)
             })
             .unwrap();
-        assert_eq!(peer_key, base64_encode(&[0x45; 32]));
+        assert_eq!(peer_key, [0x45; 32]);
+        assert_eq!(
+            conn.query_row("SELECT key FROM chat_channels", [], |row| row.get::<_, [u8; 32]>(0)).unwrap(),
+            [0x45; 32]
+        );
+        assert_eq!(
+            conn.query_row("SELECT url_token FROM shares", [], |row| row.get::<_, [u8; 32]>(0)).unwrap(),
+            [0x46; 32]
+        );
         let (owner, members): (String, String) = conn
             .query_row("SELECT owner_id,members FROM chat_channels", [], |row| {
                 Ok((row.get(0)?, row.get(1)?))

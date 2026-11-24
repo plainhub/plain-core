@@ -183,7 +183,7 @@ async fn managed_encrypted_live_stream_syncs_only_when_both_local_directions_agr
         .with_conn(|db| {
             db.execute(
                 "UPDATE peers SET status='UNPAIRED',token=?1 WHERE id=?2",
-                [&reverse.token, &receiver_id],
+                plain_libs::rusqlite::params![plain_libs::utils::base64::base64_decode(&reverse.token), receiver_id],
             )
         })
         .unwrap();

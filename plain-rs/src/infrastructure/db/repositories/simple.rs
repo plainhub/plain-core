@@ -1,3 +1,4 @@
+use crate::infrastructure::db::key_blob;
 use plain_libs::rusqlite::types::Value;
 use plain_libs::rusqlite::{OptionalExtension, params, params_from_iter};
 
@@ -29,8 +30,8 @@ fn session_from_row(
         os_version: row.get(5)?,
         app_name: row.get(6)?,
         app_version: row.get(7)?,
-        token: row.get(8)?,
-        url_token: row.get(9)?,
+        token: key_blob::read(row, 8)?,
+        url_token: key_blob::read(row, 9)?,
         last_seen_at: row.get(10)?,
         created_at: row.get(11)?,
         updated_at: row.get(12)?,
@@ -42,7 +43,7 @@ fn share_from_row(row: &plain_libs::rusqlite::Row<'_>) -> plain_libs::rusqlite::
         id: row.get(0)?,
         name: row.get(1)?,
         password: row.get(2)?,
-        url_token: row.get(3)?,
+        url_token: key_blob::read_optional(row, 3)?,
         expires_at: row.get(4)?,
         read_only: row.get::<_, i64>(5)? != 0,
         data: row.get(6)?,
@@ -237,7 +238,7 @@ impl Db {
         self.with_conn(|connection| {
             #[cfg(feature = "chat")]
             let before = self.1.session_revision.load(std::sync::atomic::Ordering::Acquire);
-            connection.execute("INSERT OR REPLACE INTO sessions (client_id,name,type,client_ip,os_name,os_version,app_name,app_version,token,url_token,last_seen_at,created_at,updated_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13)",params![row.client_id,row.name,row.r#type,row.client_ip,row.os_name,row.os_version,row.app_name,row.app_version,row.token,row.url_token,row.last_seen_at,row.created_at,row.updated_at])?;
+            connection.execute("INSERT OR REPLACE INTO sessions (client_id,name,type,client_ip,os_name,os_version,app_name,app_version,token,url_token,last_seen_at,created_at,updated_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13)",params![row.client_id,row.name,row.r#type,row.client_ip,row.os_name,row.os_version,row.app_name,row.app_version,key_blob::encode(&row.token)?,key_blob::encode(&row.url_token)?,row.last_seen_at,row.created_at,row.updated_at])?;
             #[cfg(feature = "chat")]
             self.update_session_snapshot(before, |snapshot| {snapshot.activity.retain(|(id,_)| id != &row.client_id);snapshot.rows.insert(row.client_id.clone(),row);});
             Ok(())
@@ -411,7 +412,7 @@ impl Db {
                     row.id,
                     row.name,
                     row.password,
-                    row.url_token,
+                    key_blob::optional(&row.url_token)?,
                     row.expires_at
                         .as_deref()
                         .map(plain_libs::utils::dbtime::normalize)

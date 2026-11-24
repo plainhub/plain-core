@@ -40,8 +40,8 @@ async fn fixture() -> (
         DeviceType::Computer,
     );
     peer.token = plain_libs::utils::base64::base64_encode(&[7; 32]);
-    peer.key = "pairing-key".into();
-    peer.public_key = "signature-key".into();
+    peer.key = plain_libs::utils::base64::base64_encode(&[74; 32]);
+    peer.public_key = plain_libs::utils::base64::base64_encode(&[75; 32]);
     peers::save(&state.db, &[peer.clone()], SaveMode::Insert).unwrap();
     let identity = Identity {
         url: "wss://127.0.0.1:18443/?cid=706c6169-1dfd-8b72-82bb-3ad00a9928ca".into(),
@@ -126,7 +126,7 @@ async fn encrypted_app_observations_work_without_notification_support_and_cannot
         connection
             .execute(
                 "UPDATE peers SET token=?1,port=?2 WHERE id=?3",
-                plain_libs::rusqlite::params![peer.token, port, peer.id],
+                plain_libs::rusqlite::params![plain_libs::utils::base64::base64_decode(&peer.token), port, peer.id],
             )
             .unwrap()
     });
@@ -140,7 +140,7 @@ async fn encrypted_app_observations_work_without_notification_support_and_cannot
     }
     state.db.with_conn(|connection| {
         connection
-            .execute("UPDATE peers SET token='' WHERE id=?1", [&peer.id])
+            .execute("UPDATE peers SET token=NULL WHERE id=?1", [&peer.id])
             .unwrap()
     });
     release.notify_one();
@@ -154,7 +154,7 @@ async fn encrypted_app_observations_work_without_notification_support_and_cannot
         connection
             .execute(
                 "UPDATE peers SET token=?1 WHERE id=?2",
-                [&peer.token, &peer.id],
+                plain_libs::rusqlite::params![plain_libs::utils::base64::base64_decode(&peer.token), peer.id],
             )
             .unwrap()
     });

@@ -97,8 +97,8 @@ async fn resident_peer_changes_emit_one_committed_notice_without_secrets_or_visi
         crate::features::chat::enums::DeviceType::Phone,
     );
     peer.status = crate::features::chat::enums::PeerStatus::Paired;
-    peer.key = "fixture-chat-key".into();
-    peer.token = "fixture-session-token".into();
+    peer.key = plain_libs::utils::base64::base64_encode(&[52; 32]);
+    peer.token = plain_libs::utils::base64::base64_encode(&[53; 32]);
     crate::infrastructure::db::chat_store::peers::save(
         &state.db,
         &[peer],
@@ -145,7 +145,7 @@ async fn resident_peer_changes_emit_one_committed_notice_without_secrets_or_visi
     assert_eq!(peer.name, "new");
     assert_eq!(peer.ip, "10.20.31.2");
     assert_eq!(peer.port, Some(8443));
-    assert_eq!(peer.key, "fixture-chat-key");
+    assert_eq!(peer.key, plain_libs::utils::base64::base64_encode(&[52; 32]));
     assert!(events.try_recv().is_err());
     context
         .seen_with_interfaces(device.clone(), false, true, interfaces)

@@ -23,7 +23,7 @@ fn scanning_restores_cached_remote_access_and_pairing_key() {
     for (id, remote_access) in cases {
         let mut observed = device(id, DiscoveryMethod::Lan);
         observed.remote_access = remote_access;
-        observed.signature_public_key = format!("{id}-public-key");
+        observed.signature_public_key = plain_libs::utils::base64::base64_encode(&[49; 32]);
         crate::infrastructure::db::chat_store::nearby::save(&db, &observed.cache()).unwrap();
     }
     drop(db);
@@ -36,7 +36,7 @@ fn scanning_restores_cached_remote_access_and_pairing_key() {
     for (id, remote_access) in cases {
         let restored = snapshot.devices.iter().find(|device| device.id == id).unwrap();
         assert_eq!(restored.remote_access, remote_access);
-        assert_eq!(restored.signature_public_key, format!("{id}-public-key"));
+        assert_eq!(restored.signature_public_key, plain_libs::utils::base64::base64_encode(&[49; 32]));
         assert_eq!(restored.discovery_methods, [DiscoveryMethod::Lan]);
     }
 }

@@ -126,7 +126,7 @@ async fn unpair_removes_subscription_and_rolled_back_updates_do_not_reconfigure_
     state.db.with_conn(|connection| {
         let transaction = connection.unchecked_transaction().unwrap();
         assert_eq!(transaction
-            .execute("UPDATE peers SET key='invalid' WHERE id=?1", ["706c6169-0001-8000-8000-000000000002"])
+            .execute("UPDATE peers SET key=NULL WHERE id=?1", ["706c6169-0001-8000-8000-000000000002"])
             .unwrap(), 1);
         transaction.rollback().unwrap();
     });
@@ -147,7 +147,7 @@ async fn unpair_removes_subscription_and_rolled_back_updates_do_not_reconfigure_
 }
 
 #[tokio::test]
-async fn channel_only_peers_use_open_sdk_parameters_and_corrupt_keys_revoke_old_subscription() {
+async fn channel_only_peers_use_open_sdk_parameters_and_reject_invalid_keys() {
     let (_directory, server, state) = server();
     let (messages, task) = host(&state);
     let runtime = Runtime::default();
@@ -160,8 +160,10 @@ async fn channel_only_peers_use_open_sdk_parameters_and_corrupt_keys_revoke_old_
     assert!(runtime.subscribe(&state, "706c6169-0001-8000-8000-000000000002").await.unwrap());
     assert!(messages.lock().unwrap()[0]["params"]["config"]["pmk"].is_null());
     peer.key = "%%%".to_owned();
-    peers::save(&state.db, &[peer], SaveMode::Update).unwrap();
-    assert!(runtime.refresh(&state).await.is_err());
+    assert!(peers::save(&state.db, &[peer], SaveMode::Update).is_err());
+    assert!(peers::get(&state.db, "706c6169-0001-8000-8000-000000000002").unwrap().unwrap().key.is_empty());
+    peers::unpair(&state.db, "706c6169-0001-8000-8000-000000000002").unwrap();
+    runtime.refresh(&state).await.unwrap();
     assert_eq!(messages.lock().unwrap().len(), 2);
     assert_eq!(messages.lock().unwrap()[1]["method"], "peerStopAware");
     server.shutdown().await;

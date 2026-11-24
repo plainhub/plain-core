@@ -8,7 +8,7 @@ pub(crate) fn init(conn: &Connection) -> plain_libs::rusqlite::Result<()> {
     ips TEXT NOT NULL,
     port INTEGER NOT NULL CHECK(port BETWEEN 1 AND 65535),
     remote_access INTEGER CHECK(remote_access IN (0, 1)),
-    signature_public_key TEXT NOT NULL,
+    signature_public_key BLOB CHECK(signature_public_key IS NULL OR (typeof(signature_public_key)='blob' AND length(signature_public_key)=32)),
     device_type TEXT NOT NULL CHECK(device_type IN ('PHONE','TABLET','COMPUTER','TV','NAS','OTHER')),
     version TEXT NOT NULL,
     platform TEXT NOT NULL,

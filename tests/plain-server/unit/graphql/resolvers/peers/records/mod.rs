@@ -29,7 +29,7 @@ async fn native_main_record_queries_preserve_addresses_keys_members_and_checked_
     peers::save(&state.db, &[peer.clone()], SaveMode::Insert).unwrap();
     let mut channel = DChannel::new("Channel", "706c6169-1dfd-8b72-82bb-3ad00a9928ca");
     channel.id = "channel".into();
-    channel.key = "channel-key".into();
+    channel.key = plain_libs::utils::base64::base64_encode(&[62; 32]);
     channel.members = r#"[{"peerId":"peer","status":"JOINED"}]"#.into();
     channel.version = 5000000001;
     channels::save(&state.db, &[channel], SaveMode::Insert).unwrap();
@@ -43,7 +43,7 @@ async fn native_main_record_queries_preserve_addresses_keys_members_and_checked_
     assert!(data["peers"][0].get("address").is_none());
     assert_eq!(data["peers"].as_array().unwrap().len(), 1);
     assert_eq!(data["chatChannels"][0]["version"], 5000000001_i64);
-    assert_eq!(data["chatChannels"][0]["key"], "channel-key");
+    assert_eq!(data["chatChannels"][0]["key"], plain_libs::utils::base64::base64_encode(&[62; 32]));
     assert_eq!(data["chatChannels"][0]["members"][0]["peerId"], "peer");
     let request = || Request::new(r#"{ peerFileUrl(peerId: "peer", fileId: "a +?#%") }"#);
     let response = native.execute(request()).await;
@@ -104,9 +104,9 @@ async fn main_login_and_logout_preserve_pairing_and_live_proxy_addresses() {
             "127.0.0.1",
             9443,
             DeviceType::Computer,
-            "session",
-            "public",
-            "pairing-key",
+            &plain_libs::utils::base64::base64_encode(&[63; 32]),
+            &plain_libs::utils::base64::base64_encode(&[64; 32]),
+            &plain_libs::utils::base64::base64_encode(&[65; 32]),
         )
         .unwrap();
     assert_eq!(resolve("peer-a"), Some("https://127.0.0.1:9443".into()));
@@ -115,7 +115,7 @@ async fn main_login_and_logout_preserve_pairing_and_live_proxy_addresses() {
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     let value = response.data.into_json().unwrap();
     assert_eq!(value["peers"][0]["port"], 9443);
-    assert_eq!(value["peers"][0]["token"], "session");
+    assert_eq!(value["peers"][0]["token"], plain_libs::utils::base64::base64_encode(&[63; 32]));
     assert!(
         core.native_management()
             .unwrap()
@@ -135,7 +135,7 @@ async fn main_login_and_logout_preserve_pairing_and_live_proxy_addresses() {
         row.status,
         plain_rs::features::chat::enums::PeerStatus::Paired
     );
-    assert_eq!(row.key, "pairing-key");
+    assert_eq!(row.key, plain_libs::utils::base64::base64_encode(&[65; 32]));
     assert!(row.token.is_empty());
     assert_eq!(resolve("peer-a"), Some("https://127.0.0.1:9443".into()));
     row.port = None;
@@ -170,9 +170,9 @@ async fn remote_requests_cannot_access_or_change_local_login_sessions() {
             "127.0.0.1",
             9443,
             DeviceType::Computer,
-            "unchanged-token",
-            "public",
-            "chat-key",
+            &plain_libs::utils::base64::base64_encode(&[66; 32]),
+            &plain_libs::utils::base64::base64_encode(&[64; 32]),
+            &plain_libs::utils::base64::base64_encode(&[67; 32]),
         )
         .unwrap();
     for document in [
@@ -190,7 +190,7 @@ async fn remote_requests_cannot_access_or_change_local_login_sessions() {
     }
     let rows = plain_rs::infrastructure::db::chat_store::peers::all(&state.db).unwrap();
     assert_eq!(rows.len(), 1);
-    assert_eq!(rows[0].token, "unchanged-token");
+    assert_eq!(rows[0].token, plain_libs::utils::base64::base64_encode(&[66; 32]));
     core.stop_core().await;
 }
 

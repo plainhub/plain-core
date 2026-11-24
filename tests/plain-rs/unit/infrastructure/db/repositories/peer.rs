@@ -13,7 +13,7 @@ fn seed_peer(db: &Db, id: &str, status: PeerStatus, key: &str) {
 #[test]
 fn update_peer_status_flips_status_and_bumps_updated_at() {
     let db = Db::open(&unique_tmp_dir("status-flip").join("plain.db")).expect("open db");
-    seed_peer(&db, "p1", PeerStatus::Paired, "k");
+    seed_peer(&db, "p1", PeerStatus::Paired, &plain_libs::utils::base64::base64_encode(&[1; 32]));
     let before = db.get_peer_by_id("p1").expect("peer exists");
     assert_eq!(before.status, PeerStatus::Paired);
 
@@ -21,14 +21,14 @@ fn update_peer_status_flips_status_and_bumps_updated_at() {
 
     let after = db.get_peer_by_id("p1").expect("peer still exists");
     assert_eq!(after.status, PeerStatus::Unpaired);
-    assert_eq!(after.key, "k");
+    assert_eq!(after.key, plain_libs::utils::base64::base64_encode(&[1; 32]));
     assert!(after.updated_at >= before.updated_at);
 }
 
 #[test]
 fn update_peer_status_and_key_clears_key_for_channel_demotion() {
     let db = Db::open(&unique_tmp_dir("key-clear").join("plain.db")).expect("open db");
-    seed_peer(&db, "p1", PeerStatus::Paired, "secret-key");
+    seed_peer(&db, "p1", PeerStatus::Paired, &plain_libs::utils::base64::base64_encode(&[2; 32]));
 
     db.update_peer_status_and_key("p1", PeerStatus::Channel, "");
 
@@ -40,7 +40,7 @@ fn update_peer_status_and_key_clears_key_for_channel_demotion() {
 #[test]
 fn delete_peer_removes_row() {
     let db = Db::open(&unique_tmp_dir("delete").join("plain.db")).expect("open db");
-    seed_peer(&db, "p1", PeerStatus::Paired, "k");
+    seed_peer(&db, "p1", PeerStatus::Paired, &plain_libs::utils::base64::base64_encode(&[1; 32]));
     assert!(db.get_peer_by_id("p1").is_some());
 
     db.delete_peer("p1");
@@ -57,16 +57,16 @@ fn login_peer_creates_unpaired_peer_with_token() {
         "203.0.113.10",
         8443,
         DeviceType::Phone,
-        "tok1",
-        "sig1",
+        &plain_libs::utils::base64::base64_encode(&[4; 32]),
+        &plain_libs::utils::base64::base64_encode(&[6; 32]),
         "",
     )
     .expect("login peer");
 
     let peer = db.get_peer_by_id("p1").expect("login creates peer");
     assert_eq!(peer.status, PeerStatus::Unpaired);
-    assert_eq!(peer.token, "tok1");
-    assert_eq!(peer.public_key, "sig1");
+    assert_eq!(peer.token, plain_libs::utils::base64::base64_encode(&[4; 32]));
+    assert_eq!(peer.public_key, plain_libs::utils::base64::base64_encode(&[6; 32]));
     assert_eq!(peer.ip, "203.0.113.10");
     assert_eq!(peer.port, Some(8443));
     assert_eq!(db.get_login_peers().len(), 1);
@@ -75,7 +75,7 @@ fn login_peer_creates_unpaired_peer_with_token() {
 #[test]
 fn login_peer_refreshes_existing_row_and_keeps_pairing_state() {
     let db = Db::open(&unique_tmp_dir("login-paired").join("plain.db")).expect("open db");
-    seed_peer(&db, "p1", PeerStatus::Paired, "chat-key");
+    seed_peer(&db, "p1", PeerStatus::Paired, &plain_libs::utils::base64::base64_encode(&[3; 32]));
 
     db.login_peer(
         "p1",
@@ -83,7 +83,7 @@ fn login_peer_refreshes_existing_row_and_keeps_pairing_state() {
         "203.0.113.20",
         8443,
         DeviceType::Phone,
-        "tok2",
+        &plain_libs::utils::base64::base64_encode(&[5; 32]),
         "",
         "",
     )
@@ -91,8 +91,8 @@ fn login_peer_refreshes_existing_row_and_keeps_pairing_state() {
 
     let peer = db.get_peer_by_id("p1").expect("peer still exists");
     assert_eq!(peer.status, PeerStatus::Paired);
-    assert_eq!(peer.key, "chat-key");
-    assert_eq!(peer.token, "tok2");
+    assert_eq!(peer.key, plain_libs::utils::base64::base64_encode(&[3; 32]));
+    assert_eq!(peer.token, plain_libs::utils::base64::base64_encode(&[5; 32]));
     assert_eq!(peer.ip, "203.0.113.20");
 }
 
@@ -105,17 +105,17 @@ fn login_peer_with_chat_key_creates_paired_peer_with_token() {
         "203.0.113.10",
         8443,
         DeviceType::Phone,
-        "token",
-        "phone-signature-key",
-        "chat-key",
+        &plain_libs::utils::base64::base64_encode(&[7; 32]),
+        &plain_libs::utils::base64::base64_encode(&[8; 32]),
+        &plain_libs::utils::base64::base64_encode(&[3; 32]),
     )
     .expect("login and pair peer");
 
     let peer = db.get_peer_by_id("p1").expect("paired peer");
     assert_eq!(peer.status, PeerStatus::Paired);
-    assert_eq!(peer.key, "chat-key");
-    assert_eq!(peer.token, "token");
-    assert_eq!(peer.public_key, "phone-signature-key");
+    assert_eq!(peer.key, plain_libs::utils::base64::base64_encode(&[3; 32]));
+    assert_eq!(peer.token, plain_libs::utils::base64::base64_encode(&[7; 32]));
+    assert_eq!(peer.public_key, plain_libs::utils::base64::base64_encode(&[8; 32]));
 }
 
 #[test]
@@ -127,8 +127,8 @@ fn logout_peer_clears_token_and_drops_from_login_list() {
         "203.0.113.10",
         8443,
         DeviceType::Phone,
-        "tok1",
-        "sig1",
+        &plain_libs::utils::base64::base64_encode(&[4; 32]),
+        &plain_libs::utils::base64::base64_encode(&[6; 32]),
         "",
     )
     .expect("login peer");
@@ -152,8 +152,8 @@ fn update_peer_name_renames_only() {
         "203.0.113.10",
         8443,
         DeviceType::Phone,
-        "tok1",
-        "sig1",
+        &plain_libs::utils::base64::base64_encode(&[4; 32]),
+        &plain_libs::utils::base64::base64_encode(&[6; 32]),
         "",
     )
     .expect("login peer");
@@ -165,7 +165,7 @@ fn update_peer_name_renames_only() {
 
     let peer = db.get_peer_by_id("p1").expect("peer exists");
     assert_eq!(peer.name, "new-name");
-    assert_eq!(peer.token, "tok1");
+    assert_eq!(peer.token, plain_libs::utils::base64::base64_encode(&[4; 32]));
     assert_eq!(peer.ip, "203.0.113.10");
 }
 
@@ -233,4 +233,30 @@ fn unknown_port_is_null_and_has_no_connection_urls() {
         )
         .is_err()
     );
+}
+
+#[test]
+fn login_credentials_are_raw_blobs_and_logout_clears_the_token() {
+    let db = Db::open(std::path::Path::new(":memory:")).unwrap();
+    let encode = plain_libs::utils::base64::base64_encode;
+    db.login_peer(
+        "test-peer", "Test peer", "", 8080, DeviceType::Phone,
+        &encode(&[0xef; 32]), &encode(&[0xa4; 32]), &encode(&[0x80; 32]),
+    )
+    .unwrap();
+
+    let credentials = || {
+        db.with_conn(|c| c.query_row(
+            "SELECT key, public_key, token FROM peers WHERE id='test-peer'",
+            [],
+            |row| Ok((row.get::<_, Vec<u8>>(0)?, row.get::<_, Vec<u8>>(1)?, row.get::<_, Option<Vec<u8>>>(2)?)),
+        )).unwrap()
+    };
+    assert_eq!(credentials(), (vec![0x80; 32], vec![0xa4; 32], Some(vec![0xef; 32])));
+    assert_eq!(db.get_login_peers()[0].token, encode(&[0xef; 32]));
+    assert!(db.with_conn(|c| c.execute("UPDATE peers SET token='not a blob' WHERE id='test-peer'", [])).is_err());
+
+    db.logout_peer("test-peer").unwrap();
+    assert_eq!(credentials(), (vec![0x80; 32], vec![0xa4; 32], None));
+    assert!(db.get_login_peers().is_empty());
 }

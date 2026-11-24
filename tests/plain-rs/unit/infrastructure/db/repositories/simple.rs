@@ -1,3 +1,4 @@
+use plain_libs::rusqlite::params;
 #[path = "../../../features/library/fixtures.rs"]
 mod fixtures;
 use fixtures::*;
@@ -82,7 +83,7 @@ fn clipboard_delete_by_ids_and_clear() {
 fn session_save_get_and_touch() {
     let db = test_db("session");
     let row = SessionRow {
-        url_token: "resource-key".into(),
+        url_token: plain_libs::utils::base64::base64_encode(&[17; 32]),
         client_id: "706c6169-f768-893d-8f88-928c24f13ffa".into(),
         name: "Browser".into(),
         r#type: crate::features::sessions::SessionType::Login,
@@ -91,7 +92,7 @@ fn session_save_get_and_touch() {
         os_version: "15.0".into(),
         app_name: "Chrome".into(),
         app_version: "120".into(),
-        token: "tok".into(),
+        token: plain_libs::utils::base64::base64_encode(&[18; 32]),
         last_seen_at: Some("2026-01-01T00:00:00.000Z".into()),
         created_at: "2026-01-01T00:00:00.000Z".into(),
         updated_at: "2026-01-01T00:00:00.000Z".into(),
@@ -102,6 +103,13 @@ fn session_save_get_and_touch() {
     assert_eq!(got.r#type, crate::features::sessions::SessionType::Login);
     assert_eq!(got.app_name, "Chrome");
     assert_eq!(got.url_token, row.url_token);
+    let raw = db.with_conn(|conn| conn.query_row(
+        "SELECT token,url_token FROM sessions WHERE client_id=?1",
+        [&row.client_id],
+        |r| Ok((r.get::<_, [u8;32]>(0)?, r.get::<_, [u8;32]>(1)?)),
+    )).unwrap();
+    assert_eq!(raw, ([18;32], [17;32]));
+
 
     db.session_touch(&[("706c6169-f768-893d-8f88-928c24f13ffa".into(), "2026-03-01T00:00:00.000Z".into())])
         .unwrap();
@@ -127,7 +135,7 @@ fn session_list_orders_by_last_active_desc() {
         ("706c6169-89a9-8691-892c-c40b57acf47b", "2026-03-01T00:00:00.000Z"),
     ] {
         db.session_save(&SessionRow {
-            url_token: "resource-key".into(),
+            url_token: plain_libs::utils::base64::base64_encode(&[17; 32]),
             client_id: id.into(),
             name: id.into(),
             r#type: crate::features::sessions::SessionType::Login,
@@ -136,7 +144,7 @@ fn session_list_orders_by_last_active_desc() {
             os_version: String::new(),
             app_name: String::new(),
             app_version: String::new(),
-            token: String::new(),
+            token: plain_libs::utils::base64::base64_encode(&[18; 32]),
             last_seen_at: Some(at.into()),
             created_at: at.into(),
             updated_at: at.into(),
@@ -159,7 +167,7 @@ fn share_round_trip() {
         id: "share-1".into(),
         name: "Photos".into(),
         password: String::new(),
-        url_token: "url-token".into(),
+        url_token: plain_libs::utils::base64::base64_encode(&[19; 32]),
         expires_at: Some("2027-01-01T00:00:00.000Z".into()),
         read_only: true,
         data: "[\"/a\"]".into(),
@@ -169,12 +177,18 @@ fn share_round_trip() {
     assert!(db.share_insert(&row).unwrap());
     let got = db.share_get("share-1").unwrap().expect("share");
     assert!(got.read_only);
-    assert_eq!(got.url_token, "url-token");
+    assert_eq!(got.url_token, plain_libs::utils::base64::base64_encode(&[19; 32]));
+    assert_eq!(db.with_conn(|conn| conn.query_row(
+        "SELECT url_token FROM shares WHERE id=?1",
+        [&row.id],
+        |r| r.get::<_, [u8; 32]>(0),
+    )).unwrap(), [19; 32]);
+
     assert_eq!(got.expires_at.as_deref(), Some("2027-01-01T00:00:00.000Z"));
     assert_eq!(db.share_list().unwrap().len(), 1);
     let mut collision = row.clone();
     collision.name = "Replacement".into();
-    collision.url_token = "replacement-token".into();
+    collision.url_token = plain_libs::utils::base64::base64_encode(&[20; 32]);
     assert!(!db.share_insert(&collision).unwrap());
     let preserved = db.share_get(&row.id).unwrap().unwrap();
     assert_eq!(preserved.name, row.name);
@@ -337,7 +351,7 @@ fn rows_round_trip_through_serde() {
 #[test]
 fn serialized_field_names_are_snake_case() {
     let row = SessionRow {
-        url_token: "resource-key".into(),
+        url_token: plain_libs::utils::base64::base64_encode(&[17; 32]),
         client_id: "706c6169-b201-8698-bbcd-44140e826ea8".into(),
         name: "n".into(),
         r#type: crate::features::sessions::SessionType::Login,
@@ -346,7 +360,7 @@ fn serialized_field_names_are_snake_case() {
         os_version: String::new(),
         app_name: String::new(),
         app_version: String::new(),
-        token: "t".into(),
+        token: plain_libs::utils::base64::base64_encode(&[21; 32]),
         last_seen_at: None,
         created_at: "2026-01-01T00:00:00.000Z".into(),
         updated_at: "2026-01-01T00:00:00.000Z".into(),
@@ -417,8 +431,8 @@ fn session_cache_row() -> SessionRow {
         os_version: String::new(),
         app_name: String::new(),
         app_version: String::new(),
-        token: "session-key".into(),
-        url_token: "resource-key".into(),
+        token: plain_libs::utils::base64::base64_encode(&[22; 32]),
+        url_token: plain_libs::utils::base64::base64_encode(&[17; 32]),
         last_seen_at: None,
         created_at: "2026-01-01T00:00:00Z".into(),
         updated_at: "2026-01-01T00:00:00Z".into(),
@@ -432,8 +446,8 @@ fn session_cache_tracks_mutations_clones_raw_sql_and_rollbacks() {
     let mut row = session_cache_row();
     db.session_save(&row).unwrap();
     let clone = db.clone();
-    row.token = "rotated-session-key".into();
-    row.url_token = "rotated-resource-key".into();
+    row.token = plain_libs::utils::base64::base64_encode(&[23; 32]);
+    row.url_token = plain_libs::utils::base64::base64_encode(&[24; 32]);
     db.session_save(&row).unwrap();
     assert_eq!(
         clone.session_get(&row.client_id).unwrap().unwrap().token,
@@ -459,8 +473,8 @@ fn session_cache_tracks_mutations_clones_raw_sql_and_rollbacks() {
     );
     db.with_conn(|connection| {
         connection.execute(
-            "UPDATE sessions SET url_token='raw-resource-key' WHERE client_id=?1",
-            [&row.client_id],
+            "UPDATE sessions SET url_token=?2 WHERE client_id=?1",
+            params![row.client_id, [25u8; 32]],
         )
     })
     .unwrap();
@@ -470,14 +484,14 @@ fn session_cache_tracks_mutations_clones_raw_sql_and_rollbacks() {
             .unwrap()
             .unwrap()
             .url_token,
-        "raw-resource-key"
+        plain_libs::utils::base64::base64_encode(&[25; 32])
     );
     db.with_conn(|connection| {
         let transaction = connection.unchecked_transaction().unwrap();
         transaction
             .execute(
-                "UPDATE sessions SET token='uncommitted-key' WHERE client_id=?1",
-                [&row.client_id],
+                "UPDATE sessions SET token=?2 WHERE client_id=?1",
+                params![row.client_id, [27u8; 32]],
             )
             .unwrap();
         transaction.rollback().unwrap();
@@ -650,7 +664,7 @@ fn failed_session_activity_flush_retains_pending_values_and_revocation_discards_
     db.session_touch(&[(row.client_id.clone(), "2026-04-01T00:00:00.000Z".into())])
         .unwrap();
     db.session_delete(&row.client_id).unwrap();
-    row.token = "rotated-token".into();
+    row.token = plain_libs::utils::base64::base64_encode(&[26; 32]);
     db.session_save(&row).unwrap();
     assert!(
         !db.flush_session_activity(std::time::Instant::now(), true)
@@ -701,8 +715,8 @@ fn raw_session_changes_merge_activity_only_for_the_same_credentials() {
         .unwrap();
     db.with_conn(|c| {
         c.execute(
-            "UPDATE sessions SET token='rotated' WHERE client_id=?1",
-            [&row.client_id],
+            "UPDATE sessions SET token=?2 WHERE client_id=?1",
+            params![row.client_id, [28u8; 32]],
         )
     })
     .unwrap();

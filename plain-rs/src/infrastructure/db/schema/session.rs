@@ -11,8 +11,8 @@ pub(crate) fn init(conn: &Connection) -> plain_libs::rusqlite::Result<()> {
     os_version TEXT NOT NULL,
     app_name TEXT NOT NULL,
     app_version TEXT NOT NULL,
-    token TEXT NOT NULL,
-    url_token TEXT NOT NULL,
+    token BLOB NOT NULL CHECK(typeof(token)='blob' AND length(token)=32),
+    url_token BLOB NOT NULL CHECK(typeof(url_token)='blob' AND length(url_token)=32),
     last_seen_at TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL

@@ -17,15 +17,15 @@ fn repairing_preserves_creation_and_independent_token_and_rolls_back_errors() {
     assert_eq!(first.ip, "127.0.0.1");
     db.with_conn(|c| {
         c.execute(
-            "UPDATE peers SET token='keep',created_at='2000-01-01T00:00:00.000Z' WHERE id='peer'",
-            [],
+            "UPDATE peers SET token=?1,created_at='2000-01-01T00:00:00.000Z' WHERE id='peer'",
+            [[50u8; 32]],
         )
     })
     .unwrap();
     let mut next = facts();
     next.key = plain_libs::utils::base64::base64_encode(&[3; 32]);
     let updated = save(&db, next).unwrap();
-    assert_eq!(updated.token, "keep");
+    assert_eq!(updated.token, plain_libs::utils::base64::base64_encode(&[50; 32]));
     assert_eq!(updated.created_at, "2000-01-01T00:00:00.000Z");
     assert_eq!(
         updated.key,
@@ -58,8 +58,8 @@ fn unpair_removes_management_access_before_chat_only_repairing_and_preserves_his
     let original = save(&db, facts()).unwrap();
     db.with_conn(|connection| {
         connection.execute(
-            "UPDATE peers SET token='management-grant' WHERE id='peer'",
-            [],
+            "UPDATE peers SET token=?1 WHERE id='peer'",
+            [[51u8; 32]],
         )
     })
     .unwrap();

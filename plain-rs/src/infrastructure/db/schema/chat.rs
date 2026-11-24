@@ -26,7 +26,7 @@ CREATE INDEX IF NOT EXISTS idx_chat_receipts_sent_at ON chat_receipts(sent_at);
 CREATE TABLE IF NOT EXISTS chat_channels (
     id TEXT NOT NULL CHECK(length(id)>0),
     name TEXT NOT NULL,
-    key TEXT NOT NULL,
+    key BLOB CHECK(key IS NULL OR (typeof(key)='blob' AND length(key)=32)),
     owner_id TEXT,
     members TEXT NOT NULL,
     version INTEGER NOT NULL CHECK(version>=0) DEFAULT 0,

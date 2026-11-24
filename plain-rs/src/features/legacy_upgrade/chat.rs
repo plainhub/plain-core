@@ -1,3 +1,4 @@
+use crate::infrastructure::db::key_blob;
 use super::{assets::Assets, rows::for_each, short_id};
 use crate::features::chat::channels::messages::ChannelMember;
 use crate::features::chat::enums::MemberStatus;
@@ -104,7 +105,7 @@ fn import_peers(source: &Connection, target: &Connection) -> Result<()> {
         target.execute(
             "INSERT INTO peers(id,name,ip,key,public_key,port,status,device_type,created_at,updated_at) \
              VALUES (?1,?2,?3,?4,?5,NULLIF(?6,0),?7,?8,?9,?10) ON CONFLICT(id) DO NOTHING",
-            params![id, name, ip, key, public_key, port, status, device_type, created, updated],
+            params![id, name, ip, key_blob::optional(&key)?, key_blob::optional(&public_key)?, port, status, device_type, created, updated],
         )?;
         Ok(())
     })
@@ -151,7 +152,7 @@ fn import_channels(source: &Connection, target: &Connection, self_id: &str) -> R
         target.execute(
             "INSERT INTO chat_channels(id,name,key,owner_id,members,version,status,created_at,updated_at) \
              VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9) ON CONFLICT(id) DO NOTHING",
-            params![id, name, key, owner, serde_json::to_string(&members)?, version, status, created, updated],
+            params![id, name, key_blob::optional(&key)?, owner, serde_json::to_string(&members)?, version, status, created, updated],
         )?;
         Ok(())
     })

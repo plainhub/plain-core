@@ -17,7 +17,7 @@ fn nearby_cache_survives_reopen_and_preserves_newer_sightings() {
         ips: vec!["203.0.113.2".into()],
         port: 8443,
         remote_access: Some(true),
-        signature_public_key: "fixture-key".into(),
+        signature_public_key: plain_libs::utils::base64::base64_encode(&[31; 32]),
         device_type: crate::features::chat::enums::DeviceType::Phone,
         version: "1".into(),
         platform: "android".into(),

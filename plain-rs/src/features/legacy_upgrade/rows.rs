@@ -1,3 +1,4 @@
+use crate::infrastructure::db::key_blob;
 use super::{assets::Assets, preferences::Preferences, short_id};
 use crate::features::files::shares::SharePath;
 use crate::features::services::pomodoro::PomodoroSettings;
@@ -274,7 +275,7 @@ fn import_other_tables(source: &Connection, target: &Connection) -> Result<()> {
         target.execute(
             "INSERT INTO shares(id,name,password,url_token,expires_at,read_only,data,created_at,updated_at) \
              VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9) ON CONFLICT(id) DO NOTHING",
-            params![short_id::convert(&row.get::<_, String>("id")?)?, row.get::<_, SqlValue>("name")?, row.get::<_, SqlValue>("password")?, row.get::<_, SqlValue>("url_token")?,
+            params![short_id::convert(&row.get::<_, String>("id")?)?, row.get::<_, SqlValue>("name")?, row.get::<_, SqlValue>("password")?, key_blob::optional(&row.get::<_, String>("url_token")?)?,
                 nullable_date(row, "expires_at")?, row.get::<_, SqlValue>("read_only")?, data, created, updated],
         )?;
         Ok(())

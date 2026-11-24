@@ -1,3 +1,4 @@
+use crate::infrastructure::db::key_blob;
 use crate::features::discovery::nearby_devices::MAX_AGE;
 use crate::infrastructure::db::DNearbyDeviceCache;
 use crate::infrastructure::db::Db;
@@ -35,7 +36,7 @@ fn read(db: &Db, cutoff: Option<String>) -> Result<Vec<DNearbyDeviceCache>> {
                     platform: row.get(6)?,
                     last_seen_at: row.get(7)?,
                     remote_access: row.get(8)?,
-                    signature_public_key: row.get(9)?,
+                    signature_public_key: key_blob::read_optional(row, 9)?,
                 })
             })?
             .collect::<plain_libs::rusqlite::Result<Vec<_>>>()
@@ -56,7 +57,7 @@ pub fn save(db: &Db, row: &DNearbyDeviceCache) -> Result<()> {
            last_seen_at=excluded.last_seen_at,remote_access=excluded.remote_access,
            signature_public_key=excluded.signature_public_key
          WHERE julianday(excluded.last_seen_at)>=julianday(nearby_devices.last_seen_at)",
-        params![row.id,row.name,ips,row.port,row.device_type,row.version,row.platform,last_seen_at,row.remote_access,row.signature_public_key],
+        params![row.id,row.name,ips,row.port,row.device_type,row.version,row.platform,last_seen_at,row.remote_access,key_blob::optional(&row.signature_public_key)?],
     ))?;
     Ok(())
 }

@@ -126,7 +126,7 @@ async fn queued_chat_sources_cannot_be_replaced_before_execution() {
                 Some(443),
                 crate::features::chat::enums::DeviceType::Phone,
             );
-            peer.public_key = "original".into();
+            peer.public_key = plain_libs::utils::base64::base64_encode(&[54; 32]);
             chat_store::peers::save(&state.db, &[peer.clone()], SaveMode::Insert).unwrap();
             let mut content = json!({"type":"MESSAGE","value":{"format":"PLAIN","items":[{"type":kind,"attachment":{"id":"file","uri":"fsid:original","fileName":"fixture.bin","size":3}}]}});
             let mut row = DChat::new("peer", "me", "", &content.to_string());
@@ -147,7 +147,7 @@ async fn queued_chat_sources_cannot_be_replaced_before_execution() {
             };
             match changed {
                 "peer" => {
-                    peer.public_key = "replacement".into();
+                    peer.public_key = plain_libs::utils::base64::base64_encode(&[55; 32]);
                     chat_store::peers::save(&state.db, &[peer], SaveMode::Update).unwrap();
                 }
                 field => {

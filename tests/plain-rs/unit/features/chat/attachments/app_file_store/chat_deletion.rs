@@ -91,14 +91,14 @@ fn entity_removal_is_atomic_retains_channel_peer_and_returns_removed_channel_sna
     import_bytes(&db, &root, b"entity fixture", "text/plain").unwrap();
     let mut peer = DPeer::new("peer", "peer", "", Some(1), DeviceType::Phone);
     peer.status = PeerStatus::Paired;
-    peer.key = "pair-key".into();
-    peer.token = "login-token".into();
-    peer.public_key = "public".into();
+    peer.key = plain_libs::utils::base64::base64_encode(&[41; 32]);
+    peer.token = plain_libs::utils::base64::base64_encode(&[42; 32]);
+    peer.public_key = plain_libs::utils::base64::base64_encode(&[43; 32]);
     peers::save(&db, &[peer], SaveMode::Insert).unwrap();
     let mut channel = DChannel::new("group", "owner");
     channel.id = "group".into();
     channel.members = r#"[{"peerId":"peer","status":"PENDING"}]"#.into();
-    channel.key = "channel-secret".into();
+    channel.key = plain_libs::utils::base64::base64_encode(&[44; 32]);
     channels::save(&db, &[channel], SaveMode::Insert).unwrap();
     let content=plain_libs::serde_json::json!({"type":"MESSAGE","value":{"format":"PLAIN","items":[{"type":"FILE","attachment":{"id":"local-attachment","uri":format!("fid:{}",file.fid_suffix),"size":14}}]}}).to_string();
     let mut direct = DChat::new("me", "peer", "", &content);
@@ -113,8 +113,8 @@ fn entity_removal_is_atomic_retains_channel_peer_and_returns_removed_channel_sna
     let peer = peers::get(&db, "peer").unwrap().unwrap();
     assert_eq!(peer.status, PeerStatus::Channel);
     assert!(peer.key.is_empty());
-    assert_eq!(peer.token, "login-token");
-    assert_eq!(peer.public_key, "public");
+    assert_eq!(peer.token, plain_libs::utils::base64::base64_encode(&[42; 32]));
+    assert_eq!(peer.public_key, plain_libs::utils::base64::base64_encode(&[43; 32]));
     assert!(messages::get(&db, "direct").unwrap().is_none());
     assert!(messages::get(&db, "group-message").unwrap().is_some());
     assert_eq!(db.app_file_get(&file.id).unwrap().unwrap().ref_count, 1);
@@ -131,7 +131,7 @@ fn entity_removal_is_atomic_retains_channel_peer_and_returns_removed_channel_sna
         .unwrap();
     assert_eq!(
         remove_channel(&db, &root, "group").unwrap().unwrap().key,
-        "channel-secret"
+        plain_libs::utils::base64::base64_encode(&[44; 32])
     );
     assert!(messages::get(&db, "group-message").unwrap().is_none());
     assert!(db.app_file_get(&file.id).unwrap().is_none());
@@ -158,20 +158,20 @@ fn discovery_and_unpair_update_only_owned_fields_and_require_paired_peer() {
     let db = Db::open(Path::new(":memory:")).unwrap();
     let mut peer = DPeer::new("peer", "old", "old-ip", Some(1), DeviceType::Phone);
     peer.status = PeerStatus::Paired;
-    peer.key = "current-key".into();
-    peer.token = "session".into();
+    peer.key = plain_libs::utils::base64::base64_encode(&[45; 32]);
+    peer.token = plain_libs::utils::base64::base64_encode(&[46; 32]);
     peers::save(&db, &[peer], SaveMode::Insert).unwrap();
     let refreshed = peers::discovered(&db, "peer", "127.0.0.1", 443, "new", DeviceType::Computer)
         .unwrap()
         .unwrap();
     assert_eq!(refreshed.ip, "127.0.0.1");
     assert_eq!(refreshed.name, "new");
-    assert_eq!(refreshed.key, "current-key");
-    assert_eq!(refreshed.token, "session");
+    assert_eq!(refreshed.key, plain_libs::utils::base64::base64_encode(&[45; 32]));
+    assert_eq!(refreshed.token, plain_libs::utils::base64::base64_encode(&[46; 32]));
     assert!(peers::unpair(&db, "peer").unwrap());
     let unpaired = peers::get(&db, "peer").unwrap().unwrap();
     assert_eq!(unpaired.status, PeerStatus::Unpaired);
-    assert_eq!(unpaired.key, "current-key");
+    assert_eq!(unpaired.key, plain_libs::utils::base64::base64_encode(&[45; 32]));
     assert!(unpaired.token.is_empty());
     assert!(
         peers::discovered(&db, "peer", "", 1, "stale", DeviceType::Phone)

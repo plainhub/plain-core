@@ -1383,13 +1383,15 @@ async fn relogin_rotates_the_session_url_token_and_keeps_the_session_identity() 
         at: Instant::now(),
         protection: password_protection(None),
     };
-    persist(&state, &request, "first-token").unwrap();
+    let first_token = plain_libs::utils::base64::base64_encode(&[69; 32]);
+    let second_token = plain_libs::utils::base64::base64_encode(&[70; 32]);
+    persist(&state, &request, &first_token).unwrap();
     let first = state
         .db
         .session_get("706c6169-f717-8cef-9e51-e0dade79d050")
         .unwrap()
         .unwrap();
-    persist(&state, &request, "second-token").unwrap();
+    persist(&state, &request, &second_token).unwrap();
     let second = state
         .db
         .session_get("706c6169-f717-8cef-9e51-e0dade79d050")
@@ -1398,7 +1400,7 @@ async fn relogin_rotates_the_session_url_token_and_keeps_the_session_identity() 
     assert_ne!(first.url_token, second.url_token);
     assert_eq!(first.client_id, second.client_id);
     assert_eq!(first.created_at, second.created_at);
-    assert_eq!(second.token, "second-token");
+    assert_eq!(second.token, second_token);
 }
 
 #[path = "login_events.rs"]

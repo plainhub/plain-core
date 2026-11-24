@@ -113,8 +113,8 @@ fn audit_snapshots_survive_session_changes_and_search_every_client_field() {
         app_version: "142".into(),
         os_name: "Windows".into(),
         os_version: "11".into(),
-        url_token: "fixture-url-secret".into(),
-        token: "fixture-session-secret".into(),
+        url_token: plain_libs::utils::base64::base64_encode(&[29; 32]),
+        token: plain_libs::utils::base64::base64_encode(&[30; 32]),
         r#type: crate::features::sessions::SessionType::Login,
         last_seen_at: None,
         created_at: "2026-01-01T00:00:00Z".into(),
@@ -154,8 +154,8 @@ fn audit_snapshots_survive_session_changes_and_search_every_client_field() {
     for needle in [
         "Changed name",
         "192.0.2.25",
-        "fixture-url-secret",
-        "fixture-session-secret",
+        session.url_token.as_str(),
+        session.token.as_str(),
     ] {
         assert!(
             db.audit_events(0, 10, Some(needle)).unwrap().is_empty(),

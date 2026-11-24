@@ -96,7 +96,7 @@ async fn authenticated_reply_accepts_discovery_refresh_and_rejects_revoked_pairi
                 changed.name = "Refreshed name".into();
             }
             "key" => changed.key = plain_libs::utils::base64::base64_encode(&[9; 32]),
-            "public_key" => changed.public_key = "replacement".into(),
+            "public_key" => changed.public_key = plain_libs::utils::base64::base64_encode(&[58; 32]),
             "status" => changed.status = crate::features::chat::enums::PeerStatus::Paired,
             "removed" => {}
             _ => unreachable!(),

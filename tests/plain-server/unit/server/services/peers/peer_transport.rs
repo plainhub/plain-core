@@ -63,15 +63,16 @@ async fn aware_config_uses_current_pairing_identity_and_rejects_corrupt_keys() {
     assert!(removed.data.into_json().unwrap()["__type"].is_null());
     let mut corrupt = peers::get(&state.db, "fixture").unwrap().unwrap();
     corrupt.key = "%%%".into();
-    peers::save(
-        &state.db,
-        &[corrupt],
-        plain_rs::infrastructure::db::chat_store::SaveMode::Update,
-    )
-    .unwrap();
+    assert!(aware_config_for_peer(&state, &corrupt).is_err());
     assert!(
-        aware_config_for_peer(&state, &peers::get(&state.db, "fixture").unwrap().unwrap()).is_err()
+        peers::save(
+            &state.db,
+            &[corrupt],
+            plain_rs::infrastructure::db::chat_store::SaveMode::Update,
+        )
+        .is_err()
     );
+    assert!(aware_config_for_peer(&state, &peers::get(&state.db, "fixture").unwrap().unwrap()).is_ok());
     server.shutdown().await;
 }
 

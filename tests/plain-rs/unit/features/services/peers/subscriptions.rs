@@ -7,7 +7,7 @@ use crate::test_runtime::Core as ContentServer;
 fn fixture_peer() -> DPeer {
     let mut peer = DPeer::new("peer", "Fixture", "127.0.0.1", Some(9), DeviceType::Phone);
     peer.status = PeerStatus::Paired;
-    peer.public_key = "fixture-signing-identity".into();
+    peer.public_key = plain_libs::utils::base64::base64_encode(&[59; 32]);
     peer.token = plain_libs::utils::base64::base64_encode(&[7; 32]);
     peer
 }
@@ -30,11 +30,11 @@ async fn rejects_missing_unpaired_chat_only_and_changed_signing_identity_before_
     peer.status = PeerStatus::Paired;
     peers::save(&state.db, &[peer.clone()], SaveMode::Update).unwrap();
     let mut wrong = target(&peer);
-    wrong.public_key = "other".into();
+    wrong.public_key = plain_libs::utils::base64::base64_encode(&[60; 32]);
     assert!(PeerSubscription::open(state.clone(), wrong, Default::default()).is_err());
     state
         .db
-        .with_conn(|connection| connection.execute("UPDATE peers SET token='' WHERE id='peer'", []))
+        .with_conn(|connection| connection.execute("UPDATE peers SET token=NULL WHERE id='peer'", []))
         .unwrap();
     assert!(PeerSubscription::open(state, target(&peer), Default::default()).is_err());
     server.shutdown().await;
@@ -50,7 +50,7 @@ async fn chat_rekey_preserves_management_but_unpair_revokes_and_close_releases_p
     state
         .db
         .with_conn(|connection| {
-            connection.execute("UPDATE peers SET key='new-chat-key' WHERE id='peer'", [])
+            connection.execute("UPDATE peers SET key=?1 WHERE id='peer'", [[61u8; 32]])
         })
         .unwrap();
     assert!(session.current().is_ok());

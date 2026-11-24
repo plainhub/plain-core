@@ -32,8 +32,8 @@ async fn fixture() -> (
         DeviceType::Computer,
     );
     peer.token = plain_libs::utils::base64::base64_encode(&[7; 32]);
-    peer.key = "pairing-key".into();
-    peer.public_key = "signature-key".into();
+    peer.key = plain_libs::utils::base64::base64_encode(&[56; 32]);
+    peer.public_key = plain_libs::utils::base64::base64_encode(&[57; 32]);
     peers::save(&state.db, &[peer.clone()], SaveMode::Insert).unwrap();
     let identity = Identity {
         url: "wss://127.0.0.1:18443/?cid=706c6169-1dfd-8b72-82bb-3ad00a9928ca".into(),

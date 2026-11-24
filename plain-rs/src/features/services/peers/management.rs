@@ -1,3 +1,4 @@
+use crate::infrastructure::db::key_blob;
 use crate::infrastructure::db::DPeer;
 use crate::infrastructure::db::chat_store::peers;
 use crate::runtime::Runtime as CoreRuntime;
@@ -284,7 +285,7 @@ pub fn current(
             [peer_id],
             |row| {
                 Ok((
-                    row.get::<_, String>(0)?,
+                    key_blob::read_optional(row, 0)?,
                     row.get::<_, String>(1)?,
                     row.get::<_, Option<u16>>(2)?,
                 ))

@@ -77,7 +77,7 @@ async fn rust_sweep_retires_unreachable_lan_records_without_a_host_bridge() {
         plain_rs::features::chat::enums::DeviceType::Phone,
     );
     peer.status = plain_rs::features::chat::enums::PeerStatus::Paired;
-    peer.key = "preserved-key".into();
+    peer.key = plain_libs::utils::base64::base64_encode(&[72; 32]);
     chat_store::peers::save(&state.db, &[peer], chat_store::SaveMode::Insert).unwrap();
     let mut events = state.events.subscribe();
     Context::from(&state)
@@ -94,7 +94,7 @@ async fn rust_sweep_retires_unreachable_lan_records_without_a_host_bridge() {
         "PAIRED"
     );
     let peer = chat_store::peers::get(&state.db, "live").unwrap().unwrap();
-    assert_eq!(peer.key, "preserved-key");
+    assert_eq!(peer.key, plain_libs::utils::base64::base64_encode(&[72; 32]));
     assert_eq!(peer.name, "fixture");
     let peer_update = events.recv().await.unwrap();
     assert_eq!(

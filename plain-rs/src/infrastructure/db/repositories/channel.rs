@@ -1,3 +1,4 @@
+use crate::infrastructure::db::key_blob;
 use plain_libs::rusqlite::params;
 
 use crate::features::chat::channels::messages::decode_members;
@@ -14,7 +15,7 @@ pub(crate) fn row_to_channel(row: &plain_libs::rusqlite::Row<'_>) -> plain_libs:
         name: row.get(1)?,
         owner_id: row.get(2)?,
         members: row.get(3)?,
-        key: row.get(4)?,
+        key: key_blob::read_optional(row, 4)?,
         version: row.get::<_, i64>(5)?,
         status: row.get(6)?,
         created_at: row.get(7)?,
@@ -56,7 +57,7 @@ impl Db {
     pub fn get_channels_with_key(&self) -> Vec<DChannel> {
         let conn = self.0.lock().unwrap();
         let mut stmt = match conn.prepare(&format!(
-            "SELECT {CHANNEL_COLS} FROM chat_channels WHERE key != ''"
+            "SELECT {CHANNEL_COLS} FROM chat_channels WHERE key IS NOT NULL"
         )) {
             Ok(s) => s,
             Err(_) => return vec![],
@@ -84,7 +85,7 @@ impl Db {
              VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9)",
             params![
                 channel.id, channel.name, channel.owner_id.as_deref().filter(|value|!value.is_empty()), channel.members,
-                channel.key, channel.version, channel.status,
+                key_blob::optional(&channel.key)?, channel.version, channel.status,
                 plain_libs::utils::dbtime::normalize(&channel.created_at)?, plain_libs::utils::dbtime::normalize(&channel.updated_at)?
             ],
         ).map(|_| ())
@@ -95,7 +96,7 @@ impl Db {
         conn.execute(
             "UPDATE chat_channels SET name=?1,owner_id=?2,members=?3,key=?4,version=?5,status=?6,updated_at=?7 WHERE id=?8",
             params![
-                channel.name, channel.owner_id.as_deref().filter(|value|!value.is_empty()), channel.members, channel.key,
+                channel.name, channel.owner_id.as_deref().filter(|value|!value.is_empty()), channel.members, key_blob::optional(&channel.key)?,
                 channel.version, channel.status, plain_libs::utils::dbtime::normalize(&channel.updated_at)?, channel.id
             ],
         ).map(|_| ())
@@ -112,7 +113,7 @@ impl Db {
                updated_at=excluded.updated_at",
             params![
                 channel.id, channel.name, channel.owner_id.as_deref().filter(|value|!value.is_empty()), channel.members,
-                channel.key, channel.version, channel.status,
+                key_blob::optional(&channel.key)?, channel.version, channel.status,
                 plain_libs::utils::dbtime::normalize(&channel.created_at)?, plain_libs::utils::dbtime::normalize(&channel.updated_at)?
             ],
         ).map(|_| ())

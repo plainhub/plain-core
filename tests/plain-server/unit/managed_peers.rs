@@ -455,7 +455,7 @@ async fn cached_route_rejects_identity_address_and_management_token_changes() {
     for field in ["public-key", "token", "address", "status"] {
         let mut changed = original.clone();
         match field {
-            "public-key" => changed.public_key = "other".into(),
+            "public-key" => changed.public_key = plain_libs::utils::base64::base64_encode(&[71; 32]),
             "token" => changed.token = plain_libs::utils::base64::base64_encode(&[1; 32]),
             "address" => changed.port = Some(10),
             "status" => changed.status = PeerStatus::Unpaired,

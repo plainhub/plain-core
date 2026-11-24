@@ -69,6 +69,7 @@ async fn nearby_snapshot_selects_recent_endpoints_and_restores_discovery_facts()
     let now = plain_libs::chrono::DateTime::parse_from_rfc3339(&plain_rs::infrastructure::db::now_iso())
         .unwrap()
         .with_timezone(&plain_libs::chrono::Utc);
+    let public_key = |id: &str| plain_libs::utils::base64::base64_encode(&[id.bytes().fold(0u8, u8::wrapping_add); 32]);
     let mut live_only = Vec::new();
     for (id, ip, port, hours_ago, remote_access) in [
         ("old-id", "192.0.2.1", 8443, 4, None),
@@ -86,7 +87,7 @@ async fn nearby_snapshot_selects_recent_endpoints_and_restores_discovery_facts()
             ips: if ip.is_empty() { vec![] } else { vec![ip.into()] },
             port,
             remote_access,
-            signature_public_key: format!("{id}-public-key"),
+            signature_public_key: public_key(id),
             device_type: plain_rs::features::chat::enums::DeviceType::Computer,
             version: "1".into(),
             platform: "test".into(),
@@ -118,11 +119,11 @@ async fn nearby_snapshot_selects_recent_endpoints_and_restores_discovery_facts()
     )).await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     assert_eq!(response.data.into_json().unwrap()["nearbyDevices"], plain_libs::serde_json::json!([
-        {"id":"latest-id","bestIp":"192.0.2.1","port":8443,"remoteAccess":true,"signaturePublicKey":"latest-id-public-key"},
-        {"id":"other-ip","bestIp":"192.0.2.2","port":8443,"remoteAccess":null,"signaturePublicKey":"other-ip-public-key"},
-        {"id":"other-port","bestIp":"192.0.2.1","port":9443,"remoteAccess":false,"signaturePublicKey":"other-port-public-key"},
-        {"id":"ble-first","bestIp":"","port":8443,"remoteAccess":null,"signaturePublicKey":"ble-first-public-key"},
-        {"id":"ble-second","bestIp":"","port":8443,"remoteAccess":null,"signaturePublicKey":"ble-second-public-key"},
+        {"id":"latest-id","bestIp":"192.0.2.1","port":8443,"remoteAccess":true,"signaturePublicKey":public_key("latest-id")},
+        {"id":"other-ip","bestIp":"192.0.2.2","port":8443,"remoteAccess":null,"signaturePublicKey":public_key("other-ip")},
+        {"id":"other-port","bestIp":"192.0.2.1","port":9443,"remoteAccess":false,"signaturePublicKey":public_key("other-port")},
+        {"id":"ble-first","bestIp":"","port":8443,"remoteAccess":null,"signaturePublicKey":public_key("ble-first")},
+        {"id":"ble-second","bestIp":"","port":8443,"remoteAccess":null,"signaturePublicKey":public_key("ble-second")},
     ]));
     core.shutdown().await;
 }
@@ -142,7 +143,7 @@ async fn nearby_snapshot_keeps_one_row_for_a_shared_endpoint_when_preferred_addr
         ips: vec!["2001:db8::1".into()],
         port: 8443,
         remote_access: None,
-        signature_public_key: "previous-key".into(),
+        signature_public_key: plain_libs::utils::base64::base64_encode(&[37; 32]),
         device_type: plain_rs::features::chat::enums::DeviceType::Computer,
         version: "1".into(),
         platform: "test".into(),
@@ -152,7 +153,7 @@ async fn nearby_snapshot_keeps_one_row_for_a_shared_endpoint_when_preferred_addr
     let current = Device {
         id: "current-id".into(),
         ips: vec!["2001:db8::2".into(), "2001:db8::1".into()],
-        signature_public_key: "current-key".into(),
+        signature_public_key: plain_libs::utils::base64::base64_encode(&[38; 32]),
         last_seen_at: now.to_rfc3339(),
         ..alternate.clone()
     };

@@ -1,3 +1,5 @@
+#[cfg(any(feature = "chat", feature = "library"))]
+pub(crate) mod key_blob;
 pub mod key_value_error;
 use plain_libs::rusqlite::Connection;
 #[cfg(all(feature = "chat", feature = "library"))]

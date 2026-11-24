@@ -192,7 +192,7 @@ async fn peer_subscriptions_share_the_session_bound_and_closed_owners_are_reject
     assert!(executor.open_subscriptions(scope).is_err());
     let mut peer = DPeer::new("peer", "Fixture", "127.0.0.1", None, DeviceType::Phone);
     peer.status = PeerStatus::Paired;
-    peer.public_key = "fixture-identity".into();
+    peer.public_key = plain_libs::utils::base64::base64_encode(&[68; 32]);
     peer.token = plain_libs::utils::base64::base64_encode(&[1; 32]);
     peers::save(&state.db, &[peer.clone()], SaveMode::Insert).unwrap();
     for _ in 0..128 {

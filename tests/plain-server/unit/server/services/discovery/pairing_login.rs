@@ -476,7 +476,7 @@ async fn known_key_mismatch_preserves_existing_grants() {
             "127.0.0.1",
             port,
             plain_rs::features::chat::enums::DeviceType::Computer,
-            "previous-session",
+            &base64_encode(&[73; 32]),
             &base64_encode(&[9; 32]),
             &base64_encode(&[8; 32]),
         )
@@ -501,7 +501,7 @@ async fn known_key_mismatch_preserves_existing_grants() {
     let peer = plain_rs::infrastructure::db::chat_store::peers::get(&state.db, &remote_id)
         .unwrap()
         .unwrap();
-    assert_eq!(peer.token, "previous-session");
+    assert_eq!(peer.token, base64_encode(&[73; 32]));
     assert_eq!(peer.key, base64_encode(&[8; 32]));
     assert!(
         other
@@ -601,7 +601,7 @@ async fn a_local_commit_failure_preserves_the_old_row_and_reports_the_remote_gra
             "127.0.0.1",
             port,
             plain_rs::features::chat::enums::DeviceType::Computer,
-            "previous-session",
+            &base64_encode(&[73; 32]),
             &base64_encode(&signing[32..]),
             &base64_encode(&[7; 32]),
         )
@@ -633,7 +633,7 @@ async fn a_local_commit_failure_preserves_the_old_row_and_reports_the_remote_gra
         .unwrap()
         .unwrap();
     assert_eq!(previous.name, "Previous");
-    assert_eq!(previous.token, "previous-session");
+    assert_eq!(previous.token, base64_encode(&[73; 32]));
     assert_eq!(previous.key, base64_encode(&[7; 32]));
     assert!(
         other

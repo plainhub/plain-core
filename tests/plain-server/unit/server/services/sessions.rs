@@ -368,12 +368,12 @@ async fn main_schema_keeps_secrets_local_and_remote_metadata_and_resource_token_
         Some(8080),
         plain_rs::features::chat::enums::DeviceType::Tablet,
     );
-    peer.key = "peer-secret".into();
-    peer.token = "peer-token".into();
+    peer.key = plain_libs::utils::base64::base64_encode(&[76; 32]);
+    peer.token = plain_libs::utils::base64::base64_encode(&[77; 32]);
     peers::save(&state.db, &[peer], SaveMode::Insert).unwrap();
     let mut channel = plain_rs::infrastructure::db::DChannel::new("Channel", "peer");
     channel.id = "channel".into();
-    channel.key = "channel-secret".into();
+    channel.key = plain_libs::utils::base64::base64_encode(&[78; 32]);
     channels::save(&state.db, &[channel], SaveMode::Insert).unwrap();
     let native = server.native_graphql().unwrap();
     let query = r#"{ sessions { clientId } peers { key token } chatChannels { key } }"#;
@@ -383,8 +383,8 @@ async fn main_schema_keeps_secrets_local_and_remote_metadata_and_resource_token_
     let settings = server.native_management().unwrap().preferences().unwrap();
     assert_eq!(settings["password"], "");
     assert!(settings.get("url_token").is_none());
-    assert_eq!(local["peers"][0]["key"], "peer-secret");
-    assert_eq!(local["chatChannels"][0]["key"], "channel-secret");
+    assert_eq!(local["peers"][0]["key"], plain_libs::utils::base64::base64_encode(&[76; 32]));
+    assert_eq!(local["chatChannels"][0]["key"], plain_libs::utils::base64::base64_encode(&[78; 32]));
     let mut headers = HeaderMap::new();
     headers.insert("c-id", session.client_id.parse().unwrap());
     headers.insert(

@@ -1,3 +1,4 @@
+use crate::infrastructure::db::key_blob;
 use crate::features::chat::channels::messages::ChannelMember;
 use crate::features::chat::channels::messages::MemberPeerInfo;
 use crate::features::chat::enums::PeerStatus;
@@ -48,7 +49,7 @@ pub(crate) fn ensure_peers(c: &Connection, items: &[MemberPeerInfo], actor: &str
             public_key(&item.public_key)?;
         }
         let now = now_iso();
-        if c.execute("INSERT INTO peers(id,name,ip,key,public_key,status,port,device_type,token,created_at,updated_at) VALUES(?1,?2,?3,'',?4,?5,?6,?7,'',?8,?8)",params![item.id,item.name,item.ip,item.public_key,PeerStatus::Channel,item.port,item.device_type,now])?!=1 { bail!("Member peer insert failed"); }
+        if c.execute("INSERT INTO peers(id,name,ip,key,public_key,status,port,device_type,token,created_at,updated_at) VALUES(?1,?2,?3,NULL,?4,?5,?6,?7,NULL,?8,?8)",params![item.id,item.name,item.ip,key_blob::optional(&item.public_key)?,PeerStatus::Channel,item.port,item.device_type,now])?!=1 { bail!("Member peer insert failed"); }
     }
     Ok(())
 }
@@ -68,7 +69,7 @@ pub(crate) fn accepting_peer(
             {
                 bail!("Member public key mismatch");
             }
-            if c.execute("UPDATE peers SET public_key=CASE WHEN public_key='' THEN ?2 ELSE public_key END,name=CASE WHEN name='' THEN ?3 ELSE name END,updated_at=?4 WHERE id=?1",params![id,key,name,now_iso()])?!=1 { bail!("Member peer update failed"); }
+            if c.execute("UPDATE peers SET public_key=coalesce(public_key,?2),name=CASE WHEN name='' THEN ?3 ELSE name END,updated_at=?4 WHERE id=?1",params![id,key_blob::encode(key)?,name,now_iso()])?!=1 { bail!("Member peer update failed"); }
         }
         None => ensure_peers(
             c,
@@ -101,7 +102,7 @@ pub(crate) fn save(c: &Connection, channel: &DChannel, new: bool) -> Result<()> 
                 .as_deref()
                 .filter(|value| !value.is_empty()),
             channel.members,
-            channel.key,
+            key_blob::optional(&channel.key)?,
             channel.version,
             channel.status,
             plain_libs::utils::dbtime::normalize(&channel.created_at)?,

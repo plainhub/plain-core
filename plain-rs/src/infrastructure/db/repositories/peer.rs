@@ -1,3 +1,4 @@
+use crate::infrastructure::db::key_blob;
 use plain_libs::rusqlite::params;
 
 use crate::features::chat::enums::DeviceType;
@@ -14,12 +15,12 @@ pub(crate) fn row_to_peer(row: &plain_libs::rusqlite::Row<'_>) -> plain_libs::ru
         id: row.get(0)?,
         name: row.get(1)?,
         ip: row.get(2)?,
-        key: row.get(3)?,
-        public_key: row.get(4)?,
+        key: key_blob::read_optional(row, 3)?,
+        public_key: key_blob::read_optional(row, 4)?,
         status: row.get(5)?,
         port: row.get(6)?,
         device_type: row.get(7)?,
-        token: row.get(8)?,
+        token: key_blob::read_optional(row, 8)?,
         created_at: row.get(9)?,
         updated_at: row.get(10)?,
     })
@@ -61,8 +62,8 @@ impl Db {
                port=excluded.port, device_type=excluded.device_type,
                token=excluded.token, updated_at=excluded.updated_at",
             params![
-                peer.id, peer.name, peer.ip, peer.key, peer.public_key,
-                peer.status, peer.port.map(i64::from), peer.device_type, peer.token,
+                peer.id, peer.name, peer.ip, key_blob::optional(&peer.key)?, key_blob::optional(&peer.public_key)?,
+                peer.status, peer.port.map(i64::from), peer.device_type, key_blob::optional(&peer.token)?,
                 plain_libs::utils::dbtime::normalize(&peer.created_at)?, plain_libs::utils::dbtime::normalize(&peer.updated_at)?
             ],
         )
@@ -96,10 +97,15 @@ impl Db {
     pub fn update_peer_status_and_key(&self, id: &str, status: PeerStatus, key: &str) {
         let now = now_iso();
         let conn = self.0.lock().unwrap();
-        let _ = conn.execute(
-            "UPDATE peers SET status=?1, key=?2, updated_at=?3 WHERE id=?4",
-            params![status, key, now, id],
-        );
+        let result = key_blob::optional(key).and_then(|key| {
+            conn.execute(
+                "UPDATE peers SET status=?1, key=?2, updated_at=?3 WHERE id=?4",
+                params![status, key, now, id],
+            )
+        });
+        if let Err(error) = result {
+            log::error!("update_peer_status_and_key failed id={id} err={error}");
+        }
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -142,17 +148,23 @@ impl Db {
         let conn = self.0.lock().unwrap();
         let result = conn.execute(
             "INSERT INTO peers (id,name,ip,key,public_key,status,port,device_type,token,created_at,updated_at)
-             VALUES (?1,?2,?3,?9,?7,CASE WHEN ?9<>'' THEN 'PAIRED' ELSE 'UNPAIRED' END,?4,?5,?6,?8,?8)
+             VALUES (?1,?2,?3,?9,?7,CASE WHEN ?9 IS NOT NULL THEN 'PAIRED' ELSE 'UNPAIRED' END,?4,?5,?6,?8,?8)
              ON CONFLICT(id) DO UPDATE SET
                token=excluded.token, ip=excluded.ip, port=excluded.port,
                name=CASE WHEN excluded.name<>'' THEN excluded.name ELSE peers.name END,
                device_type=CASE WHEN excluded.device_type<>'' THEN excluded.device_type ELSE peers.device_type END,
-               public_key=CASE WHEN excluded.public_key<>'' THEN excluded.public_key ELSE peers.public_key END,
-               key=CASE WHEN excluded.key<>'' THEN excluded.key ELSE peers.key END,
-               status=CASE WHEN excluded.key<>'' THEN 'PAIRED' ELSE peers.status END,
+               public_key=coalesce(excluded.public_key,peers.public_key),
+               key=coalesce(excluded.key,peers.key),
+               status=CASE WHEN excluded.key IS NOT NULL THEN 'PAIRED' ELSE peers.status END,
                updated_at=excluded.updated_at
-             WHERE peers.public_key='' OR peers.public_key=?10",
-            params![id, name, ip, port as i64, device_type, token, signature_public_key, now, chat_key, previous_identity],
+             WHERE peers.public_key IS NULL OR peers.public_key=?10",
+            params![
+                id, name, ip, port as i64, device_type,
+                key_blob::encode(token).map_err(|error| error.to_string())?,
+                key_blob::optional(signature_public_key).map_err(|error| error.to_string())?, now,
+                key_blob::optional(chat_key).map_err(|error| error.to_string())?,
+                key_blob::optional(previous_identity).map_err(|error| error.to_string())?,
+            ],
         );
         if result.map_err(|e| e.to_string())? != 1 {
             return Err("Peer identity changed".into());
@@ -165,7 +177,7 @@ impl Db {
         let now = now_iso();
         let conn = self.0.lock().unwrap();
         conn.execute(
-            "UPDATE peers SET token='', updated_at=?1 WHERE id=?2",
+            "UPDATE peers SET token=NULL, updated_at=?1 WHERE id=?2",
             params![now, id],
         )
         .map_err(|error| error.to_string())?;
@@ -176,7 +188,7 @@ impl Db {
     pub fn get_login_peers(&self) -> Vec<DPeer> {
         let conn = self.0.lock().unwrap();
         let mut stmt = match conn.prepare(&format!(
-            "SELECT {PEER_COLS} FROM peers WHERE token<>'' ORDER BY created_at DESC"
+            "SELECT {PEER_COLS} FROM peers WHERE token IS NOT NULL ORDER BY created_at DESC"
         )) {
             Ok(s) => s,
             Err(_) => return vec![],

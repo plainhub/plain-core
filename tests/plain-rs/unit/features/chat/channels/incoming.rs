@@ -15,8 +15,8 @@ fn setup() -> (Db, Vec<u8>, String) {
     let public = base64_encode(&public);
     let mut owner = DPeer::new("owner", "Owner", "127.0.0.1", Some(1), DeviceType::Phone);
     owner.public_key = public.clone();
-    owner.key = "pairing-secret".into();
-    owner.token = "login-secret".into();
+    owner.key = plain_libs::utils::base64::base64_encode(&[47; 32]);
+    owner.token = plain_libs::utils::base64::base64_encode(&[48; 32]);
     peers::save(&db, &[owner], SaveMode::Insert).unwrap();
     (db, private.to_vec(), public)
 }
@@ -61,8 +61,8 @@ fn invitations_require_owner_signature_and_membership_preserve_credentials_and_r
             .changed
     );
     let peer = peers::get(&db, "owner").unwrap().unwrap();
-    assert_eq!(peer.key, "pairing-secret");
-    assert_eq!(peer.token, "login-secret");
+    assert_eq!(peer.key, plain_libs::utils::base64::base64_encode(&[47; 32]));
+    assert_eq!(peer.token, plain_libs::utils::base64::base64_encode(&[48; 32]));
     assert_eq!(peer.name, "Owner");
     let kick =
         json!({"channelId":"channel","version":2,"signature":sign(&key,2,Action::Kick,"actor")});

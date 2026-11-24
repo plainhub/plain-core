@@ -208,7 +208,7 @@ async fn nearby_client_handles_probe_accept_reject_timeout_and_offline() {
     let cancel = |to: &str| {
         Message::PairCancel(PairingCancel {
             request_signature: "request".into(),
-            signature_public_key: "public".into(),
+            signature_public_key: plain_libs::utils::base64::base64_encode(&[39; 32]),
             timestamp: 1,
             signature: "proof".into(),
             from_id: "fixture".into(),

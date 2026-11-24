@@ -13,20 +13,20 @@ use plain_libs::serde_json::json;
 fn checked_chat_storage_is_atomic_literal_and_preserves_unrelated_conversations_and_login_tokens() {
     let db = Db::open(std::path::Path::new(":memory:")).unwrap();
     let mut peer = DPeer::new("peer", "name", "127.0.0.1", Some(443), DeviceType::Phone);
-    peer.token = "session".into();
+    peer.token = plain_libs::utils::base64::base64_encode(&[33; 32]);
     peers::save(&db, std::slice::from_ref(&peer), SaveMode::Insert).unwrap();
     peer.name = "renamed".into();
     peer.token.clear();
     peers::save(&db, std::slice::from_ref(&peer), SaveMode::Update).unwrap();
-    assert_eq!(peers::get(&db, "peer").unwrap().unwrap().token, "session");
+    assert_eq!(peers::get(&db, "peer").unwrap().unwrap().token, plain_libs::utils::base64::base64_encode(&[33; 32]));
     let before = peers::get(&db, "peer").unwrap().unwrap();
     let mut after = before.clone();
     after.ip = "::1".into();
-    db.with_conn(|c| c.execute("UPDATE peers SET key='new-key' WHERE id='peer'", []))
+    db.with_conn(|c| c.execute("UPDATE peers SET key=?1 WHERE id='peer'", [[36u8; 32]]))
         .unwrap();
     assert_eq!(
         peers::patch(&db, &before, &after).unwrap().unwrap().key,
-        "new-key"
+        plain_libs::utils::base64::base64_encode(&[36; 32])
     );
     let missing = DPeer::new("missing", "", "", None, DeviceType::Unknown);
     peer.name = "must rollback".into();
@@ -145,7 +145,7 @@ fn nearby_cache_keeps_newest_facts_and_all_records_survive_reopening() {
         ips: vec!["::1".into(), "127.0.0.1".into()],
         port: 443,
         remote_access: Some(true),
-        signature_public_key: "fixture-key".into(),
+        signature_public_key: plain_libs::utils::base64::base64_encode(&[31; 32]),
         device_type: crate::features::chat::enums::DeviceType::Phone,
         version: "1".into(),
         platform: "Android".into(),
@@ -154,7 +154,7 @@ fn nearby_cache_keeps_newest_facts_and_all_records_survive_reopening() {
     nearby::save(&db, &item).unwrap();
     item.name = "stale".into();
     item.remote_access = Some(false);
-    item.signature_public_key = "stale-key".into();
+    item.signature_public_key = plain_libs::utils::base64::base64_encode(&[32; 32]);
     item.last_seen_at = "2026-10-04T00:00:01.000Z".into();
     nearby::save(&db, &item).unwrap();
     drop(db);
@@ -163,7 +163,7 @@ fn nearby_cache_keeps_newest_facts_and_all_records_survive_reopening() {
     assert_eq!(rows[0].name, "new");
     assert_eq!(rows[0].ips.len(), 2);
     assert_eq!(rows[0].remote_access, Some(true));
-    assert_eq!(rows[0].signature_public_key, "fixture-key");
+    assert_eq!(rows[0].signature_public_key, plain_libs::utils::base64::base64_encode(&[31; 32]));
     let now = |time: &str| plain_libs::chrono::DateTime::parse_from_rfc3339(time)
         .unwrap()
         .with_timezone(&plain_libs::chrono::Utc);
@@ -178,8 +178,8 @@ fn discovery_refreshes_only_paired_peers_and_preserves_identity_and_unrelated_ro
     let db = Db::open(std::path::Path::new(":memory:")).unwrap();
     let mut paired = DPeer::new("paired", "old", "192.0.2.1", Some(2443), DeviceType::Phone);
     paired.status = PeerStatus::Paired;
-    paired.key = "paired-key".into();
-    paired.public_key = "public-key".into();
+    paired.key = plain_libs::utils::base64::base64_encode(&[34; 32]);
+    paired.public_key = plain_libs::utils::base64::base64_encode(&[35; 32]);
     let unpaired = DPeer::new(
         "unpaired",
         "other",
