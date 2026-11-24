@@ -22,14 +22,14 @@ pub fn capabilities() -> &'static [Capability] {
     FILESYSTEM
 }
 
-pub async fn capability_list(host: &Host) -> Result<Vec<Capability>, String> {
-    if cfg!(any(target_os = "android", target_os = "ios")) {
-        crate::features::services::capabilities::snapshot(host)
-            .await
-            .map_err(|error| error.to_string())
-    } else {
-        Ok(capabilities().to_vec())
+pub async fn capability_list(host: &Host) -> plain_libs::anyhow::Result<Vec<Capability>> {
+    use crate::features::services::capabilities;
+    if FILESYSTEM.is_empty() || host.uses_system_media_catalog() {
+        return capabilities::snapshot(host).await;
     }
+    let mut capabilities = FILESYSTEM.to_vec();
+    capabilities::include_filesystem_media_trash(host, &mut capabilities);
+    Ok(capabilities)
 }
 
 pub fn action_capability(action: Action) -> Capability {
@@ -65,7 +65,6 @@ impl Operation {
         action: Action,
         ids: Vec<String>,
         from_trash: bool,
-        gallery_trash: bool,
         destination: String,
         expected_path: Option<String>,
         #[cfg(feature = "runtime-media")] scans: Arc<
@@ -90,7 +89,7 @@ impl Operation {
             Backend::Files {
                 from_trash,
                 destination,
-                trash: (gallery_trash || from_trash).then(|| Trash::new(platform.db.clone())),
+                trash: (action == Action::Trash || from_trash).then(|| Trash::new(platform.db.clone())),
                 #[cfg(feature = "runtime-media")]
                 scans,
             }

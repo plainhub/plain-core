@@ -2,6 +2,48 @@ use plain_rs::features::enums::DataType;
 use plain_rs::infrastructure::db::Db;
 use std::path::Path;
 
+#[cfg(all(feature = "media", not(any(target_os = "android", target_os = "ios"))))]
+fn open_trash_fixture(root: &Path) -> crate::server::ContentServer {
+    use plain_rs::features::prefs::{Prefs, default_path};
+    use std::sync::Arc;
+
+    let mut config = plain_rs::infrastructure::platform::startup::config();
+    config.cache_dir = Some(root.join("cache").to_str().unwrap().into());
+    config.filesystem_media_trash = true;
+    let data = root.join("core");
+    std::fs::create_dir_all(&data).unwrap();
+    let prefs = Arc::new(Prefs::load(&default_path(&data)).unwrap());
+    crate::server::ContentServer::start_core_with_config(
+        &data,
+        &plain_libs::crypto::gen_token(),
+        prefs,
+        config,
+    )
+    .unwrap()
+}
+
+#[cfg(all(feature = "media", not(any(target_os = "android", target_os = "ios"))))]
+fn respond_to_media_host(
+    host: std::sync::Arc<plain_rs::infrastructure::host::bridge::Host>,
+) -> tokio::task::JoinHandle<()> {
+    use plain_libs::serde_json::{Value, json};
+
+    let (generation, mut requests) = host.connect();
+    tokio::spawn(async move {
+        while let Some(request) = requests.recv().await {
+            let result = match request["method"].as_str().unwrap() {
+                "systemCapabilities" => json!(["MEDIA_DELETE", "MEDIA_MOVE"]),
+                "systemAccessFacts" => json!({"granted":{
+                    "IMAGES":true, "VIDEOS":true, "AUDIO":true, "DOCS":true
+                }}),
+                _ => Value::Null,
+            };
+            host.reply(generation, json!({"id":request["id"],"result":result}))
+                .unwrap();
+        }
+    })
+}
+
 #[cfg(feature = "media")]
 #[tokio::test]
 async fn existing_media_delete_filters_trash_and_preserves_unselected_files() {
@@ -272,49 +314,176 @@ async fn partial_main_media_actions_invalidate_only_completed_duration_entries()
 
 #[cfg(all(feature = "media", not(any(target_os = "android", target_os = "ios"))))]
 #[tokio::test]
-async fn local_desktop_image_trash_is_reversible_and_not_exposed_to_remote_clients() {
-    use crate::graphql::executor::{RequestContext, execute_graphql};
+async fn desktop_media_trash_round_trips_through_native_and_browser_graphql() {
+    use plain_libs::axum::{body, extract::State, http};
+    use plain_libs::serde_json::{Value, json};
+    use plain_rs::features::sessions::{SessionType, token_key};
+    use plain_rs::infrastructure::transport::{http_request, http_response};
+
+    let directory = plain_libs::temporary::tempdir().unwrap();
+    let root = directory.path().canonicalize().unwrap();
+    let core = open_trash_fixture(&root);
+    let state = core.runtime_state();
+    let responder = respond_to_media_host(state.host.clone());
+    let native = core.native_graphql().unwrap();
+    let mut browser =
+        plain_rs::features::services::sessions::create(&state, "Browser fixture".into()).unwrap();
+    browser.r#type = SessionType::Login;
+    state.db.session_save(&browser).unwrap();
+    let key = token_key(&browser.token).unwrap();
+    let execute = async |local: bool, query: String| -> Value {
+        if local {
+            let response = native.execute(plain_graphql::Request::new(query)).await;
+            return plain_libs::serde_json::to_value(response).unwrap();
+        }
+        let document = json!({"requestId":plain_rs::features::record_id::generate(),"query":query})
+            .to_string();
+        let request =
+            http_request::encrypt_raw(&key, "POST", "/graphql", document.as_bytes()).unwrap();
+        let mut headers = http::HeaderMap::new();
+        headers.insert("c-id", browser.client_id.parse().unwrap());
+        let response = crate::http::graphql::call(
+            State(state.clone()),
+            headers,
+            body::Bytes::from(request.clone()),
+        )
+        .await;
+        assert_eq!(response.status(), http::StatusCode::OK);
+        let bytes = body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let payload = http_response::Context::new(&request)
+            .decrypt(&key, &bytes)
+            .unwrap();
+        plain_libs::serde_json::from_slice(&payload).unwrap()
+    };
+
+    let protected = root.join("private.txt");
+    std::fs::write(&protected, b"private fixture").unwrap();
+    let id = seed_kind(&state.db, &protected, DataType::Doc);
+    state
+        .prefs
+        .set("api_permissions", json!(["IMAGES", "VIDEOS", "AUDIO"]))
+        .unwrap();
+    for action in ["trashMediaItems", "restoreMediaItems"] {
+        let denied = execute(
+            false,
+            format!("mutation {{ {action}(type:DOC,query:\"ids:{id}\") {{ affectedCount }} }}"),
+        )
+        .await;
+        assert_eq!(denied["errors"][0]["message"], "NO_PERMISSION");
+    }
+    assert_eq!(std::fs::read(&protected).unwrap(), b"private fixture");
+    state
+        .prefs
+        .set(
+            "api_permissions",
+            json!(["IMAGES", "VIDEOS", "AUDIO", "DOCS"]),
+        )
+        .unwrap();
+
+    for local in [false, true] {
+        let capabilities = execute(local, "{ app { capabilities } }".into()).await;
+        assert!(
+            capabilities["data"]["app"]["capabilities"]
+                .as_array()
+                .unwrap()
+                .contains(&json!("MEDIA_TRASH")),
+            "local={local}: {capabilities}"
+        );
+        for (kind, name, extension, field) in [
+            (DataType::Image, "IMAGE", "jpg", "images"),
+            (DataType::Video, "VIDEO", "mp4", "videos"),
+            (DataType::Audio, "AUDIO", "mp3", "audios"),
+            (DataType::Doc, "DOC", "txt", "docs"),
+        ] {
+            let original = root.join(format!("round-trip-{local}.{extension}"));
+            let payload = format!("{name} fixture");
+            std::fs::write(&original, &payload).unwrap();
+            let id = seed_kind(&state.db, &original, kind);
+            let mutate = |action| {
+                format!(
+                    "mutation {{ {action}(type:{name},query:\"ids:{id}\") {{ affectedCount }} }}"
+                )
+            };
+            let list = |trash| {
+                format!(
+                    "{{ {field}(query:\"ids:{id} trash:{trash}\",offset:0,limit:10,sortBy:UPDATED_AT_DESC) {{ id path }} }}"
+                )
+            };
+
+            let moved = execute(local, mutate("trashMediaItems")).await;
+            assert_eq!(
+                moved["data"]["trashMediaItems"]["affectedCount"], 1,
+                "local={local}, type={name}: {moved}"
+            );
+            assert!(!original.exists());
+            let trashed = execute(local, list(true)).await;
+            let record = &trashed["data"][field][0];
+            assert_eq!(record["id"], id, "{trashed}");
+            let physical = Path::new(record["path"].as_str().unwrap());
+            assert!(
+                physical
+                    .components()
+                    .any(|part| part.as_os_str() == ".plain-trash")
+            );
+            assert_eq!(std::fs::read_to_string(physical).unwrap(), payload);
+            assert_eq!(execute(local, list(false)).await["data"][field], json!([]));
+
+            let restored = execute(local, mutate("restoreMediaItems")).await;
+            assert_eq!(
+                restored["data"]["restoreMediaItems"]["affectedCount"], 1,
+                "local={local}, type={name}: {restored}"
+            );
+            assert_eq!(std::fs::read_to_string(&original).unwrap(), payload);
+            assert!(!physical.exists());
+            assert_eq!(execute(local, list(true)).await["data"][field], json!([]));
+            assert_eq!(
+                execute(local, list(false)).await["data"][field][0]["id"],
+                id
+            );
+            assert_eq!(
+                execute(local, mutate("restoreMediaItems")).await["data"]["restoreMediaItems"]["affectedCount"],
+                0
+            );
+
+            if !local {
+                assert_eq!(
+                    execute(false, mutate("trashMediaItems")).await["data"]["trashMediaItems"]["affectedCount"],
+                    1
+                );
+                assert_eq!(
+                    execute(true, mutate("restoreMediaItems")).await["data"]["restoreMediaItems"]["affectedCount"],
+                    1
+                );
+                assert_eq!(std::fs::read_to_string(&original).unwrap(), payload);
+            }
+        }
+    }
+    core.stop_core().await;
+    responder.abort();
+}
+
+#[cfg(all(feature = "media", not(any(target_os = "android", target_os = "ios"))))]
+#[tokio::test]
+async fn desktop_image_trash_preserves_name_collisions_and_partial_batch_success() {
     use plain_graphql::{Request, Variables};
     use plain_libs::serde_json::json;
 
     let directory = plain_libs::temporary::tempdir().unwrap();
-    let core = crate::server::ContentServer::open(&directory.path().join("core")).unwrap();
+    let core = open_trash_fixture(directory.path());
     let state = core.runtime_state();
     state.prefs.set("api_permissions", json!(["IMAGES"])).unwrap();
     let photo = directory.path().join("photo.jpg");
     std::fs::write(&photo, b"original image bytes").unwrap();
     let id = seed_kind(&state.db, &photo, DataType::Image);
 
-    let host = state.host.clone();
-    let (generation, mut requests) = host.connect();
-    let responder = tokio::spawn(async move {
-        while let Some(request) = requests.recv().await {
-            let reply = match request["method"].as_str().unwrap() {
-                "systemCapabilities" => json!(["MEDIA_TRASH", "MEDIA_DELETE", "MEDIA_MOVE"]),
-                "systemAccessFacts" => json!({"granted":{"IMAGES":true}}),
-                _ => json!(null),
-            };
-            host.reply(generation, json!({"id":request["id"],"result":reply})).unwrap();
-        }
-    });
+    let responder = respond_to_media_host(state.host.clone());
     let selection = format!("ids:{id}");
     let mutate = |name| Request::new(format!(
         "mutation($query:String!) {{ {name}(type:IMAGE,query:$query) {{ affectedCount }} }}"
     )).variables(Variables::from_json(json!({"query":selection})));
     let native = core.native_graphql().unwrap();
-    let capabilities = "{ app { capabilities } }";
-    let local = native.execute(Request::new(capabilities)).await;
-    assert!(local.errors.is_empty(), "{:?}", local.errors);
-    assert!(local.data.into_json().unwrap()["app"]["capabilities"].as_array().unwrap().contains(&json!("MEDIA_TRASH")));
-    let remote = execute_graphql(&state.public, Request::new(capabilities),
-        RequestContext::authenticated_remote(state.clone(),"fixture-remote".into())).await;
-    assert!(remote.errors.is_empty(), "{:?}", remote.errors);
-    assert!(!remote.data.into_json().unwrap()["app"]["capabilities"].as_array().unwrap().contains(&json!("MEDIA_TRASH")));
-    let refused = execute_graphql(&state.public, mutate("trashMediaItems"),
-        RequestContext::authenticated_remote(state.clone(),"fixture-remote".into())).await;
-    assert_eq!(refused.errors[0].message, "unsupported capability MEDIA_TRASH");
-    assert!(photo.is_file());
-
     let trashed = native.execute(mutate("trashMediaItems")).await;
     assert!(trashed.errors.is_empty(), "{:?}", trashed.errors);
     assert_eq!(trashed.data.into_json().unwrap()["trashMediaItems"]["affectedCount"], 1);

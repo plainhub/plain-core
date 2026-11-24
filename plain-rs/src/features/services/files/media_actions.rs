@@ -7,6 +7,8 @@ use crate::features::media::audio::commands as audio_commands;
 use crate::features::media::audio::playback as audio_playback;
 use crate::features::prefs::Prefs;
 use crate::features::services::audio::host::Audio;
+use crate::features::services::capabilities;
+use crate::features::services::files::media_action_io;
 use crate::features::services::images::index::ImageIndex;
 use crate::infrastructure::db::Db;
 use crate::infrastructure::host::bridge::Host;
@@ -61,28 +63,9 @@ impl MediaActions {
         action: Action,
         query: &str,
         dest_dir: &str,
-        local: bool,
     ) -> Result<i32> {
-        let mut capabilities =
-            crate::features::services::files::media_action_io::capability_list(&self.host)
-                .await
-                .map_err(plain_libs::anyhow::Error::msg)?;
-        let gallery_trash = local
-            && kind == DataType::Image
-            && action != Action::Move
-            && !cfg!(any(target_os = "android", target_os = "ios"))
-            && !self.host.uses_system_media_catalog()
-            && crate::features::services::capabilities::snapshot(&self.host)
-                .await?
-                .contains(&Capability::MediaTrash);
-        if gallery_trash {
-            capabilities.push(Capability::MediaTrash);
-        }
-        crate::features::services::capabilities::require_list(
-            &capabilities,
-            crate::features::services::files::media_action_io::action_capability(action),
-        )
-        .map_err(|error| plain_libs::anyhow::Error::msg(error.to_string()))?;
+        let capabilities = media_action_io::capability_list(&self.host).await?;
+        capabilities::require_list(&capabilities, media_action_io::action_capability(action))?;
         let from_trash = action == Action::Restore
             || (action == Action::Delete && capabilities.contains(&Capability::MediaTrash));
         if !matches!(
@@ -100,7 +83,7 @@ impl MediaActions {
         .await
         .map_err(plain_libs::anyhow::Error::msg)?;
         let result = self
-            .run_batches(kind, action, ids, from_trash, gallery_trash, dest_dir.to_owned())
+            .run_batches(kind, action, ids, from_trash, dest_dir.to_owned())
             .await?;
         let affected = result.affected_count;
         let failed = result.failed_ids.len();
@@ -118,7 +101,6 @@ impl MediaActions {
         action: Action,
         requested: Vec<String>,
         from_trash: bool,
-        gallery_trash: bool,
         dest_dir: String,
     ) -> Result<Completed> {
         if !matches!(
@@ -141,7 +123,7 @@ impl MediaActions {
         };
         for batch in ids.chunks(500) {
             let result = self
-                .apply(kind, action, batch.to_vec(), from_trash, gallery_trash, dest_dir.clone(), None)
+                .apply(kind, action, batch.to_vec(), from_trash, dest_dir.clone(), None)
                 .await?;
             completed.affected_count = completed
                 .affected_count
@@ -160,7 +142,7 @@ impl MediaActions {
         expected_path: String,
     ) -> Result<()> {
         let from_trash = matches!(action, Action::Restore | Action::Delete);
-        let result = self.apply(kind, action, vec![id], from_trash, false, String::new(), Some(expected_path)).await?;
+        let result = self.apply(kind, action, vec![id], from_trash, String::new(), Some(expected_path)).await?;
         if result.affected_count != 1 {
             plain_libs::anyhow::bail!("Media provider did not complete the selected file operation");
         }
@@ -173,7 +155,6 @@ impl MediaActions {
         action: Action,
         requested: Vec<String>,
         from_trash: bool,
-        gallery_trash: bool,
         dest_dir: String,
         expected_path: Option<String>,
     ) -> Result<Completed> {
@@ -191,14 +172,13 @@ impl MediaActions {
         if action == Action::Move && dest_dir.is_empty() {
             plain_libs::anyhow::bail!("media destination required");
         }
-        let operation = crate::features::services::files::media_action_io::Operation::prepare(
+        let operation = media_action_io::Operation::prepare(
             &self.host,
             &self.platform,
             r#type,
             action,
             requested,
             from_trash,
-            gallery_trash,
             dest_dir,
             expected_path,
             #[cfg(feature = "runtime-media")]

@@ -452,7 +452,6 @@ async fn media_action(
             action,
             query,
             dest.as_str().unwrap_or_default(),
-            public_gate::is_local(ctx),
         )
         .await
         .map_err(Into::into)

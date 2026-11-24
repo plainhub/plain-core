@@ -1,0 +1,1 @@
+import{n as e}from"./chunk-data-D8B-n4xp.js";var t=(e,t)=>!!t?.includes(e),n=n=>t(e.MEDIA_TRASH,n?.capabilities),r=n=>t(e.MEDIA_DELETE,n?.capabilities),i=n=>t(e.MEDIA_MOVE,n?.capabilities);export{n as i,r as n,i as r,t};
