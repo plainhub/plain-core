@@ -57,9 +57,10 @@ async fn server_with_policy(
     u16,
 ) {
     let directory = plain_libs::temporary::tempdir().unwrap();
-    let server = crate::server::ContentServer::open_with_pairing_approval(
+    let server = crate::server::ContentServer::open_with_config(
         &directory.path().join("data"),
         &directory.path().join("cache"),
+        plain_rs::infrastructure::platform::startup::config(),
         policy,
     )
     .unwrap();

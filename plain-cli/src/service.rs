@@ -28,10 +28,13 @@ pub struct Service {
 impl Service {
     pub async fn start(paths: &AppPaths, options: Options) -> Result<Self> {
         crate::bootstrap::initialize_tls();
+        let mut config = plain_rs::infrastructure::platform::startup::config();
+        config.filesystem_media_trash = true;
         let core = Arc::new(
-            ContentServer::open_with_pairing_approval(
+            ContentServer::open_with_config(
                 &paths.data_dir,
                 &paths.cache_dir,
+                config,
                 PairingApproval::FollowPasswordLogin,
             )
             .map_err(plain_libs::anyhow::Error::msg)?,

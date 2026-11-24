@@ -4,12 +4,18 @@ use std::path::Path;
 
 #[cfg(all(feature = "media", not(any(target_os = "android", target_os = "ios"))))]
 fn open_trash_fixture(root: &Path) -> crate::server::ContentServer {
+    open_trash_fixture_with_catalog(root, false)
+}
+
+#[cfg(all(feature = "media", not(any(target_os = "android", target_os = "ios"))))]
+fn open_trash_fixture_with_catalog(root: &Path, system_media_catalog: bool) -> crate::server::ContentServer {
     use plain_rs::features::prefs::{Prefs, default_path};
     use std::sync::Arc;
 
     let mut config = plain_rs::infrastructure::platform::startup::config();
     config.cache_dir = Some(root.join("cache").to_str().unwrap().into());
     config.filesystem_media_trash = true;
+    config.system_media_catalog = system_media_catalog;
     let data = root.join("core");
     std::fs::create_dir_all(&data).unwrap();
     let prefs = Arc::new(Prefs::load(&default_path(&data)).unwrap());
@@ -20,6 +26,79 @@ fn open_trash_fixture(root: &Path) -> crate::server::ContentServer {
         config,
     )
     .unwrap()
+}
+
+#[cfg(all(feature = "media", not(any(target_os = "android", target_os = "ios"))))]
+#[tokio::test]
+async fn filesystem_trash_uses_shared_file_operations_with_an_active_system_catalog() {
+    use plain_graphql::Request;
+    use plain_libs::serde_json::{Value, json};
+
+    for (kind, items, count, extension, mime) in [
+        ("IMAGE", "images", "imageCount", "png", "image/png"),
+        ("VIDEO", "videos", "videoCount", "mp4", "video/mp4"),
+        ("AUDIO", "audios", "audioCount", "mp3", "audio/mpeg"),
+        ("DOC", "docs", "docCount", "txt", "text/plain"),
+    ] {
+        let directory = plain_libs::temporary::tempdir().unwrap();
+        let root = directory.path().canonicalize().unwrap();
+        let core = open_trash_fixture_with_catalog(&root, true);
+        let state = core.runtime_state();
+        let photo = root.join(format!("sample.{extension}"));
+        std::fs::write(&photo, b"owned media fixture").unwrap();
+        let source = photo.to_str().unwrap().to_owned();
+        let (generation, mut requests) = state.host.connect();
+        let host = state.host.clone();
+        let responder = tokio::spawn(async move {
+            while let Some(request) = requests.recv().await {
+                let result = match request["method"].as_str().unwrap() {
+                    "systemCapabilities" => json!(["MEDIA_DELETE", "MEDIA_MOVE"]),
+                    "systemAccessFacts" => {
+                        json!({"granted":{"IMAGES":true,"VIDEOS":true,"AUDIO":true,"DOCS":true,"FILES":true}})
+                    }
+                    "systemMediaIdsFacts" => json!(["41"]),
+                    "mediaProviderRows" => json!([{
+                        "id":"41", "path":source, "trashed":false,
+                        "mimeType":mime, "volumeRoot":null
+                    }]),
+                    "fileTaskScan" => json!(true),
+                    _ => Value::Null,
+                };
+                host.reply(generation, json!({"id":request["id"],"result":result}))
+                    .unwrap();
+            }
+        });
+        let executor = core.native_graphql().unwrap();
+        let moved = executor
+            .execute(Request::new(format!(
+                r#"mutation {{ trashMediaItems(type:{kind},query:"ids:41") {{ affectedCount }} }}"#
+            )))
+            .await;
+        assert!(moved.errors.is_empty(), "{:?}", moved.errors);
+        assert!(!photo.exists());
+        let trash = executor.execute(Request::new(format!(
+            r#"{{ {items}(query:"trash:true",offset:0,limit:10,sortBy:UPDATED_AT_DESC){{id path}} {count}(query:"trash:true") trashedFiles(query:"sample.{extension}",offset:0,limit:10){{path}} }}"#
+        ))).await;
+        assert!(trash.errors.is_empty(), "{:?}", trash.errors);
+        let trash = trash.data.into_json().unwrap();
+        assert_eq!(trash[count], 1);
+        assert_eq!(trash[items][0]["path"], trash["trashedFiles"][0]["path"]);
+        let id = trash[items][0]["id"].as_str().unwrap();
+        let physical = Path::new(trash[items][0]["path"].as_str().unwrap());
+        assert_eq!(std::fs::read(physical).unwrap(), b"owned media fixture");
+        let restored = executor.execute(Request::new(format!(
+            r#"mutation {{ restoreMediaItems(type:{kind},query:"ids:{id}") {{ affectedCount }} }}"#
+        ))).await;
+        assert!(restored.errors.is_empty(), "{:?}", restored.errors);
+        assert_eq!(
+            restored.data.into_json().unwrap()["restoreMediaItems"]["affectedCount"],
+            1
+        );
+        assert_eq!(std::fs::read(photo).unwrap(), b"owned media fixture");
+        assert!(!physical.exists());
+        core.stop_core().await;
+        responder.abort();
+    }
 }
 
 #[cfg(all(feature = "media", not(any(target_os = "android", target_os = "ios"))))]

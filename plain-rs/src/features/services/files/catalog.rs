@@ -65,6 +65,19 @@ impl MediaCatalog {
         }
     }
 
+    fn filesystem_trash_catalog(&self, query: &str, from_trash: bool) -> Option<Self> {
+        let Self::Platform { db, host, prefs } = self else {
+            return None;
+        };
+        if host.startup().filesystem_media_trash
+            && (from_trash || super::provider_query::requests_media_trash(query))
+        {
+            Some(Self::Native(db.clone(), prefs.clone()))
+        } else {
+            None
+        }
+    }
+
     pub async fn rows(
         &self,
         kind: DataType,
@@ -73,7 +86,7 @@ impl MediaCatalog {
         limit: u32,
         offset: u32,
     ) -> Result<Vec<Value>, String> {
-        match self {
+        match self.filesystem_trash_catalog(query, false).as_ref().unwrap_or(self) {
             Self::Platform { db, host, prefs } => {
                 let facts = host.call(
                     "systemMediaRows",
@@ -106,7 +119,7 @@ impl MediaCatalog {
         limit: u32,
         offset: u32,
     ) -> Result<MediaPage, String> {
-        match self {
+        match self.filesystem_trash_catalog(query, false).as_ref().unwrap_or(self) {
             Self::Platform { db, host, prefs } => {
                 let facts = host.call("systemMediaRows", platform_params(
                     db, prefs, kind, query,
@@ -174,7 +187,7 @@ impl MediaCatalog {
     }
 
     pub async fn count(&self, kind: DataType, query: &str) -> Result<i64, String> {
-        match self {
+        match self.filesystem_trash_catalog(query, false).as_ref().unwrap_or(self) {
             Self::Platform { db, host, prefs } => host
                 .call(
                     "systemMediaCount",
@@ -202,7 +215,7 @@ impl MediaCatalog {
         query: &str,
         from_trash: bool,
     ) -> Result<Vec<String>, String> {
-        match self {
+        match self.filesystem_trash_catalog(query, from_trash).as_ref().unwrap_or(self) {
             Self::Platform { db, host, prefs } => plain_libs::serde_json::from_value(
                 host.call("systemMediaIdsFacts", {
                     let mut params = platform_params(db, prefs, kind, query, json!({"dataType":kind}))?;

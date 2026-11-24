@@ -57,13 +57,12 @@ impl MediaActions {
             events,
         }
     }
-    pub async fn run_query(
+    pub(super) async fn select_query(
         &self,
         kind: DataType,
         action: Action,
         query: &str,
-        dest_dir: &str,
-    ) -> Result<i32> {
+    ) -> Result<(Vec<String>, bool)> {
         let capabilities = media_action_io::capability_list(&self.host).await?;
         capabilities::require_list(&capabilities, media_action_io::action_capability(action))?;
         let from_trash = action == Action::Restore
@@ -82,6 +81,17 @@ impl MediaActions {
         .ids(kind, query, from_trash)
         .await
         .map_err(plain_libs::anyhow::Error::msg)?;
+        Ok((ids, from_trash))
+    }
+
+    pub(super) async fn run_query(
+        &self,
+        kind: DataType,
+        action: Action,
+        query: &str,
+        dest_dir: &str,
+    ) -> Result<i32> {
+        let (ids, from_trash) = self.select_query(kind, action, query).await?;
         let result = self
             .run_batches(kind, action, ids, from_trash, dest_dir.to_owned())
             .await?;

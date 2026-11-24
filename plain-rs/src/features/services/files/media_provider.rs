@@ -54,14 +54,7 @@ pub async fn run(
     destination: &str,
     expected_path: Option<&str>,
 ) -> Result<Outcome, String> {
-    let rows: Vec<Row> = plain_libs::serde_json::from_value(
-        host.call(
-            "mediaProviderRows",
-            json!({"type":kind.kind(),"ids":ids,"includeVolumes":action == Action::Move}),
-        )
-        .await?,
-    )
-    .map_err(|error| error.to_string())?;
+    let rows = rows(host, kind, ids, action == Action::Move).await?;
     if let Some(path) = expected_path {
         if rows.len() != 1 || rows[0].path != path {
             return Err("Selected media path changed".into());
@@ -114,6 +107,45 @@ pub async fn run(
     .await
     .map_err(|error| error.to_string())??;
     Ok(successful)
+}
+
+async fn rows(
+    host: &Host,
+    kind: DataType,
+    ids: &[String],
+    include_volumes: bool,
+) -> Result<Vec<Row>, String> {
+    plain_libs::serde_json::from_value(
+        host.call(
+            "mediaProviderRows",
+            json!({"type":kind.kind(),"ids":ids,"includeVolumes":include_volumes}),
+        )
+        .await?,
+    )
+    .map_err(|error| error.to_string())
+}
+
+pub(super) async fn trash_source_paths(
+    host: &Host,
+    kind: DataType,
+    ids: &[String],
+) -> Result<Vec<String>, String> {
+    let mut paths = Vec::with_capacity(ids.len());
+    for batch in ids.chunks(500) {
+        let (planned, failed) = plan(
+            kind,
+            Action::Trash,
+            batch,
+            false,
+            None,
+            rows(host, kind, batch, false).await?,
+        )?;
+        if !failed.is_empty() {
+            return Err("Media trash selection changed".into());
+        }
+        paths.extend(planned.into_iter().map(|item| item.before.path));
+    }
+    Ok(paths)
 }
 
 fn plan(

@@ -203,6 +203,13 @@ async fn service_grants_remote_file_features_and_preserves_other_settings_across
                     .unwrap()
                     .contains(&plain_libs::serde_json::json!("MEDIA_SCAN"))
             );
+            assert!(
+                data["app"]["capabilities"]
+                    .as_array()
+                    .unwrap()
+                    .contains(&plain_libs::serde_json::json!("MEDIA_TRASH")),
+                "NAS media Trash capability missing: {result}"
+            );
             assert!(data["fileIndexVolumes"].is_array());
             assert!(data["fileIndexDefaults"]["excludedDirs"].is_array());
             assert!(data["fileIndexScanProgress"]["state"].is_string());

@@ -63,6 +63,14 @@ impl Trash {
     }
 
     pub async fn trash_paths(&self, paths: Vec<String>) -> Result<Vec<String>> {
+        self.trash_paths_with_media_type(paths, None).await
+    }
+
+    pub(crate) async fn trash_paths_with_media_type(
+        &self,
+        paths: Vec<String>,
+        media_type: Option<crate::features::enums::DataType>,
+    ) -> Result<Vec<String>> {
         let mut result = Vec::with_capacity(paths.len());
         for raw in paths {
             let location = crate::infrastructure::db::files::locate(&raw)?;
@@ -70,40 +78,63 @@ impl Trash {
             validate_trashable_path(source)?;
             let metadata = std::fs::symlink_metadata(source)?;
             let source_text = source.to_str().context("Invalid file path encoding")?;
-            let file = self
-                .db
-                .record_file_paths(&[source_text.into()], None)?
-                .remove(0);
+            let id = if let Some(media_type) = media_type {
+                ensure!(
+                    metadata.file_type().is_file(),
+                    "Regular media file required"
+                );
+                let media = crate::features::media::file_metadata::read(
+                    source,
+                    media_type,
+                    plain_libs::media::image_io::file_dimensions,
+                )?;
+                self.db.record_media_file_reads(&[media])?.remove(0).id
+            } else {
+                self.db
+                    .record_file_paths(&[source_text.into()], None)?
+                    .remove(0)
+                    .id
+            };
             let kind = if metadata.is_dir() { "dir" } else { "file" };
-            let mount = location.volume.path.to_str().context("Invalid volume path encoding")?;
+            let mount = location
+                .volume
+                .path
+                .to_str()
+                .context("Invalid volume path encoding")?;
             let name = source
                 .file_name()
                 .and_then(|name| name.to_str())
                 .context("File name required")?;
             let now = Utc::now();
-            let relative = compute_bucket_rel_path(kind, &file.id, name, now);
+            let relative = compute_bucket_rel_path(kind, &id, name, now);
             let info = TrashInfo::new(&location, relative, now)?;
             let disk = writable_disk(source, mount, |disk| {
                 prepare_trash_parent(disk, &info.trash_path)?;
                 prepare_trash_parent(disk, "info/record.json")
             })?;
             let destination = abs_trash_path(&disk, &info.trash_path);
-            let target = destination.to_str().context("Invalid trash path encoding")?;
+            let target = destination
+                .to_str()
+                .context("Invalid trash path encoding")?;
             let lock = lock_for_disk(&disk);
             let _guard = lock.lock().await;
             self.db
-                .prepare_file_path_change(&file.id, source_text, target, PathChange::Trash)?;
-            if let Err(error) = info.write(&disk, &file.id) {
-                self.db.key_values().remove(format!("file_path_change:{}", file.id))?;
+                .prepare_file_path_change(&id, source_text, target, PathChange::Trash)?;
+            if let Err(error) = info.write(&disk, &id) {
+                self.db
+                    .key_values()
+                    .remove(format!("file_path_change:{id}"))?;
                 return Err(error);
             }
             if let Err(error) = plain_libs::filesystem::rename::no_replace(source, &destination) {
-                self.db.key_values().remove(format!("file_path_change:{}", file.id))?;
-                info::remove(&disk, &file.id)?;
+                self.db
+                    .key_values()
+                    .remove(format!("file_path_change:{id}"))?;
+                info::remove(&disk, &id)?;
                 return Err(error.into());
             }
             self.db
-                .finish_file_path_change(&file.id, source_text, target, PathChange::Trash)?;
+                .finish_file_path_change(&id, source_text, target, PathChange::Trash)?;
             result.push(target.into());
         }
         Ok(result)

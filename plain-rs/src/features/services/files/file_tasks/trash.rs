@@ -1,12 +1,77 @@
+use crate::features::enums::DataType;
 use crate::features::files::trash::Trash;
+use crate::features::media::actions::Action;
 use crate::features::services::files::file_tasks::*;
 use plain_libs::rusqlite::OptionalExtension;
 
 impl FileTasks {
+    pub async fn run_media_query(
+        &self,
+        kind: DataType,
+        action: Action,
+        query: &str,
+        destination: &str,
+    ) -> Result<i32> {
+        let platform = &self.hooks.platform;
+        let host = &platform.host;
+        if !host.uses_system_media_catalog()
+            || !host.startup().filesystem_media_trash
+            || action == Action::Move
+        {
+            return self
+                .media_actions
+                .run_query(kind, action, query, destination)
+                .await;
+        }
+
+        let (ids, _) = self.media_actions.select_query(kind, action, query).await?;
+        let count = if action == Action::Trash {
+            let paths = crate::features::services::files::media_provider::trash_source_paths(
+                host, kind, &ids,
+            )
+            .await
+            .map_err(plain_libs::anyhow::Error::msg)?;
+            let count = self
+                .trash_paths_with_media_type(paths.clone(), Some(kind))
+                .await?;
+            platform.scan(&paths).await?;
+            count
+        } else {
+            let store = Trash::new(platform.db.clone());
+            let paths = ids
+                .iter()
+                .map(|id| {
+                    let item = store
+                        .load_item(id)?
+                        .ok_or_else(|| anyhow!("Media trash item not found"))?;
+                    item.path
+                        .into_os_string()
+                        .into_string()
+                        .map_err(|_| anyhow!("Invalid trash path encoding"))
+                })
+                .collect::<Result<Vec<_>>>()?;
+            if action == Action::Restore {
+                self.restore_paths(paths).await?
+            } else {
+                self.delete_trashed(paths).await?
+            }
+        };
+        if count != 0 {
+            crate::features::services::files::catalog_events::publish(&self.events, [kind.kind()]);
+        }
+        Ok(count.try_into()?)
+    }
+
     pub async fn trash_paths(&self, paths: Vec<String>) -> Result<usize> {
+        self.trash_paths_with_media_type(paths, None).await
+    }
+
+    async fn trash_paths_with_media_type(
+        &self,
+        paths: Vec<String>,
+        media_type: Option<DataType>,
+    ) -> Result<usize> {
         let _guard = self.deletion_lock.lock().await;
-        use crate::features::enums::DataType;
-        use crate::features::media::actions::Action;
         let mut roots = Vec::with_capacity(paths.len());
         let mut files = Vec::new();
         let provider = self.has_provider_trash().await?;
@@ -48,7 +113,9 @@ impl FileTasks {
                 count += 1;
                 continue;
             }
-            trash.trash_paths(vec![root.clone()]).await?;
+            trash
+                .trash_paths_with_media_type(vec![root.clone()], media_type)
+                .await?;
             self.hooks
                 .duration_cache
                 .invalidate_paths(&[], &[root.clone()])?;
@@ -83,6 +150,7 @@ impl FileTasks {
         }
         Ok(count)
     }
+
     pub async fn restore_paths(&self, references: Vec<String>) -> Result<usize> {
         let _guard = self.deletion_lock.lock().await;
         let trash = Trash::new(self.hooks.platform.db.clone());

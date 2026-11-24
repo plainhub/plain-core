@@ -247,13 +247,19 @@ impl ContentServer {
     }
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     pub fn open_with_cache(directory: &Path, cache_directory: &Path) -> Result<Self, String> {
-        Self::open_with_pairing_approval(directory, cache_directory, PairingApproval::Required)
+        Self::open_with_config(
+            directory,
+            cache_directory,
+            plain_rs::infrastructure::platform::startup::config(),
+            PairingApproval::Required,
+        )
     }
 
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
-    pub fn open_with_pairing_approval(
+    pub fn open_with_config(
         directory: &Path,
         cache_directory: &Path,
+        mut config: plain_rs::infrastructure::host::startup::StartupConfig,
         pairing_approval: PairingApproval,
     ) -> Result<Self, String> {
         tokio::runtime::Handle::try_current().map_err(|error| error.to_string())?;
@@ -272,7 +278,6 @@ impl ContentServer {
             .map_err(|error| error.to_string())?,
         );
         let token = plain_libs::crypto::gen_token();
-        let mut config = plain_rs::infrastructure::platform::startup::config();
         config.cache_dir = Some(cache_directory.to_string_lossy().into_owned());
         let mut server = Self::start_core_with_config(directory, &token, prefs, config)?;
         server.state.pairing_approval = pairing_approval;

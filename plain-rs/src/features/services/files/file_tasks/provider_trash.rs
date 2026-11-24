@@ -22,6 +22,7 @@ impl FileTasks {
     pub(super) async fn has_provider_trash(&self) -> Result<bool> {
         let host = &self.hooks.platform.host;
         Ok(host.uses_system_media_catalog()
+            && !host.startup().filesystem_media_trash
             && crate::features::services::capabilities::snapshot(host)
                 .await?
                 .contains(&Capability::MediaTrash))

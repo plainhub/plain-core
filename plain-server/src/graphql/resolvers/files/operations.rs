@@ -446,8 +446,8 @@ async fn media_action(
         MediaDataType::IMAGE => plain_rs::features::enums::DataType::Image,
         MediaDataType::DOC => plain_rs::features::enums::DataType::Doc,
     };
-    ctx.data::<Arc<plain_rs::features::services::files::media_actions::MediaActions>>()?
-        .run_query(
+    ctx.data::<Arc<plain_rs::features::services::files::file_tasks::FileTasks>>()?
+        .run_media_query(
             data_type,
             action,
             query,

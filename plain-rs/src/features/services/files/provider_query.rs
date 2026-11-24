@@ -134,7 +134,13 @@ pub fn plan(
     resolved_parent_id: Option<&str>,
     query_is_empty: bool,
 ) -> plain_libs::anyhow::Result<Plan> {
-    let mut plan = Plan::default();
+    let mut plan = Plan {
+        trash: match provider {
+            Provider::Audio | Provider::Video | Provider::Image | Provider::Doc => media_trash_filter(fields),
+            _ => None,
+        },
+        ..Default::default()
+    };
 
     if matches!(provider, Provider::Doc) {
         plan.add(
@@ -191,11 +197,6 @@ pub fn plan(
             (Provider::File, "parent") => plan.add("parent = ?".into(), vec![resolved_parent_id.unwrap_or("-1").to_owned()]),
             (Provider::File, "type") => plan.equal("mime_type", &field.value),
             (Provider::File, "ids") => plan.ids("_id", field.value.split(',').map(str::to_owned).collect()),
-            (Provider::Audio | Provider::Video | Provider::Image | Provider::Doc, "trash") => {
-                if let Some(flag) = field.value.parse::<bool>().ok() {
-                    plan.trash = Some(flag);
-                }
-            }
             // Reached only when no arm above matched, so these are fields this
             // provider has no column for. Dropping them used to leave the
             // clause list empty — which ContentWhere renders as `1=1`, turning
@@ -211,6 +212,15 @@ pub fn plan(
         }
     }
     Ok(plan)
+}
+
+fn media_trash_filter(fields: &[FilterField]) -> Option<bool> {
+    fields.iter().rev().filter(|field| field.name == "trash")
+        .find_map(|field| field.value.parse::<bool>().ok())
+}
+
+pub(super) fn requests_media_trash(query: &str) -> bool {
+    media_trash_filter(&search_dsl::parse(query)) == Some(true)
 }
 fn escape_like(value: &str) -> String {
     value
