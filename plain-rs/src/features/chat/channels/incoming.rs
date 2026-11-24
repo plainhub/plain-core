@@ -1,8 +1,6 @@
 use crate::features::chat::channels::incoming_store as store;
 use crate::features::chat::channels::messages::*;
 use crate::features::chat::enums::ChannelStatus;
-use crate::features::chat::enums::ChannelSystemMessageAction as Action;
-use crate::features::chat::enums::ChannelSystemMessageType as Type;
 use crate::features::chat::enums::MemberStatus;
 use crate::infrastructure::db::DChannel;
 use crate::infrastructure::db::Db;
@@ -34,40 +32,28 @@ pub struct Cancel {
     pub owner_peer_id: String,
 }
 
-pub fn verify(public_key: &str, payload: &str, signature: &str) -> bool {
-    !public_key.is_empty()
-        && !signature.is_empty()
-        && plain_libs::crypto::ed25519_verify(public_key, payload.as_bytes(), signature)
-}
-fn signature(
-    key: &str,
-    id: &str,
-    version: i64,
-    action: Action,
-    target: &str,
-    sig: &str,
-) -> Result<()> {
-    if version < 0
-        || !verify(
-            key,
-            &channel_message_payload(id, version, action, target),
-            sig,
-        )
-    {
-        bail!("Invalid channel signature");
-    }
-    Ok(())
-}
-fn validate_members(members: &[ChannelMember]) -> Result<()> {
+fn roster(state: &State) -> Result<String> {
     let mut ids = std::collections::HashSet::new();
-    if members
-        .iter()
-        .any(|m| m.peer_id.is_empty() || !ids.insert(&m.peer_id))
-    {
-        bail!("Invalid channel member roster");
+    let mut members = Vec::with_capacity(state.members.len());
+    for member in &state.members {
+        if member.peer_id.is_empty() || !ids.insert(&member.peer_id) {
+            bail!("Invalid channel member roster");
+        }
+        members.push(ChannelMember {
+            peer_id: member.peer_id.clone(),
+            status: member.status,
+        });
+    }
+    Ok(plain_libs::serde_json::to_string(&members)?)
+}
+
+fn validate_version(version: i64) -> Result<()> {
+    if version < 0 {
+        bail!("Invalid channel version");
     }
     Ok(())
 }
+
 fn advance(channel: &mut DChannel) -> Result<()> {
     channel.version = channel
         .version
@@ -77,17 +63,23 @@ fn advance(channel: &mut DChannel) -> Result<()> {
     Ok(())
 }
 
-pub fn receive(db: &Db, actor: &str, from: &str, kind: Type, payload: &str) -> Result<Received> {
-    if actor.is_empty() || from.is_empty() {
+pub fn receive(
+    db: &Db,
+    actor: &str,
+    from: &str,
+    id: &str,
+    notification: Notification,
+) -> Result<Received> {
+    if actor.is_empty() || from.is_empty() || id.is_empty() {
         bail!("Missing channel message identity");
     }
-    let value: plain_libs::serde_json::Value = plain_libs::serde_json::from_str(payload)?;
-    let id = value["channelId"]
-        .as_str()
-        .filter(|s| !s.is_empty())
-        .ok_or_else(|| plain_libs::anyhow::anyhow!("Missing channel id"))?
-        .to_owned();
-    let id = id.as_str();
+    if let Notification::MemberRemoved {
+        removed_peer_id, ..
+    } = &notification
+        && removed_peer_id != actor
+    {
+        bail!("Channel removal recipient mismatch");
+    }
     db.with_conn(|c| -> Result<Received> {
         let tx = c.unchecked_transaction()?;
         let current = store::channel(&tx, id)?;
@@ -95,44 +87,33 @@ pub fn receive(db: &Db, actor: &str, from: &str, kind: Type, payload: &str) -> R
             accepted: true,
             ..Default::default()
         };
-        match kind {
-            Type::Invite => {
-                let msg: ChannelInvite = plain_libs::serde_json::from_value(value)?;
-                if msg.owner != from {
-                    bail!("Invite sender is not owner");
-                }
+        match notification {
+            Notification::Invite { channel_key, state } => {
+                validate_version(state.version)?;
                 let owner = store::peer(&tx, from)?
                     .ok_or_else(|| plain_libs::anyhow::anyhow!("Unknown invite owner"))?;
-                let info = msg
-                    .member_peers
+                if let Some(public_key) = state
+                    .members
                     .iter()
-                    .find(|p| p.id == from)
-                    .ok_or_else(|| plain_libs::anyhow::anyhow!("Missing invite owner information"))?;
-                if plain_libs::utils::base64::base64_decode(&info.public_key)
-                    != plain_libs::utils::base64::base64_decode(&owner.public_key)
+                    .find(|member| member.peer_id == from)
+                    .and_then(|member| member.public_key.as_deref())
+                    && plain_libs::utils::base64::base64_decode(public_key)
+                        != plain_libs::utils::base64::base64_decode(&owner.public_key)
                 {
                     bail!("Invite owner public key mismatch");
                 }
-                signature(
-                    &owner.public_key,
-                    id,
-                    msg.version,
-                    Action::Invite,
-                    actor,
-                    &msg.signature,
-                )?;
-                if plain_libs::utils::base64::base64_decode(&msg.key).len() != 32 {
+                if plain_libs::utils::base64::base64_decode(&channel_key).len() != 32 {
                     bail!("Invalid channel key");
                 }
-                validate_members(&msg.members)?;
-                if !msg
+                let members = roster(&state)?;
+                if !state
                     .members
                     .iter()
-                    .any(|m| m.peer_id == from && m.is_joined())
-                    || !msg
+                    .any(|m| m.peer_id == from && m.status == MemberStatus::Joined)
+                    || !state
                         .members
                         .iter()
-                        .any(|m| m.peer_id == actor && m.is_pending())
+                        .any(|m| m.peer_id == actor && m.status == MemberStatus::Pending)
                 {
                     bail!("Invalid invitation membership");
                 }
@@ -145,22 +126,22 @@ pub fn receive(db: &Db, actor: &str, from: &str, kind: Type, payload: &str) -> R
                         if !matches!(channel.status, ChannelStatus::Left | ChannelStatus::Kicked) {
                             return Ok(result);
                         }
-                        if msg.version <= channel.version {
+                        if state.version <= channel.version {
                             bail!("Stale channel invitation");
                         }
                         channel
                     }
                     None => {
-                        let mut channel = DChannel::new(&msg.channel_name, from);
-                        channel.id = msg.channel_id.clone();
+                        let mut channel = DChannel::new(&state.name, from);
+                        channel.id = id.into();
                         channel
                     }
                 };
-                store::ensure_peers(&tx, &msg.member_peers, actor)?;
-                channel.name = msg.channel_name;
-                channel.key = msg.key;
-                channel.members = plain_libs::serde_json::to_string(&msg.members)?;
-                channel.version = msg.version;
+                store::ensure_peers(&tx, &state.members, actor)?;
+                channel.name = state.name;
+                channel.key = channel_key;
+                channel.members = members;
+                channel.version = state.version;
                 channel.status = ChannelStatus::Joined;
                 channel.updated_at = now_iso();
                 store::save(&tx, &channel, new)?;
@@ -176,62 +157,32 @@ pub fn receive(db: &Db, actor: &str, from: &str, kind: Type, payload: &str) -> R
                 });
                 result.channel = Some(channel);
             }
-            Type::Update => {
-                let msg: ChannelUpdate = plain_libs::serde_json::from_value(value)?;
-                let mut channel = current.ok_or_else(|| plain_libs::anyhow::anyhow!("Unknown channel"))?;
+            Notification::StateChanged(state) => {
+                validate_version(state.version)?;
+                let mut channel =
+                    current.ok_or_else(|| plain_libs::anyhow::anyhow!("Unknown channel"))?;
                 if channel.owner_id.as_deref() != Some(from) {
                     bail!("Update sender is not owner");
                 }
-                let owner = store::peer(&tx, from)?
-                    .ok_or_else(|| plain_libs::anyhow::anyhow!("Unknown channel owner"))?;
-                signature(
-                    &owner.public_key,
-                    id,
-                    msg.version,
-                    Action::Update,
-                    "",
-                    &msg.signature,
-                )?;
-                if msg.version <= channel.version {
+                if state.version <= channel.version {
                     return Ok(result);
                 }
-                validate_members(&msg.members)?;
-                store::ensure_peers(&tx, &msg.member_peers, actor)?;
-                channel.name = msg.channel_name;
-                channel.members = plain_libs::serde_json::to_string(&msg.members)?;
-                channel.version = msg.version;
+                let members = roster(&state)?;
+                store::ensure_peers(&tx, &state.members, actor)?;
+                channel.name = state.name;
+                channel.members = members;
+                channel.version = state.version;
                 channel.updated_at = now_iso();
                 store::save(&tx, &channel, false)?;
                 result.channel = Some(channel);
             }
-            Type::Kick => {
-                let msg: ChannelKick = plain_libs::serde_json::from_value(value)?;
-                let owner = store::peer(&tx, from)?
-                    .ok_or_else(|| plain_libs::anyhow::anyhow!("Unknown channel owner"))?;
-                if signature(
-                    &owner.public_key,
-                    id,
-                    msg.version,
-                    Action::Kick,
-                    actor,
-                    &msg.signature,
-                )
-                .is_err()
-                {
-                    signature(
-                        &owner.public_key,
-                        id,
-                        msg.version,
-                        Action::Kick,
-                        "",
-                        &msg.signature,
-                    )?;
-                }
+            Notification::MemberRemoved { version, .. } | Notification::Deleted { version } => {
+                validate_version(version)?;
                 if let Some(mut channel) = current {
                     if channel.owner_id.as_deref() != Some(from) {
                         bail!("Kick sender is not owner");
                     }
-                    if msg.version < channel.version {
+                    if version < channel.version {
                         return Ok(result);
                     }
                     let mut members = store::members(&channel.members)?;
@@ -244,7 +195,7 @@ pub fn receive(db: &Db, actor: &str, from: &str, kind: Type, payload: &str) -> R
                     members.retain(|m| m.peer_id != actor);
                     channel.members = plain_libs::serde_json::to_string(&members)?;
                     channel.status = ChannelStatus::Kicked;
-                    channel.version = msg.version;
+                    channel.version = version;
                     channel.updated_at = now_iso();
                     store::save(&tx, &channel, false)?;
                     result.channel = Some(channel);
@@ -261,8 +212,9 @@ pub fn receive(db: &Db, actor: &str, from: &str, kind: Type, payload: &str) -> R
                     });
                 }
             }
-            Type::InviteAccept | Type::InviteDecline | Type::Leave => {
-                let mut channel = current.ok_or_else(|| plain_libs::anyhow::anyhow!("Unknown channel"))?;
+            Notification::InviteResponse { .. } | Notification::MemberLeft => {
+                let mut channel =
+                    current.ok_or_else(|| plain_libs::anyhow::anyhow!("Unknown channel"))?;
                 if channel.owner_id.as_deref() != Some(actor) || from == actor {
                     bail!("Invalid member message ownership");
                 }
@@ -270,31 +222,19 @@ pub fn receive(db: &Db, actor: &str, from: &str, kind: Type, payload: &str) -> R
                 let Some(index) = members.iter().position(|m| m.peer_id == from) else {
                     return Ok(result);
                 };
-                match kind {
-                    Type::InviteAccept => {
-                        let msg: ChannelInviteAccept = plain_libs::serde_json::from_value(value)?;
+                match notification {
+                    Notification::InviteResponse { accept } => {
                         if !members[index].is_pending() {
                             return Ok(result);
                         }
-                        store::accepting_peer(
-                            &tx,
-                            from,
-                            &msg.name,
-                            &msg.public_key,
-                            msg.device_type,
-                        )?;
-                        members[index].status = MemberStatus::Joined;
-                        result.broadcast = true;
-                    }
-                    Type::InviteDecline => {
-                        let _: ChannelInviteDecline = plain_libs::serde_json::from_value(value)?;
-                        if !members[index].is_pending() {
-                            return Ok(result);
+                        if accept {
+                            members[index].status = MemberStatus::Joined;
+                            result.broadcast = true;
+                        } else {
+                            members.remove(index);
                         }
-                        members.remove(index);
                     }
-                    Type::Leave => {
-                        let _: ChannelLeave = plain_libs::serde_json::from_value(value)?;
+                    Notification::MemberLeft => {
                         members.remove(index);
                         result.broadcast = true;
                     }

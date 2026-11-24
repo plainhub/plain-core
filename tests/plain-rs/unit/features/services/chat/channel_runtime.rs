@@ -1,6 +1,6 @@
-use plain_libs::protocols::http_client;
 use super::*;
 use crate::infrastructure::db::chat_store::channels;
+use plain_libs::protocols::http_client;
 
 fn fixture() -> (plain_libs::temporary::TempDir, crate::test_runtime::Core) {
     use std::sync::Arc;
@@ -39,7 +39,10 @@ async fn http_mutations_own_identity_pending_members_and_owner_policy() {
     .await
     .unwrap();
     let id = result["channel"]["id"].as_str().unwrap();
-    assert_eq!(result["channel"]["owner_id"], state.native_client_id().unwrap());
+    assert_eq!(
+        result["channel"]["owner_id"],
+        state.native_client_id().unwrap()
+    );
     execute(
         &state,
         Request::Rename {
@@ -49,18 +52,17 @@ async fn http_mutations_own_identity_pending_members_and_owner_policy() {
     )
     .await
     .unwrap();
-    execute(
+    let before = get(&state, id).unwrap();
+    let unknown = execute(
         &state,
         Request::Invite {
             id: id.into(),
             peer: "unknown".into(),
         },
     )
-    .await
-    .unwrap();
-    let channel = get(&state, id).unwrap();
-    assert_eq!(channel.version, 3);
-    assert!(channel.members.contains("PENDING"));
+    .await;
+    assert!(unknown.is_err());
+    assert_eq!(get(&state, id).unwrap(), before);
     assert!(
         execute(
             &state,

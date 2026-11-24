@@ -16,8 +16,6 @@ pub enum SignaturePurpose {
     PeerStatus,
     #[serde(rename = "QR_PAIR_ACCEPT")]
     QrPairAccept,
-    #[serde(rename = "CHANNEL_MEMBERSHIP")]
-    ChannelMembership,
     #[serde(rename = "PEER_TLS_CERTIFICATE")]
     PeerTlsCertificate,
 }

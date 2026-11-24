@@ -1,14 +1,21 @@
-use plain_libs::serde_json::json;
 use super::*;
 use plain_libs::protocols::http_client;
 use plain_libs::serde_json::Value;
+use plain_libs::serde_json::json;
 #[tokio::test]
 async fn peer_schema_preserves_required_arguments_and_empty_query() {
     let schema = schema();
     let sdl = schema.sdl();
     for field in [
         "createChatItem(content: String!): [ChatItem!]!",
-        "channelSystemMessage(type: ChannelSystemMessageType!, payload: String!): Boolean!",
+        "notifyChannelInvite(channelId: ID!, input: ChannelInviteInput!): Boolean!",
+        "notifyChannelStateChanged(channelId: ID!, input: ChannelStateInput!): Boolean!",
+        "notifyChannelMemberRemoved(channelId: ID!, removedPeerId: ID!, version: Long!): Boolean!",
+        "notifyChannelDeleted(channelId: ID!, version: Long!): Boolean!",
+        "notifyChannelInviteResponse(channelId: ID!, accept: Boolean!): Boolean!",
+        "notifyChannelMemberLeft(channelId: ID!): Boolean!",
+        "deviceType: DeviceType",
+        "members: [ChannelMemberInput!]!",
         "createdAt: Instant!",
         "updatedAt: Instant!",
         "fromId: ID!",
@@ -18,6 +25,8 @@ async fn peer_schema_preserves_required_arguments_and_empty_query() {
     }
     assert!(!sdl.contains("_peerSchemaVersion"));
     assert!(!sdl.contains("startAware"));
+    assert!(!sdl.contains("channelSystemMessage"));
+    assert!(!sdl.contains("ChannelReceipt"));
     for operation in [
         "mutation { startAware }",
         r#"mutation { setPref(key:"wifi_aware_enabled", value:true) }"#,
@@ -134,20 +143,18 @@ async fn encrypted_public_and_ble_rpc_share_auth_executor_and_receipts() {
                         &parts.signature
                     ));
                     let document: Value = plain_libs::serde_json::from_str(&wire).unwrap();
-                    assert_eq!(document["variables"]["type"], "UPDATE");
-                    let payload: Value = plain_libs::serde_json::from_str(
-                        document["variables"]["payload"].as_str().unwrap(),
-                    )
-                    .unwrap();
-                    let local = payload["memberPeers"]
+                    assert!(parts.query.contains("notifyChannelStateChanged"));
+                    let local = document["variables"]["input"]["members"]
                         .as_array()
                         .unwrap()
                         .iter()
-                        .find(|p| p["id"] == advertised_client_id)
+                        .find(|p| p["peerId"] == advertised_client_id)
                         .unwrap();
                     assert!(
-                        plain_rs::features::client_identity::parse(local["id"].as_str().unwrap())
-                            .is_some()
+                        plain_rs::features::client_identity::parse(
+                            local["peerId"].as_str().unwrap()
+                        )
+                        .is_some()
                     );
                     assert_eq!(local["name"], "fixture tablet");
                     assert_eq!(local["deviceType"], "COMPUTER");
@@ -157,7 +164,7 @@ async fn encrypted_public_and_ble_rpc_share_auth_executor_and_receipts() {
                     plain_rs::features::services::peers::ble_transport::test_reply(
                         &ble,
                         &request["params"],
-                        json!({"data":{"channelSystemMessage":true}}),
+                        json!({"data":{"notifyChannelStateChanged":true}}),
                         &[7; 32],
                     )
                 }
@@ -243,9 +250,14 @@ async fn encrypted_public_and_ble_rpc_share_auth_executor_and_receipts() {
             .unwrap(),
     )
     .unwrap();
-    assert!(content["errors"].as_array().is_some_and(|errors| !errors.is_empty()));
-    let body =
-        wire(json!({"query":"mutation { channelSystemMessage(type:INVITE,payload:\"invalid\") }"}));
+    assert!(
+        content["errors"]
+            .as_array()
+            .is_some_and(|errors| !errors.is_empty())
+    );
+    let body = wire(
+        json!({"query":"mutation { notifyChannelDeleted(channelId:\"unknown\",version:-1) }"}),
+    );
     let response = client
         .post(&public_url)
         .header("c-id", "706c6169-89f1-81c6-8bc7-6b67c2ffa178")
@@ -259,7 +271,8 @@ async fn encrypted_public_and_ble_rpc_share_auth_executor_and_receipts() {
             .unwrap(),
     )
     .unwrap();
-    assert_eq!(content["data"]["channelSystemMessage"], false);
+    assert!(content["data"].is_null());
+    assert_eq!(content["errors"][0]["message"], "Invalid channel version");
     assert_eq!(
         client
             .post(&public_url)
@@ -284,7 +297,7 @@ async fn encrypted_public_and_ble_rpc_share_auth_executor_and_receipts() {
     .unwrap();
     let mut channel_events = server.runtime_state().events.subscribe();
     let body = wire(
-        json!({"query":"mutation Accept($payload:String!) { channelSystemMessage(type:INVITE_ACCEPT,payload:$payload) }","variables":{"payload":json!({"channelId":channel.id,"publicKey":plain_libs::utils::base64::base64_encode(&public_key),"name":"joined","deviceType":"PHONE"}).to_string()}}),
+        json!({"query":"mutation Accept($channelId:ID!) { notifyChannelInviteResponse(channelId:$channelId, accept:true) }","variables":{"channelId":channel.id}}),
     );
     let response = client
         .post(&public_url)
@@ -299,7 +312,10 @@ async fn encrypted_public_and_ble_rpc_share_auth_executor_and_receipts() {
             .unwrap(),
     )
     .unwrap();
-    assert_eq!(content["data"]["channelSystemMessage"], true, "{content}");
+    assert_eq!(
+        content["data"]["notifyChannelInviteResponse"], true,
+        "{content}"
+    );
     let event = tokio::time::timeout(std::time::Duration::from_secs(2), async {
         while let Ok(event) = channel_events.recv().await {
             if event.event_type == plain_rs::features::chat::events::WS_CHANNELS_UPDATED {
@@ -332,6 +348,105 @@ async fn encrypted_public_and_ble_rpc_share_auth_executor_and_receipts() {
     );
     server.shutdown().await;
     responder.abort();
+}
+
+#[tokio::test]
+async fn signed_channel_notifications_apply_once_and_enforce_route_and_recipient() {
+    use plain_libs::utils::base64::base64_encode;
+    use plain_rs::features::chat::enums::{ChannelStatus, DeviceType, PeerStatus};
+    use plain_rs::infrastructure::db::DPeer;
+    use plain_rs::infrastructure::db::chat_store::{SaveMode, channels, peers};
+    use plain_rs::infrastructure::transport::{
+        contract::signed_request, http_request, http_response,
+    };
+    let dir = plain_libs::temporary::tempdir().unwrap();
+    let prefs = std::sync::Arc::new(
+        plain_rs::features::prefs::Prefs::load(&dir.path().join("prefs.json")).unwrap(),
+    );
+    let server =
+        crate::server::ContentServer::start(dir.path(), &base64_encode(&[4; 32]), prefs).unwrap();
+    let state = server.runtime_state();
+    let actor = state.native_client_id().unwrap();
+    let (signer, public) = plain_libs::crypto::ed25519_generate();
+    let mut owner = DPeer::new("owner", "Owner", "", None, DeviceType::Computer);
+    owner.key = base64_encode(&[5; 32]);
+    owner.public_key = base64_encode(&public);
+    owner.status = PeerStatus::Paired;
+    peers::save(&state.db, &[owner], SaveMode::Insert).unwrap();
+    let request = |query: &'static str, variables: Value, context: &'static str, key: [u8; 32]| {
+        let state = &state;
+        let signer = &signer;
+        async move {
+            let wire = signed_request(signer, query, variables, context).unwrap();
+            let body =
+                http_request::encrypt_raw(&key, "POST", "/peer_graphql", wire.as_bytes()).unwrap();
+            let (status, response) = execute(state, "owner", context, &body).await;
+            assert_eq!(status, 200);
+            let data = http_response::Context::new(&body)
+                .decrypt(&key, &response)
+                .unwrap();
+            plain_libs::serde_json::from_slice::<Value>(&data).unwrap()
+        }
+    };
+    let invitation = "mutation($channelId:ID!,$input:ChannelInviteInput!){notifyChannelInvite(channelId:$channelId,input:$input)}";
+    let snapshot = json!({"name":"Channel","version":1,"members":[
+        {"peerId":"owner","status":"JOINED","deviceType":"COMPUTER"},
+        {"peerId":actor,"status":"PENDING"},
+        {"peerId":"new-peer","status":"JOINED","deviceType":"PHONE","port":443}
+    ]});
+    let variables = json!({"channelId":"channel","input":{"channelKey":base64_encode(&[7;32]),"state":snapshot}});
+    for _ in 0..2 {
+        let accepted = request(invitation, variables.clone(), "", [5; 32]).await;
+        assert_eq!(accepted["data"]["notifyChannelInvite"], true, "{accepted}");
+    }
+    assert_eq!(
+        peers::get(&state.db, "new-peer").unwrap().unwrap().port,
+        Some(443)
+    );
+    let blocked = request(invitation, variables, "channel", [7; 32]).await;
+    assert_eq!(
+        blocked["errors"][0]["message"],
+        "Channel invitations require direct pairing"
+    );
+    let mismatch = request(
+        "mutation{notifyChannelDeleted(channelId:\"different\",version:7)}",
+        json!({}),
+        "channel",
+        [7; 32],
+    )
+    .await;
+    assert_eq!(
+        mismatch["errors"][0]["message"],
+        "Channel transport context mismatch"
+    );
+    let mut update = snapshot;
+    update["version"] = json!(2);
+    update["name"] = json!("Renamed");
+    let reply = request("mutation($input:ChannelStateInput!){notifyChannelStateChanged(channelId:\"channel\",input:$input)}", json!({"input":update}), "channel", [7;32]).await;
+    assert_eq!(reply["data"]["notifyChannelStateChanged"], true, "{reply}");
+    assert_eq!(
+        channels::get(&state.db, "channel").unwrap().unwrap().name,
+        "Renamed"
+    );
+    let removal = "mutation($peerId:ID!){notifyChannelMemberRemoved(channelId:\"channel\",removedPeerId:$peerId,version:3)}";
+    let wrong = request(removal, json!({"peerId":"different"}), "", [5; 32]).await;
+    assert_eq!(
+        wrong["errors"][0]["message"],
+        "Channel removal recipient mismatch"
+    );
+    assert_eq!(
+        channels::get(&state.db, "channel")
+            .unwrap()
+            .unwrap()
+            .version,
+        2
+    );
+    let right = request(removal, json!({"peerId":actor}), "", [5; 32]).await;
+    assert_eq!(right["data"]["notifyChannelMemberRemoved"], true, "{right}");
+    let row = channels::get(&state.db, "channel").unwrap().unwrap();
+    assert_eq!(row.status, ChannelStatus::Kicked);
+    assert_eq!(row.version, 3);
+    server.shutdown().await;
 }
 
 #[test]

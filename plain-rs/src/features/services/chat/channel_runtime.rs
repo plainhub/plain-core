@@ -1,59 +1,34 @@
 use crate::features::chat::attachments::app_file_store::chat_deletion;
+use crate::features::chat::channels::messages::Notification;
+use crate::features::chat::channels::outgoing::{self, Action as Outgoing};
 use crate::features::chat::channels::state;
 use crate::features::chat::channels::state::Action;
-use crate::features::chat::enums::ChannelSystemMessageType;
 use crate::features::services::chat::channel_delivery;
 use crate::infrastructure::db::DChannel;
 use crate::infrastructure::db::chat_store::channels;
 use crate::infrastructure::db::chat_store::peers;
 use crate::runtime::Runtime as CoreRuntime;
 use plain_libs::anyhow::{Result, ensure};
-use serde::Deserialize;
 use plain_libs::serde_json::{Value, json};
+use serde::Deserialize;
 #[derive(Deserialize)]
-#[serde(tag = "action", rename_all = "SCREAMING_SNAKE_CASE", deny_unknown_fields)]
+#[serde(
+    tag = "action",
+    rename_all = "SCREAMING_SNAKE_CASE",
+    deny_unknown_fields
+)]
 pub enum Request {
     Snapshot,
-    Invitation {
-        id: String,
-        owner: Option<String>,
-    },
-    Create {
-        name: String,
-    },
-    Rename {
-        id: String,
-        name: String,
-    },
-    Delete {
-        id: String,
-    },
-    Leave {
-        id: String,
-    },
-    Invite {
-        id: String,
-        peer: String,
-    },
-    Resend {
-        id: String,
-        peer: String,
-    },
-    Kick {
-        id: String,
-        peer: String,
-    },
-    Accept {
-        id: String,
-    },
-    Decline {
-        id: String,
-    },
-    Send {
-        id: String,
-        message_type: ChannelSystemMessageType,
-        target: String,
-    },
+    Invitation { id: String, owner: Option<String> },
+    Create { name: String },
+    Rename { id: String, name: String },
+    Delete { id: String },
+    Leave { id: String },
+    Invite { id: String, peer: String },
+    Resend { id: String, peer: String },
+    Kick { id: String, peer: String },
+    Accept { id: String },
+    Decline { id: String },
 }
 fn with_channels(state: &CoreRuntime, mut result: Value) -> Result<Value> {
     result["channels"] = crate::features::chat::events::public_channels(
@@ -90,19 +65,34 @@ fn notify_changed(state: &CoreRuntime) -> Result<()> {
 pub async fn receive(
     state: &CoreRuntime,
     from: &str,
-    kind: ChannelSystemMessageType,
-    payload: &str,
-) -> Result<Value> {
+    transport_channel_id: &str,
+    channel_id: &str,
+    notification: Notification,
+) -> Result<()> {
+    if !transport_channel_id.is_empty() {
+        ensure!(
+            transport_channel_id == channel_id,
+            "Channel transport context mismatch"
+        );
+        ensure!(
+            !matches!(notification, Notification::Invite { .. }),
+            "Channel invitations require direct pairing"
+        );
+    }
     let actor = state
         .prefs
         .get::<String>(crate::features::prefs::pref_keys::CLIENT_ID)?
         .filter(|id| !id.is_empty())
         .ok_or_else(|| plain_libs::anyhow::anyhow!("Missing client identity"))?;
-    let received =
-        crate::features::chat::channels::incoming::receive(&state.db, &actor, from, kind, payload)?;
-    let result = plain_libs::serde_json::to_value(&received)?;
+    let received = crate::features::chat::channels::incoming::receive(
+        &state.db,
+        &actor,
+        from,
+        channel_id,
+        notification,
+    )?;
     if received.changed || received.invite.is_some() || received.cancel.is_some() {
-        publish(state, result.clone())?;
+        publish(state, plain_libs::serde_json::to_value(&received)?)?;
     }
     if received.broadcast {
         if let Some(channel) = received.channel {
@@ -111,9 +101,8 @@ pub async fn receive(
                 if let Err(error) = crate::features::services::chat::channel_delivery::send(
                     &state,
                     &channel,
-                    ChannelSystemMessageType::Update,
+                    Outgoing::StateChanged,
                     "",
-                    false,
                 )
                 .await
                 {
@@ -122,19 +111,13 @@ pub async fn receive(
             });
         }
     }
-    Ok(result)
+    Ok(())
 }
 pub fn get(state: &CoreRuntime, id: &str) -> Result<DChannel> {
     channels::get(&state.db, id)?.ok_or_else(|| plain_libs::anyhow::anyhow!("Channel not found"))
 }
-async fn send(
-    state: &CoreRuntime,
-    channel: &DChannel,
-    kind: ChannelSystemMessageType,
-    target: &str,
-    removed: bool,
-) -> Value {
-    channel_delivery::send(state, channel, kind, target, removed)
+async fn send(state: &CoreRuntime, channel: &DChannel, kind: Outgoing, target: &str) -> Value {
+    channel_delivery::send(state, channel, kind, target)
         .await
         .unwrap_or_else(channel_delivery::rejected)
 }
@@ -163,7 +146,7 @@ pub async fn execute(state: &CoreRuntime, request: Request) -> Result<Value> {
                 .ok_or_else(|| plain_libs::anyhow::anyhow!("Channel not found"))?;
             notify_changed(state)?;
             if channel.owner_id.as_deref() == Some(actor.as_str()) {
-                send(state, &channel, ChannelSystemMessageType::Kick, "", true).await;
+                send(state, &channel, Outgoing::Deleted, "").await;
             }
             (None, Value::Null)
         }
@@ -183,26 +166,16 @@ pub async fn execute(state: &CoreRuntime, request: Request) -> Result<Value> {
             send(
                 state,
                 &channel,
-                ChannelSystemMessageType::InviteDecline,
+                Outgoing::InviteResponse(false),
                 channel
                     .owner_id
                     .as_deref()
                     .ok_or_else(|| plain_libs::anyhow::anyhow!("Channel owner missing"))?,
-                false,
             )
             .await;
             chat_deletion::remove_channel_if_matches(&state.db, &state.directory, &channel)?;
             notify_changed(state)?;
             (None, Value::Null)
-        }
-        Request::Send {
-            id,
-            message_type,
-            target,
-        } => {
-            let channel = get(state, &id)?;
-            let response = send(state, &channel, message_type, &target, false).await;
-            (channels::get(&state.db, &id)?, response)
         }
         request => {
             let (id, action, kind, target, broadcast, changed) = match request {
@@ -212,7 +185,7 @@ pub async fn execute(state: &CoreRuntime, request: Request) -> Result<Value> {
                 Request::Leave { id } => (
                     id,
                     Action::Leave,
-                    Some(ChannelSystemMessageType::Leave),
+                    Some(Outgoing::MemberLeft),
                     String::new(),
                     false,
                     true,
@@ -220,7 +193,7 @@ pub async fn execute(state: &CoreRuntime, request: Request) -> Result<Value> {
                 Request::Invite { id, peer } => (
                     id,
                     Action::Invite { peer: peer.clone() },
-                    Some(ChannelSystemMessageType::Invite),
+                    Some(Outgoing::Invite),
                     peer,
                     false,
                     true,
@@ -228,7 +201,7 @@ pub async fn execute(state: &CoreRuntime, request: Request) -> Result<Value> {
                 Request::Resend { id, peer } => (
                     id,
                     Action::Resend { peer: peer.clone() },
-                    Some(ChannelSystemMessageType::Invite),
+                    Some(Outgoing::Invite),
                     peer,
                     false,
                     false,
@@ -236,7 +209,7 @@ pub async fn execute(state: &CoreRuntime, request: Request) -> Result<Value> {
                 Request::Kick { id, peer } => (
                     id,
                     Action::Kick { peer: peer.clone() },
-                    Some(ChannelSystemMessageType::Kick),
+                    Some(Outgoing::MemberRemoved),
                     peer,
                     true,
                     true,
@@ -244,13 +217,18 @@ pub async fn execute(state: &CoreRuntime, request: Request) -> Result<Value> {
                 Request::Accept { id } => (
                     id,
                     Action::Accept,
-                    Some(ChannelSystemMessageType::InviteAccept),
+                    Some(Outgoing::InviteResponse(true)),
                     String::new(),
                     false,
                     false,
                 ),
                 _ => unreachable!(),
             };
+            if kind == Some(Outgoing::Invite) {
+                let peer = peers::get(&state.db, &target)?
+                    .ok_or_else(|| plain_libs::anyhow::anyhow!("Peer not found"))?;
+                outgoing::pairing_key(&peer)?;
+            }
             let channel = state::apply(&state.db, &actor, &id, action)?;
             if changed {
                 notify_changed(state)?;
@@ -264,12 +242,12 @@ pub async fn execute(state: &CoreRuntime, request: Request) -> Result<Value> {
                 target
             };
             let response = if let Some(kind) = kind {
-                send(state, &channel, kind, &target, false).await
+                send(state, &channel, kind, &target).await
             } else {
                 Value::Null
             };
             if broadcast && channel.owner_id.as_deref() == Some(actor.as_str()) {
-                send(state, &channel, ChannelSystemMessageType::Update, "", false).await;
+                send(state, &channel, Outgoing::StateChanged, "").await;
             }
             (channels::get(&state.db, &id)?, response)
         }

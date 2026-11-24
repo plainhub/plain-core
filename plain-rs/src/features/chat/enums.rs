@@ -7,7 +7,9 @@
 use std::fmt;
 use std::str::FromStr;
 
-use plain_libs::rusqlite::types::{FromSql, FromSqlError, FromSqlResult, ToSql, ToSqlOutput, Value, ValueRef};
+use plain_libs::rusqlite::types::{
+    FromSql, FromSqlError, FromSqlResult, ToSql, ToSqlOutput, Value, ValueRef,
+};
 
 // ── PeerStatus ────────────────────────────────────────────────────────────
 
@@ -254,104 +256,5 @@ impl FromSql for DeviceType {
     fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
         let s = value.as_str()?;
         Self::from_str(s).map_err(|_| FromSqlError::InvalidType)
-    }
-}
-
-// ── ChannelSystemMessageType ──────────────────────────────────────────────
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-#[cfg_attr(feature = "graphql", derive(plain_graphql::Enum))]
-pub enum ChannelSystemMessageType {
-    Invite,
-    InviteAccept,
-    InviteDecline,
-    Update,
-    Kick,
-    Leave,
-}
-
-impl ChannelSystemMessageType {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Self::Invite => "INVITE",
-            Self::InviteAccept => "INVITE_ACCEPT",
-            Self::InviteDecline => "INVITE_DECLINE",
-            Self::Update => "UPDATE",
-            Self::Kick => "KICK",
-            Self::Leave => "LEAVE",
-        }
-    }
-}
-
-impl fmt::Display for ChannelSystemMessageType {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(self.as_str())
-    }
-}
-
-impl FromStr for ChannelSystemMessageType {
-    type Err = String;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "INVITE" => Ok(Self::Invite),
-            "INVITE_ACCEPT" => Ok(Self::InviteAccept),
-            "INVITE_DECLINE" => Ok(Self::InviteDecline),
-            "UPDATE" => Ok(Self::Update),
-            "KICK" => Ok(Self::Kick),
-            "LEAVE" => Ok(Self::Leave),
-            _ => Err(format!("Unknown ChannelSystemMessageType: {s}")),
-        }
-    }
-}
-
-impl ToSql for ChannelSystemMessageType {
-    fn to_sql(&self) -> plain_libs::rusqlite::Result<ToSqlOutput<'_>> {
-        Ok(ToSqlOutput::Owned(Value::Text(self.to_string())))
-    }
-}
-
-impl FromSql for ChannelSystemMessageType {
-    fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
-        let s = value.as_str()?;
-        Self::from_str(s).map_err(|_| FromSqlError::InvalidType)
-    }
-}
-
-// ── ChannelSystemMessageAction ────────────────────────────────────────────
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum ChannelSystemMessageAction {
-    Invite,
-    Update,
-    Kick,
-}
-
-impl ChannelSystemMessageAction {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Self::Invite => "INVITE",
-            Self::Update => "UPDATE",
-            Self::Kick => "KICK",
-        }
-    }
-}
-
-impl fmt::Display for ChannelSystemMessageAction {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(self.as_str())
-    }
-}
-
-impl FromStr for ChannelSystemMessageAction {
-    type Err = String;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "INVITE" => Ok(Self::Invite),
-            "UPDATE" => Ok(Self::Update),
-            "KICK" => Ok(Self::Kick),
-            _ => Err(format!("Unknown ChannelSystemMessageAction: {s}")),
-        }
     }
 }

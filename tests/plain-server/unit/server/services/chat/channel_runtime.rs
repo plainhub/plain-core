@@ -1,12 +1,11 @@
+use plain_libs::serde_json::Value;
+use plain_libs::serde_json::json;
 use plain_rs::features::chat::channels::state;
 use plain_rs::features::chat::channels::state::Action;
-use plain_rs::features::chat::enums::ChannelSystemMessageType;
 use plain_rs::features::services::chat::channel_runtime::*;
 use plain_rs::infrastructure::db::chat_store::channels;
 use plain_rs::infrastructure::db::chat_store::peers;
 use plain_rs::runtime::Runtime as ServerState;
-use plain_libs::serde_json::Value;
-use plain_libs::serde_json::json;
 
 #[cfg(feature = "http_transport")]
 fn fixture() -> (plain_libs::temporary::TempDir, crate::server::ContentServer) {
@@ -41,6 +40,7 @@ fn add_peer(state: &ServerState, id: &str, paired: bool) {
     );
     if paired {
         peer.key = plain_libs::utils::base64::base64_encode(&[8; 32]);
+        peer.status = plain_rs::features::chat::enums::PeerStatus::Paired;
     }
     peers::save(
         &state.db,
@@ -87,18 +87,27 @@ async fn signed_invites_ack_keys_and_deleted_broadcast_use_rust_snapshot() {
                     assert!(plain_libs::crypto::ed25519_verify(
                         &public,
                         &pieces.signing_bytes(if p["peer"]["id"] == "paired" {
-                                ""
-                            } else {
-                                &channel_id
-                            }),
+                            ""
+                        } else {
+                            &channel_id
+                        }),
                         &pieces.signature
                     ));
                     let wire: Value = plain_libs::serde_json::from_str(&body).unwrap();
-                    let payload: Value =
-                        plain_libs::serde_json::from_str(wire["variables"]["payload"].as_str().unwrap())
-                            .unwrap();
-                    if wire["variables"]["type"] == "INVITE" {
-                        assert_eq!(payload["memberPeers"][0]["deviceType"], "COMPUTER");
+                    let field = [
+                        "notifyChannelInvite",
+                        "notifyChannelStateChanged",
+                        "notifyChannelDeleted",
+                    ]
+                    .into_iter()
+                    .find(|field| pieces.query.contains(field))
+                    .unwrap();
+                    if field == "notifyChannelInvite" {
+                        assert_eq!(p["peer"]["id"], "paired");
+                        assert_eq!(
+                            wire["variables"]["input"]["state"]["members"][0]["deviceType"],
+                            "COMPUTER"
+                        );
                     }
                     if p["peer"]["id"] == "paired" {
                         assert!(
@@ -109,11 +118,11 @@ async fn signed_invites_ack_keys_and_deleted_broadcast_use_rust_snapshot() {
                             matches!(ble.request_for_test(p), plain_rs::infrastructure::protocols::ble::Request::PeerGraphql { channel_id: cid, .. } if cid == channel_id)
                         );
                     }
-                    attempts.push(wire["variables"]["type"].as_str().unwrap().to_owned());
+                    attempts.push(field);
                     plain_rs::features::services::peers::ble_transport::test_reply(
                         &ble,
                         p,
-                        json!({"data":{"channelSystemMessage":attempts.len()!=1}}),
+                        json!({"data":{(field):attempts.len()!=1}}),
                         &key,
                     )
                 }
@@ -137,21 +146,33 @@ async fn signed_invites_ack_keys_and_deleted_broadcast_use_rust_snapshot() {
         first["response"]["errors"][0]["message"],
         "Channel message rejected"
     );
-    execute(
-        &state,
-        Request::Invite {
-            id: channel.id.clone(),
+    let before = get(&state, &channel.id).unwrap();
+    assert!(
+        execute(
+            &state,
+            Request::Invite {
+                id: channel.id.clone(),
+                peer: "group".into()
+            }
+        )
+        .await
+        .is_err()
+    );
+    assert_eq!(get(&state, &channel.id).unwrap(), before);
+    state::apply(
+        &state.db,
+        &state.native_client_id().unwrap(),
+        &channel.id,
+        Action::Invite {
             peer: "group".into(),
         },
     )
-    .await
     .unwrap();
     execute(
         &state,
-        Request::Send {
+        Request::Rename {
             id: channel.id.clone(),
-            message_type: ChannelSystemMessageType::Update,
-            target: "paired".into(),
+            name: "Updated".into(),
         },
     )
     .await
@@ -165,7 +186,13 @@ async fn signed_invites_ack_keys_and_deleted_broadcast_use_rust_snapshot() {
     .await
     .unwrap();
     let attempts = responder.await.unwrap();
-    assert_eq!(attempts.iter().filter(|s| s.as_str() == "KICK").count(), 2);
+    assert_eq!(
+        attempts
+            .iter()
+            .filter(|s| **s == "notifyChannelDeleted")
+            .count(),
+        2
+    );
     assert!(channels::get(&state.db, &channel.id).unwrap().is_none());
     state.host.disconnect(generation);
     server.shutdown().await;
@@ -179,7 +206,9 @@ async fn queued_send_and_decline_ack_cannot_act_on_replacement() {
     let mut channel = state::create(&state.db, "owner", "invitation").unwrap();
     channel.members = plain_libs::serde_json::to_string(&[
         plain_rs::features::chat::channels::messages::ChannelMember::new("owner"),
-        plain_rs::features::chat::channels::messages::ChannelMember::pending(&state.native_client_id().unwrap()),
+        plain_rs::features::chat::channels::messages::ChannelMember::pending(
+            &state.native_client_id().unwrap(),
+        ),
     ])
     .unwrap();
     channels::save(
@@ -237,7 +266,7 @@ async fn queued_send_and_decline_ack_cannot_act_on_replacement() {
         },
     )
     .unwrap();
-    state.host.reply(generation,json!({"id":attempt["id"],"result":plain_rs::features::services::peers::ble_transport::test_reply(&state.ble_transport, &attempt["params"], json!({"data":{"channelSystemMessage":true}}),&[8;32])})).unwrap();
+    state.host.reply(generation,json!({"id":attempt["id"],"result":plain_rs::features::services::peers::ble_transport::test_reply(&state.ble_transport, &attempt["params"], json!({"data":{"notifyChannelInviteResponse":true}}),&[8;32])})).unwrap();
     assert!(
         call.await
             .unwrap()
@@ -261,7 +290,9 @@ async fn peer_key_changes_before_physical_send_are_rejected_and_accept_leave_dec
     let mut channel = state::create(&state.db, "owner", "fixture").unwrap();
     channel.members = plain_libs::serde_json::to_string(&[
         plain_rs::features::chat::channels::messages::ChannelMember::new("owner"),
-        plain_rs::features::chat::channels::messages::ChannelMember::pending(&state.native_client_id().unwrap()),
+        plain_rs::features::chat::channels::messages::ChannelMember::pending(
+            &state.native_client_id().unwrap(),
+        ),
     ])
     .unwrap();
     channels::save(
@@ -307,21 +338,19 @@ async fn peer_key_changes_before_physical_send_are_rejected_and_accept_leave_dec
                         &req["params"],
                         &[9; 32],
                     );
-                    let wire: Value =
-                        plain_libs::serde_json::from_str::<Value>(&body).unwrap();
-                    let kind = wire["variables"]["type"].as_str().unwrap().to_string();
-                    if kind == "INVITE_ACCEPT" {
-                        let payload: Value =
-                            plain_libs::serde_json::from_str(wire["variables"]["payload"].as_str().unwrap())
-                                .unwrap();
-                        assert_eq!(payload["deviceType"], "COMPUTER");
-                        assert_eq!(payload["name"], "Actual tablet");
-                    }
-                    kinds.push(kind);
+                    let wire: Value = plain_libs::serde_json::from_str::<Value>(&body).unwrap();
+                    let query = wire["query"].as_str().unwrap();
+                    let field = if query.contains("notifyChannelInviteResponse") {
+                        "notifyChannelInviteResponse"
+                    } else {
+                        assert!(query.contains("notifyChannelMemberLeft"));
+                        "notifyChannelMemberLeft"
+                    };
+                    kinds.push((field, wire["variables"]["accept"].as_bool()));
                     plain_rs::features::services::peers::ble_transport::test_reply(
                         &ble,
                         &req["params"],
-                        json!({"data":{"channelSystemMessage":true}}),
+                        json!({"data":{(field):true}}),
                         &[9; 32],
                     )
                 }
@@ -340,7 +369,10 @@ async fn peer_key_changes_before_physical_send_are_rejected_and_accept_leave_dec
     )
     .await
     .unwrap();
-    assert_eq!(accepted["response"]["data"]["channelSystemMessage"], true);
+    assert_eq!(
+        accepted["response"]["data"]["notifyChannelInviteResponse"],
+        true
+    );
     assert!(
         get(&state, &channel.id)
             .unwrap()
@@ -377,7 +409,11 @@ async fn peer_key_changes_before_physical_send_are_rejected_and_accept_leave_dec
     assert!(channels::get(&state.db, &channel.id).unwrap().is_none());
     assert_eq!(
         responder.await.unwrap(),
-        vec!["INVITE_ACCEPT", "LEAVE", "INVITE_DECLINE"]
+        vec![
+            ("notifyChannelInviteResponse", Some(true)),
+            ("notifyChannelMemberLeft", None),
+            ("notifyChannelInviteResponse", Some(false))
+        ]
     );
     state.host.disconnect(generation);
     server.shutdown().await;

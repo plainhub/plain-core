@@ -16,7 +16,6 @@ fn signature_purposes_are_distinct_and_not_interchangeable() {
         SignaturePurpose::PeerRequest,
         SignaturePurpose::PeerStatus,
         SignaturePurpose::QrPairAccept,
-        SignaturePurpose::ChannelMembership,
         SignaturePurpose::PeerTlsCertificate,
     ];
     let (key, public) = ed25519_generate();

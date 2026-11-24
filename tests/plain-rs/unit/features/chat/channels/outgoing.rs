@@ -1,188 +1,65 @@
 use super::*;
-use crate::features::chat::channels::incoming;
 use crate::infrastructure::db::DPeer;
-use crate::infrastructure::db::chat_store::SaveMode;
-use crate::infrastructure::db::chat_store::peers;
-use plain_libs::crypto::ed25519_generate;
+use crate::infrastructure::db::chat_store::{SaveMode, peers};
+use crate::infrastructure::transport::graphql_request::SignedEnvelope;
 
 #[test]
-fn shared_invite_roundtrips_into_receiver_with_owner_key_and_preserves_real_peer_data() {
-    let sender = Db::open(std::path::Path::new(":memory:")).unwrap();
-    let receiver = Db::open(std::path::Path::new(":memory:")).unwrap();
-    let (key, public) = ed25519_generate();
-    let mut owner = DPeer::new("owner", "known", "127.0.0.1", Some(1), DeviceType::Phone);
-    owner.public_key = base64_encode(&public);
-    peers::save(&receiver, &[owner], SaveMode::Insert).unwrap();
-    let guest = DPeer::new("guest", "中文 %_", "10.0.0.2", Some(443), DeviceType::Phone);
-    peers::save(&sender, &[guest], SaveMode::Insert).unwrap();
-    let mut channel = DChannel::new("group", "owner");
+fn channel_snapshots_include_each_member_once_and_sign_typed_variables() {
+    let db = Db::open(std::path::Path::new(":memory:")).unwrap();
+    let (keys, public) = plain_libs::crypto::ed25519_generate();
+    let mut peer = DPeer::new(
+        "paired",
+        "Paired member",
+        "",
+        Some(1234),
+        DeviceType::Unknown,
+    );
+    peer.public_key = base64_encode(&[8; 32]);
+    peers::save(&db, &[peer], SaveMode::Insert).unwrap();
+    let mut channel = DChannel::new("Group", "owner");
     channel.key = base64_encode(&[7; 32]);
-    channel.members = plain_libs::serde_json::to_string(&vec![
-        ChannelMember::new("owner"),
-        ChannelMember::pending("guest"),
-    ])
-    .unwrap();
-    let payload = build(
-        Some(&sender),
+    let state = snapshot(
+        &db,
         &channel,
         "owner",
-        "owner name",
-        DeviceType::Nas,
-        &key,
-        Type::Invite,
-        "guest",
+        "Owner".into(),
+        DeviceType::Computer,
+        &public,
+        vec![
+            ChannelMember::new("owner"),
+            ChannelMember::pending("paired"),
+            ChannelMember::new("missing"),
+        ],
     )
     .unwrap();
-    let msg: ChannelInvite = plain_libs::serde_json::from_str(&payload).unwrap();
-    assert_eq!(msg.member_peers.len(), 2);
-    assert_eq!(msg.member_peers[0].public_key, base64_encode(&public));
-    assert_eq!(msg.member_peers[1].name, "中文 %_");
-    assert!(
-        incoming::receive(&receiver, "guest", "owner", Type::Invite, &payload)
+    let envelope: SignedEnvelope = plain_libs::serde_json::from_str(
+        &Action::Invite
+            .request(&channel, "paired", Some(&state))
             .unwrap()
-            .changed
-    );
-    assert!(
-        build(
-            Some(&sender),
-            &channel,
-            "guest",
-            "",
-            DeviceType::Phone,
-            &key,
-            Type::Update,
-            ""
-        )
-        .is_err()
-    );
-    channel.members = "corrupt".into();
-    assert!(
-        build(
-            Some(&sender),
-            &channel,
-            "owner",
-            "",
-            DeviceType::Phone,
-            &key,
-            Type::Invite,
-            "guest"
-        )
-        .is_err()
-    );
-}
-
-#[test]
-fn member_actions_and_directed_or_broadcast_kicks_use_canonical_wire_payloads() {
-    let (key, public) = ed25519_generate();
-    let channel = DChannel::new("group", "owner");
-    for target in ["guest", ""] {
-        let payload = build(
-            None,
-            &channel,
-            "owner",
-            "",
-            DeviceType::Phone,
-            &key,
-            Type::Kick,
-            target,
-        )
-        .unwrap();
-        let kick: ChannelKick = plain_libs::serde_json::from_str(&payload).unwrap();
-        assert!(plain_libs::crypto::ed25519_verify(
-            &base64_encode(&public),
-            channel_message_payload(&channel.id, channel.version, Action::Kick, target).as_bytes(),
-            &kick.signature
-        ));
-    }
-    for kind in [Type::InviteAccept, Type::InviteDecline, Type::Leave] {
-        let value: plain_libs::serde_json::Value = plain_libs::serde_json::from_str(
-            &build(
-                None,
-                &channel,
-                "guest",
-                "中文",
-                DeviceType::Phone,
-                &key,
-                kind,
-                "owner",
-            )
+            .sign(&keys, "")
             .unwrap(),
-        )
-        .unwrap();
-        assert_eq!(value["channelId"], channel.id);
-        if kind == Type::InviteAccept {
-            assert_eq!(value["publicKey"], base64_encode(&public));
-            assert_eq!(value["name"], "中文");
-        }
-    }
+    )
+    .unwrap();
+    assert!(plain_libs::crypto::ed25519_verify(
+        &base64_encode(&public),
+        &envelope.signing_bytes(""),
+        &envelope.signature
+    ));
     assert!(
-        build(
-            None,
-            &channel,
-            "owner",
-            "",
-            DeviceType::Phone,
-            &[1; 64],
-            Type::Kick,
-            "guest"
-        )
-        .is_err()
+        envelope
+            .query
+            .contains("notifyChannelInvite(channelId: $channelId, input: $input)")
     );
-}
-
-#[tokio::test]
-async fn encrypted_delivery_requires_a_true_acknowledgement() {
-    struct Response(&'static str);
-    impl crate::infrastructure::transport::contract::PeerTransport for Response {
-        fn post<'a>(
-            &'a self,
-            _: &'a str,
-            _: &'a str,
-            _: Option<&'a str>,
-            body: &'a [u8],
-        ) -> impl std::future::Future<Output = Result<Vec<u8>, String>> + Send {
-            async move {
-                assert!(
-                    crate::infrastructure::transport::http_request::decrypt_raw(
-                        &[7; 32],
-                        "POST",
-                        "/peer_graphql",
-                        body
-                    )
-                    .is_some()
-                );
-                Ok(
-                    crate::infrastructure::transport::http_response::Context::new(body)
-                        .encrypt(&[7; 32], self.0.as_bytes())
-                        .unwrap(),
-                )
-            }
-        }
-    }
-    let (key, _) = ed25519_generate();
-    let peer = DPeer::new("guest", "guest", "127.0.0.1", Some(1), DeviceType::Phone);
-    for (body, expected) in [
-        (r#"{"data":{"channelSystemMessage":true}}"#, true),
-        (r#"{"data":{"channelSystemMessage":false}}"#, false),
-        (r#"{"data":{}}"#, false),
-        (
-            r#"{"data":{"channelSystemMessage":true},"errors":[{"message":"REJECTED"}]}"#,
-            false,
-        ),
-    ] {
-        assert_eq!(
-            crate::infrastructure::transport::contract::deliver_channel_system_message(
-                &Response(body),
-                &peer,
-                &[7; 32],
-                "actor",
-                &key,
-                "UPDATE",
-                "{}",
-                None
-            )
-            .await,
-            expected
-        );
-    }
+    let vars = Value::Object(envelope.variables);
+    assert_eq!(
+        vars,
+        json!({
+            "channelId":channel.id,
+            "input":{"channelKey":channel.key,"state":{"name":"Group","version":channel.version,"members":[
+                {"peerId":"owner","status":"JOINED","name":"Owner","deviceType":"COMPUTER","publicKey":base64_encode(&public)},
+                {"peerId":"paired","status":"PENDING","name":"Paired member","deviceType":"OTHER","ip":"","publicKey":base64_encode(&[8;32]),"port":1234},
+                {"peerId":"missing","status":"JOINED"}
+            ]}}
+        })
+    );
 }

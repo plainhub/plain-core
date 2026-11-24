@@ -254,3 +254,32 @@ async fn unpaired_peer_send_fails_and_local_cache_tracks_deletion() {
     assert!(service.delete_chat_item(local[0].id.clone()));
     assert!(service.cacher.get_latest_chat("local").is_none());
 }
+
+#[test]
+fn deleting_a_peer_keeps_its_channel_membership_and_clears_direct_chats() {
+    use crate::features::chat::enums::PeerStatus;
+    use crate::infrastructure::db::DPeer;
+    let dir = plain_libs::temporary::tempdir().unwrap();
+    let db = Db::open(&dir.path().join("plain.db")).unwrap();
+    let service = ChatService::new(
+        db,
+        std::sync::Arc::from(plain_libs::crypto::gen_token()),
+        std::sync::Arc::new(ChatIdentity::new("owner", "Owner", String::new())),
+        DeviceType::Computer,
+        dir.path().to_owned(),
+        std::sync::Arc::new(TestTransport),
+        std::sync::Arc::new(NoChatHooks),
+        no_link_previews(),
+    );
+    let mut channel = crate::features::chat::channels::state::create(&service.db, "owner", "Group").unwrap();
+    channel.members = r#"[{"peerId":"owner","status":"JOINED"},{"peerId":"guest","status":"JOINED"}]"#.into();
+    service.db.update_channel(&channel);
+    service.db.upsert_peer(&DPeer::new("guest", "Guest", "", None, DeviceType::Phone));
+    seed(&service.db, "direct-chat", "owner", "guest", "");
+    assert!(service.delete_peer("guest"));
+    assert_eq!(service.db.get_peer_by_id("guest").unwrap().status, PeerStatus::Channel);
+    assert!(service.db.get_chat_by_id("direct-chat").is_none());
+    assert!(!service.delete_peer("missing"));
+    assert!(service.unpair_peer("guest"));
+    assert_eq!(service.db.get_peer_by_id("guest").unwrap().status, PeerStatus::Unpaired);
+}

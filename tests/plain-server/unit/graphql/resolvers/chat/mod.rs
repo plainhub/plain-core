@@ -469,7 +469,36 @@ async fn channel_roots_read_current_store_and_share_runtime_mutations_without_ho
         "{renamed}"
     );
     assert_eq!(renamed["data"]["updateChatChannel"]["version"], 2);
-    let invited = channel_query(&state, &format!(r#"mutation {{ addChatChannelMember(id:"{id}",peerId:"unknown") {{ members {{ peerId status }} version }} }}"#)).await;
+    let invite = |peer_id: &str| {
+        format!(
+            r#"mutation {{ addChatChannelMember(id:"{id}",peerId:"{peer_id}") {{ members {{ peerId status }} version }} }}"#
+        )
+    };
+    let unpaired = channel_query(&state, &invite("unknown")).await;
+    assert_eq!(unpaired["errors"][0]["message"], "Peer not found");
+    assert_eq!(
+        plain_rs::infrastructure::db::chat_store::channels::get(&state.db, id)
+            .unwrap()
+            .unwrap()
+            .version,
+        2
+    );
+    let mut peer = plain_rs::infrastructure::db::DPeer::new(
+        "paired",
+        "Paired fixture",
+        "",
+        None,
+        plain_rs::features::chat::enums::DeviceType::Phone,
+    );
+    peer.status = plain_rs::features::chat::enums::PeerStatus::Paired;
+    peer.key = plain_libs::utils::base64::base64_encode(&[7; 32]);
+    plain_rs::infrastructure::db::chat_store::peers::save(
+        &state.db,
+        &[peer],
+        plain_rs::infrastructure::db::chat_store::SaveMode::Insert,
+    )
+    .unwrap();
+    let invited = channel_query(&state, &invite("paired")).await;
     assert_eq!(
         invited["data"]["addChatChannelMember"]["version"], 3,
         "{invited}"
@@ -488,7 +517,7 @@ async fn channel_roots_read_current_store_and_share_runtime_mutations_without_ho
         "{listed}"
     );
     assert_eq!(listed["data"]["chatChannels"][0]["version"], 3);
-    let kicked = channel_query(&state, &format!(r#"mutation {{ removeChatChannelMember(id:"{id}",peerId:"unknown") {{ version members {{ peerId }} }} }}"#)).await;
+    let kicked = channel_query(&state, &format!(r#"mutation {{ removeChatChannelMember(id:"{id}",peerId:"paired") {{ version members {{ peerId }} }} }}"#)).await;
     assert_eq!(
         kicked["data"]["removeChatChannelMember"]["version"], 4,
         "{kicked}"

@@ -1,7 +1,5 @@
 pub mod channel_delivery;
 
-pub mod channel_outgoing;
-
 pub mod channel_runtime;
 
 pub mod chat_actions;

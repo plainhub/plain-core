@@ -1,8 +1,11 @@
 use super::PeerContext;
-use crate::graphql::resolvers::chat::{ChatItem, item};
-use plain_graphql::{Context, Object};
+use crate::graphql::enums::DeviceType;
+use crate::graphql::resolvers::chat::{ChannelMemberStatus, ChatItem, item};
+use plain_graphql::{Context, ID, InputObject, Object};
 use plain_libs::serde_json::json;
-use plain_rs::features::chat::enums::ChannelSystemMessageType;
+use plain_rs::features::chat::channels::messages::{MemberSnapshot, Notification, State};
+use plain_rs::features::chat::enums::MemberStatus;
+use plain_rs::infrastructure::types::Long;
 
 pub(crate) struct Mutation;
 
@@ -51,26 +54,159 @@ impl Mutation {
         c.state.previews.request(&received.chat.id);
         Ok(vec![item])
     }
-    async fn channel_system_message(
+    async fn notify_channel_invite(
         &self,
         ctx: &Context<'_>,
-        r#type: ChannelSystemMessageType,
-        payload: String,
+        channel_id: ID,
+        input: ChannelInviteInput,
     ) -> plain_graphql::Result<bool> {
-        let c = ctx.data_unchecked::<PeerContext>();
-        match plain_rs::features::services::chat::channel_runtime::receive(
-            &c.state,
-            &c.authenticated.peer.id,
-            r#type,
-            &payload,
+        receive(
+            ctx,
+            channel_id,
+            Notification::Invite {
+                channel_key: input.channel_key,
+                state: input.state.try_into()?,
+            },
         )
         .await
-        {
-            Ok(received) => Ok(received["accepted"].as_bool().unwrap_or(false)),
-            Err(error) => {
-                log::warn!("Channel message rejected: {error}");
-                Ok(false)
-            }
-        }
+    }
+
+    async fn notify_channel_state_changed(
+        &self,
+        ctx: &Context<'_>,
+        channel_id: ID,
+        input: ChannelStateInput,
+    ) -> plain_graphql::Result<bool> {
+        receive(
+            ctx,
+            channel_id,
+            Notification::StateChanged(input.try_into()?),
+        )
+        .await
+    }
+
+    async fn notify_channel_member_removed(
+        &self,
+        ctx: &Context<'_>,
+        channel_id: ID,
+        removed_peer_id: ID,
+        version: Long,
+    ) -> plain_graphql::Result<bool> {
+        receive(
+            ctx,
+            channel_id,
+            Notification::MemberRemoved {
+                removed_peer_id: removed_peer_id.to_string(),
+                version: version.0,
+            },
+        )
+        .await
+    }
+
+    async fn notify_channel_deleted(
+        &self,
+        ctx: &Context<'_>,
+        channel_id: ID,
+        version: Long,
+    ) -> plain_graphql::Result<bool> {
+        receive(
+            ctx,
+            channel_id,
+            Notification::Deleted { version: version.0 },
+        )
+        .await
+    }
+
+    async fn notify_channel_invite_response(
+        &self,
+        ctx: &Context<'_>,
+        channel_id: ID,
+        accept: bool,
+    ) -> plain_graphql::Result<bool> {
+        receive(ctx, channel_id, Notification::InviteResponse { accept }).await
+    }
+
+    async fn notify_channel_member_left(
+        &self,
+        ctx: &Context<'_>,
+        channel_id: ID,
+    ) -> plain_graphql::Result<bool> {
+        receive(ctx, channel_id, Notification::MemberLeft).await
+    }
+}
+
+async fn receive(
+    ctx: &Context<'_>,
+    channel_id: ID,
+    notification: Notification,
+) -> plain_graphql::Result<bool> {
+    let c = ctx.data_unchecked::<PeerContext>();
+    plain_rs::features::services::chat::channel_runtime::receive(
+        &c.state,
+        &c.authenticated.peer.id,
+        &c.channel_id,
+        &channel_id,
+        notification,
+    )
+    .await?;
+    Ok(true)
+}
+
+#[derive(InputObject)]
+struct ChannelInviteInput {
+    channel_key: String,
+    state: ChannelStateInput,
+}
+
+#[derive(InputObject)]
+struct ChannelStateInput {
+    name: String,
+    version: Long,
+    members: Vec<ChannelMemberInput>,
+}
+
+#[derive(InputObject)]
+struct ChannelMemberInput {
+    peer_id: ID,
+    status: ChannelMemberStatus,
+    name: Option<String>,
+    device_type: Option<DeviceType>,
+    ip: Option<String>,
+    public_key: Option<String>,
+    port: Option<i32>,
+}
+
+impl TryFrom<ChannelStateInput> for State {
+    type Error = plain_graphql::Error;
+
+    fn try_from(input: ChannelStateInput) -> Result<Self, Self::Error> {
+        let members = input
+            .members
+            .into_iter()
+            .map(|member| {
+                let port = member
+                    .port
+                    .map(u16::try_from)
+                    .transpose()
+                    .map_err(|_| plain_graphql::Error::new("Invalid channel member port"))?;
+                Ok::<_, Self::Error>(MemberSnapshot {
+                    peer_id: member.peer_id.to_string(),
+                    status: match member.status {
+                        ChannelMemberStatus::Joined => MemberStatus::Joined,
+                        ChannelMemberStatus::Pending => MemberStatus::Pending,
+                    },
+                    name: member.name,
+                    device_type: member.device_type.map(Into::into),
+                    ip: member.ip,
+                    public_key: member.public_key,
+                    port,
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(Self {
+            name: input.name,
+            version: input.version.0,
+            members,
+        })
     }
 }

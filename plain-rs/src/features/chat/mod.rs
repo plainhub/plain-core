@@ -1,6 +1,6 @@
 //! Shared chat domain, extracted from plain-desktop's Rust port of the
 //! plain-app chat stack (Kotlin `ChatManager` / `ChatSender` /
-//! `PairingCore` / `ChannelSystemMessage*`).
+//! `PairingCore`).
 //!
 //! What lives here, in rough layers:
 //! - [`enums`] — the wire enums (chat/peer/channel status, device type).

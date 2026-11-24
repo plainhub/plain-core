@@ -1,12 +1,12 @@
 use crate::features::chat::channels::messages::ChannelMember;
-use crate::features::chat::enums::ChannelSystemMessageType;
-use crate::features::chat::enums::DeviceType;
+use crate::features::chat::channels::outgoing::{self, Action};
 use crate::infrastructure::db::DChannel;
 use crate::infrastructure::db::chat_store::channels;
 use crate::infrastructure::db::chat_store::peers;
 use crate::runtime::Runtime as CoreRuntime;
 use plain_libs::anyhow::{Result, ensure};
 use plain_libs::serde_json::{Value, json};
+use plain_libs::utils::base64::base64_decode;
 
 pub fn rejected(message: impl ToString) -> Value {
     json!({"errors":[{"message":message.to_string()}]})
@@ -22,25 +22,24 @@ fn current(state: &CoreRuntime, channel: &DChannel, removed: bool) -> Result<boo
 pub async fn send(
     state: &CoreRuntime,
     channel: &DChannel,
-    kind: ChannelSystemMessageType,
+    action: Action,
     target: &str,
-    removed: bool,
 ) -> Result<Value> {
     let mut stop = state.stop.clone();
     ensure!(!*stop.borrow(), "Server stopped");
     tokio::select! {
         biased;
         _ = stop.changed() => Ok(rejected("Server stopped")),
-        result = deliver(state, channel, kind, target, removed) => result,
+        result = deliver(state, channel, action, target) => result,
     }
 }
 async fn deliver(
     state: &CoreRuntime,
     channel: &DChannel,
-    kind: ChannelSystemMessageType,
+    action: Action,
     target: &str,
-    removed: bool,
 ) -> Result<Value> {
+    let removed = action == Action::Deleted;
     ensure!(
         current(state, channel, removed)?,
         "Channel changed before send"
@@ -48,83 +47,59 @@ async fn deliver(
     let actor = state
         .prefs
         .get::<String>(crate::features::prefs::pref_keys::CLIENT_ID)?
-        .unwrap_or_default();
-    ensure!(!actor.is_empty(), "Missing client identity");
-    match kind {
-        ChannelSystemMessageType::Invite
-        | ChannelSystemMessageType::Update
-        | ChannelSystemMessageType::Kick => ensure!(
-            channel.owner_id.as_deref() == Some(actor.as_str()),
+        .filter(|id| !id.is_empty())
+        .ok_or_else(|| plain_libs::anyhow::anyhow!("Missing client identity"))?;
+    if action.is_owner_action() {
+        ensure!(
+            channel.owner_id.as_deref() == Some(&actor),
             "Only owner can send channel updates"
-        ),
-        _ => ensure!(
+        );
+    } else {
+        ensure!(
             !target.is_empty() && Some(target) == channel.owner_id.as_deref(),
             "Invalid channel owner destination"
-        ),
+        );
     }
-    ensure!(
-        kind != ChannelSystemMessageType::Invite || !target.is_empty(),
-        "Missing invite target"
-    );
-    let ids = if target.is_empty() {
-        plain_libs::serde_json::from_str::<Vec<ChannelMember>>(&channel.members)?
-            .into_iter()
-            .filter(|m| m.peer_id != actor)
-            .map(|m| m.peer_id)
-            .collect::<Vec<_>>()
-    } else {
-        vec![target.to_owned()]
-    };
-    let mut present = false;
-    for id in &ids {
-        present |= peers::get(&state.db, id)?.is_some();
+    if matches!(action, Action::Invite | Action::MemberRemoved) {
+        ensure!(!target.is_empty(), "Missing channel notification recipient");
     }
-    if !present {
-        return Ok(if target.is_empty() {
-            json!({"data":{"channelSystemMessage":true}})
-        } else {
-            rejected("Peer not found")
-        });
-    }
-    struct Device {
-        name: String,
-        device_type: DeviceType,
-    }
-    let device = if matches!(
-        kind,
-        ChannelSystemMessageType::Invite
-            | ChannelSystemMessageType::Update
-            | ChannelSystemMessageType::InviteAccept
-    ) {
-        Device {
-            name: crate::features::prefs::settings::snapshot(&state.prefs)?.device_name,
-            device_type: crate::features::services::discovery::discovery_advertisement::device_type(
-                state,
-            ),
+
+    let members: Vec<ChannelMember> = plain_libs::serde_json::from_str(&channel.members)?;
+    let mut targets = Vec::new();
+    if target.is_empty() {
+        for member in members.iter().filter(|member| member.peer_id != actor) {
+            if peers::get(&state.db, &member.peer_id)?.is_some() {
+                targets.push(member.peer_id.clone());
+            }
         }
+    } else if peers::get(&state.db, target)?.is_some() {
+        targets.push(target.into());
     } else {
-        Device {
-            name: String::new(),
-            device_type: DeviceType::Unknown,
-        }
+        return Ok(rejected("Peer not found"));
+    }
+    let field = action.field();
+    let mut response = json!({"data":{(field):true}});
+    if targets.is_empty() {
+        return Ok(response);
+    }
+    let keypair = crate::features::services::peers::peer_wire::signing_keypair(&state.prefs)?;
+    let snapshot = if action.includes_state() {
+        Some(outgoing::snapshot(
+            &state.db,
+            channel,
+            &actor,
+            crate::features::prefs::settings::snapshot(&state.prefs)?.device_name,
+            crate::features::services::discovery::discovery_advertisement::device_type(state),
+            &keypair[32..],
+            members,
+        )?)
+    } else {
+        None
     };
-    ensure!(
-        current(state, channel, removed)?,
-        "Channel changed before send"
-    );
-    let prepared = crate::features::services::chat::channel_outgoing::prepare(
-        &state.db,
-        &state.prefs,
-        channel,
-        kind,
-        target,
-        &device.name,
-        device.device_type,
-    )?;
+    let request = action.request(channel, target, snapshot.as_ref())?;
     let direct_wire = tokio::sync::OnceCell::<String>::new();
     let channel_wire = tokio::sync::OnceCell::<String>::new();
-    let mut response = json!({"data":{"channelSystemMessage":true}});
-    for group in prepared.targets.chunks(4) {
+    for group in targets.chunks(4) {
         let results = futures_util::future::join_all(group.iter().map(|target| async {
             let _permit = state
                 .channel_delivery
@@ -135,32 +110,27 @@ async fn deliver(
                 current(state, channel, removed)?,
                 "Channel changed before send"
             );
-            let peer = peers::get(&state.db, &target.peer.id)?
+            let peer = peers::get(&state.db, target)?
                 .ok_or_else(|| plain_libs::anyhow::anyhow!("Peer not found"))?;
-            let (key, cid) = if peer.key.is_empty() {
-                (&channel.key, channel.id.as_str())
+            let (key, cid) = if action == Action::Invite {
+                (outgoing::pairing_key(&peer)?, "")
+            } else if peer.key.is_empty() {
+                (base64_decode(&channel.key), channel.id.as_str())
             } else {
-                (&peer.key, "")
+                (base64_decode(&peer.key), "")
             };
             let wire = if cid.is_empty() {
                 &direct_wire
             } else {
                 &channel_wire
             }
-            .get_or_try_init(|| async {
-                crate::features::services::chat::channel_outgoing::wire(
-                    &state.prefs,
-                    kind,
-                    &prepared.payload,
-                    cid,
-                )
-            })
+            .get_or_try_init(|| async { request.sign(&keypair, cid) })
             .await?;
             let response = crate::features::services::peers::peer_transport::send_checked(
                 state,
                 &peer,
                 cid,
-                &plain_libs::utils::base64::base64_decode(key),
+                &key,
                 wire,
                 || {
                     if !current(state, channel, removed).map_err(|e| e.to_string())? {
@@ -180,7 +150,7 @@ async fn deliver(
             .await;
             Ok::<Value, plain_libs::anyhow::Error>(match response {
                 Ok(value)
-                    if value["data"]["channelSystemMessage"].as_bool() == Some(true)
+                    if value["data"][field].as_bool() == Some(true)
                         && value.get("errors").is_none_or(|v| {
                             v.is_null() || v.as_array().is_some_and(Vec::is_empty)
                         }) =>

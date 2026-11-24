@@ -1,10 +1,27 @@
-enum ChannelSystemMessageType {
-	INVITE
-	INVITE_ACCEPT
-	INVITE_DECLINE
-	UPDATE
-	KICK
-	LEAVE
+input ChannelInviteInput {
+	channelKey: String!
+	state: ChannelStateInput!
+}
+
+input ChannelMemberInput {
+	peerId: ID!
+	status: ChannelMemberStatus!
+	name: String
+	deviceType: DeviceType
+	ip: String
+	publicKey: String
+	port: Int
+}
+
+enum ChannelMemberStatus {
+	JOINED
+	PENDING
+}
+
+input ChannelStateInput {
+	name: String!
+	version: Long!
+	members: [ChannelMemberInput!]!
 }
 
 type ChatAttachment {
@@ -107,13 +124,27 @@ enum ChatTextFormat {
 	MARKDOWN
 }
 
+enum DeviceType {
+	PHONE
+	TABLET
+	COMPUTER
+	TV
+	NAS
+	OTHER
+}
+
 scalar Instant
 
 scalar Long
 
 type Mutation {
 	createChatItem(content: String!): [ChatItem!]!
-	channelSystemMessage(type: ChannelSystemMessageType!, payload: String!): Boolean!
+	notifyChannelInvite(channelId: ID!, input: ChannelInviteInput!): Boolean!
+	notifyChannelStateChanged(channelId: ID!, input: ChannelStateInput!): Boolean!
+	notifyChannelMemberRemoved(channelId: ID!, removedPeerId: ID!, version: Long!): Boolean!
+	notifyChannelDeleted(channelId: ID!, version: Long!): Boolean!
+	notifyChannelInviteResponse(channelId: ID!, accept: Boolean!): Boolean!
+	notifyChannelMemberLeft(channelId: ID!): Boolean!
 }
 
 enum PeerStatus {

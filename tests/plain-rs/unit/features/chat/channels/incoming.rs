@@ -1,268 +1,280 @@
 use super::*;
-use crate::features::chat::enums::DeviceType;
 use crate::infrastructure::db::DPeer;
-use crate::infrastructure::db::chat_store::SaveMode;
-use crate::infrastructure::db::chat_store::channels;
-use crate::infrastructure::db::chat_store::peers;
-use plain_libs::crypto::ed25519_generate;
-use plain_libs::crypto::ed25519_sign;
+use crate::infrastructure::db::chat_store::{SaveMode, peers};
 use plain_libs::utils::base64::base64_encode;
-use plain_libs::serde_json::{Value, json};
 
-fn setup() -> (Db, Vec<u8>, String) {
+fn db() -> Db {
     let db = Db::open(std::path::Path::new(":memory:")).unwrap();
-    let (private, public) = ed25519_generate();
-    let public = base64_encode(&public);
-    let mut owner = DPeer::new("owner", "Owner", "127.0.0.1", Some(1), DeviceType::Phone);
-    owner.public_key = public.clone();
-    owner.key = plain_libs::utils::base64::base64_encode(&[47; 32]);
-    owner.token = plain_libs::utils::base64::base64_encode(&[48; 32]);
+    let mut owner = DPeer::new(
+        "owner",
+        "Owner",
+        "",
+        None,
+        crate::features::chat::enums::DeviceType::Computer,
+    );
+    owner.public_key = base64_encode(&[9; 32]);
     peers::save(&db, &[owner], SaveMode::Insert).unwrap();
-    (db, private.to_vec(), public)
+    db
 }
-fn sign(key: &[u8], version: i64, action: Action, target: &str) -> String {
-    ed25519_sign(
-        key,
-        channel_message_payload("channel", version, action, target).as_bytes(),
-    )
+
+fn member(peer_id: &str, status: MemberStatus) -> MemberSnapshot {
+    MemberSnapshot {
+        peer_id: peer_id.into(),
+        status,
+        name: None,
+        device_type: None,
+        ip: None,
+        public_key: None,
+        port: None,
+    }
 }
-fn invite(key: &[u8], public: &str, version: i64) -> Value {
-    json!({"channelId":"channel","channelName":"中文 %_","owner":"owner","key":base64_encode(&[7;32]),"version":version,
-        "members":[{"peerId":"owner","status":"JOINED"},{"peerId":"actor","status":"PENDING"}],
-        "memberPeers":[{"id":"owner","publicKey":public,"name":"replacement"}],"signature":sign(key,version,Action::Invite,"actor")})
+
+fn state(version: i64) -> State {
+    State {
+        name: "Channel".into(),
+        version,
+        members: vec![
+            member("owner", MemberStatus::Joined),
+            member("guest", MemberStatus::Pending),
+        ],
+    }
 }
-fn recv(db: &Db, actor: &str, from: &str, kind: Type, payload: &Value) -> Result<Received> {
-    receive(db, actor, from, kind, &payload.to_string())
+
+fn invite(version: i64) -> Notification {
+    Notification::Invite {
+        channel_key: base64_encode(&[7; 32]),
+        state: state(version),
+    }
 }
-fn channel(db: &Db) -> DChannel {
-    channels::get(db, "channel").unwrap().unwrap()
-}
-fn reject_writes(db: &Db) {
-    db.with_conn(|c|c.execute_batch("CREATE TRIGGER reject_channel BEFORE UPDATE ON chat_channels BEGIN SELECT RAISE(ABORT,'reject fixture'); END;")).unwrap();
+
+fn stored(db: &Db) -> Option<DChannel> {
+    crate::infrastructure::db::chat_store::channels::get(db, "channel").unwrap()
 }
 
 #[test]
-fn invitations_require_owner_signature_and_membership_preserve_credentials_and_reject_replay() {
-    let (db, key, public) = setup();
-    let mut msg = invite(&key, &public, 1);
-    msg["signature"] = json!("");
-    assert!(recv(&db, "actor", "owner", Type::Invite, &msg).is_err());
-    assert!(channels::get(&db, "channel").unwrap().is_none());
-    msg = invite(&key, &public, 1);
-    assert!(recv(&db, "actor", "forged", Type::Invite, &msg).is_err());
-    let first = recv(&db, "actor", "owner", Type::Invite, &msg).unwrap();
-    assert!(first.changed);
-    assert_eq!(first.invite.unwrap().owner_peer_name, "Owner");
-    let created = channel(&db);
-    assert_eq!(created.status, ChannelStatus::Joined);
+fn invite_validates_roster_and_existing_owner_and_reinvites_only_at_new_version() {
+    let db = db();
+    assert!(receive(&db, "other", "owner", "channel", invite(1)).is_err());
+    assert!(stored(&db).is_none());
+    let mut forged = state(1);
+    forged.members[0].public_key = Some(base64_encode(&[8; 32]));
     assert!(
-        !recv(&db, "actor", "owner", Type::Invite, &msg)
-            .unwrap()
-            .changed
-    );
-    let peer = peers::get(&db, "owner").unwrap().unwrap();
-    assert_eq!(peer.key, plain_libs::utils::base64::base64_encode(&[47; 32]));
-    assert_eq!(peer.token, plain_libs::utils::base64::base64_encode(&[48; 32]));
-    assert_eq!(peer.name, "Owner");
-    let kick =
-        json!({"channelId":"channel","version":2,"signature":sign(&key,2,Action::Kick,"actor")});
-    let result = recv(&db, "actor", "owner", Type::Kick, &kick).unwrap();
-    assert!(result.cancel.is_some());
-    assert_eq!(channel(&db).status, ChannelStatus::Kicked);
-    assert!(recv(&db, "actor", "owner", Type::Invite, &msg).is_err());
-    assert!(
-        recv(
+        receive(
             &db,
-            "actor",
+            "guest",
             "owner",
-            Type::Invite,
-            &invite(&key, &public, 2)
+            "channel",
+            Notification::Invite {
+                channel_key: base64_encode(&[7; 32]),
+                state: forged,
+            }
         )
         .is_err()
     );
-    msg = invite(&key, &public, 3);
+    let first = receive(&db, "guest", "owner", "channel", invite(1)).unwrap();
+    assert!(first.changed);
+    assert_eq!(first.invite.unwrap().owner_peer_id, "owner");
     assert!(
-        recv(&db, "actor", "owner", Type::Invite, &msg)
+        !receive(&db, "guest", "owner", "channel", invite(1))
             .unwrap()
             .changed
     );
-    assert_eq!(channel(&db).created_at, created.created_at);
-    msg["members"] = json!([{"peerId":"owner","status":"JOINED"}]);
-    assert!(recv(&db, "actor", "owner", Type::Invite, &msg).is_err());
-}
-
-#[test]
-fn signed_update_rolls_back_new_peers_and_rejects_stale_or_forged_messages() {
-    let (db, key, public) = setup();
-    recv(
+    assert!(
+        receive(
+            &db,
+            "guest",
+            "other",
+            "channel",
+            Notification::Deleted { version: 2 }
+        )
+        .is_err()
+    );
+    assert!(
+        receive(
+            &db,
+            "guest",
+            "owner",
+            "channel",
+            Notification::MemberRemoved {
+                removed_peer_id: "other".into(),
+                version: 2
+            }
+        )
+        .is_err()
+    );
+    let result = receive(
         &db,
-        "actor",
+        "guest",
         "owner",
-        Type::Invite,
-        &invite(&key, &public, 1),
+        "channel",
+        Notification::MemberRemoved {
+            removed_peer_id: "guest".into(),
+            version: 2,
+        },
     )
     .unwrap();
-    let before = channel(&db);
-    let mut msg = json!({"channelId":"channel","channelName":"after","version":2,"members":[{"peerId":"owner","status":"JOINED"},{"peerId":"actor","status":"JOINED"}],"memberPeers":[{"id":"guest","publicKey":public}],"signature":sign(&key,2,Action::Update,"")});
-    reject_writes(&db);
-    assert!(recv(&db, "actor", "owner", Type::Update, &msg).is_err());
-    assert!(peers::get(&db, "guest").unwrap().is_none());
-    assert_eq!(channel(&db).updated_at, before.updated_at);
-    db.with_conn(|c| c.execute_batch("DROP TRIGGER reject_channel"))
-        .unwrap();
-    msg["signature"] = json!(sign(&key, 2, Action::Update, "other"));
-    assert!(recv(&db, "actor", "owner", Type::Update, &msg).is_err());
-    msg["signature"] = json!(sign(&key, 2, Action::Update, ""));
+    assert!(result.cancel.is_some());
+    assert_eq!(stored(&db).unwrap().status, ChannelStatus::Kicked);
+    assert!(receive(&db, "guest", "owner", "channel", invite(2)).is_err());
     assert!(
-        recv(&db, "actor", "owner", Type::Update, &msg)
-            .unwrap()
-            .changed
-    );
-    assert!(peers::get(&db, "guest").unwrap().is_some());
-    assert_eq!(channel(&db).name, "after");
-    assert!(
-        !recv(&db, "actor", "owner", Type::Update, &msg)
-            .unwrap()
-            .changed
-    );
-    let stale =
-        json!({"channelId":"channel","version":1,"signature":sign(&key,1,Action::Kick,"actor")});
-    assert!(
-        !recv(&db, "actor", "owner", Type::Kick, &stale)
-            .unwrap()
-            .changed
-    );
-    let broadcast =
-        json!({"channelId":"channel","version":2,"signature":sign(&key,2,Action::Kick,"")});
-    assert!(
-        recv(&db, "actor", "owner", Type::Kick, &broadcast)
-            .unwrap()
-            .changed
-    );
-    assert!(
-        !recv(&db, "actor", "owner", Type::Kick, &broadcast)
+        receive(&db, "guest", "owner", "channel", invite(3))
             .unwrap()
             .changed
     );
 }
 
 #[test]
-fn accepting_only_pending_members_is_atomic_and_does_not_create_uninvited_peers() {
-    let (db, _, public) = setup();
-    let mut ch = super::super::state::create(&db, "actor", "owned").unwrap();
-    ch.id = "channel".into();
-    ch.members = plain_libs::serde_json::to_string(&vec![
-        ChannelMember::new("actor"),
+fn snapshots_validate_before_effects_and_roll_back_peer_creation_on_channel_write_failure() {
+    let db = db();
+    receive(&db, "guest", "owner", "channel", invite(1)).unwrap();
+    let before = stored(&db).unwrap();
+    assert!(
+        receive(
+            &db,
+            "guest",
+            "other",
+            "channel",
+            Notification::StateChanged(state(2))
+        )
+        .is_err()
+    );
+    assert!(
+        receive(
+            &db,
+            "guest",
+            "owner",
+            "channel",
+            Notification::StateChanged(state(-1))
+        )
+        .is_err()
+    );
+    assert!(
+        !receive(
+            &db,
+            "guest",
+            "owner",
+            "channel",
+            Notification::StateChanged(state(1))
+        )
+        .unwrap()
+        .changed
+    );
+    let mut duplicate = state(2);
+    duplicate
+        .members
+        .push(member("guest", MemberStatus::Joined));
+    assert!(
+        receive(
+            &db,
+            "guest",
+            "owner",
+            "channel",
+            Notification::StateChanged(duplicate)
+        )
+        .is_err()
+    );
+    let update = || {
+        let mut snapshot = state(2);
+        snapshot.members.push(MemberSnapshot {
+            name: Some("New peer".into()),
+            ..member("new", MemberStatus::Joined)
+        });
+        snapshot
+            .members
+            .push(member("no-metadata", MemberStatus::Pending));
+        Notification::StateChanged(snapshot)
+    };
+    db.with_conn(|c| c.execute_batch("CREATE TRIGGER reject_channel BEFORE UPDATE ON chat_channels BEGIN SELECT RAISE(ABORT, 'test failure'); END;")).unwrap();
+    assert!(receive(&db, "guest", "owner", "channel", update()).is_err());
+    assert_eq!(stored(&db).unwrap(), before);
+    assert!(peers::get(&db, "new").unwrap().is_none());
+    db.with_conn(|c| c.execute_batch("DROP TRIGGER reject_channel;"))
+        .unwrap();
+    assert!(
+        receive(&db, "guest", "owner", "channel", update())
+            .unwrap()
+            .changed
+    );
+    assert_eq!(peers::get(&db, "new").unwrap().unwrap().name, "New peer");
+    assert!(peers::get(&db, "no-metadata").unwrap().is_none());
+    assert!(stored(&db).unwrap().members.contains("no-metadata"));
+}
+
+#[test]
+fn invitation_replies_and_leave_affect_only_the_sender() {
+    let db = db();
+    let mut channel = DChannel::new("Channel", "owner");
+    channel.id = "channel".into();
+    channel.members = plain_libs::serde_json::to_string(&[
+        ChannelMember::new("owner"),
         ChannelMember::pending("guest"),
+        ChannelMember::pending("declining"),
     ])
     .unwrap();
-    channels::save(&db, &[ch], SaveMode::Insert).unwrap();
-    let accept =
-        json!({"channelId":"channel","publicKey":public,"name":"Guest","deviceType":"PHONE"});
-    assert!(
-        !recv(&db, "actor", "uninvited", Type::InviteAccept, &accept)
-            .unwrap()
-            .changed
-    );
-    assert!(peers::get(&db, "uninvited").unwrap().is_none());
-    reject_writes(&db);
-    assert!(recv(&db, "actor", "guest", Type::InviteAccept, &accept).is_err());
-    assert!(peers::get(&db, "guest").unwrap().is_none());
-    assert_eq!(channel(&db).version, 1);
-    db.with_conn(|c| c.execute_batch("DROP TRIGGER reject_channel"))
+    crate::infrastructure::db::chat_store::channels::save(&db, &[channel], SaveMode::Insert)
         .unwrap();
-    let received = recv(&db, "actor", "guest", Type::InviteAccept, &accept).unwrap();
-    assert!(received.broadcast);
     assert!(
-        store::members(&channel(&db).members)
-            .unwrap()
-            .iter()
-            .find(|m| m.peer_id == "guest")
-            .unwrap()
-            .is_joined()
+        !receive(
+            &db,
+            "owner",
+            "stranger",
+            "channel",
+            Notification::InviteResponse { accept: true }
+        )
+        .unwrap()
+        .changed
     );
     assert!(
-        !recv(&db, "actor", "guest", Type::InviteAccept, &accept)
-            .unwrap()
-            .changed
+        receive(
+            &db,
+            "owner",
+            "declining",
+            "channel",
+            Notification::InviteResponse { accept: false }
+        )
+        .unwrap()
+        .changed
     );
-    let member = json!({"channelId":"channel"});
     assert!(
-        !recv(&db, "actor", "guest", Type::InviteDecline, &member)
-            .unwrap()
-            .changed
+        !receive(
+            &db,
+            "owner",
+            "declining",
+            "channel",
+            Notification::InviteResponse { accept: false }
+        )
+        .unwrap()
+        .changed
     );
     assert!(
-        recv(&db, "actor", "guest", Type::Leave, &member)
+        receive(
+            &db,
+            "owner",
+            "guest",
+            "channel",
+            Notification::InviteResponse { accept: true }
+        )
+        .unwrap()
+        .broadcast
+    );
+    assert!(
+        !receive(
+            &db,
+            "owner",
+            "guest",
+            "channel",
+            Notification::InviteResponse { accept: false }
+        )
+        .unwrap()
+        .changed
+    );
+    assert!(
+        receive(&db, "owner", "guest", "channel", Notification::MemberLeft)
             .unwrap()
             .broadcast
     );
-    assert!(
-        !recv(&db, "actor", "guest", Type::Leave, &member)
-            .unwrap()
-            .changed
+    assert_eq!(
+        decode_members(&stored(&db).unwrap().members),
+        vec![ChannelMember::new("owner")]
     );
-    assert_eq!(channel(&db).version, 3);
-}
-
-#[test]
-fn accept_key_conflicts_and_version_overflow_preserve_peer_and_roster() {
-    let (db, _, public) = setup();
-    let ch = DChannel {
-        id: "channel".into(),
-        owner_id: Some("actor".into()),
-        members: plain_libs::serde_json::to_string(&vec![
-            ChannelMember::new("actor"),
-            ChannelMember::pending("owner"),
-        ])
-        .unwrap(),
-        version: i64::MAX,
-        ..DChannel::new("owned", "actor")
-    };
-    channels::save(&db, &[ch], SaveMode::Insert).unwrap();
-    let before = peers::get(&db, "owner").unwrap().unwrap();
-    let mut accept = json!({"channelId":"channel","publicKey":base64_encode(&[9;32]),"name":"fake","deviceType":"PHONE"});
-    assert!(recv(&db, "actor", "owner", Type::InviteAccept, &accept).is_err());
-    accept["publicKey"] = json!(public);
-    assert!(recv(&db, "actor", "owner", Type::InviteAccept, &accept).is_err());
-    let after = peers::get(&db, "owner").unwrap().unwrap();
-    assert_eq!(after.updated_at, before.updated_at);
-    assert_eq!(after.token, before.token);
-    assert_eq!(after.public_key, before.public_key);
-    assert_eq!(channel(&db).version, i64::MAX);
-    assert!(store::members(&channel(&db).members).unwrap()[1].is_pending());
-}
-
-#[test]
-fn unknown_kick_requires_a_signature_and_pending_decline_is_idempotent() {
-    let (db, key, _) = setup();
-    let mut kick = json!({"channelId":"channel","version":1,"signature":""});
-    assert!(recv(&db, "actor", "owner", Type::Kick, &kick).is_err());
-    kick["signature"] = json!(sign(&key, 1, Action::Kick, "actor"));
-    let effect = recv(&db, "actor", "owner", Type::Kick, &kick).unwrap();
-    assert!(effect.cancel.is_some());
-    assert!(!effect.changed);
-    let ch = DChannel {
-        id: "channel".into(),
-        members: plain_libs::serde_json::to_string(&vec![
-            ChannelMember::new("actor"),
-            ChannelMember::pending("guest"),
-        ])
-        .unwrap(),
-        ..DChannel::new("owned", "actor")
-    };
-    channels::save(&db, &[ch], SaveMode::Insert).unwrap();
-    let decline = json!({"channelId":"channel"});
-    assert!(
-        recv(&db, "actor", "guest", Type::InviteDecline, &decline)
-            .unwrap()
-            .changed
-    );
-    assert!(
-        !recv(&db, "actor", "guest", Type::InviteDecline, &decline)
-            .unwrap()
-            .changed
-    );
-    assert_eq!(channel(&db).version, 2);
-    assert!(peers::get(&db, "guest").unwrap().is_none());
 }
