@@ -4,8 +4,8 @@ use crate::graphql::resolvers::key_value::public::{KeyValueMutation, KeyValueQue
 use crate::graphql::resolvers::mobile::{MobileMutation, MobileQuery};
 use crate::graphql::resolvers::videos::public::VideosQuery;
 
-use crate::graphql::resolvers::audio::public::AudioMutation;
-use crate::graphql::resolvers::audio::public::AudioQuery;
+use crate::graphql::resolvers::audio::mutation::AudioMutation;
+use crate::graphql::resolvers::audio::query::AudioQuery;
 use crate::graphql::resolvers::chat::public::ChatMutation;
 use crate::graphql::resolvers::chat::public::ChatQuery;
 use crate::graphql::resolvers::clipboard::public::ClipboardMutation;

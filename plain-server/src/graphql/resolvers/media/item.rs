@@ -1,5 +1,5 @@
 use crate::graphql::resolvers::{
-    audio::public::Audio, docs::public::Doc, images::public::Image, videos::public::Video,
+    audio::query::Audio, docs::public::Doc, images::public::Image, videos::public::Video,
 };
 use plain_rs::infrastructure::types::Instant;
 use plain_rs::infrastructure::types::Long;

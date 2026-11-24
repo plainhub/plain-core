@@ -3,7 +3,7 @@ use super::{
     item::MediaItem,
     public::{library_rows, prefs},
 };
-use crate::graphql::resolvers::audio::public::audio_from_facts;
+use crate::graphql::resolvers::audio::query::audio_from_facts;
 use crate::graphql::resolvers::common::content_common::instant;
 use crate::graphql::resolvers::videos::public::video_from_facts;
 use crate::http::auth::public_gate;
