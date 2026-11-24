@@ -8,9 +8,6 @@ fn result(peer_id: &str, error: Option<&str>) -> ChannelDeliveryResult {
     }
 }
 
-/// Aggregate status: no recipients / all delivered → SENT, all failed →
-/// FAILED, mixed → PARTIAL. Direct translation of
-/// `DMessageStatusData.aggregateStatus()`.
 #[test]
 fn compute_status_aggregates() {
     assert_eq!(compute_status(&[]), ChatStatus::Sent);
@@ -36,12 +33,4 @@ fn status_data_json_shape() {
     assert_eq!(v["results"][0]["peerId"], "a");
     assert_eq!(v["results"][0]["error"], "boom");
     assert_eq!(v["results"][1]["error"], plain_libs::serde_json::Value::Null);
-}
-
-/// NoLeader / LeaderPeerMissing serialize `results: null` — the shape the
-/// web client distinguishes from an empty result list.
-#[test]
-fn no_leader_status_data_is_null_results() {
-    let v: plain_libs::serde_json::Value = plain_libs::serde_json::from_str(&build_no_leader_status_data()).unwrap();
-    assert!(v["results"].is_null());
 }

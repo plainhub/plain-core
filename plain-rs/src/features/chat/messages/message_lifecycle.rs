@@ -154,16 +154,20 @@ pub fn delivery(
     results: Option<Vec<ChannelDeliveryResult>>,
     retry: bool,
 ) -> Result<Option<DChat>> {
-    delivery_impl(db, id, results, retry, None)
+    delivery_impl(db, id, results, retry, None, false)
 }
-pub(crate) fn delivery_for_content(
-    db: &Db,
-    id: &str,
-    results: Option<Vec<ChannelDeliveryResult>>,
-    retry: bool,
-    content: &str,
+pub(crate) fn write_delivery(
+    db: &Db, chat: &DChat, results: Option<Vec<ChannelDeliveryResult>>, pending: bool,
 ) -> Result<Option<DChat>> {
-    delivery_impl(db, id, results, retry, Some(content))
+    delivery_impl(db, &chat.id, results, false, Some(&chat.content), pending)
+}
+
+pub(crate) fn previous_delivery_results(chat: &DChat, targets: &[String]) -> Result<Vec<ChannelDeliveryResult>> {
+    let Some(data) = chat.status_data.as_deref() else {
+        return Ok(Vec::new());
+    };
+    let previous: StatusData = plain_libs::serde_json::from_str(data)?;
+    Ok(previous.results.unwrap_or_default().into_iter().filter(|result| !targets.contains(&result.peer_id)).collect())
 }
 fn delivery_impl(
     db: &Db,
@@ -171,6 +175,7 @@ fn delivery_impl(
     results: Option<Vec<ChannelDeliveryResult>>,
     retry: bool,
     expected_content: Option<&str>,
+    pending: bool,
 ) -> Result<Option<DChat>> {
     db.with_conn(|c| -> Result<Option<DChat>> {
         let tx = c.unchecked_transaction()?;
@@ -184,7 +189,7 @@ fn delivery_impl(
         else {
             return Ok(None);
         };
-        if expected_content.is_some_and(|content| content != chat.content) {
+        if expected_content.is_some_and(|content| content != chat.content || chat.from_id != "me") {
             bail!("Message content changed during delivery");
         }
         let (status, data) = if let Some(mut results) = results {
@@ -206,7 +211,7 @@ fn delivery_impl(
                 merged.append(&mut results);
                 results = merged;
             }
-            (compute_status(&results), build_status_data_json(&results))
+            (if pending { ChatStatus::Pending } else { compute_status(&results) }, build_status_data_json(&results))
         } else {
             (ChatStatus::Failed, String::new())
         };

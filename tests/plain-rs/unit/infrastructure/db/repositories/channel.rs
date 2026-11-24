@@ -41,24 +41,6 @@ fn joined_member_ids_filters_by_joined_status() {
 }
 
 #[test]
-fn elect_leader_prefers_owner_then_smallest_online() {
-    use std::collections::HashSet;
-    let mut ch = DChannel::new("test", "owner-1");
-    ch.members = r#"[{"peerId":"owner-1","status":"JOINED"},{"peerId":"b","status":"JOINED"},{"peerId":"c","status":"JOINED"}]"#.to_string();
-
-    let online: HashSet<String> = ["b".to_string(), "c".to_string()].into_iter().collect();
-    assert_eq!(ch.elect_leader(&online, "me"), Some("b".to_string()));
-
-    let online: HashSet<String> = ["owner-1".to_string(), "c".to_string()]
-        .into_iter()
-        .collect();
-    assert_eq!(ch.elect_leader(&online, "me"), Some("owner-1".to_string()));
-
-    let empty: HashSet<String> = HashSet::new();
-    assert_eq!(ch.elect_leader(&empty, "me"), None);
-}
-
-#[test]
 fn any_channel_has_member_returns_true_when_member_found() {
     let db = Db::open(&unique_tmp_dir("has-member").join("plain.db")).expect("open db");
     let mut ch = DChannel::new("ch1", "owner");

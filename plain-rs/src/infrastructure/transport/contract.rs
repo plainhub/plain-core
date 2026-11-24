@@ -12,6 +12,8 @@ use plain_libs::utils::http_url::build_url;
 
 use crate::infrastructure::db::DPeer;
 
+pub(crate) const CHAT_DELIVERY_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(20);
+
 /// The one transport seam of the chat stack: POST an encrypted body to a
 /// peer URL with the `c-id` / `c-cid` headers and return the raw response
 /// bytes. Implementations own their HTTP client, TLS policy (peers use
@@ -45,6 +47,25 @@ pub trait PeerTransport: Send + Sync {
             .await
         }
     }
+
+    fn queued_message(
+        &self,
+        peer: &DPeer,
+        client_id: &str,
+        channel_id: &str,
+        key: &[u8],
+        sign: impl Fn() -> Result<String, String> + Send + Sync,
+    ) -> impl std::future::Future<Output = Result<(), String>> + Send {
+        async move {
+            let body = sign()?;
+            tokio::time::timeout(
+                CHAT_DELIVERY_TIMEOUT,
+                self.message(peer, client_id, channel_id, key, &body),
+            )
+            .await
+            .map_err(|_| "Peer delivery unconfirmed after 20s".to_string())?
+        }
+    }
 }
 
 /// Blanket forwarding impl so callers can pass `&Arc<T>` where `&T` is
@@ -69,6 +90,19 @@ impl<T: PeerTransport> PeerTransport for std::sync::Arc<T> {
     ) -> Result<(), String> {
         (**self)
             .message(peer, client_id, channel_id, key, body)
+            .await
+    }
+
+    async fn queued_message(
+        &self,
+        peer: &DPeer,
+        client_id: &str,
+        channel_id: &str,
+        key: &[u8],
+        sign: impl Fn() -> Result<String, String> + Send + Sync,
+    ) -> Result<(), String> {
+        (**self)
+            .queued_message(peer, client_id, channel_id, key, sign)
             .await
     }
 }

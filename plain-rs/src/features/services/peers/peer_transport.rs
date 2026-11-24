@@ -6,7 +6,8 @@ use crate::infrastructure::transport::router::Ticket;
 use crate::infrastructure::transport::router::TransportType;
 use crate::runtime::Runtime as CoreRuntime;
 use plain_libs::serde_json::{Value, json};
-use std::time::Duration;
+use std::{borrow::Cow, future::Future, time::Duration};
+use tokio::{sync::Semaphore, time::Instant};
 pub async fn capabilities(
     host: &crate::infrastructure::host::bridge::Host,
 ) -> Result<Vec<TransportType>, String> {
@@ -65,6 +66,50 @@ impl Drop for Pending<'_> {
         notify(self.state);
     }
 }
+pub(crate) struct ChatLanes {
+    routes: Semaphore,
+    lan: Semaphore,
+    ble: Semaphore,
+}
+
+impl Default for ChatLanes {
+    fn default() -> Self {
+        Self {
+            routes: Semaphore::new(32),
+            lan: Semaphore::new(3),
+            ble: Semaphore::new(1),
+        }
+    }
+}
+
+impl ChatLanes {
+    fn lane(&self, transport: TransportType) -> Option<&Semaphore> {
+        match transport {
+            TransportType::Lan => Some(&self.lan),
+            TransportType::Ble => Some(&self.ble),
+            TransportType::Aware => None,
+        }
+    }
+}
+
+async fn spend<T>(
+    budget: &mut Option<Duration>,
+    work: impl Future<Output = T>,
+) -> Result<T, String> {
+    let Some(left) = budget else {
+        return Ok(work.await);
+    };
+    if left.is_zero() {
+        return Err("Peer delivery unconfirmed after 20s".into());
+    }
+    let started = Instant::now();
+    let result = tokio::time::timeout(*left, work)
+        .await
+        .map_err(|_| "Peer delivery unconfirmed after 20s".to_string())?;
+    *left = left.saturating_sub(started.elapsed());
+    Ok(result)
+}
+
 pub async fn send(
     state: &CoreRuntime,
     peer: &DPeer,
@@ -87,29 +132,42 @@ pub async fn send_checked(
         peer,
         channel_id,
         key,
-        body,
+        || Ok(Cow::Borrowed(body)),
         Attempt::Automatic,
+        None,
         validate,
     )
     .await
 }
-pub async fn send_with_attempt(
+pub(crate) async fn send_chat(
     state: &CoreRuntime,
     peer: &DPeer,
     channel_id: &str,
     key: &[u8],
-    body: &str,
+    sign: impl Fn() -> Result<String, String>,
     attempt: Attempt,
 ) -> Result<Value, String> {
-    send_checked_with_attempt(state, peer, channel_id, key, body, attempt, || Ok(())).await
+    send_checked_with_attempt(
+        state,
+        peer,
+        channel_id,
+        key,
+        || sign().map(Cow::Owned),
+        attempt,
+        Some(&state.chat_lanes),
+        || Ok(()),
+    )
+    .await
 }
-async fn send_checked_with_attempt(
+
+async fn send_checked_with_attempt<'a>(
     state: &CoreRuntime,
     peer: &DPeer,
     channel_id: &str,
     key: &[u8],
-    body: &str,
+    body: impl Fn() -> Result<Cow<'a, str>, String>,
     attempt: Attempt,
+    lanes: Option<&ChatLanes>,
     validate: impl Fn() -> Result<(), String>,
 ) -> Result<Value, String> {
     if key.len() != 32 {
@@ -118,12 +176,22 @@ async fn send_checked_with_attempt(
     if *state.stop.borrow() {
         return Err("Core stopped".into());
     }
+    let mut stop = state.stop.clone();
+    let _chat_route = match lanes {
+        Some(lanes) => Some(tokio::select! {
+            _ = stop.changed() => return Err("Core stopped".into()),
+            permit = lanes.routes.acquire() => permit.map_err(|e| e.to_string())?,
+        }),
+        None => None,
+    };
+    let mut budget =
+        lanes.map(|_| crate::infrastructure::transport::contract::CHAT_DELIVERY_TIMEOUT);
     let host = &state.host;
     let router = &state.transport;
     let mut available = vec![TransportType::Lan];
     available.extend(
-        capabilities(host)
-            .await?
+        spend(&mut budget, capabilities(host))
+            .await??
             .into_iter()
             .filter(|kind| *kind != TransportType::Lan),
     );
@@ -144,13 +212,23 @@ async fn send_checked_with_attempt(
         ticket: first,
     };
     loop {
+        let _lane = match lanes.and_then(|lanes| lanes.lane(pending.ticket.transport)) {
+            Some(lane) => Some(tokio::select! {
+                _ = stop.changed() => return Err("Core stopped".into()),
+                permit = lane.acquire() => permit.map_err(|e| e.to_string())?,
+            }),
+            None => None,
+        };
         notify(state);
         validate()?;
         crate::features::services::peers::peer_address::current_identity(&state.db, &peer.id, peer)
             .map_err(|e| e.to_string())?;
+        let body = body()?;
         if pending.ticket.transport == TransportType::Lan {
-            let mut stop = state.stop.clone();
-            let response = tokio::select! {_=stop.changed()=>return Err("Core stopped".into()),result=crate::features::services::peers::peer_lan::send(state,peer,channel_id,key,body,&validate)=>result};
+            let response = tokio::select! {
+                _ = stop.changed() => return Err("Core stopped".into()),
+                result = spend(&mut budget, crate::features::services::peers::peer_lan::send(state, peer, channel_id, key, &body, &validate)) => result?,
+            };
             match response {
                 Ok(response) => {
                     validate()?;
@@ -184,24 +262,27 @@ async fn send_checked_with_attempt(
                 }
             }
         }
-        let attempt = tokio::time::timeout(Duration::from_secs(15), async {
+        let exchange = tokio::time::timeout(Duration::from_secs(15), async {
             match pending.ticket.transport {
                 TransportType::Aware => {
                     crate::features::services::peers::peer_sdk::aware_send(
-                        state, peer, channel_id, key, body,
+                        state, peer, channel_id, key, &body,
                     )
                     .await
                 }
                 TransportType::Ble => {
                     crate::features::services::peers::peer_sdk::ble_send(
-                        state, peer, channel_id, key, body,
+                        state, peer, channel_id, key, &body,
                     )
                     .await
                 }
                 TransportType::Lan => unreachable!(),
             }
-        })
-        .await;
+        });
+        let attempt = tokio::select! {
+            _ = stop.changed() => return Err("Core stopped".into()),
+            result = spend(&mut budget, exchange) => result?,
+        };
         let outcome = match attempt {
             Err(_) => return Err("SDK response timed out; delivery is unconfirmed".into()),
             Ok(Ok(response)) => {

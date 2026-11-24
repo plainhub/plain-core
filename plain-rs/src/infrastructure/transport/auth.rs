@@ -11,7 +11,7 @@ use plain_libs::utils::base64::base64_decode;
 use std::time::{SystemTime, UNIX_EPOCH};
 // Existing chat receipt lifetime; independent of HTTP request freshness.
 pub(crate) const TIMESTAMP_WINDOW_MS: u64 = 5 * 60 * 1000;
-const GRAPHQL_WINDOW_MS: u64 = 60_000;
+pub(crate) const GRAPHQL_WINDOW_MS: u64 = 60_000;
 
 pub struct AuthenticatedPeer {
     pub peer: DPeer,

@@ -358,3 +358,92 @@ async fn concurrent_sends_serialize_and_reload_content_after_old_attempt_finishe
     assert!(saved.content.contains("newer"));
     assert_eq!(transport.calls.load(Ordering::SeqCst), 2);
 }
+
+#[tokio::test]
+async fn channel_delivers_to_online_members_while_first_member_waits() {
+    struct Waiting {
+        release: tokio::sync::Notify,
+        received: Mutex<Vec<String>>,
+    }
+    impl PeerTransport for Waiting {
+        async fn post<'a>(&'a self, _: &'a str, _: &'a str, _: Option<&'a str>, _: &'a [u8]) -> std::result::Result<Vec<u8>, String> {
+            unreachable!()
+        }
+        async fn message(&self, peer: &DPeer, _: &str, _: &str, _: &[u8], _: &str) -> std::result::Result<(), String> {
+            if peer.id == "offline" {
+                self.release.notified().await;
+                return Err("offline".into());
+            }
+            self.received.lock().unwrap().push(peer.id.clone());
+            Ok(())
+        }
+    }
+    let (db, key) = setup();
+    let client = "706c6169-1ac2-825a-8c79-0951ec181d4a";
+    let mut channel = crate::infrastructure::db::DChannel::new("group", client);
+    channel.id = "concurrent-group".into();
+    channel.key = base64_encode(&[7; 32]);
+    channel.members = json!([
+        {"peerId":client,"status":"JOINED"},
+        {"peerId":"offline","status":"JOINED"},
+        {"peerId":"peer","status":"JOINED"},
+        {"peerId":"unpaired","status":"JOINED"}
+    ]).to_string();
+    channels::save(&db, &[channel.clone()], SaveMode::Insert).unwrap();
+    let row = message_lifecycle::create(&db, "", &channel.id, TEXT).unwrap();
+    let delivery = Delivery::new(db.clone(), Arc::from(plain_libs::crypto::gen_token()));
+    let transport = Waiting { release: tokio::sync::Notify::new(), received: Mutex::new(vec![]) };
+    let mut sending = std::pin::pin!(delivery.send(&transport, client, &key, &row.id, None));
+    std::future::poll_fn(|cx| {
+        assert!(std::future::Future::poll(sending.as_mut(), cx).is_pending());
+        std::task::Poll::Ready(())
+    }).await;
+    let mut received = transport.received.lock().unwrap().clone();
+    received.sort();
+    assert_eq!(received, ["peer", "unpaired"], "online recipients must not wait for the first offline device");
+    let progress = messages::get(&db, &row.id).unwrap().unwrap();
+    assert_eq!(progress.status, ChatStatus::Pending);
+    let results: Value = plain_libs::serde_json::from_str(progress.status_data.as_deref().unwrap()).unwrap();
+    assert_eq!(results["results"].as_array().unwrap().len(), 2);
+    transport.release.notify_one();
+    let done = sending.await.unwrap().chat.unwrap();
+    assert_eq!(done.status, ChatStatus::Partial);
+}
+
+#[tokio::test]
+async fn different_messages_to_the_same_device_keep_their_order() {
+    struct Holding {
+        calls: Mutex<Vec<String>>,
+        release: tokio::sync::Notify,
+    }
+    impl PeerTransport for Holding {
+        async fn post<'a>(&'a self, _: &'a str, _: &'a str, _: Option<&'a str>, _: &'a [u8]) -> std::result::Result<Vec<u8>, String> {
+            unreachable!()
+        }
+        async fn message(&self, _: &DPeer, _: &str, _: &str, _: &[u8], body: &str) -> std::result::Result<(), String> {
+            let wire: Value = plain_libs::serde_json::from_str(body).unwrap();
+            let msg: Value = plain_libs::serde_json::from_str(wire["variables"]["content"].as_str().unwrap()).unwrap();
+            let text = msg["value"]["text"].as_str().unwrap();
+            self.calls.lock().unwrap().push(text.into());
+            if text == "first" { self.release.notified().await; }
+            Ok(())
+        }
+    }
+    let (db, key) = setup();
+    let delivery = Delivery::new(db.clone(), Arc::from(plain_libs::crypto::gen_token()));
+    let transport = Holding { calls: Mutex::new(vec![]), release: tokio::sync::Notify::new() };
+    let first = message_lifecycle::create(&db, "peer", "", &TEXT.replace("fixture", "first")).unwrap();
+    let second = message_lifecycle::create(&db, "peer", "", &TEXT.replace("fixture", "second")).unwrap();
+    let mut a = std::pin::pin!(delivery.send(&transport, "me", &key, &first.id, None));
+    let mut b = std::pin::pin!(delivery.send(&transport, "me", &key, &second.id, None));
+    poll_fn(|cx| {
+        assert!(a.as_mut().poll(cx).is_pending());
+        assert!(b.as_mut().poll(cx).is_pending());
+        Poll::Ready(())
+    }).await;
+    assert_eq!(*transport.calls.lock().unwrap(), ["first"]);
+    transport.release.notify_one();
+    assert_eq!(a.await.unwrap().chat.unwrap().status, ChatStatus::Sent);
+    assert_eq!(b.await.unwrap().chat.unwrap().status, ChatStatus::Sent);
+    assert_eq!(*transport.calls.lock().unwrap(), ["first", "second"]);
+}

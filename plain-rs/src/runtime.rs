@@ -66,6 +66,7 @@ pub struct Runtime {
     pub downloads: Arc<crate::features::downloads::queue::Queue>,
     pub(crate) attachments: Arc<crate::features::chat::attachments::attachment_imports::Imports>,
     pub(crate) delivery: Arc<crate::features::chat::delivery::Delivery>,
+    pub(crate) chat_lanes: Arc<crate::features::services::peers::peer_transport::ChatLanes>,
     pub(crate) channel_delivery: Arc<tokio::sync::Semaphore>,
     pub ble_transport: Arc<crate::features::services::peers::ble_transport::Runtime>,
     pub(crate) ble_pairing: Arc<crate::features::services::discovery::ble_pairing::Pairings>,
@@ -394,6 +395,7 @@ impl Runtime {
                 (*db).clone(),
                 token.clone(),
             )),
+            chat_lanes: Arc::default(),
             channel_delivery: Arc::new(tokio::sync::Semaphore::new(4)),
             ble_transport: Arc::new(
                 crate::features::services::peers::ble_transport::Runtime::default(),

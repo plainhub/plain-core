@@ -73,7 +73,13 @@ pub async fn send(
         .body(cipher)
         .send()
         .await
-        .map_err(|e| Failure::Unavailable(e.to_string()))?;
+        .map_err(|error| {
+            Failure::Unavailable(if error.is_timeout() && !error.is_connect() {
+                "LAN response timed out; delivery is unconfirmed".into()
+            } else {
+                error.to_string()
+            })
+        })?;
     let status = response.status();
     let bytes = limited(response, 4 * 1024 * 1024)
         .await

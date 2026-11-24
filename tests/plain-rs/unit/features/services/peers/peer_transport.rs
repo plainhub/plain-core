@@ -245,3 +245,77 @@ async fn cancel_releases_route_and_malformed_raw_ble_response_is_terminal() {
     host.disconnect(generation);
     server.shutdown().await;
 }
+
+#[tokio::test]
+async fn chat_transport_limits_are_shared_and_ble_does_not_hold_a_lan_slot() {
+    let (_dir, server, state) = state();
+    let lanes = &state.chat_lanes;
+    let lan = lanes.lane(TransportType::Lan).unwrap();
+    let ble = lanes.lane(TransportType::Ble).unwrap();
+    let _ble = ble.try_acquire().unwrap();
+    assert!(ble.try_acquire().is_err());
+    let _lan1 = lan.try_acquire().unwrap();
+    let _lan2 = lan.try_acquire().unwrap();
+    let _lan3 = lan.try_acquire().unwrap();
+    assert!(state.clone().chat_lanes.lane(TransportType::Lan).unwrap().try_acquire().is_err());
+    drop(_lan1);
+    assert!(lan.try_acquire().is_ok());
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn queued_ble_chat_does_not_sign_or_send_until_its_slot_opens() {
+    let (_dir, server, state) = state();
+    let first = peer();
+    let mut second = peer();
+    second.id = "second-fixture".into();
+    peers::save(&state.db, &[second.clone()], crate::infrastructure::db::chat_store::SaveMode::Insert).unwrap();
+    let (generation, mut requests) = crate::test_support::HostRequests::connect(&state.host);
+    let signed = std::sync::atomic::AtomicUsize::new(0);
+    let mut a = std::pin::pin!(send_chat(&state, &first, "", &[7; 32], || Ok("first".into()), Attempt::Automatic));
+    let mut b = std::pin::pin!(send_chat(&state, &second, "", &[7; 32], || {
+        signed.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        Ok("second".into())
+    }, Attempt::Automatic));
+    macro_rules! pending {
+        ($send:ident) => {
+            std::future::poll_fn(|cx| {
+                assert!($send.as_mut().poll(cx).is_pending());
+                std::task::Poll::Ready(())
+            }).await
+        };
+    }
+    pending!(a);
+    let caps = requests.try_recv().unwrap();
+    state.host.reply(generation, json!({"id":caps["id"],"result":["BLE"]})).unwrap();
+    pending!(a);
+    let first_exchange = requests.try_recv().unwrap();
+    assert_eq!(first_exchange["method"], "peerTransportBleExchange");
+
+    pending!(b);
+    let caps = requests.try_recv().unwrap();
+    state.host.reply(generation, json!({"id":caps["id"],"result":["BLE"]})).unwrap();
+    pending!(b);
+    assert!(requests.try_recv().is_err());
+    assert_eq!(signed.load(std::sync::atomic::Ordering::SeqCst), 0);
+
+    let reply_ble = |exchange: &Value| {
+        let crate::infrastructure::protocols::ble::Request::PeerGraphql { body, .. } =
+            state.ble_transport.request_for_test(&exchange["params"])
+        else { panic!("Expected peer request") };
+        let encrypted = crate::infrastructure::transport::http_response::Context::new(&body)
+            .encrypt(&[7; 32], br#"{"data":{"createChatItem":[]}}"#).unwrap();
+        let reply = state.ble_transport.reply_for_test(&exchange["params"], crate::infrastructure::protocols::ble::response(200, &encrypted).unwrap());
+        state.host.reply(generation, json!({"id":exchange["id"],"result":reply})).unwrap();
+    };
+    reply_ble(&first_exchange);
+    assert!(a.await.is_ok());
+    pending!(b);
+    let second_exchange = requests.try_recv().unwrap();
+    assert_eq!(second_exchange["method"], "peerTransportBleExchange");
+    assert_eq!(signed.load(std::sync::atomic::Ordering::SeqCst), 1);
+    reply_ble(&second_exchange);
+    assert!(b.await.is_ok());
+    state.host.disconnect(generation);
+    server.shutdown().await;
+}

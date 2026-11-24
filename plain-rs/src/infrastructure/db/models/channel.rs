@@ -43,43 +43,4 @@ impl DChannel {
             .map(|m| m.peer_id)
             .collect()
     }
-
-    /// Elect a leader for this channel from the online joined members.
-    ///
-    /// Direct translation of plain-app `DChatChannel.electLeader`:
-    /// ```kotlin
-    /// fun electLeader(onlinePeerIds: Set<String>, myId: String): String? {
-    ///     val joined = joinedMembers()
-    ///     val onlineJoined = joined.filter { it.id == myId || onlinePeerIds.contains(it.id) }
-    ///     if (onlineJoined.isEmpty()) return null
-    ///     val ownerPeerId = if (owner == "me") myId else owner
-    ///     if (onlineJoined.any { it.id == ownerPeerId }) return ownerPeerId
-    ///     return onlineJoined.minByOrNull { it.id }?.id
-    /// }
-    /// ```
-    ///
-    /// 1. Owner is preferred if online.
-    /// 2. Fall back to the smallest online joined member id (including self).
-    /// 3. Returns `None` if no eligible member is online.
-    pub fn elect_leader(
-        &self,
-        online_ids: &std::collections::HashSet<String>,
-        _my_id: &str,
-    ) -> Option<String> {
-        if online_ids.is_empty() {
-            return None;
-        }
-        // Owner is preferred (plain-app resolves "me" sentinel → my_id;
-        // in Rust the owner is stored as the real peer id).
-        if let Some(owner) = self
-            .owner_id
-            .as_ref()
-            .filter(|owner| online_ids.contains(*owner))
-        {
-            return Some(owner.clone());
-        }
-        // Fallback: smallest id among ALL online joined members.
-        // Mirrors `onlineJoined.minByOrNull { it.id }?.id` — includes self.
-        online_ids.iter().min().cloned()
-    }
 }

@@ -16,20 +16,20 @@ impl PeerTransport for Transport {
     ) -> Result<Vec<u8>, String> {
         Err("Raw mobile HTTP transport unavailable".into())
     }
-    async fn message(
+    async fn queued_message(
         &self,
         peer: &DPeer,
         _: &str,
         channel_id: &str,
         key: &[u8],
-        body: &str,
+        sign: impl Fn() -> Result<String, String> + Send + Sync,
     ) -> Result<(), String> {
-        let response = crate::features::services::peers::peer_transport::send_with_attempt(
+        let response = crate::features::services::peers::peer_transport::send_chat(
             &self.state,
             peer,
             channel_id,
             key,
-            body,
+            sign,
             self.attempt,
         )
         .await?;
@@ -78,8 +78,10 @@ pub async fn deliver_observed(
                         .events
                         .send(crate::infrastructure::events::WsEvent::broadcast(
                             crate::features::chat::events::WS_MESSAGE_UPDATED,
-                            plain_libs::serde_json::json!([crate::features::chat::service::chat_to_json(chat)])
-                                .to_string(),
+                            plain_libs::serde_json::json!([
+                                crate::features::chat::service::chat_to_json(chat)
+                            ])
+                            .to_string(),
                         ));
                 },
             )
@@ -95,7 +97,8 @@ pub async fn deliver_observed(
             .events
             .send(crate::infrastructure::events::WsEvent::broadcast(
                 crate::features::chat::events::WS_MESSAGE_UPDATED,
-                plain_libs::serde_json::json!([crate::features::chat::service::chat_to_json(chat)]).to_string(),
+                plain_libs::serde_json::json!([crate::features::chat::service::chat_to_json(chat)])
+                    .to_string(),
             ));
     }
     Ok(receipt)
