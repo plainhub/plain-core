@@ -394,17 +394,26 @@ async fn aborted_scan_future_releases_the_shared_job_and_failed_scans_report_par
         Status::Canceled
     );
     catalog.read_gate = None;
+    let not_a_file = directory.path().join("folder");
+    std::fs::create_dir(&not_a_file).unwrap();
     let result = catalog
         .scan_files(
             crate::features::enums::DataType::Doc,
-            vec![path.to_str().unwrap().into(), "invalid-reference".into()],
+            vec![
+                path.to_str().unwrap().into(),
+                not_a_file.to_str().unwrap().into(),
+            ],
         )
         .await
         .unwrap();
     assert_eq!(result.status, Status::Failed);
     assert_eq!(result.total_files, Some(2));
     assert_eq!(result.processed_files, 1);
-    assert!(result.error.is_some());
+    assert!(
+        result.error.as_deref().unwrap_or_default().contains("is not a regular file"),
+        "{:?}",
+        result.error
+    );
     assert_eq!(
         catalog
             .count(crate::features::enums::DataType::Doc)
