@@ -14,7 +14,6 @@ fn open_trash_fixture_with_catalog(root: &Path, system_media_catalog: bool) -> c
 
     let mut config = plain_rs::infrastructure::platform::startup::config();
     config.cache_dir = Some(root.join("cache").to_str().unwrap().into());
-    config.filesystem_media_trash = true;
     config.system_media_catalog = system_media_catalog;
     let data = root.join("core");
     std::fs::create_dir_all(&data).unwrap();
@@ -52,7 +51,7 @@ async fn filesystem_trash_uses_shared_file_operations_with_an_active_system_cata
         let responder = tokio::spawn(async move {
             while let Some(request) = requests.recv().await {
                 let result = match request["method"].as_str().unwrap() {
-                    "systemCapabilities" => json!(["MEDIA_DELETE", "MEDIA_MOVE"]),
+                    "systemCapabilities" => json!(["MEDIA_MOVE"]),
                     "systemAccessFacts" => {
                         json!({"granted":{"IMAGES":true,"VIDEOS":true,"AUDIO":true,"DOCS":true,"FILES":true}})
                     }
@@ -102,6 +101,118 @@ async fn filesystem_trash_uses_shared_file_operations_with_an_active_system_cata
 }
 
 #[cfg(all(feature = "media", not(any(target_os = "android", target_os = "ios"))))]
+fn browser_session(state: &plain_rs::runtime::Runtime) -> plain_rs::infrastructure::db::SessionRow {
+    let mut session =
+        plain_rs::features::services::sessions::create(state, "Browser fixture".into()).unwrap();
+    session.r#type = plain_rs::features::sessions::SessionType::Login;
+    state.db.session_save(&session).unwrap();
+    session
+}
+
+#[cfg(all(feature = "media", not(any(target_os = "android", target_os = "ios"))))]
+async fn browser_graphql(
+    state: &crate::server::ServerState,
+    browser: &plain_rs::infrastructure::db::SessionRow,
+    query: String,
+) -> plain_libs::serde_json::Value {
+    use plain_libs::axum::{body, extract::State, http};
+    use plain_libs::serde_json::json;
+    use plain_rs::infrastructure::transport::{http_request, http_response};
+
+    let key = plain_rs::features::sessions::token_key(&browser.token).unwrap();
+    let document = json!({"requestId":plain_rs::features::record_id::generate(),"query":query}).to_string();
+    let request = http_request::encrypt_raw(&key, "POST", "/graphql", document.as_bytes()).unwrap();
+    let mut headers = http::HeaderMap::new();
+    headers.insert("c-id", browser.client_id.parse().unwrap());
+    let response = crate::http::graphql::call(State(state.clone()), headers, body::Bytes::from(request.clone())).await;
+    assert_eq!(response.status(), http::StatusCode::OK);
+    let bytes = body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let payload = http_response::Context::new(&request).decrypt(&key, &bytes).unwrap();
+    plain_libs::serde_json::from_slice(&payload).unwrap()
+}
+
+#[cfg(all(feature = "media", not(any(target_os = "android", target_os = "ios"))))]
+#[tokio::test]
+async fn system_photo_trash_restores_the_same_asset_without_moving_it() {
+    use plain_graphql::Request;
+    use std::sync::{Arc, atomic::{AtomicUsize, Ordering}};
+    use plain_libs::serde_json::{Value, json};
+
+    let directory = plain_libs::temporary::tempdir().unwrap();
+    let core = open_trash_fixture(directory.path());
+    let state = core.runtime_state();
+    let (generation, mut requests) = state.host.connect();
+    let host = state.host.clone();
+    let delete_requests = Arc::new(AtomicUsize::new(0));
+    let requests_seen = delete_requests.clone();
+    let responder = tokio::spawn(async move {
+        while let Some(request) = requests.recv().await {
+            let result = match request["method"].as_str().unwrap() {
+                "systemCapabilities" => json!(["MEDIA_MOVE"]),
+                "systemAccessFacts" => json!({"granted":{"IMAGES":true,"VIDEOS":true,"FILES":true}}),
+                "photoCatalogSnapshot" => json!({"revision":"1","total":2}),
+                "photoCatalogVerify" => json!(true),
+                "photoCatalogPage" => json!([
+                    {"id":"image/0","name":"live.heic","mediaType":1,"durationMs":0,"width":10,"height":10,
+                     "createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-01T00:00:00Z","favorite":true},
+                    {"id":"video/0","name":"clip.mov","mediaType":2,"durationMs":100,"width":10,"height":10,
+                     "createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-01T00:00:00Z","favorite":false}
+                ]),
+                "deletePhotoAssets" => {
+                    assert_eq!(request["params"]["ids"], json!(["image/0"]));
+                    json!(requests_seen.fetch_add(1, Ordering::SeqCst) > 0)
+                }
+                _ => Value::Null,
+            };
+            host.reply(generation, json!({"id":request["id"],"result":result})).unwrap();
+        }
+    });
+    state.file_platform.photos.sync(&state.core.db, &state.host).await.unwrap();
+    let executor = core.native_graphql().unwrap();
+    let browser = browser_session(&state.core);
+    state.prefs.set("api_permissions", json!(["IMAGES", "VIDEOS"])).unwrap();
+    for (kind, rows, id) in [("IMAGE", "images", "image/0"), ("VIDEO", "videos", "video/0")] {
+        let mutation = format!(r#"mutation {{trashMediaItems(type:{kind},query:"ids:photos:{id}"){{affectedCount}}}}"#);
+        let moved = browser_graphql(&state, &browser, mutation.clone()).await;
+        assert_eq!(moved["data"]["trashMediaItems"]["affectedCount"], 1, "{moved}");
+        let listed = executor.execute(Request::new(format!(
+            r#"{{active:{rows}(query:"",offset:0,limit:10,sortBy:UPDATED_AT_DESC){{id}} trashed:{rows}(query:"trash:true",offset:0,limit:10,sortBy:UPDATED_AT_DESC){{id path}} trashedFiles(query:"",offset:0,limit:10){{path}}}}"#
+        ))).await;
+        assert!(listed.errors.is_empty(), "{:?}", listed.errors);
+        let data = listed.data.into_json().unwrap();
+        assert_eq!(data["active"], json!([]));
+        assert_eq!(data["trashed"], json!([{"id":format!("photos:{id}"),"path":format!("ph://{id}")}]));
+        assert_eq!(data["trashedFiles"], json!([]));
+        let restored = executor.execute(Request::new(format!(
+            r#"mutation {{restoreMediaItems(type:{kind},query:"ids:photos:{id}"){{affectedCount}}}}"#
+        ))).await;
+        assert!(restored.errors.is_empty(), "{:?}", restored.errors);
+        assert_eq!(restored.data.into_json().unwrap()["restoreMediaItems"]["affectedCount"], 1);
+        if kind == "IMAGE" {
+            let delete = format!(r#"mutation {{deleteMediaItems(type:{kind},query:"ids:photos:{id}"){{affectedCount}}}}"#);
+            let execute = async |query: &str| {
+                let result = executor.execute(Request::new(query)).await;
+                assert!(result.errors.is_empty(), "{:?}", result.errors);
+                result.data.into_json().unwrap()
+            };
+            assert_eq!(execute(&delete).await["deleteMediaItems"]["affectedCount"], 0);
+            assert_eq!(execute(&mutation).await["trashMediaItems"]["affectedCount"], 1);
+            let refused = browser_graphql(&state, &browser, delete.clone()).await;
+            assert_eq!(refused["errors"][0]["message"], "System photos must be deleted on the iPhone");
+            assert_eq!(delete_requests.load(Ordering::SeqCst), 0);
+            assert_eq!(execute(&delete).await["deleteMediaItems"]["affectedCount"], 0);
+            let count = r#"{imageCount(query:"trash:true")}"#;
+            assert_eq!(execute(count).await["imageCount"], 1);
+            assert_eq!(execute(&delete).await["deleteMediaItems"]["affectedCount"], 1);
+            assert_eq!(execute(count).await["imageCount"], 0);
+            assert_eq!(delete_requests.load(Ordering::SeqCst), 2);
+        }
+    }
+    core.stop_core().await;
+    responder.abort();
+}
+
+#[cfg(all(feature = "media", not(any(target_os = "android", target_os = "ios"))))]
 fn respond_to_media_host(
     host: std::sync::Arc<plain_rs::infrastructure::host::bridge::Host>,
 ) -> tokio::task::JoinHandle<()> {
@@ -111,7 +222,7 @@ fn respond_to_media_host(
     tokio::spawn(async move {
         while let Some(request) = requests.recv().await {
             let result = match request["method"].as_str().unwrap() {
-                "systemCapabilities" => json!(["MEDIA_DELETE", "MEDIA_MOVE"]),
+                "systemCapabilities" => json!(["MEDIA_MOVE"]),
                 "systemAccessFacts" => json!({"granted":{
                     "IMAGES":true, "VIDEOS":true, "AUDIO":true, "DOCS":true
                 }}),
@@ -158,25 +269,17 @@ async fn existing_media_delete_filters_trash_and_preserves_unselected_files() {
         })
         .collect::<Vec<_>>();
     let rows = catalog.record_files(&metadata).unwrap();
-    core.runtime_state()
-        .core
-        .db
-        .with_conn(|conn| {
-            conn.execute(
-                "UPDATE files SET trashed_at='2026-01-01T00:00:00Z',original_path=path WHERE id=?1",
-                [&rows[1].id],
-            )
-        })
-        .unwrap();
+    let trash = plain_rs::features::files::trash::Trash::new(core.runtime_state().db.clone());
+    let stored = trash.trash_paths(vec![rows[1].path.clone()]).await.unwrap();
     let ids = rows.iter().map(|row| row.id.clone()).collect::<Vec<_>>();
     let native = core.native_graphql().unwrap();
     let response = native.execute(plain_graphql::Request::new("mutation Delete($query: String!) { deleteMediaItems(type: DOC, query: $query) { affectedCount } }")
-        .variables(plain_graphql::Variables::from_json(plain_libs::serde_json::json!({"query":format!("ids:{} trash:false",ids.join(","))})))).await;
+        .variables(plain_graphql::Variables::from_json(plain_libs::serde_json::json!({"query":format!("ids:{}",ids.join(","))})))).await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     let data = response.data.into_json().unwrap();
     assert_eq!(data["deleteMediaItems"]["affectedCount"], 1);
-    assert!(!paths[0].exists());
-    assert!(paths[1].exists());
+    assert!(paths[0].exists());
+    assert!(!Path::new(&stored[0]).exists());
     assert!(
         catalog
             .by_path(
@@ -184,7 +287,7 @@ async fn existing_media_delete_filters_trash_and_preserves_unselected_files() {
                 paths[0].to_str().unwrap()
             )
             .unwrap()
-            .is_none()
+            .is_some()
     );
     assert!(
         catalog
@@ -193,7 +296,7 @@ async fn existing_media_delete_filters_trash_and_preserves_unselected_files() {
                 paths[1].to_str().unwrap()
             )
             .unwrap()
-            .is_some()
+            .is_none()
     );
     core.stop_core().await;
     let response = native
@@ -239,22 +342,24 @@ async fn image_delete_updates_index_before_any_parent_consumes_the_receipt() {
     let responder = tokio::spawn(async move {
         while let Some(request) = requests.recv().await {
             let reply = match request["method"].as_str().unwrap() {
-                "systemCapabilities" => plain_libs::serde_json::json!(["MEDIA_DELETE", "MEDIA_MOVE"]),
+                "systemCapabilities" => plain_libs::serde_json::json!(["MEDIA_MOVE"]),
                 _ => plain_libs::serde_json::Value::Null,
             };
             host.reply(generation, plain_libs::serde_json::json!({"id":request["id"],"result":reply})).unwrap();
         }
     });
+    let stored = plain_rs::features::files::trash::Trash::new(state.db.clone())
+        .trash_paths(vec![rows[0].path.clone()]).await.unwrap();
     let index = state.core.index.clone();
     let version = index.status().version;
     let response = core.native_graphql().unwrap().execute(plain_graphql::Request::new("mutation Delete($query: String!) { deleteMediaItems(type: IMAGE, query: $query) { affectedCount } }")
-        .variables(plain_graphql::Variables::from_json(plain_libs::serde_json::json!({"query":format!("ids:{} trash:false",rows[0].id)})))).await;
+        .variables(plain_graphql::Variables::from_json(plain_libs::serde_json::json!({"query":format!("ids:{}",rows[0].id)})))).await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     assert_eq!(
         response.data.into_json().unwrap()["deleteMediaItems"]["affectedCount"],
         1
     );
-    assert!(!path.exists());
+    assert!(!Path::new(&stored[0]).exists());
     assert_eq!(
         catalog
             .count(plain_rs::features::enums::DataType::Image)
@@ -308,9 +413,11 @@ async fn native_main_delete_has_no_host_exchange_and_publishes_each_event_once()
     let source = directory.path().join("note.txt");
     std::fs::write(&source, b"document").unwrap();
     let id = seed(&state.db, &source);
+    let stored = plain_rs::features::files::trash::Trash::new(state.db.clone())
+        .trash_paths(vec![source.to_string_lossy().into_owned()]).await.unwrap();
     let (_generation, mut requests) = state.host.connect();
     let mut events = state.events.subscribe();
-    let response = core.native_graphql().unwrap().execute(plain_graphql::Request::new("mutation Delete($query: String!) { deleteMediaItems(type: DOC, query: $query) { affectedCount } }").variables(plain_graphql::Variables::from_json(plain_libs::serde_json::json!({"query":format!("ids:{id} trash:false")})))).await;
+    let response = core.native_graphql().unwrap().execute(plain_graphql::Request::new("mutation Delete($query: String!) { deleteMediaItems(type: DOC, query: $query) { affectedCount } }").variables(plain_graphql::Variables::from_json(plain_libs::serde_json::json!({"query":format!("ids:{id}")})))).await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     assert!(requests.try_recv().is_err());
     let mut content = 0;
@@ -321,7 +428,7 @@ async fn native_main_delete_has_no_host_exchange_and_publishes_each_event_once()
         }
     }
     assert_eq!(content, 1);
-    assert!(!source.exists());
+    assert!(!Path::new(&stored[0]).exists());
     core.stop_core().await;
 }
 
@@ -338,14 +445,17 @@ async fn partial_main_media_actions_invalidate_only_completed_duration_entries()
         let state = core.runtime_state().core;
         let (_generation, mut requests) = state.host.connect();
         let good_path = directory.path().join("good.mp4");
-        let blocked = directory.path().join("blocked");
+        let bad_path = directory.path().join("bad.mp4");
         std::fs::write(&good_path, b"document").unwrap();
-        std::fs::create_dir(&blocked).unwrap();
-        let bad_path = blocked.join("bad.mp4");
+        std::fs::write(&bad_path, b"document").unwrap();
         let good = seed_kind(&state.db, &good_path, kind);
         let bad = seed_kind(&state.db, &bad_path, kind);
-        std::fs::remove_dir(&blocked).unwrap();
-        std::fs::write(&blocked, b"not a directory").unwrap();
+        let stored = plain_rs::features::files::trash::Trash::new(state.db.clone())
+            .trash_paths(vec![good_path.to_string_lossy().into_owned(), bad_path.to_string_lossy().into_owned()])
+            .await.unwrap();
+        let good_path = Path::new(&stored[0]);
+        let bad_path = Path::new(&stored[1]);
+        std::fs::remove_file(bad_path).unwrap();
         let duration = |id: &str, path: &Path| Duration {
             media_type: media_type.into(),
             file_id: id.into(),
@@ -366,7 +476,7 @@ async fn partial_main_media_actions_invalidate_only_completed_duration_entries()
         let revision = state.duration_cache.revision();
         let response = core.native_graphql().unwrap().execute(plain_graphql::Request::new(format!(
             "mutation Delete($query: String!) {{ deleteMediaItems(type: {name}, query: $query) {{ affectedCount }} }}"
-        )).variables(plain_graphql::Variables::from_json(plain_libs::serde_json::json!({"query":format!("ids:{good},{bad} trash:false")})))).await;
+        )).variables(plain_graphql::Variables::from_json(plain_libs::serde_json::json!({"query":format!("ids:{good},{bad}")})))).await;
         assert_eq!(response.errors.len(), 1, "{:?}", response.errors);
         assert!(
             response.errors[0]
@@ -374,7 +484,6 @@ async fn partial_main_media_actions_invalidate_only_completed_duration_entries()
                 .contains("1 media actions failed (1 completed)")
         );
         assert!(!good_path.exists());
-        assert!(blocked.is_file());
         let remaining = state.duration_cache.all().unwrap();
         assert_eq!(remaining.len(), 1);
         assert_eq!(remaining[0].file_id, bad);
@@ -394,10 +503,7 @@ async fn partial_main_media_actions_invalidate_only_completed_duration_entries()
 #[cfg(all(feature = "media", not(any(target_os = "android", target_os = "ios"))))]
 #[tokio::test]
 async fn desktop_media_trash_round_trips_through_native_and_browser_graphql() {
-    use plain_libs::axum::{body, extract::State, http};
     use plain_libs::serde_json::{Value, json};
-    use plain_rs::features::sessions::{SessionType, token_key};
-    use plain_rs::infrastructure::transport::{http_request, http_response};
 
     let directory = plain_libs::temporary::tempdir().unwrap();
     let root = directory.path().canonicalize().unwrap();
@@ -405,36 +511,14 @@ async fn desktop_media_trash_round_trips_through_native_and_browser_graphql() {
     let state = core.runtime_state();
     let responder = respond_to_media_host(state.host.clone());
     let native = core.native_graphql().unwrap();
-    let mut browser =
-        plain_rs::features::services::sessions::create(&state, "Browser fixture".into()).unwrap();
-    browser.r#type = SessionType::Login;
-    state.db.session_save(&browser).unwrap();
-    let key = token_key(&browser.token).unwrap();
+    let browser = browser_session(&state.core);
     let execute = async |local: bool, query: String| -> Value {
         if local {
             let response = native.execute(plain_graphql::Request::new(query)).await;
-            return plain_libs::serde_json::to_value(response).unwrap();
+            plain_libs::serde_json::to_value(response).unwrap()
+        } else {
+            browser_graphql(&state, &browser, query).await
         }
-        let document = json!({"requestId":plain_rs::features::record_id::generate(),"query":query})
-            .to_string();
-        let request =
-            http_request::encrypt_raw(&key, "POST", "/graphql", document.as_bytes()).unwrap();
-        let mut headers = http::HeaderMap::new();
-        headers.insert("c-id", browser.client_id.parse().unwrap());
-        let response = crate::http::graphql::call(
-            State(state.clone()),
-            headers,
-            body::Bytes::from(request.clone()),
-        )
-        .await;
-        assert_eq!(response.status(), http::StatusCode::OK);
-        let bytes = body::to_bytes(response.into_body(), usize::MAX)
-            .await
-            .unwrap();
-        let payload = http_response::Context::new(&request)
-            .decrypt(&key, &bytes)
-            .unwrap();
-        plain_libs::serde_json::from_slice(&payload).unwrap()
     };
 
     let protected = root.join("private.txt");
@@ -462,14 +546,6 @@ async fn desktop_media_trash_round_trips_through_native_and_browser_graphql() {
         .unwrap();
 
     for local in [false, true] {
-        let capabilities = execute(local, "{ app { capabilities } }".into()).await;
-        assert!(
-            capabilities["data"]["app"]["capabilities"]
-                .as_array()
-                .unwrap()
-                .contains(&json!("MEDIA_TRASH")),
-            "local={local}: {capabilities}"
-        );
         for (kind, name, extension, field) in [
             (DataType::Image, "IMAGE", "jpg", "images"),
             (DataType::Video, "VIDEO", "mp4", "videos"),

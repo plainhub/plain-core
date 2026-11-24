@@ -1,0 +1,1 @@
+import{n as e}from"./chunk-data-Dl8cm4Yr.js";var t=(e,t)=>!!t?.includes(e),n=n=>t(e.MEDIA_MOVE,n?.capabilities);export{n,t};

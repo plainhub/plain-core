@@ -69,7 +69,7 @@ impl MediaCatalog {
         let Self::Platform { db, host, prefs } = self else {
             return None;
         };
-        if host.startup().filesystem_media_trash
+        if !host.startup().system_media_trash
             && (from_trash || super::provider_query::requests_media_trash(query))
         {
             Some(Self::Native(db.clone(), prefs.clone()))

@@ -63,10 +63,11 @@ impl MediaActions {
         action: Action,
         query: &str,
     ) -> Result<(Vec<String>, bool)> {
-        let capabilities = media_action_io::capability_list(&self.host).await?;
-        capabilities::require_list(&capabilities, media_action_io::action_capability(action))?;
-        let from_trash = action == Action::Restore
-            || (action == Action::Delete && capabilities.contains(&Capability::MediaTrash));
+        if action == Action::Move {
+            let capabilities = media_action_io::capability_list(&self.host).await?;
+            capabilities::require_list(&capabilities, Capability::MediaMove)?;
+        }
+        let from_trash = matches!(action, Action::Restore | Action::Delete);
         if !matches!(
             kind,
             DataType::Audio | DataType::Video | DataType::Image | DataType::Doc
@@ -90,8 +91,18 @@ impl MediaActions {
         action: Action,
         query: &str,
         dest_dir: &str,
+        local: bool,
     ) -> Result<i32> {
         let (ids, from_trash) = self.select_query(kind, action, query).await?;
+        if action == Action::Delete {
+            if !local && ids.iter().any(|id| super::photo_catalog::system_id(id).is_some()) {
+                plain_libs::anyhow::bail!("System photos must be deleted on the iPhone");
+            }
+            if !super::photo_catalog::delete_assets(&self.host, &ids).await
+                .map_err(plain_libs::anyhow::Error::msg)? {
+                return Ok(0);
+            }
+        }
         let result = self
             .run_batches(kind, action, ids, from_trash, dest_dir.to_owned())
             .await?;

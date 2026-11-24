@@ -11,16 +11,17 @@ impl FileTasks {
         action: Action,
         query: &str,
         destination: &str,
+        local: bool,
     ) -> Result<i32> {
         let platform = &self.hooks.platform;
         let host = &platform.host;
         if !host.uses_system_media_catalog()
-            || !host.startup().filesystem_media_trash
+            || host.startup().system_media_trash
             || action == Action::Move
         {
             return self
                 .media_actions
-                .run_query(kind, action, query, destination)
+                .run_query(kind, action, query, destination, local)
                 .await;
         }
 
@@ -74,7 +75,7 @@ impl FileTasks {
         let _guard = self.deletion_lock.lock().await;
         let mut roots = Vec::with_capacity(paths.len());
         let mut files = Vec::new();
-        let provider = self.has_provider_trash().await?;
+        let provider = self.has_provider_trash();
         for path in paths {
             plain_libs::filesystem::deletion::validate(Path::new(&path))?;
             self.hooks.platform.authorize(&path, true).await?;

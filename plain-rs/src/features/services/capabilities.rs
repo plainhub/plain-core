@@ -3,20 +3,12 @@ use crate::infrastructure::host::bridge::Host;
 use plain_libs::anyhow::{Result, anyhow, bail};
 
 pub async fn snapshot(host: &Host) -> Result<Vec<Capability>> {
-    let mut capabilities = crate::features::capability::deserialize_list(
+    crate::features::capability::deserialize_list(
         host.call("systemCapabilities", plain_libs::serde_json::json!({}))
             .await
             .map_err(plain_libs::anyhow::Error::msg)?,
     )
-    .map_err(|error| anyhow!("invalid platform capabilities: {error}"))?;
-    include_filesystem_media_trash(host, &mut capabilities);
-    Ok(capabilities)
-}
-
-pub(super) fn include_filesystem_media_trash(host: &Host, capabilities: &mut Vec<Capability>) {
-    if host.startup().filesystem_media_trash && !capabilities.contains(&Capability::MediaTrash) {
-        capabilities.push(Capability::MediaTrash);
-    }
+    .map_err(|error| anyhow!("invalid platform capabilities: {error}"))
 }
 
 pub fn require_list(capabilities: &[Capability], capability: Capability) -> Result<()> {

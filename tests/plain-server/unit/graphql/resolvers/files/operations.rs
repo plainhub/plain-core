@@ -246,7 +246,7 @@ async fn copy_and_move_use_the_shared_file_tasks() {
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 #[tokio::test]
-async fn unsupported_trash_actions_report_the_capability_without_requiring_a_storage_grant() {
+async fn trash_actions_work_without_a_separate_remote_storage_grant() {
     let (_dir, schema) = fixture(r#"["IMAGES"]"#);
     for action in ["trashMediaItems", "restoreMediaItems"] {
         let response = schema
@@ -254,11 +254,8 @@ async fn unsupported_trash_actions_report_the_capability_without_requiring_a_sto
                 r#"mutation {{ {action}(type:IMAGE, query:"all:true") {{ affectedCount }} }}"#
             ))
             .await;
-        assert_eq!(response.errors.len(), 1);
-        assert_eq!(
-            response.errors[0].message,
-            "unsupported capability MEDIA_TRASH"
-        );
+        assert!(response.errors.is_empty(), "{:?}", response.errors);
+        assert_eq!(response.data.into_json().unwrap()[action]["affectedCount"], 0);
     }
 }
 
@@ -565,6 +562,8 @@ async fn media_batches_commit_successes_and_notify_only_confirmed_ids() {
         false,
         "mp4",
     );
+    let stored = plain_rs::features::files::trash::Trash::new(database(&schema).clone())
+        .trash_paths(rows.iter().map(|row| row.path.clone()).collect()).await.unwrap();
     let selected = plain_rs::features::services::files::catalog::MediaCatalog::new(
         database(&schema).clone(),
         schema.data::<Arc<Host>>().unwrap().clone(),
@@ -573,13 +572,13 @@ async fn media_batches_commit_successes_and_notify_only_confirmed_ids() {
     .ids(
         plain_rs::features::enums::DataType::Video,
         "all:true",
-        false,
+        true,
     )
     .await
     .unwrap();
     let casualty = selected[6].clone();
-    let failed = rows.iter().find(|row| row.id == casualty).unwrap();
-    std::fs::remove_file(&failed.path).unwrap();
+    let failed = rows.iter().position(|row| row.id == casualty).unwrap();
+    std::fs::remove_file(&stored[failed]).unwrap();
     let db = schema.data::<Arc<Db>>().unwrap();
     let tag = plain_rs::features::tags::create_tag(
         db,
@@ -694,6 +693,8 @@ async fn existing_media_delete_uses_shared_batches_and_refuses_blank_queries_bef
         false,
         "mp4",
     );
+    let stored = plain_rs::features::files::trash::Trash::new(database(&schema).clone())
+        .trash_paths(rows.iter().map(|row| row.path.clone()).collect()).await.unwrap();
     let ids = rows.iter().map(|row| row.id.clone()).collect::<Vec<_>>();
     let document =
         r#"mutation($query:String!){deleteMediaItems(type:VIDEO,query:$query){affectedCount}}"#;
@@ -707,18 +708,18 @@ async fn existing_media_delete_uses_shared_batches_and_refuses_blank_queries_bef
         assert_eq!(response.errors.len(), 1, "blank query must be rejected");
     }
     assert!(
-        rows.iter()
-            .all(|row| std::path::Path::new(&row.path).exists())
+        stored.iter()
+            .all(|path| std::path::Path::new(path).exists())
     );
     for index in [6, 500] {
-        std::fs::remove_file(&rows[index].path).unwrap();
+        std::fs::remove_file(&stored[index]).unwrap();
     }
     let mut requested = ids.clone();
     requested.push(ids[0].clone());
     let response = schema
         .execute(plain_graphql::Request::new(document).variables(
             plain_graphql::Variables::from_json(
-                json!({"query":format!("ids:{} trash:false",requested.join(","))}),
+                json!({"query":format!("ids:{}",requested.join(","))}),
             ),
         ))
         .await;
@@ -740,8 +741,8 @@ async fn existing_media_delete_uses_shared_batches_and_refuses_blank_queries_bef
         .unwrap();
     assert_eq!(remaining, 2);
     assert!(
-        rows.iter()
-            .all(|row| !std::path::Path::new(&row.path).exists())
+        stored.iter()
+            .all(|path| !std::path::Path::new(path).exists())
     );
 }
 

@@ -2,6 +2,21 @@ use crate::infrastructure::{db::Db, host::bridge::Host};
 use serde::Deserialize;
 use plain_libs::serde_json::json;
 
+const ID_PREFIX: &str = "photos:";
+
+pub(super) fn system_id(id: &str) -> Option<&str> {
+    id.strip_prefix(ID_PREFIX)
+}
+
+pub(super) async fn delete_assets(host: &Host, ids: &[String]) -> Result<bool, String> {
+    let photos: Vec<_> = ids.iter().filter_map(|id| system_id(id)).collect();
+    if photos.is_empty() {
+        return Ok(true);
+    }
+    host.call_wait("deletePhotoAssets", json!({"ids":photos})).await?
+        .as_bool().ok_or_else(|| "Invalid system photo deletion receipt".into())
+}
+
 #[derive(Default)]
 pub struct PhotoCatalog(tokio::sync::Mutex<Option<(u64, String, usize)>>);
 
@@ -87,7 +102,7 @@ fn replace(db: &Db, assets: &[Asset]) -> plain_libs::rusqlite::Result<()> {
         for asset in assets {
             let created = plain_libs::utils::dbtime::normalize(&asset.created_at).map_err(|_| plain_libs::rusqlite::Error::InvalidQuery)?;
             let updated = plain_libs::utils::dbtime::normalize(&asset.updated_at).map_err(|_| plain_libs::rusqlite::Error::InvalidQuery)?;
-            let id = format!("photos:{}", asset.id);
+            let id = format!("{ID_PREFIX}{}", asset.id);
             let kind = if asset.media_type == 1 { "IMAGE" } else { "VIDEO" };
             let mime = plain_libs::utils::mime::mime_from_ext(&asset.name);
             let changed = tx.execute("UPDATE files SET file_name=?3,created_at=?4,taken_at=?4,updated_at=?5,width=?6,height=?7,title=?3,favorited=?8,kind=?9,duration_ms=?10,mime_type=?11,missing=0,indexed=1 WHERE id=?1 AND volume_id='photos' AND path=?2", params![id, asset.id, asset.name, created, updated, asset.width, asset.height, asset.favorite, kind, asset.duration_ms, mime])?;

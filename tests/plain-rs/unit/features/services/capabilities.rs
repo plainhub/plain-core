@@ -12,15 +12,15 @@ async fn support_uses_one_capability_sample_without_permission_or_method_probes(
             assert_eq!(request["method"], "systemCapabilities");
             host.reply(
                 generation,
-                plain_libs::serde_json::json!({"id":request["id"],"result":["MEDIA_DELETE"]}),
+                plain_libs::serde_json::json!({"id":request["id"],"result":["MEDIA_MOVE"]}),
             )
             .unwrap();
             assert!(requests.try_recv().is_err());
         })
     };
     let capabilities = snapshot(&host).await.unwrap();
-    assert!(require_list(&capabilities, Capability::MediaDelete).is_ok());
-    assert!(require_list(&capabilities, Capability::MediaMove).is_err());
+    assert!(require_list(&capabilities, Capability::MediaMove).is_ok());
+    assert!(require_list(&capabilities, Capability::MediaFavorite).is_err());
     worker.await.unwrap();
 }
 

@@ -42,6 +42,7 @@ async fn main_tasks_track_resolved_paths_and_gate_sdk_execution_on_platform_auth
         Arc::new(plain_rs::features::prefs::Prefs::load(&temp.path().join("prefs.json")).unwrap()),
         plain_rs::infrastructure::host::startup::StartupConfig {
             system_media_catalog: true,
+            system_media_trash: true,
             ..plain_rs::infrastructure::platform::startup::config()
         },
     )
@@ -179,6 +180,7 @@ async fn media_move_case(missing_destination: bool) {
         Arc::new(plain_rs::features::prefs::Prefs::load(&base.join("prefs")).unwrap()),
         plain_rs::infrastructure::host::startup::StartupConfig {
             system_media_catalog: true,
+            system_media_trash: true,
             ..plain_rs::infrastructure::platform::startup::config()
         },
     )

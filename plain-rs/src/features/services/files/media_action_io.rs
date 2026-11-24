@@ -16,7 +16,7 @@ use std::sync::Arc;
 #[cfg(any(target_os = "android", target_os = "ios"))]
 const FILESYSTEM: &[Capability] = &[];
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
-const FILESYSTEM: &[Capability] = &[Capability::MediaDelete, Capability::MediaMove];
+const FILESYSTEM: &[Capability] = &[Capability::MediaMove];
 
 pub fn capabilities() -> &'static [Capability] {
     FILESYSTEM
@@ -27,17 +27,7 @@ pub async fn capability_list(host: &Host) -> plain_libs::anyhow::Result<Vec<Capa
     if FILESYSTEM.is_empty() || host.uses_system_media_catalog() {
         return capabilities::snapshot(host).await;
     }
-    let mut capabilities = FILESYSTEM.to_vec();
-    capabilities::include_filesystem_media_trash(host, &mut capabilities);
-    Ok(capabilities)
-}
-
-pub fn action_capability(action: Action) -> Capability {
-    match action {
-        Action::Delete => Capability::MediaDelete,
-        Action::Move => Capability::MediaMove,
-        Action::Trash | Action::Restore => Capability::MediaTrash,
-    }
+    Ok(FILESYSTEM.to_vec())
 }
 
 enum Backend {
@@ -192,6 +182,12 @@ fn files(
     for (id, row) in ids.iter().zip(rows) {
         let changed = (|| -> Result<Item, String> {
             let (path, trashed) = row.ok_or("Media file not found")?;
+            if let Some(asset_id) = super::photo_catalog::system_id(id) {
+                if path.strip_prefix("ph://") != Some(asset_id) || action == Action::Move || trashed != from_trash {
+                    return Err("Invalid system photo operation".into());
+                }
+                return Ok(Item { id: id.clone(), path, destination_path: String::new() });
+            }
             let source = Path::new(&path);
             if !source.is_absolute()
                 || !std::fs::symlink_metadata(source)
@@ -205,20 +201,16 @@ fn files(
                 .map_err(|error| error.to_string())?;
             let destination_path = match action {
                 Action::Delete => {
-                    if trashed != from_trash {
-                        return Err("Media trash state changed".into());
+                    if !trashed {
+                        return Err("Media is not in trash".into());
                     }
-                    if from_trash {
-                        let store = trash.ok_or("Unsupported filesystem media operation")?;
-                        let item = store.resolve_item(&path)
-                            .map_err(|error| error.to_string())?
-                            .ok_or("Media trash item not found")?;
-                        tokio::runtime::Handle::current()
-                            .block_on(store.remove_trashed_payload(&item))
-                            .map_err(|error| error.to_string())?;
-                    } else {
-                        std::fs::remove_file(source).map_err(|error| error.to_string())?;
-                    }
+                    let store = trash.ok_or("Filesystem trash required")?;
+                    let item = store.resolve_item(&path)
+                        .map_err(|error| error.to_string())?
+                        .ok_or("Media trash item not found")?;
+                    tokio::runtime::Handle::current()
+                        .block_on(store.remove_trashed_payload(&item))
+                        .map_err(|error| error.to_string())?;
                     String::new()
                 }
                 Action::Move => {

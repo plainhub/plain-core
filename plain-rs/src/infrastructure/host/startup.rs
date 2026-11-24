@@ -24,7 +24,7 @@ pub struct StartupConfig {
     pub recent_files_catalog: bool,
     pub system_media_catalog: bool,
     #[serde(default)]
-    pub filesystem_media_trash: bool,
+    pub system_media_trash: bool,
     pub supported_abis: Vec<String>,
     pub update_source: Option<crate::features::updates::Source>,
     pub android_sdk_version: Option<i32>,

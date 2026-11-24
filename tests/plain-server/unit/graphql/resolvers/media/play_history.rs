@@ -129,6 +129,7 @@ async fn history_only_exposes_authorized_media_categories() {
 async fn audio_history_uses_a_supported_system_catalog_sort() {
     let host = Arc::new(Host::with_startup_config(plain_rs::infrastructure::host::startup::StartupConfig {
         system_media_catalog: true,
+        system_media_trash: true,
         ..plain_rs::infrastructure::platform::startup::config()
     }).unwrap());
     let (_dir, db, schema) = fixture_with_host(&["AUDIO"], host.clone());

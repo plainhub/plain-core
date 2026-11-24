@@ -1,5 +1,4 @@
 use super::*;
-use crate::features::capability::Capability;
 use crate::features::enums::DataType;
 use crate::features::files::trash::{TrashItem, is_trashed_path};
 use crate::features::media::actions::Action;
@@ -19,17 +18,13 @@ struct Row {
 
 
 impl FileTasks {
-    pub(super) async fn has_provider_trash(&self) -> Result<bool> {
+    pub(super) fn has_provider_trash(&self) -> bool {
         let host = &self.hooks.platform.host;
-        Ok(host.uses_system_media_catalog()
-            && !host.startup().filesystem_media_trash
-            && crate::features::services::capabilities::snapshot(host)
-                .await?
-                .contains(&Capability::MediaTrash))
+        host.uses_system_media_catalog() && host.startup().system_media_trash
     }
 
     pub(super) async fn provider_trash(&self) -> Result<Vec<(TrashItem, DataType)>> {
-        if !self.has_provider_trash().await? {
+        if !self.has_provider_trash() {
             return Ok(Vec::new());
         }
         let rows: Vec<Row> = plain_libs::serde_json::from_value(

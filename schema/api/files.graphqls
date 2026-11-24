@@ -188,6 +188,7 @@ extend type Mutation {
 	deleteChunks(fileId: String!): Boolean!
 	deleteFiles(paths: [String!]!): ActionResult!
 	"""
+	Deletes only items in the media Trash. System photos require confirmation on the iPhone.
 	A blank query would match the whole library, and a bulk delete is
 	not something a client should be able to aim at everything by
 	accident — it is refused before the platform is asked.

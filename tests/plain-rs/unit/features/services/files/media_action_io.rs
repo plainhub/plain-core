@@ -173,18 +173,21 @@ fn invalid_provider_receipts_never_reach_shared_cleanup() {
     );
 }
 
-#[test]
-fn physical_failure_preserves_queue_and_tag_references_for_only_the_failed_row() {
+#[tokio::test]
+async fn physical_failure_preserves_queue_and_tag_references_for_only_the_failed_row() {
     let directory = plain_libs::temporary::tempdir().unwrap();
-    let db = Db::open(&directory.path().join("plain.db")).unwrap();
+    let db = std::sync::Arc::new(Db::open(&directory.path().join("plain.db")).unwrap());
     let good_path = directory.path().join("good.wav");
-    let blocked = directory.path().join("blocked");
-    std::fs::write(&good_path, b"document").unwrap();
-    std::fs::create_dir(&blocked).unwrap();
+    let bad_path = directory.path().join("missing.wav");
+    for path in [&good_path, &bad_path] {
+        std::fs::write(path, b"document").unwrap();
+    }
     let good = seed_kind(&db, &good_path, DataType::Audio);
-    let bad = seed_kind(&db, &blocked.join("missing.wav"), DataType::Audio);
-    std::fs::remove_dir(&blocked).unwrap();
-    std::fs::write(&blocked, b"not a directory").unwrap();
+    let bad = seed_kind(&db, &bad_path, DataType::Audio);
+    let trash = Trash::new(db.clone());
+    let stored = trash.trash_paths([&good_path, &bad_path].into_iter()
+        .map(|path| path.to_string_lossy().into_owned()).collect()).await.unwrap();
+    std::fs::remove_file(&stored[1]).unwrap();
     db.with_conn(|connection| -> plain_libs::rusqlite::Result<()> {
         connection.execute_batch("INSERT INTO tags(id,name,type,created_at,updated_at) VALUES('audio','audio','AUDIO','now','now'),('video','video','VIDEO','now','now');")?;
         for (index, id) in [&good, &bad].into_iter().enumerate() {
@@ -198,27 +201,21 @@ fn physical_failure_preserves_queue_and_tag_references_for_only_the_failed_row()
         action: Action::Delete,
         ids: vec![good.clone(), bad.clone()],
         backend: Backend::Files {
-            trash: None,
-            from_trash: false,
+            trash: Some(trash),
+            from_trash: true,
             destination: String::new(),
             #[cfg(feature = "runtime-media")]
             scans: scans(),
         },
     };
-    let outcome = operation
-        .complete(&db, |outcome| {
-            crate::features::media::actions::cleanup(
-                &db,
-                DataType::Audio,
-                Action::Delete,
-                &outcome.successful,
-            )?;
-            Ok(outcome)
-        })
-        .unwrap();
+    let operation_db = db.clone();
+    let outcome = tokio::task::spawn_blocking(move || operation.complete(&operation_db, |outcome| {
+        crate::features::media::actions::cleanup(&operation_db, DataType::Audio, Action::Delete, &outcome.successful)?;
+        Ok(outcome)
+    })).await.unwrap().unwrap();
     assert_eq!(outcome.successful.len(), 1);
     assert_eq!(outcome.failed_ids, vec![bad.clone()]);
-    assert!(!good_path.exists());
+    assert!(!Path::new(&stored[0]).exists());
     db.with_conn(|connection| -> plain_libs::rusqlite::Result<()> {
         assert_eq!(
             connection.query_row("SELECT file_id FROM audio_queue_items", [], |row| row
@@ -283,28 +280,7 @@ fn wrong_media_type_and_corrupt_catalog_rows_never_delete_source_files() {
 }
 
 #[tokio::test]
-async fn native_media_support_is_declared_by_its_adapter_without_a_host_exchange() {
+async fn native_media_move_is_declared_without_a_host_exchange() {
     let host = Host::default();
-    let supported = capability_list(&host).await.unwrap();
-    assert!(
-        crate::features::services::capabilities::require_list(
-            &supported,
-            action_capability(Action::Delete)
-        )
-        .is_ok()
-    );
-    assert!(
-        crate::features::services::capabilities::require_list(
-            &supported,
-            action_capability(Action::Move)
-        )
-        .is_ok()
-    );
-    assert!(
-        crate::features::services::capabilities::require_list(
-            &supported,
-            action_capability(Action::Trash)
-        )
-        .is_err()
-    );
+    assert!(capability_list(&host).await.unwrap().contains(&Capability::MediaMove));
 }

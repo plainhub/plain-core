@@ -57,6 +57,7 @@ async fn platform_catalog_queries_media_independently_of_file_index_volumes() {
     let host = Arc::new(
         Host::with_startup_config(crate::infrastructure::host::startup::StartupConfig {
             system_media_catalog: true,
+            system_media_trash: true,
             ..crate::infrastructure::platform::startup::config()
         })
         .unwrap(),
@@ -418,6 +419,7 @@ async fn platform_media_entries_send_the_same_exclusion_rule_to_the_host() {
     let host = Arc::new(
         Host::with_startup_config(crate::infrastructure::host::startup::StartupConfig {
             system_media_catalog: true,
+            system_media_trash: true,
             ..crate::infrastructure::platform::startup::config()
         })
         .unwrap(),

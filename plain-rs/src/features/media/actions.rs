@@ -142,6 +142,18 @@ fn update_catalog(
         tx.execute("DELETE FROM files WHERE id=?1", [&id])?;
         return Ok(());
     }
+    if path.starts_with("ph://") {
+        return match action {
+            Action::Trash if !trashed => tx.execute(
+                "UPDATE files SET trashed_at=?2,original_path=path WHERE id=?1",
+                params![id, plain_libs::utils::dbtime::now_iso_millis()],
+            ).map(|_| ()),
+            Action::Restore if trashed => tx.execute(
+                "UPDATE files SET trashed_at=NULL,original_path=NULL WHERE id=?1", [&id],
+            ).map(|_| ()),
+            _ => Err(plain_libs::rusqlite::Error::InvalidQuery),
+        };
+    }
     let destination = match action {
         Action::Trash if !trashed => {
             if item.destination_path.is_empty() {

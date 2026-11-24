@@ -1418,6 +1418,7 @@ async fn fs_previews_trashed_images_by_system_media_id() {
         ),
         plain_rs::infrastructure::host::startup::StartupConfig {
             system_media_catalog: true,
+            system_media_trash: true,
             ..plain_rs::infrastructure::platform::startup::config()
         },
     )

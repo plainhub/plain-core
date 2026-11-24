@@ -39,7 +39,7 @@ pub(crate) struct PreparedRestore {
     rebuild: bool,
 }
 
-const TOP_LEVEL: &str = "trashed=1 AND is_available=1 AND missing=0 AND NOT EXISTS(SELECT 1 FROM file_catalog parent WHERE parent.volume_id=file_catalog.volume_id AND parent.trashed=1 AND parent.file_id<>file_catalog.file_id AND substr(file_catalog.path,1,length(parent.path)+1)=parent.path||'/')";
+const TOP_LEVEL: &str = "trashed=1 AND is_available=1 AND missing=0 AND volume_id<>'photos' AND NOT EXISTS(SELECT 1 FROM file_catalog parent WHERE parent.volume_id=file_catalog.volume_id AND parent.trashed=1 AND parent.file_id<>file_catalog.file_id AND substr(file_catalog.path,1,length(parent.path)+1)=parent.path||'/')";
 
 fn trash_item(row: &plain_libs::rusqlite::Row<'_>) -> plain_libs::rusqlite::Result<TrashItem> {
     let path: String = row.get(1)?;
@@ -59,7 +59,7 @@ impl Trash {
     }
 
     pub fn load_item(&self, id: &str) -> Result<Option<TrashItem>> {
-        Ok(self.db.with_conn(|conn|conn.query_row("SELECT id,path,original_path FROM file_catalog WHERE id=?1 AND trashed=1",[id],trash_item).optional())?)
+        Ok(self.db.with_conn(|conn|conn.query_row("SELECT id,path,original_path FROM file_catalog WHERE id=?1 AND trashed=1 AND volume_id<>'photos'",[id],trash_item).optional())?)
     }
 
     pub async fn trash_paths(&self, paths: Vec<String>) -> Result<Vec<String>> {

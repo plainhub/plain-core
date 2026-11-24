@@ -329,6 +329,7 @@ pub struct MediaItemsMutation;
 
 #[Object]
 impl MediaItemsMutation {
+    /// Deletes only items in the media Trash. System photos require confirmation on the iPhone.
     /// A blank query would match the whole library, and a bulk delete is
     /// not something a client should be able to aim at everything by
     /// accident — it is refused before the platform is asked.
@@ -446,12 +447,15 @@ async fn media_action(
         MediaDataType::IMAGE => plain_rs::features::enums::DataType::Image,
         MediaDataType::DOC => plain_rs::features::enums::DataType::Doc,
     };
+    #[cfg(target_os = "ios")]
+    crate::graphql::resolvers::media::public::catalog(ctx, data_type).await?;
     ctx.data::<Arc<plain_rs::features::services::files::file_tasks::FileTasks>>()?
         .run_media_query(
             data_type,
             action,
             query,
             dest.as_str().unwrap_or_default(),
+            public_gate::is_local(ctx),
         )
         .await
         .map_err(Into::into)
