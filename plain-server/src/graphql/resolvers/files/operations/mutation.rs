@@ -1,0 +1,415 @@
+//! Public `/graphql` roots that write: file operations, media-library
+//! actions and the resumable-upload merge state.
+//!
+use super::{MergeTask, STORAGE, merge_task, prefs};
+use crate::graphql::resolvers::files::types::File;
+use crate::graphql::resolvers::media::query::MediaDataType;
+use crate::graphql::types::ActionResult;
+use crate::http::auth::public_gate;
+use plain_graphql::{Context, Object};
+use plain_libs::serde_json::{Value, json};
+use plain_rs::features::access_error::AccessErrorCode;
+use plain_rs::features::services::files::provider_query as provider_plan;
+use plain_rs::features::services::files::provider_query::Provider;
+use plain_rs::infrastructure::db::Db;
+use std::sync::Arc;
+
+#[derive(Default)]
+pub struct FileOpsMutation;
+
+#[Object]
+impl FileOpsMutation {
+    async fn create_file(&self, ctx: &Context<'_>, path: String) -> plain_graphql::Result<File> {
+        public_gate::require(ctx, prefs(ctx), &[STORAGE])?;
+        let record = plain_rs::features::services::files::writes::execute(
+            ctx.data::<Arc<plain_rs::features::services::files::platform::FilePlatform>>()?,
+            plain_libs::filesystem::writes::Operation::CreateFile { path },
+        )
+        .await
+        .map_err(plain_graphql::Error::new)?;
+        Ok(record.into())
+    }
+    async fn delete_files(
+        &self,
+        ctx: &Context<'_>,
+        paths: Vec<String>,
+    ) -> plain_graphql::Result<ActionResult> {
+        public_gate::require(ctx, prefs(ctx), &[STORAGE])?;
+        let tasks =
+            ctx.data::<Arc<plain_rs::features::services::files::file_tasks::FileTasks>>()?;
+        Ok(ActionResult {
+            affected_count: tasks.delete_many(paths).await?,
+        })
+    }
+
+    async fn create_zip_archive(
+        &self,
+        ctx: &Context<'_>,
+        paths: Vec<String>,
+        target: String,
+    ) -> plain_graphql::Result<String> {
+        public_gate::require(ctx, prefs(ctx), &[STORAGE])?;
+        let state = ctx.data::<crate::server::ServerState>()?;
+        plain_rs::features::services::files::archive_operations::pack(
+            &state.file_platform,
+            paths,
+            target,
+            state.stop.clone(),
+        )
+        .await
+        .map_err(plain_graphql::Error::new)
+    }
+
+    async fn extract_zip_archive(
+        &self,
+        ctx: &Context<'_>,
+        path: String,
+        target: String,
+    ) -> plain_graphql::Result<String> {
+        public_gate::require(ctx, prefs(ctx), &[STORAGE])?;
+        let state = ctx.data::<crate::server::ServerState>()?;
+        plain_rs::features::services::files::archive_operations::unpack(
+            &state.file_platform,
+            path,
+            target,
+            state.stop.clone(),
+        )
+        .await
+        .map_err(plain_graphql::Error::new)
+    }
+
+    async fn cache_zip_entry(
+        &self,
+        ctx: &Context<'_>,
+        path: String,
+    ) -> plain_graphql::Result<String> {
+        public_gate::require(ctx, prefs(ctx), &[STORAGE])?;
+        let services = ctx.data::<plain_rs::runtime::Runtime>()?;
+        let path = services
+            .archives
+            .preview(&services.file_platform, path)
+            .await
+            .map_err(plain_graphql::Error::new)?;
+        Ok(path.to_string_lossy().into_owned())
+    }
+
+    async fn create_dir(&self, ctx: &Context<'_>, path: String) -> plain_graphql::Result<File> {
+        public_gate::require(ctx, prefs(ctx), &[STORAGE])?;
+        let record = plain_rs::features::services::files::writes::execute(
+            ctx.data::<Arc<plain_rs::features::services::files::platform::FilePlatform>>()?,
+            plain_libs::filesystem::writes::Operation::CreateDirectory { path },
+        )
+        .await
+        .map_err(plain_graphql::Error::new)?;
+        Ok(record.into())
+    }
+
+    async fn rename_file(
+        &self,
+        ctx: &Context<'_>,
+        path: String,
+        name: String,
+    ) -> plain_graphql::Result<Option<String>> {
+        public_gate::require(ctx, prefs(ctx), &[STORAGE])?;
+        Ok(ctx
+            .data::<Arc<plain_rs::features::services::files::file_tasks::FileTasks>>()?
+            .rename(&super::super::tasks::caller(ctx)?, path, name)
+            .await?)
+    }
+
+    async fn write_text_file(
+        &self,
+        ctx: &Context<'_>,
+        path: String,
+        content: String,
+        overwrite: bool,
+    ) -> plain_graphql::Result<File> {
+        public_gate::require(ctx, prefs(ctx), &[STORAGE])?;
+        let record = plain_rs::features::services::files::writes::execute(
+            ctx.data::<Arc<plain_rs::features::services::files::platform::FilePlatform>>()?,
+            plain_libs::filesystem::writes::Operation::WriteText {
+                path,
+                content,
+                overwrite,
+            },
+        )
+        .await
+        .map_err(plain_graphql::Error::new)?;
+        Ok(record.into())
+    }
+
+    async fn copy_file_to_directory(
+        &self,
+        ctx: &Context<'_>,
+        src: String,
+        directory: String,
+        name: String,
+    ) -> plain_graphql::Result<String> {
+        public_gate::require(ctx, prefs(ctx), &[STORAGE])?;
+        if (src.starts_with("content://") || src.starts_with("ph://"))
+            && !public_gate::is_local(ctx)
+        {
+            return Err(plain_graphql::Error::from(AccessErrorCode::NoPermission));
+        }
+        Ok(plain_rs::features::services::files::named_copy::copy(
+            ctx.data::<crate::server::ServerState>()?,
+            super::super::tasks::caller(ctx)?,
+            src,
+            directory,
+            name,
+        )
+        .await?)
+    }
+
+    async fn delete_chunks(
+        &self,
+        ctx: &Context<'_>,
+        file_id: String,
+    ) -> plain_graphql::Result<bool> {
+        public_gate::require(ctx, prefs(ctx), &[STORAGE])?;
+        let base = upload_base(ctx).await?;
+        ctx.data_unchecked::<std::sync::Arc<plain_rs::features::files::uploads::Runtime>>()
+            .delete(&base, &file_id)
+            .await
+            .map_err(|error| plain_graphql::Error::from(error))
+    }
+
+    /// Starts the merge and returns immediately; completion arrives over the
+    /// websocket, and `mergeStatus` is the polling fallback for a lost event.
+    async fn merge_chunks(
+        &self,
+        ctx: &Context<'_>,
+        file_id: String,
+        total_chunks: i32,
+        path: String,
+        replace: bool,
+        total_size: plain_rs::infrastructure::types::Long,
+    ) -> plain_graphql::Result<MergeTask> {
+        public_gate::require(ctx, prefs(ctx), &[STORAGE])?;
+        let platform =
+            ctx.data::<Arc<plain_rs::features::services::files::platform::FilePlatform>>()?;
+        let path = platform.resolve_reference(&path)?;
+        let kind = if path.starts_with("content://") {
+            if !replace {
+                return Err("Resource upload requires replacement".into());
+            }
+            let host = ctx
+                .data::<Arc<plain_rs::infrastructure::host::bridge::Host>>()?
+                .clone();
+            let destination = path.clone();
+            plain_rs::features::files::uploads::Kind::Resource {
+                name: path.rsplit('/').next().unwrap_or_default().to_owned(),
+                write: Arc::new(move |source| {
+                    let host = host.clone();
+                    let destination = destination.clone();
+                    Box::pin(async move {
+                        plain_rs::features::services::files::resources::write(
+                            &host,
+                            &source,
+                            &destination,
+                        )
+                        .await
+                        .map_err(plain_libs::anyhow::Error::msg)
+                    })
+                }),
+            }
+        } else {
+            if path.contains("://") {
+                return Err("Unsupported upload destination".into());
+            }
+            platform.authorize(&path, true).await?;
+            plain_rs::features::files::uploads::Kind::File {
+                path: path.into(),
+                replace,
+            }
+        };
+        start_merge(ctx, file_id, total_chunks, total_size.0, kind).await
+    }
+
+    async fn merge_app_file_chunks(
+        &self,
+        ctx: &Context<'_>,
+        file_id: String,
+        total_chunks: i32,
+        file_name: String,
+        total_size: plain_rs::infrastructure::types::Long,
+    ) -> plain_graphql::Result<MergeTask> {
+        public_gate::require(ctx, prefs(ctx), &[STORAGE])?;
+        start_merge(
+            ctx,
+            file_id,
+            total_chunks,
+            total_size.0,
+            plain_rs::features::files::uploads::Kind::AppFile { name: file_name },
+        )
+        .await
+    }
+}
+
+#[derive(Default)]
+pub struct MediaItemsMutation;
+
+#[Object]
+impl MediaItemsMutation {
+    /// Deletes only items in the media Trash. System photos require confirmation on the iPhone.
+    /// A blank query would match the whole library, and a bulk delete is
+    /// not something a client should be able to aim at everything by
+    /// accident — it is refused before the platform is asked.
+    async fn delete_media_items(
+        &self,
+        ctx: &Context<'_>,
+        r#type: MediaDataType,
+        query: String,
+    ) -> plain_graphql::Result<ActionResult> {
+        require_explicit_query(&query)?;
+        require_narrowing_media(ctx, r#type, &query).await?;
+        let affected = media_action(ctx, "delete", r#type, &query, Value::Null).await?;
+        Ok(ActionResult {
+            affected_count: affected,
+        })
+    }
+
+    async fn trash_media_items(
+        &self,
+        ctx: &Context<'_>,
+        r#type: MediaDataType,
+        query: String,
+    ) -> plain_graphql::Result<ActionResult> {
+        require_explicit_query(&query)?;
+        require_narrowing_media(ctx, r#type, &query).await?;
+        let affected = media_action(ctx, "trash", r#type, &query, Value::Null).await?;
+        Ok(ActionResult {
+            affected_count: affected,
+        })
+    }
+
+    async fn restore_media_items(
+        &self,
+        ctx: &Context<'_>,
+        r#type: MediaDataType,
+        query: String,
+    ) -> plain_graphql::Result<ActionResult> {
+        require_explicit_query(&query)?;
+        require_narrowing_media(ctx, r#type, &query).await?;
+        let affected = media_action(ctx, "restore", r#type, &query, Value::Null).await?;
+        Ok(ActionResult {
+            affected_count: affected,
+        })
+    }
+
+    async fn move_media_items(
+        &self,
+        ctx: &Context<'_>,
+        r#type: MediaDataType,
+        query: String,
+        dest_dir: String,
+    ) -> plain_graphql::Result<ActionResult> {
+        public_gate::require(ctx, prefs(ctx), &[STORAGE])?;
+        require_explicit_query(&query)?;
+        require_narrowing_media(ctx, r#type, &query).await?;
+        let affected = media_action(ctx, "move", r#type, &query, json!(dest_dir)).await?;
+        Ok(ActionResult {
+            affected_count: affected,
+        })
+    }
+}
+
+fn require_explicit_query(query: &str) -> plain_graphql::Result<()> {
+    if query.trim().is_empty() {
+        return Err(plain_graphql::Error::new("explicit query required"));
+    }
+    Ok(())
+}
+
+/// Refuses a media action whose query builds no clause, which would resolve to
+/// every row of the library. Blank is already the caller's business; this is
+/// the other half — a query can be non-empty and still name nothing that
+/// narrows, because the fields it carries are ones this provider does not act
+/// on.
+async fn require_narrowing_media(
+    ctx: &Context<'_>,
+    r#type: MediaDataType,
+    query: &str,
+) -> plain_graphql::Result<()> {
+    let provider = match r#type {
+        MediaDataType::AUDIO => Provider::Audio,
+        MediaDataType::VIDEO => Provider::Video,
+        MediaDataType::IMAGE => Provider::Image,
+        MediaDataType::DOC => Provider::Doc,
+    };
+    provider_plan::require_narrowing(ctx.data_unchecked::<Arc<Db>>(), provider, query)
+        .map_err(|error| plain_graphql::Error::from(error))
+}
+
+async fn media_action(
+    ctx: &Context<'_>,
+    action: &str,
+    r#type: MediaDataType,
+    query: &str,
+    dest: Value,
+) -> plain_graphql::Result<i32> {
+    public_gate::require(
+        ctx,
+        prefs(ctx),
+        &[crate::graphql::resolvers::media::query::access_feature(
+            r#type.data_type(),
+        )],
+    )?;
+    use plain_rs::features::media::actions::Action;
+    let action = match action {
+        "delete" => Action::Delete,
+        "trash" => Action::Trash,
+        "restore" => Action::Restore,
+        "move" => Action::Move,
+        _ => return Err("invalid media action".into()),
+    };
+    let data_type = match r#type {
+        MediaDataType::AUDIO => plain_rs::features::enums::DataType::Audio,
+        MediaDataType::VIDEO => plain_rs::features::enums::DataType::Video,
+        MediaDataType::IMAGE => plain_rs::features::enums::DataType::Image,
+        MediaDataType::DOC => plain_rs::features::enums::DataType::Doc,
+    };
+    #[cfg(target_os = "ios")]
+    crate::graphql::resolvers::media::query::catalog(ctx, data_type).await?;
+    ctx.data::<Arc<plain_rs::features::services::files::file_tasks::FileTasks>>()?
+        .run_media_query(
+            data_type,
+            action,
+            query,
+            dest.as_str().unwrap_or_default(),
+            public_gate::is_local(ctx),
+        )
+        .await
+        .map_err(Into::into)
+}
+
+async fn upload_base(ctx: &Context<'_>) -> plain_graphql::Result<std::path::PathBuf> {
+    Ok(ctx
+        .data::<Arc<plain_rs::features::services::files::upload_chunks::UploadChunks>>()?
+        .directory()
+        .to_path_buf())
+}
+
+async fn start_merge(
+    ctx: &Context<'_>,
+    id: String,
+    count: i32,
+    size: i64,
+    kind: plain_rs::features::files::uploads::Kind,
+) -> plain_graphql::Result<MergeTask> {
+    let base = upload_base(ctx).await?;
+    let store = ctx
+        .data_unchecked::<std::sync::Arc<plain_rs::features::files::app_files::FileStore>>()
+        .clone();
+    let runtime = ctx
+        .data_unchecked::<std::sync::Arc<plain_rs::features::files::uploads::Runtime>>()
+        .clone();
+    let events = ctx
+        .data_unchecked::<tokio::sync::broadcast::Sender<plain_rs::infrastructure::events::WsEvent>>()
+        .clone();
+    let value = runtime
+        .start(store, base, id, count, size, kind, events)
+        .await
+        .map_err(|error| plain_graphql::Error::from(error))?;
+    Ok(merge_task(&value))
+}

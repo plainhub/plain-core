@@ -1,8 +1,8 @@
-use crate::graphql::resolvers::{
-    audio::query::Audio, docs::public::Doc, images::public::Image, videos::public::Video,
-};
-use plain_rs::infrastructure::types::Instant;
-use plain_rs::infrastructure::types::Long;
+use crate::graphql::resolvers::audio::query::Audio;
+use crate::graphql::resolvers::docs::query::Doc;
+use crate::graphql::resolvers::images::query::Image;
+use crate::graphql::resolvers::videos::query::Video;
+use plain_rs::infrastructure::types::{Instant, Long};
 
 use plain_graphql::{ID, Interface};
 

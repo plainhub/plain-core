@@ -1,0 +1,125 @@
+use crate::graphql::resolvers::media::query::{prefs, row, text_field};
+use crate::graphql::resolvers::tags::domain_types::Tag;
+use crate::graphql::types::facts::{flag, optional_instant, rows};
+use crate::http::auth::public_gate;
+use plain_graphql::{Context, Object, SimpleObject};
+use plain_libs::serde_json::Value;
+use plain_rs::features::access::AccessFeature;
+use plain_rs::infrastructure::types::{Instant, Long};
+use std::sync::Arc;
+
+const FEATURE: AccessFeature = AccessFeature::Images;
+
+#[derive(SimpleObject, Clone, Debug)]
+#[graphql(complex)]
+pub struct Image {
+    #[graphql(getter = true)]
+    pub id: plain_graphql::ID,
+    #[graphql(getter = true)]
+    pub title: String,
+    #[graphql(getter = true)]
+    pub path: String,
+    #[graphql(getter = true)]
+    pub size: Long,
+    pub width: i32,
+    pub height: i32,
+    pub rotation: i32,
+    #[graphql(name = "bucketId")]
+    #[graphql(getter = true)]
+    pub bucket_id: plain_graphql::ID,
+    #[graphql(name = "createdAt")]
+    #[graphql(getter = true)]
+    pub created_at: Instant,
+    #[graphql(name = "updatedAt")]
+    #[graphql(getter = true)]
+    pub updated_at: Instant,
+    pub thumb_hash: Option<String>,
+    #[graphql(name = "takenAt")]
+    pub taken_at: Option<Instant>,
+    #[graphql(name = "isFavorite")]
+    pub is_favorite: bool,
+}
+
+#[plain_graphql::ComplexObject]
+impl Image {
+    async fn tags(&self, ctx: &plain_graphql::Context<'_>) -> plain_graphql::Result<Vec<Tag>> {
+        crate::graphql::resolvers::tags::loader::load(
+            ctx,
+            plain_rs::features::enums::DataType::Image,
+            self.id.as_str(),
+        )
+        .await
+    }
+}
+
+#[derive(Default)]
+pub struct ImagesQuery;
+
+#[Object]
+impl ImagesQuery {
+    async fn image_count(&self, ctx: &Context<'_>, query: String) -> plain_graphql::Result<i32> {
+        if !public_gate::require_granted(ctx, &[FEATURE]).await? {
+            return Ok(0);
+        }
+        plain_rs::features::services::images::search::count(
+            &crate::graphql::resolvers::media::query::catalog(
+                ctx,
+                plain_rs::features::enums::DataType::Image,
+            )
+            .await?,
+            ctx.data_unchecked::<Arc<plain_rs::features::services::images::models::Runtime>>(),
+            &text_field(&query),
+            &query,
+        )
+        .await
+        .map_err(plain_graphql::Error::new)
+    }
+
+    async fn images(
+        &self,
+        ctx: &Context<'_>,
+        query: String,
+        offset: i32,
+        limit: i32,
+        sort_by: plain_rs::features::prefs::settings::ImageSortBy,
+    ) -> plain_graphql::Result<Vec<Image>> {
+        public_gate::require(ctx, prefs(ctx), &[FEATURE])?;
+        let items = Value::Array(
+            plain_rs::features::services::images::search::rows(
+                &crate::graphql::resolvers::media::query::catalog(
+                    ctx,
+                    plain_rs::features::enums::DataType::Image,
+                )
+                .await?,
+                ctx.data_unchecked::<Arc<plain_rs::features::services::images::models::Runtime>>(),
+                &text_field(&query),
+                &query,
+                offset,
+                limit,
+                sort_by.as_str(),
+            )
+            .await
+            .map_err(plain_graphql::Error::new)?,
+        );
+        Ok(rows(&items, image))
+    }
+}
+
+fn image(item: &Value) -> Image {
+    let row = row(item);
+    Image {
+        id: row.id.into(),
+        title: row.title,
+        path: row.path,
+        size: row.size,
+        width: crate::graphql::types::facts::integer(item, "width") as i32,
+        height: crate::graphql::types::facts::integer(item, "height") as i32,
+        rotation: crate::graphql::types::facts::integer(item, "rotation") as i32,
+        bucket_id: row.bucket_id,
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+        thumb_hash: item["thumbHash"].as_str().map(str::to_owned),
+        taken_at: optional_instant(item, "takenAt"),
+        is_favorite: flag(item, "isFavorite"),
+    }
+}

@@ -1,5 +1,2 @@
-#[cfg(feature = "core")]
-pub mod pomodoro;
-
-#[cfg(feature = "core")]
-pub mod state;
+pub mod mutation;
+pub mod query;

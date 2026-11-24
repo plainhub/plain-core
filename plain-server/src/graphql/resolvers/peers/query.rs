@@ -1,35 +1,28 @@
-use plain_graphql::{
-    Context, ContextSelectionSet, ObjectType, OutputType, Positioned, ServerResult, Value,
-    parser::types::Field,
-    registry::{self, MetaTypeId},
-    resolver_utils::{ContainerType, resolve_container},
-};
-use std::borrow::Cow;
+use super::Peer;
+use plain_graphql::{Context, Object};
+use plain_libs::serde_json::Value;
 
-// The published mobile peer schema has an empty Query object.
-pub(crate) struct Query;
-impl ContainerType for Query {
-    async fn resolve_field(&self, _: &Context<'_>) -> ServerResult<Option<Value>> {
-        Ok(None)
+#[derive(Default)]
+pub struct PeersQuery;
+
+#[Object]
+impl PeersQuery {
+    fn peers(&self, ctx: &Context<'_>) -> plain_graphql::Result<Vec<Peer>> {
+        let state = ctx.data::<crate::server::ServerState>()?;
+        let rows = plain_rs::infrastructure::db::chat_store::peers::all(&state.db)?;
+        let connections = state.peer_status.connections.snapshot_peers(&rows);
+        let online = connections["online"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(Value::as_str)
+            .collect::<std::collections::HashSet<_>>();
+        Ok(rows
+            .into_iter()
+            .map(|row| {
+                let connected = online.contains(row.id.as_str());
+                Peer::from_record(row, connected)
+            })
+            .collect())
     }
 }
-impl OutputType for Query {
-    fn type_name() -> Cow<'static, str> {
-        Cow::Borrowed("Query")
-    }
-    fn create_type_info(registry: &mut registry::Registry) -> String {
-        registry.create_output_type::<Self, _>(MetaTypeId::Object, |_| {
-            registry::ObjectBuilder::new("Query", Default::default())
-                .rust_typename(std::any::type_name::<Self>())
-                .build()
-        })
-    }
-    async fn resolve(
-        &self,
-        ctx: &ContextSelectionSet<'_>,
-        _: &Positioned<Field>,
-    ) -> ServerResult<Value> {
-        resolve_container(ctx, self).await
-    }
-}
-impl ObjectType for Query {}

@@ -1,0 +1,585 @@
+use plain_rs::features::access::AccessFeature;
+use plain_rs::features::capability::Capability;
+use plain_rs::infrastructure::host::bridge::Host;
+use crate::test_support::schema::SchemaFixture as PublicSchema;
+use plain_rs::features::prefs::Prefs;
+use plain_rs::infrastructure::db::Db;
+use plain_libs::serde_json::{Value, json};
+use std::sync::Arc;
+
+fn stub(host: Arc<Host>, handler: impl Fn(&str, Value) -> Value + Send + 'static) {
+    let (generation, mut requests) = host.connect();
+    let host = host.clone();
+    tokio::spawn(async move {
+        while let Some(request) = requests.recv().await {
+            let Some(id) = request["id"].as_u64() else {
+                continue;
+            };
+            let result = handler(
+                &request["method"].as_str().unwrap_or_default(),
+                request["params"].clone(),
+            );
+            let _ = host.reply(generation, json!({ "id": id, "result": result }));
+        }
+    });
+}
+
+fn permission_sample(params: Value, grants: &[&str]) -> Value {
+    let values: plain_libs::serde_json::Map<String, Value> = params["features"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|value| {
+            let name = value.as_str().unwrap();
+            (name.to_owned(), Value::Bool(grants.contains(&name)))
+        })
+        .collect();
+    json!({"granted":values})
+}
+
+fn fixture(
+    handler: impl Fn(&str, Value) -> Value + Send + 'static,
+) -> (plain_libs::temporary::TempDir, PublicSchema) {
+    let dir = plain_libs::temporary::tempdir().unwrap();
+    let prefs = Arc::new(Prefs::load(&dir.path().join("prefs.json")).unwrap());
+    plain_rs::features::prefs::security::bootstrap(&prefs).unwrap();
+    prefs.set("client_id", "706c6169-b44a-8a65-8768-0c507e483d69").unwrap();
+    prefs.set("api_permissions", vec!["SMS"]).unwrap();
+    prefs.set("http_port", 8080).unwrap();
+    prefs.set("https_port", 8443).unwrap();
+    prefs.set("device_name", "Pixel 8").unwrap();
+    prefs.set("developer_mode", true).unwrap();
+    let db = Arc::new(Db::open(&dir.path().join("data.db")).unwrap());
+    let host = Arc::new(
+        Host::with_startup_config(plain_rs::infrastructure::host::startup::StartupConfig {
+            device_type: plain_rs::features::chat::enums::DeviceType::Phone,
+            build_channel: "GITHUB".into(),
+            downloads_dir: "/downloads".into(),
+            debug: false,
+            ..plain_rs::infrastructure::platform::startup::config()
+        })
+        .unwrap(),
+    );
+    stub(host.clone(), handler);
+    let directory = dir.path().to_path_buf();
+    let (events, _) = tokio::sync::broadcast::channel(16);
+    let schema = crate::test_support::schema::build(host, events, prefs, db, directory);
+    schema
+        .data::<plain_rs::runtime::Runtime>()
+        .unwrap()
+        .logs
+        .set_path(dir.path().join("plain.log"))
+        .unwrap();
+    (dir, schema)
+}
+
+fn properties() -> Value {
+    json!({
+        "name": "Test Device", "manufacturer": "Example", "model": "model", "osVersion": "14",
+        "appVersion": "1.2.3", "appBuildNumber": "45", "language": "en", "cpuArch": "arm64-v8a",
+        "socModel": null, "display.width": 1080, "display.height": 2400, "display.density": 2.75,
+        "android.sdkVersion": 34, "android.buildBrand": "example", "android.buildTime": 1704067200000i64,
+    })
+}
+
+#[tokio::test]
+async fn device_info_carries_the_hardware_report_without_combined_host_facts() {
+    let (_dir, schema) = fixture(|method, params| match method {
+        "systemProperties" => {
+            let values = properties();
+            let mut selected = plain_libs::serde_json::Map::new();
+            for name in params["names"].as_array().unwrap() {
+                let name = name.as_str().unwrap();
+                assert!(values.get(name).is_some(), "unexpected property {name}");
+                selected.insert(name.into(), values[name].clone());
+            }
+            Value::Object(selected)
+        }
+        other => panic!("unexpected host call {other}"),
+    });
+    let response = schema
+        .execute(
+            r#"query { deviceInfo { name platform manufacturer model osVersion cpuArch
+                        cpuModel totalMemory totalStorage
+                        display { width height density }
+                        android { sdkVersion buildBrand buildTime } } }"#,
+        )
+        .await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    let info = response.data.into_json().unwrap()["deviceInfo"].clone();
+    assert!(info["totalMemory"].as_i64().unwrap() > 0);
+    assert!(info["totalStorage"].as_i64().unwrap() > 0);
+    assert!(!info["name"].as_str().unwrap().is_empty());
+    if cfg!(any(target_os = "android", target_os = "ios")) {
+        assert_eq!(info["name"], "Test Device");
+        assert_eq!(info["display"]["density"], 2.75);
+    } else {
+        assert!(info["display"].is_null());
+    }
+    if cfg!(target_os = "android") {
+        assert_eq!(info["platform"], "ANDROID");
+        assert_eq!(info["android"]["sdkVersion"], 34);
+        assert_eq!(info["android"]["buildBrand"], "example");
+        assert_eq!(info["android"]["buildTime"], "2024-01-01T00:00:00.000Z");
+    } else {
+        assert!(info["android"].is_null());
+    }
+}
+
+#[tokio::test]
+async fn selecting_only_platform_and_nested_type_names_never_reads_sdk_properties() {
+    let (_dir, schema) = fixture(|method, _| panic!("unexpected host call {method}"));
+    let response = schema
+        .execute("{ deviceInfo { platform display { __typename } android { __typename } } }")
+        .await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    let info = response.data.into_json().unwrap()["deviceInfo"].clone();
+    assert_eq!(
+        info["display"].is_null(),
+        !cfg!(any(target_os = "android", target_os = "ios"))
+    );
+    assert_eq!(info["android"].is_null(), !cfg!(target_os = "android"));
+}
+
+#[tokio::test]
+async fn device_status_preserves_optional_battery_and_selected_values() {
+    let (_dir, schema) = fixture(|method, _| match method {
+        "systemBatterySample" => {
+            json!({"level":null,"scale":null,"charging":false,"temperatureTenths":null})
+        }
+        "systemMemoryAvailable" => json!(0),
+        other => panic!("unexpected host call {other}"),
+    });
+    let response = schema
+        .execute(
+            r#"query { deviceStatus { uptimeSec batteryLevel charging cpuUsage
+                        memoryAvailable storageAvailable temperatures { label celsius } } }"#,
+        )
+        .await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    let status = response.data.into_json().unwrap()["deviceStatus"].clone();
+    assert!(status["uptimeSec"].as_i64().unwrap() >= 0);
+    if cfg!(any(target_os = "macos", target_os = "windows")) {
+        if let Some(level) = status["batteryLevel"].as_i64() {
+            assert!((0..=100).contains(&level));
+        }
+        assert!(status["charging"].is_boolean());
+    } else {
+        assert!(status["batteryLevel"].is_null());
+        assert_eq!(status["charging"], false);
+    }
+    assert!((0.0..=100.0).contains(&status["cpuUsage"].as_f64().unwrap()));
+    assert!(status["storageAvailable"].as_i64().unwrap() >= 0);
+    if cfg!(target_os = "ios") {
+        assert!(status["memoryAvailable"].is_null());
+    } else if cfg!(target_os = "android") {
+        assert_eq!(status["memoryAvailable"], 0);
+    } else {
+        assert!(status["memoryAvailable"].as_i64().unwrap() >= 0);
+    }
+    assert!(status["temperatures"].is_array());
+}
+
+#[tokio::test]
+async fn the_app_root_exposes_the_identity_and_the_capability_lists() {
+    let calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let observed = calls.clone();
+    let (_dir, schema) = fixture(move |method, params| {
+        observed.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        match method {
+            "systemCapabilities" => json!(["TELEPHONY", "WAT"]),
+            "systemAccessFacts" => {
+                permission_sample(params, &["RECORD_AUDIO", "SMS", "ADB", "NOPE"])
+            }
+            other => panic!("unexpected host call {other}"),
+        }
+    });
+    let response = schema
+        .execute(
+            r#"query { app { clientId urlToken httpPort httpsPort deviceName deviceType
+                        buildChannel capabilities repeatedCapabilities:capabilities access repeatedAccess:access developerMode debug } }"#,
+        )
+        .await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 2);
+    let app = response.data.into_json().unwrap()["app"].clone();
+    assert_eq!(app["clientId"], "706c6169-b44a-8a65-8768-0c507e483d69");
+    assert_eq!(app["httpPort"], 8080);
+    assert_eq!(app["deviceType"], "PHONE");
+    assert_eq!(app["buildChannel"], "GITHUB");
+    assert_eq!(app["developerMode"], true);
+    assert_eq!(app["capabilities"], json!(["TELEPHONY"]));
+    assert_eq!(app["repeatedCapabilities"], app["capabilities"]);
+    assert_eq!(app["repeatedAccess"], app["access"]);
+    assert_eq!(app["access"], json!(["SMS"]));
+}
+
+/// A capability or permission this build has never heard of is dropped
+/// rather than invented — a client cannot render a section it cannot
+/// drive, and cannot request a permission it has no name for.
+#[test]
+fn unknown_capabilities_and_access_are_dropped() {
+    assert_eq!(Capability::parse("PEER_DISCOVERY"), None);
+    assert_eq!(Capability::parse("BLE_DISCOVERY"), None);
+    for capability in [
+        "BACKGROUND_SERVICE",
+        "FILE_BROWSER",
+        "IMAGE_LIBRARY",
+        "AUDIO_LIBRARY",
+        "VIDEO_LIBRARY",
+        "DOCUMENT_LIBRARY",
+    ] {
+        assert_eq!(Capability::parse(capability), None);
+    }
+    assert_eq!(Capability::parse("BLE"), Some(Capability::Ble));
+    assert_eq!(Capability::parse("WIFI_AWARE"), Some(Capability::WifiAware));
+    assert_eq!(Capability::parse("TELEPHONY"), Some(Capability::Telephony));
+    for capability in ["SMS", "CALLS", "CALL_PHONE", "SIM_INFO", "CONTACTS"] {
+        assert_eq!(Capability::parse(capability), None);
+    }
+    for capability in ["NOTES", "FEEDS", "POMODORO", "DONATION"] {
+        assert_eq!(Capability::parse(capability), None);
+    }
+    assert_eq!(Capability::parse("TELEPORT"), None);
+    assert_eq!(AccessFeature::parse("SMS"), Some(AccessFeature::Sms));
+    assert_eq!(AccessFeature::parse("ADB"), Some(AccessFeature::Adb));
+    assert_eq!(AccessFeature::parse("NOT_A_PERMISSION"), None);
+}
+
+#[tokio::test]
+async fn a_log_search_filters_before_applying_the_page() {
+    let (dir, schema) = fixture(|method, _| panic!("unexpected host call {method}"));
+    std::fs::write(
+        dir.path().join("plain.log"),
+        "e boom 7\nnoise\ne boom 6\ne boom 5\nnoise\ne boom 4\ne boom 3\ne boom 2\ne boom 1\n",
+    )
+    .unwrap();
+    let response = schema
+        .execute(r#"query { appLogs(offset:5, limit:10, query:"text:boom size:>1") }"#)
+        .await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    assert_eq!(
+        response.data.into_json().unwrap()["appLogs"],
+        json!(["e boom 6", "e boom 7"])
+    );
+}
+
+#[tokio::test]
+async fn a_log_query_without_text_pages_the_entire_file() {
+    let (dir, schema) = fixture(|method, _| panic!("unexpected host call {method}"));
+    std::fs::write(dir.path().join("plain.log"), "old\nnew\n").unwrap();
+    let response = schema
+        .execute(r#"query { appLogs(offset:0, limit:10, query:"size:>1") }"#)
+        .await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    assert_eq!(
+        response.data.into_json().unwrap()["appLogs"],
+        json!(["new", "old"])
+    );
+}
+
+#[tokio::test]
+async fn reading_the_log_path_does_not_open_the_file_or_call_the_host() {
+    let (dir, schema) = fixture(|method, _| panic!("unexpected host call {method}"));
+    let response = schema.execute("{ appLogPath }").await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    assert_eq!(
+        response.data.into_json().unwrap()["appLogPath"],
+        dir.path().join("plain.log").to_string_lossy().as_ref()
+    );
+    assert!(!dir.path().join("plain.log").exists());
+}
+
+#[tokio::test]
+async fn clearing_the_logs_truncates_the_configured_file() {
+    let (dir, schema) = fixture(|method, _| panic!("unexpected host call {method}"));
+    let path = dir.path().join("plain.log");
+    std::fs::write(&path, "old\n").unwrap();
+    let response = schema.execute("mutation { clearAppLogs }").await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    assert_eq!(response.data.into_json().unwrap()["clearAppLogs"], true);
+    assert_eq!(std::fs::read(path).unwrap(), Vec::<u8>::new());
+}
+
+#[tokio::test]
+async fn a_temp_value_is_echoed_rather_than_read_back() {
+    let (_dir, schema) = fixture(|method, _| panic!("unexpected host call {method}"));
+    let response = schema
+        .execute(r#"mutation { setTempValue(key:"k", value:"v") { key value } }"#)
+        .await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    let pair = response.data.into_json().unwrap()["setTempValue"].clone();
+    assert_eq!(pair["key"], "k");
+    assert_eq!(pair["value"], "v");
+}
+
+#[tokio::test]
+async fn discovery_commands_use_the_shared_runtime_and_platform_multicast_lease() {
+    let _runtime = plain_rs::features::services::discovery::mdns_runtime::TEST_LOCK
+        .lock()
+        .await;
+    let dir = plain_libs::temporary::tempdir().unwrap();
+    let prefs = Arc::new(Prefs::load(&dir.path().join("prefs.json")).unwrap());
+    prefs.set("client_id", "706c6169-ea44-84e7-b8f7-63295a6cffa2").unwrap();
+    let server = crate::server::ContentServer::start(
+        dir.path(),
+        &plain_libs::utils::base64::base64_encode(&[4; 32]),
+        prefs,
+    )
+    .unwrap();
+    let state = server.runtime_state();
+    stub(state.host.clone(), |method, _| match method {
+        "mdnsMulticast" => json!(true),
+        other => panic!("unexpected host call {other}"),
+    });
+    let execute = |document: &str| {
+        state
+            .public
+            .execute(plain_graphql::Request::new(document).data(state.clone()))
+    };
+    let response = execute("{isDiscovering}").await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    assert_eq!(response.data.into_json().unwrap()["isDiscovering"], false);
+    let response = execute("mutation {startDiscovery}").await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    assert_eq!(state.mdns.snapshot()["scanning"], true);
+    let response = execute("{isDiscovering}").await;
+    assert_eq!(response.data.into_json().unwrap()["isDiscovering"], true);
+    let response = execute("mutation {stopDiscovery}").await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    assert_eq!(state.mdns.snapshot()["scanning"], false);
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn renaming_the_device_forwards_the_new_name() {
+    let (_dir, schema) = fixture(|method, params| match method {
+        "systemUpdateDeviceName" => {
+            assert_eq!(params["name"], "New Name");
+            json!(true)
+        }
+        "systemCapabilities" => json!(["APP_RELAUNCH"]),
+        "systemRelaunchApp" => json!(true),
+        other => panic!("unexpected host call {other}"),
+    });
+    let response = schema
+        .execute(r#"mutation { updateDeviceName(name:"New Name") relaunchApp }"#)
+        .await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    let data = response.data.into_json().unwrap();
+    assert_eq!(data["updateDeviceName"], true);
+    assert_eq!(data["relaunchApp"], true);
+}
+
+#[tokio::test]
+async fn local_app_access_use_os_grants_without_web_opt_in() {
+    let (_dir, schema) = fixture(|method, params| match method {
+        "systemCapabilities" => json!(["TELEPHONY"]),
+        "systemAccessFacts" => {
+            permission_sample(params, &["SMS", "CONTACTS", "RECORD_AUDIO", "UNKNOWN"])
+        }
+        other => panic!("unexpected host call {other}"),
+    });
+    let query = "{ app { access } }";
+    for (origin, expected) in [
+        (
+            crate::graphql::executor::RequestOrigin::Local,
+            json!(["CONTACTS", "SMS"]),
+        ),
+        (
+            crate::graphql::executor::RequestOrigin::Remote,
+            json!(["SMS"]),
+        ),
+    ] {
+        let response = schema
+            .execute(plain_graphql::Request::new(query).data(origin))
+            .await;
+        assert!(response.errors.is_empty(), "{:?}", response.errors);
+        assert_eq!(
+            response.data.into_json().unwrap()["app"]["access"],
+            expected
+        );
+    }
+}
+
+#[tokio::test]
+async fn incomplete_permission_samples_fail_instead_of_granting_access() {
+    let (_dir, schema) = fixture(|method, _| match method {
+        "systemCapabilities" => json!(["TELEPHONY"]),
+        "systemAccessFacts" => json!({"granted":{"SMS":true}}),
+        other => panic!("unexpected host call {other}"),
+    });
+    let response = schema.execute("{ app { access } }").await;
+    assert_eq!(response.errors.len(), 1);
+    assert!(
+        response.errors[0]
+            .message
+            .starts_with("Missing access sample:")
+    );
+}
+
+#[tokio::test]
+async fn app_preferences_do_not_call_the_platform() {
+    let (_dir, schema) = fixture(|method, _| panic!("unexpected host call {method}"));
+    let response = schema
+        .execute("{app{clientId urlToken httpPort httpsPort deviceName developerMode appDir deviceType buildChannel downloadsDir debug}}")
+        .await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    assert_eq!(response.data.into_json().unwrap()["app"]["urlToken"], {
+        let runtime = schema.data::<plain_rs::runtime::Runtime>().unwrap();
+        assert!(runtime.db.session_get(&runtime.native_client_id().unwrap()).unwrap().is_none());
+        runtime.token.to_string()
+    });
+}
+
+#[tokio::test]
+async fn separate_app_queries_refresh_capabilities_and_access() {
+    let capabilities = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let access = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let caps = capabilities.clone();
+    let grants = access.clone();
+    let (_directory, schema) = fixture(move |method, params| match method {
+        "systemCapabilities" => {
+            if caps.fetch_add(1, std::sync::atomic::Ordering::SeqCst) == 0 {
+                json!(["TELEPHONY"])
+            } else {
+                json!([])
+            }
+        }
+        "systemAccessFacts" => {
+            if grants.fetch_add(1, std::sync::atomic::Ordering::SeqCst) == 0 {
+                permission_sample(params, &["SMS"])
+            } else {
+                permission_sample(params, &[])
+            }
+        }
+        other => panic!("unexpected host call {other}"),
+    });
+    let first = schema.execute("{ app { capabilities access } }").await;
+    let second = schema.execute("{ app { capabilities access } }").await;
+    assert!(first.errors.is_empty(), "{:?}", first.errors);
+    assert!(second.errors.is_empty(), "{:?}", second.errors);
+    let first = first.data.into_json().unwrap();
+    let second = second.data.into_json().unwrap();
+    assert!(
+        first["app"]["capabilities"]
+            .as_array()
+            .unwrap()
+            .contains(&json!("TELEPHONY"))
+    );
+    assert!(
+        !second["app"]["capabilities"]
+            .as_array()
+            .unwrap()
+            .contains(&json!("TELEPHONY"))
+    );
+    assert_eq!(first["app"]["access"], json!(["SMS"]));
+    assert_eq!(second["app"]["access"], json!([]));
+    assert_eq!(capabilities.load(std::sync::atomic::Ordering::SeqCst), 2);
+    assert_eq!(access.load(std::sync::atomic::Ordering::SeqCst), 2);
+}
+
+#[tokio::test]
+async fn unsupported_relaunch_never_invokes_the_platform_action() {
+    let (_directory, schema) = fixture(|method, _| match method {
+        "systemCapabilities" => json!([]),
+        other => panic!("unexpected host call {other}"),
+    });
+    let response = schema.execute("mutation { relaunchApp }").await;
+    assert_eq!(response.errors.len(), 1);
+    assert!(
+        response.errors[0]
+            .message
+            .contains("unsupported capability APP_RELAUNCH")
+    );
+}
+
+#[tokio::test]
+async fn feed_scheduling_details_are_not_public_capabilities() {
+    let (_dir, schema) = fixture(|method, _| panic!("unexpected host call {method}"));
+    let response = schema
+        .execute(r#"{ __type(name: "Capability") { enumValues { name } } }"#)
+        .await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    let data = response.data.into_json().unwrap();
+    let names = data["__type"]["enumValues"].as_array().unwrap();
+    for name in ["BACKGROUND_TIMER", "BACKGROUND_WAKE"] {
+        assert!(!names.iter().any(|value| value["name"] == name));
+    }
+}
+
+#[tokio::test]
+async fn retired_permission_contract_is_not_public() {
+    let (_directory, schema) = fixture(|method, _| panic!("unexpected host call {method}"));
+    for document in [
+        "{ app { permissions } }",
+        "mutation { openWebSettings(feature: FILES) }",
+    ] {
+        assert!(!schema.execute(document).await.errors.is_empty());
+    }
+    let response = schema.execute(r#"{ old: __type(name: "Permission") { name } feature: __type(name: "AccessFeature") { enumValues { name } } }"#).await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    let data = response.data.into_json().unwrap();
+    assert!(data["old"].is_null());
+    assert_eq!(data["feature"]["enumValues"].as_array().unwrap().len(), 14);
+}
+
+#[tokio::test]
+async fn access_request_uses_feature_and_preserves_host_acceptance() {
+    let calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let observed = calls.clone();
+    let (_directory, schema) = fixture(move |method, params| match method {
+        "systemCapabilities" => json!([]),
+        "systemRequestAccess" => {
+            assert_eq!(params, json!({"feature":"FILES"}));
+            observed.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            json!(false)
+        }
+        other => panic!("unexpected host call {other}"),
+    });
+    let response = schema
+        .execute("mutation { requestAccess(feature: FILES) }")
+        .await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    assert_eq!(response.data.into_json().unwrap()["requestAccess"], false);
+    for document in [
+        "mutation { requestAccess }",
+        "mutation { requestAccess(feature: WRITE_EXTERNAL_STORAGE) }",
+        "mutation { requestAccess(feature: SMS) }",
+    ] {
+        assert!(!schema.execute(document).await.errors.is_empty());
+    }
+    assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+async fn remote_logs_require_developer_mode_and_native_diagnostics_remain_available() {
+    let (_directory, schema) = fixture(|method, _| panic!("Unexpected host call: {method}"));
+    let prefs = schema.data::<Arc<Prefs>>().unwrap();
+    prefs.set("developer_mode", false).unwrap();
+    for document in [
+        r#"{appLogs(query:"",offset:0,limit:1)}"#,
+        "{appLogPath}",
+        "{appLogFilesSize}",
+        "mutation {clearAppLogs}",
+        "mutation {exportAppLogs}",
+    ] {
+        let response = schema.execute(document).await;
+        assert_eq!(response.errors.len(), 1, "{document}");
+        assert_eq!(
+            response.errors[0].message,
+            "No permission: developer mode is disabled"
+        );
+    }
+    for local in [true, false] {
+        if !local {
+            prefs.set("developer_mode", true).unwrap();
+        }
+        let mut request = plain_graphql::Request::new("{appLogPath appLogFilesSize}");
+        if local {
+            request = request.data(crate::graphql::executor::RequestOrigin::Local);
+        }
+        let response = schema.execute(request).await;
+        assert!(response.errors.is_empty(), "{:?}", response.errors);
+    }
+}

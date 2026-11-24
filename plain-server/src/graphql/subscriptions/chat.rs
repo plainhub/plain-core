@@ -1,5 +1,5 @@
 use super::events;
-use crate::graphql::resolvers::chat::public::ChatItem;
+use crate::graphql::resolvers::chat::ChatItem;
 use futures_util::stream::BoxStream;
 use plain_graphql::{Context, Result, Subscription};
 

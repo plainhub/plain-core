@@ -90,7 +90,7 @@ impl AudioQuery {
         public_gate::require(ctx, prefs(ctx), &[FEATURE])?;
         let artists = plain_rs::features::services::audio::overview::read(
             ctx.data::<Arc<plain_rs::infrastructure::db::Db>>()?.clone(),
-            crate::graphql::resolvers::media::public::catalog(ctx, DataType::Audio).await?,
+            crate::graphql::resolvers::media::query::catalog(ctx, DataType::Audio).await?,
         )
         .await
         .map_err(plain_graphql::Error::new)?;
@@ -118,7 +118,7 @@ impl AudioQuery {
         if !public_gate::require_granted(ctx, &[FEATURE]).await? {
             return Ok(0);
         }
-        crate::graphql::resolvers::media::public::media_count(ctx, "AUDIO", query).await
+        crate::graphql::resolvers::media::query::media_count(ctx, "AUDIO", query).await
     }
 
     async fn audios(
@@ -131,7 +131,7 @@ impl AudioQuery {
     ) -> plain_graphql::Result<Vec<Audio>> {
         public_gate::require(ctx, prefs(ctx), &[FEATURE])?;
         let items = crate::graphql::types::facts::rows(
-            &crate::graphql::resolvers::media::public::media_rows(
+            &crate::graphql::resolvers::media::query::media_rows(
                 ctx,
                 json!({
                     "dataType": "AUDIO", "query": query,

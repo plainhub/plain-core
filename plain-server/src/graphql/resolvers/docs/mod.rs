@@ -1,2 +1,1 @@
-#[cfg(feature = "core")]
-pub mod public;
+pub mod query;

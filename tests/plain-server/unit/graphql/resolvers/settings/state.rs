@@ -1,9 +1,9 @@
 use super::*;
 use plain_graphql::{EmptySubscription, Schema};
-type Mutations = crate::graphql::resolvers::settings::public::PrefsMutation;
+type Mutations = crate::graphql::resolvers::settings::mutation::PrefsMutation;
 fn fixture() -> (
     plain_libs::temporary::TempDir,
-    Schema<crate::graphql::resolvers::settings::public::PrefsQuery, Mutations, EmptySubscription>,
+    Schema<crate::graphql::resolvers::settings::query::PrefsQuery, Mutations, EmptySubscription>,
     tokio::sync::broadcast::Receiver<WsEvent>,
 ) {
     let dir = plain_libs::temporary::tempdir().unwrap();
@@ -11,8 +11,8 @@ fn fixture() -> (
     plain_rs::features::prefs::security::bootstrap(&prefs).unwrap();
     let (events, receiver) = broadcast::channel(32);
     let schema = Schema::build(
-        crate::graphql::resolvers::settings::public::PrefsQuery,
-        crate::graphql::resolvers::settings::public::PrefsMutation,
+        crate::graphql::resolvers::settings::query::PrefsQuery,
+        crate::graphql::resolvers::settings::mutation::PrefsMutation,
         EmptySubscription,
     )
     .data(prefs)
@@ -165,8 +165,8 @@ async fn result_only_user_patch_does_not_read_unselected_system_settings() {
         )
         .unwrap();
     let schema = Schema::build(
-        crate::graphql::resolvers::settings::public::PrefsQuery,
-        crate::graphql::resolvers::settings::public::PrefsMutation,
+        crate::graphql::resolvers::settings::query::PrefsQuery,
+        crate::graphql::resolvers::settings::mutation::PrefsMutation,
         EmptySubscription,
     )
     .data(prefs.clone())

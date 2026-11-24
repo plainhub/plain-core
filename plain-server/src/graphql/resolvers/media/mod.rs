@@ -1,14 +1,7 @@
-#[cfg(feature = "core")]
-pub mod public;
-
-#[cfg(feature = "core")]
+pub mod item;
 pub mod types;
 
-#[cfg(feature = "core")]
-pub mod item;
-
-#[cfg(feature = "core")]
+pub mod play_history;
 pub mod scan;
 
-#[cfg(feature = "core")]
-pub mod play_history;
+pub mod query;

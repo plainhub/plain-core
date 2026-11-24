@@ -230,7 +230,7 @@ impl HostEvents {
             return Err("host disconnected".into());
         }
 
-        return crate::graphql::resolvers::notifications::public::publish(
+        return crate::graphql::resolvers::notifications::publish(
             &self.state.prefs,
             &self.state.events,
             plain_libs::serde_json::from_str(&payload).map_err(|error| error.to_string())?,

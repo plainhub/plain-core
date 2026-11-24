@@ -1,0 +1,409 @@
+use crate::graphql::resolvers::files::types::{
+    AudioFileInfo, DriveType, File, FileInfo, ImageFileInfo, Location, MediaFileInfo, Mount,
+    VideoFileInfo,
+};
+use crate::graphql::types::facts::{flag, integer, list, rows, text};
+use crate::http::auth::public_gate;
+use plain_graphql::{Context, Object};
+use plain_libs::chrono::{DateTime, Utc};
+use plain_libs::filesystem::SortBy;
+use plain_libs::filesystem::browse::Request;
+use plain_libs::serde_json::{Value, json};
+use plain_rs::features::access::AccessFeature;
+use plain_rs::features::prefs::settings::FileSortBy;
+use plain_rs::features::services::files::browse as file_reads;
+use plain_rs::infrastructure::types::{Instant, Long};
+use std::path::Path;
+use std::sync::Arc;
+
+const STORAGE: AccessFeature = AccessFeature::Files;
+
+#[derive(Default)]
+pub struct FilesQuery;
+
+#[Object]
+impl FilesQuery {
+    async fn indexed_files(
+        &self,
+        ctx: &Context<'_>,
+        query: String,
+        offset: i32,
+        limit: i32,
+        sort_by: FileSortBy,
+    ) -> plain_graphql::Result<Vec<File>> {
+        if !public_gate::require_granted(ctx, &[STORAGE]).await? {
+            return Ok(Vec::new());
+        }
+        let items = ctx
+            .data::<Arc<plain_rs::features::services::files::platform::FilePlatform>>()?
+            .indexed_files(query, offset, limit, sort_by, false)
+            .await
+            .map_err(|error| plain_graphql::Error::from(error))?;
+        Ok(rows(&items, file))
+    }
+    async fn indexed_file_count(
+        &self,
+        ctx: &Context<'_>,
+        query: String,
+    ) -> plain_graphql::Result<Long> {
+        if !public_gate::require_granted(ctx, &[STORAGE]).await? {
+            return Ok(Long(0));
+        }
+        let count = ctx
+            .data::<Arc<plain_rs::features::services::files::platform::FilePlatform>>()?
+            .indexed_files(query, 0, 0, FileSortBy::NameAsc, true)
+            .await
+            .map_err(|error| plain_graphql::Error::from(error))?;
+        Ok(Long(count.as_i64().ok_or("invalid indexed file count")?))
+    }
+
+    async fn mounts(&self, ctx: &Context<'_>) -> plain_graphql::Result<Vec<Mount>> {
+        if !public_gate::is_local(ctx)
+            && !plain_rs::features::services::device::access::is_enabled(prefs(ctx), &[STORAGE])
+        {
+            return Ok(Vec::new());
+        }
+        let facts = ctx
+            .data::<Arc<plain_rs::features::services::files::platform::FilePlatform>>()?
+            .mounts()
+            .await
+            .map_err(|error| plain_graphql::Error::from(error))?;
+        Ok(rows(&facts, mount))
+    }
+
+    /// Recently-opened files. Reading them is a storage read, so this one
+    /// gates — plain-app's `recentFiles` calls `checkEnabledAsync`.
+    async fn recent_files(&self, ctx: &Context<'_>) -> plain_graphql::Result<Vec<File>> {
+        public_gate::require(ctx, prefs(ctx), &[STORAGE])?;
+        let items = ctx
+            .data::<Arc<plain_rs::features::services::files::platform::FilePlatform>>()?
+            .recent_files()
+            .await?;
+        Ok(items.iter().map(file).collect())
+    }
+
+    /// One page of a directory listing, filtered and sorted by the search
+    /// DSL. `query` may carry a `parent` field to redirect the root, which
+    /// is what the file manager's breadcrumb links send.
+    async fn files(
+        &self,
+        ctx: &Context<'_>,
+        root: String,
+        query: String,
+        offset: i32,
+        limit: i32,
+        sort_by: FileSortBy,
+    ) -> plain_graphql::Result<Vec<File>> {
+        crate::graphql::resolvers::common::validate_pagination(offset, limit)?;
+        public_gate::require(ctx, prefs(ctx), &[STORAGE])?;
+        let page = read_page(
+            ctx,
+            Request {
+                root,
+                query,
+                sort_by: sort_by.into(),
+                offset: offset as usize,
+                limit: Some(limit as usize),
+                count_only: false,
+                count_children: ctx.look_ahead().field("childCount").exists(),
+            },
+        )
+        .await
+        .map_err(plain_graphql::Error::new)?;
+        Ok(list(&page, "items", file))
+    }
+
+    /// Total matches for the same query, ignoring paging.
+    async fn file_count(
+        &self,
+        ctx: &Context<'_>,
+        root: String,
+        query: String,
+    ) -> plain_graphql::Result<i32> {
+        public_gate::require(ctx, prefs(ctx), &[STORAGE])?;
+        let page = read_page(
+            ctx,
+            Request {
+                root,
+                query,
+                sort_by: SortBy::NameAsc,
+                offset: 0,
+                limit: None,
+                count_only: true,
+                count_children: false,
+            },
+        )
+        .await
+        .map_err(plain_graphql::Error::new)?;
+        Ok(page["count"].as_u64().unwrap_or_default() as i32)
+    }
+
+    async fn file_info(
+        &self,
+        ctx: &Context<'_>,
+        path: String,
+    ) -> plain_graphql::Result<Option<FileInfo>> {
+        public_gate::require(ctx, prefs(ctx), &[STORAGE])?;
+        let Some(record) = file_reads::stat_record(
+            ctx.data::<Arc<plain_rs::features::services::files::platform::FilePlatform>>()?,
+            &path,
+        )
+        .await
+        .map_err(|error| plain_graphql::Error::from(error))?
+        else {
+            return Ok(None);
+        };
+        let data = if !record.is_dir && ctx.look_ahead().field("data").exists() {
+            media_info(ctx, &record.path, &record.name).await?
+        } else {
+            None
+        };
+        Ok(Some(FileInfo {
+            path,
+            updated_at: instant(record.updated_at),
+            size: Long(record.size),
+            data,
+        }))
+    }
+}
+
+async fn media_info(
+    ctx: &Context<'_>,
+    path: &str,
+    name: &str,
+) -> plain_graphql::Result<Option<MediaFileInfo>> {
+    let extension = Path::new(name)
+        .extension()
+        .map(|extension| extension.to_string_lossy().to_lowercase())
+        .unwrap_or_default();
+    let kind = if is_image(&extension) {
+        plain_rs::features::enums::DataType::Image
+    } else if is_video(&extension) {
+        plain_rs::features::enums::DataType::Video
+    } else if is_audio(&extension) {
+        plain_rs::features::enums::DataType::Audio
+    } else {
+        return Ok(None);
+    };
+    let selected = ctx.look_ahead().field("data");
+    let selections = selected.selection_fields();
+    let needs_details = selections
+        .iter()
+        .flat_map(|field| field.selection_set())
+        .any(|field| !matches!(field.name(), "durationMs" | "__typename"));
+    let facts = if !needs_details {
+        if kind != plain_rs::features::enums::DataType::Image
+            && selected.field("durationMs").exists()
+        {
+            match ctx
+                .data::<Arc<plain_rs::features::services::files::duration_updates::Runtime>>()?
+                .probe_milliseconds(path)
+                .await
+                .map_err(plain_graphql::Error::new)?
+            {
+                Some(duration) => json!({"durationMs":duration}),
+                None => ctx
+                    .data::<Arc<plain_rs::features::services::files::info::Info>>()?
+                    .read(path, kind)
+                    .await
+                    .map_err(plain_graphql::Error::new)?,
+            }
+        } else {
+            json!({})
+        }
+    } else {
+        ctx.data::<Arc<plain_rs::features::services::files::info::Info>>()?
+            .read(path, kind)
+            .await
+            .map_err(plain_graphql::Error::new)?
+    };
+    if facts.is_null() {
+        return Ok(None);
+    }
+    Ok(Some(match kind {
+        plain_rs::features::enums::DataType::Image => MediaFileInfo::Image(ImageFileInfo {
+            make: text(&facts, "make"),
+            model: text(&facts, "model"),
+            rotation: integer(&facts, "rotation") as i32,
+            color_space: text(&facts, "colorSpace"),
+            aperture_value: facts["apertureValue"].as_f64().unwrap_or(0.0),
+            exposure_time: text(&facts, "exposureTime"),
+            focal_length: text(&facts, "focalLength"),
+            iso_speed: integer(&facts, "isoSpeed") as i32,
+            taken_at: facts["takenAt"]
+                .as_str()
+                .and_then(|value| plain_libs::chrono::DateTime::parse_from_rfc3339(value).ok())
+                .map(|value| {
+                    plain_rs::infrastructure::types::Instant(
+                        value.with_timezone(&plain_libs::chrono::Utc),
+                    )
+                }),
+            flash: integer(&facts, "flash") as i32,
+            f_number: facts["fNumber"].as_f64().unwrap_or(0.0),
+            exposure_program: integer(&facts, "exposureProgram") as i32,
+            metering_mode: integer(&facts, "meteringMode") as i32,
+            white_balance: integer(&facts, "whiteBalance") as i32,
+            creator: text(&facts, "creator"),
+            resolution_x: integer(&facts, "resolutionX") as i32,
+            resolution_y: integer(&facts, "resolutionY") as i32,
+            description: text(&facts, "description"),
+
+            width: integer(&facts, "width") as i32,
+            height: integer(&facts, "height") as i32,
+            location: location(&facts),
+        }),
+        plain_rs::features::enums::DataType::Video => MediaFileInfo::Video(VideoFileInfo {
+            width: integer(&facts, "width") as i32,
+            height: integer(&facts, "height") as i32,
+            duration_ms: Long(integer(&facts, "durationMs")),
+            rotation: integer(&facts, "rotation") as i32,
+            display_width: integer(&facts, "displayWidth") as i32,
+            display_height: integer(&facts, "displayHeight") as i32,
+            bitrate: Long(integer(&facts, "bitrate")),
+            frame_rate: facts["frameRate"].as_f64().unwrap_or(0.0),
+            title: text(&facts, "title"),
+            artist: text(&facts, "artist"),
+            album: text(&facts, "album"),
+            genre: text(&facts, "genre"),
+            writer: text(&facts, "writer"),
+            composer: text(&facts, "composer"),
+            taken_at: facts["takenAt"]
+                .as_str()
+                .and_then(|value| plain_libs::chrono::DateTime::parse_from_rfc3339(value).ok())
+                .map(|value| {
+                    plain_rs::infrastructure::types::Instant(
+                        value.with_timezone(&plain_libs::chrono::Utc),
+                    )
+                }),
+            location: location(&facts),
+        }),
+        _ => MediaFileInfo::Audio(AudioFileInfo {
+            duration_ms: Long(integer(&facts, "durationMs")),
+            location: location(&facts),
+        }),
+    }))
+}
+
+fn location(value: &Value) -> Option<Location> {
+    let raw = &value["location"];
+    if let (Some(latitude), Some(longitude)) = (raw["latitude"].as_f64(), raw["longitude"].as_f64())
+    {
+        return Some(Location {
+            latitude,
+            longitude,
+        });
+    }
+    let raw = value["rawLocation"].as_str()?;
+    let (latitude, longitude) = plain_libs::utils::iso6709::coordinates(raw)?;
+    Some(Location {
+        latitude,
+        longitude,
+    })
+}
+
+/// Kept in step with plain-app's `isImageFast` / `isVideoFast` /
+/// `isAudioFast`, which are extension checks over the same extension sets
+/// the platform decoders register.
+fn is_image(extension: &str) -> bool {
+    matches!(
+        extension,
+        "jpg" | "jpeg" | "png" | "gif" | "webp" | "bmp" | "tif" | "tiff" | "heic" | "heif" | "svg"
+    )
+}
+
+fn is_video(extension: &str) -> bool {
+    matches!(
+        extension,
+        "mp4" | "m4v" | "mov" | "mkv" | "webm" | "avi" | "3gp" | "ts" | "flv" | "wmv"
+    )
+}
+
+fn is_audio(extension: &str) -> bool {
+    matches!(
+        extension,
+        "mp3" | "m4a" | "aac" | "wav" | "flac" | "ogg" | "opus" | "amr" | "wma" | "mid"
+    )
+}
+
+async fn read_page(ctx: &Context<'_>, request: Request) -> Result<Value, String> {
+    if request.root.starts_with("https://") {
+        return plain_rs::features::services::peers::shared_client::files(
+            ctx.data::<crate::server::ServerState>()
+                .map_err(|error| error.message)?,
+            request,
+        )
+        .await
+        .map_err(|error| error.to_string());
+    }
+    file_reads::execute(
+        ctx.data::<Arc<plain_rs::features::services::files::platform::FilePlatform>>()
+            .map_err(|error| error.message)?,
+        request,
+    )
+    .await
+}
+
+fn file(item: &Value) -> File {
+    File {
+        resource_url: item["url"].as_str().map(str::to_owned),
+        permission: text(item, "permission"),
+        file_id: item["mediaId"]
+            .as_str()
+            .filter(|value| !value.is_empty())
+            .map(|value| plain_graphql::ID::from(value)),
+        name: text(item, "name"),
+        path: text(item, "path"),
+        created_at: item["createdAt"].as_i64().map(|millis| instant(millis)),
+        updated_at: instant(item["updatedAt"].as_i64().unwrap_or_default()),
+        size: Long(item["size"].as_i64().unwrap_or_default()),
+        is_dir: flag(item, "isDir"),
+        child_count: integer(item, "childCount") as i32,
+    }
+}
+
+fn mount(item: &Value) -> Mount {
+    Mount {
+        id: plain_graphql::ID(plain_rs::features::services::files::mounts::mount_id(item)),
+        name: text(item, "name"),
+        path: text(item, "path"),
+        mount_point: item
+            .get("mountPoint")
+            .and_then(Value::as_str)
+            .unwrap_or_else(|| item.get("path").and_then(Value::as_str).unwrap_or_default())
+            .to_owned(),
+        fs_type: text(item, "fsType"),
+        total_bytes: Long(integer(item, "totalBytes")),
+        used_bytes: Long(
+            item.get("usedBytes")
+                .and_then(Value::as_i64)
+                .unwrap_or_else(|| {
+                    integer(item, "totalBytes")
+                        .saturating_sub(integer(item, "freeBytes"))
+                        .max(0)
+                }),
+        ),
+        free_bytes: Long(integer(item, "freeBytes")),
+        remote: flag(item, "remote"),
+        alias: text(item, "alias"),
+        drive_type: DriveType::parse(&text(item, "driveType")),
+        disk_id: text(item, "diskId"),
+        label: text(item, "label"),
+        disk_model: text(item, "diskModel"),
+    }
+}
+
+fn instant(millis: i64) -> Instant {
+    Instant(DateTime::<Utc>::from_timestamp_millis(millis).unwrap_or_else(epoch_datetime))
+}
+
+fn epoch_datetime() -> DateTime<Utc> {
+    DateTime::<Utc>::from_timestamp(0, 0).unwrap_or_default()
+}
+
+fn prefs<'a>(ctx: &'a Context<'_>) -> &'a Arc<plain_rs::features::prefs::Prefs> {
+    ctx.data_unchecked::<Arc<plain_rs::features::prefs::Prefs>>()
+}
+
+#[cfg(test)]
+#[path = "../../../../../tests/plain-server/unit/graphql/resolvers/files/query.rs"]
+mod tests;

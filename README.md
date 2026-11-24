@@ -106,6 +106,8 @@ plain-server/
 
 ```
 
+GraphQL resolver modules use query.rs and mutation.rs for operation roots. Shared types and helpers live with their owning domain.
+
 ## Build
 
 Requires Rust 1.99+ and a C compiler. Standard workspace builds and tests do

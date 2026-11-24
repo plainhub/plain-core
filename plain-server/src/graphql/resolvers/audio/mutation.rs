@@ -300,7 +300,7 @@ async fn search_tracks(
     let mut tracks = Vec::new();
     let mut offset = 0;
     loop {
-        let page = crate::graphql::resolvers::media::public::library_rows(
+        let page = crate::graphql::resolvers::media::query::library_rows(
             ctx,
             DataType::Audio,
             query.to_owned(),

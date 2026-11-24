@@ -1,5 +1,5 @@
 use super::events;
-use crate::graphql::resolvers::casting::sender::DlnaSenderState;
+use crate::graphql::resolvers::casting::DlnaSenderState;
 use futures_util::stream::BoxStream;
 use plain_graphql::{Context, Result, Subscription};
 

@@ -1,8 +1,4 @@
-#[cfg(feature = "core")]
 pub mod image_editor_project;
+pub mod index;
 
-#[cfg(feature = "core")]
-pub mod public_index;
-
-#[cfg(feature = "core")]
-pub mod public;
+pub mod query;

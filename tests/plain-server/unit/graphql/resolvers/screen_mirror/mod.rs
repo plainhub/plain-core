@@ -1,0 +1,257 @@
+use plain_rs::infrastructure::host::bridge::Host;
+use std::sync::Arc;
+use crate::test_support::schema::SchemaFixture as PublicSchema;
+use plain_libs::serde_json::{Value, json};
+
+fn stub(host: Arc<Host>, handler: impl Fn(&str, Value) -> Value + Send + 'static) {
+    let (generation, mut requests) = host.connect();
+    let host = host.clone();
+    tokio::spawn(async move {
+        while let Some(request) = requests.recv().await {
+            let Some(id) = request["id"].as_u64() else {
+                continue;
+            };
+            let method = request["method"].as_str().unwrap_or_default();
+            let result = if method == "systemCapabilities" {
+                json!(["SCREEN_MIRROR", "ACCESSIBILITY", "TELEPHONY"])
+            } else {
+                handler(method, request["params"].clone())
+            };
+            let _ = host.reply(generation, json!({ "id": id, "result": result }));
+        }
+    });
+}
+
+fn fixture() -> (plain_libs::temporary::TempDir, PublicSchema) {
+    let dir = plain_libs::temporary::tempdir().unwrap();
+    let prefs =
+        Arc::new(plain_rs::features::prefs::Prefs::load(&dir.path().join("prefs.json")).unwrap());
+    let db = Arc::new(plain_rs::infrastructure::db::Db::open(&dir.path().join("data.db")).unwrap());
+    let host = Arc::new(Host::default());
+    let directory = dir.path().to_path_buf();
+    let (events, _) = tokio::sync::broadcast::channel(16);
+    (
+        dir,
+        crate::test_support::schema::build(host, events, prefs, db, directory),
+    )
+}
+
+fn schema_host(schema: &PublicSchema) -> Arc<Host> {
+    schema.data::<Arc<Host>>().unwrap().clone()
+}
+
+fn state(running: bool, codec: Value) -> Value {
+    json!({"running": running, "controlEnabled": true, "codec": codec})
+}
+
+#[tokio::test]
+async fn mirroring_state_is_projected_from_one_platform_read() {
+    let (_dir, schema) = fixture();
+    stub(schema_host(&schema), |method, _| match method {
+        "systemScreenMirrorState" => state(true, json!({"annexB":"AAAA","keyFrame":"BBBB"})),
+        other => panic!("unexpected host call {other}"),
+    });
+    let response = schema
+        .execute(
+            r#"query { isScreenMirroring screenMirrorControlEnabled
+                     screenMirrorVideoCodec { annexB keyFrame } }"#,
+        )
+        .await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    let data = response.data.into_json().unwrap();
+    assert_eq!(data["isScreenMirroring"], true);
+    assert_eq!(data["screenMirrorControlEnabled"], true);
+    assert_eq!(data["screenMirrorVideoCodec"]["annexB"], "AAAA");
+    assert_eq!(data["screenMirrorVideoCodec"]["keyFrame"], "BBBB");
+}
+
+/// No keyframe yet is null, not an empty string — the client distinguishes
+/// "not emitted" from "emitted nothing".
+#[tokio::test]
+async fn a_codec_without_a_keyframe_reports_null() {
+    let (_dir, schema) = fixture();
+    stub(schema_host(&schema), |method, _| match method {
+        "systemScreenMirrorState" => state(false, json!({"annexB":"AAAA","keyFrame": Value::Null})),
+        other => panic!("unexpected host call {other}"),
+    });
+    let response = schema
+        .execute(r#"query { screenMirrorVideoCodec { annexB keyFrame } }"#)
+        .await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    let codec = &response.data.into_json().unwrap()["screenMirrorVideoCodec"];
+    assert_eq!(codec["annexB"], "AAAA");
+    assert_eq!(codec["keyFrame"], Value::Null);
+}
+
+#[tokio::test]
+async fn no_published_codec_is_null_rather_than_an_empty_object() {
+    let (_dir, schema) = fixture();
+    stub(schema_host(&schema), |method, _| match method {
+        "systemScreenMirrorState" => state(false, Value::Null),
+        other => panic!("unexpected host call {other}"),
+    });
+    let response = schema
+        .execute(r#"query { screenMirrorVideoCodec { annexB } }"#)
+        .await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    assert_eq!(
+        response.data.into_json().unwrap()["screenMirrorVideoCodec"],
+        Value::Null
+    );
+}
+
+#[tokio::test]
+async fn quality_is_read_from_the_single_rust_store() {
+    let (_dir, schema) = fixture();
+    schema
+        .data::<Arc<plain_rs::features::prefs::Prefs>>()
+        .unwrap()
+        .set(
+            "screen_mirror_quality",
+            json!({"mode":"SMOOTH","resolution":720}),
+        )
+        .unwrap();
+    stub(schema_host(&schema), |method, _| match method {
+        "systemScreenMirrorQuality" => json!({"mode":"SMOOTH","resolution":720}),
+        other => panic!("unexpected host call {other}"),
+    });
+    let response = schema
+        .execute(r#"query { screenMirrorQuality { mode resolution } }"#)
+        .await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    let quality = &response.data.into_json().unwrap()["screenMirrorQuality"];
+    assert_eq!(quality["mode"], "SMOOTH");
+    assert_eq!(quality["resolution"], 720);
+}
+
+/// An unrecognised stored mode reads back as HD — the store only ever holds
+/// the two the picker offers.
+#[tokio::test]
+async fn an_unknown_stored_quality_mode_reads_as_hd() {
+    let (_dir, schema) = fixture();
+    schema
+        .data::<Arc<plain_rs::features::prefs::Prefs>>()
+        .unwrap()
+        .set(
+            "screen_mirror_quality",
+            json!({"mode":"WAT","resolution":1080}),
+        )
+        .unwrap();
+    stub(schema_host(&schema), |method, _| {
+        panic!("unexpected host call {method}")
+    });
+    let response = schema
+        .execute(r#"query { screenMirrorQuality { mode resolution } }"#)
+        .await;
+    assert_eq!(
+        response.data.into_json().unwrap()["screenMirrorQuality"]["mode"],
+        "HD"
+    );
+}
+
+#[tokio::test]
+async fn requesting_mirror_audio_reports_whether_the_device_already_granted_it() {
+    let (_dir, schema) = fixture();
+    stub(schema_host(&schema), |method, _| match method {
+        "systemRequestScreenMirrorAudio" => json!(false),
+        other => panic!("unexpected host call {other}"),
+    });
+    let response = schema
+        .execute(r#"mutation { requestScreenMirrorAudio }"#)
+        .await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    // false means the platform raised the runtime prompt; the caller retries.
+    assert_eq!(
+        response.data.into_json().unwrap()["requestScreenMirrorAudio"],
+        false
+    );
+}
+
+#[tokio::test]
+async fn start_screen_mirror_passes_the_audio_choice_through() {
+    let (_dir, schema) = fixture();
+    stub(schema_host(&schema), |method, params| match method {
+        "systemStartScreenMirror" => {
+            assert_eq!(params["audio"], true);
+            json!(true)
+        }
+        other => panic!("unexpected host call {other}"),
+    });
+    let response = schema
+        .execute(r#"mutation { startScreenMirror(audio:true) }"#)
+        .await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    assert_eq!(
+        response.data.into_json().unwrap()["startScreenMirror"],
+        true
+    );
+}
+
+#[tokio::test]
+async fn quality_updates_send_the_mode_name_the_store_understands() {
+    let (_dir, schema) = fixture();
+    stub(schema_host(&schema), |method, _| {
+        panic!("unexpected host call {method}")
+    });
+    let response = schema
+        .execute(r#"mutation { updateScreenMirrorQuality(mode:SMOOTH) }"#)
+        .await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    assert_eq!(
+        response.data.into_json().unwrap()["updateScreenMirrorQuality"],
+        true
+    );
+    assert_eq!(
+        schema
+            .data::<Arc<plain_rs::features::prefs::Prefs>>()
+            .unwrap()
+            .get::<Value>("screen_mirror_quality")
+            .unwrap(),
+        Some(json!({"mode":"SMOOTH","resolution":720}))
+    );
+}
+
+#[tokio::test]
+async fn access_request_carries_the_feature_name() {
+    let (_dir, schema) = fixture();
+    stub(schema_host(&schema), |method, params| match method {
+        "systemRequestAccess" => {
+            assert_eq!(params["feature"], "CALLS");
+            json!(true)
+        }
+        "systemOpenAccessibilitySettings" => json!(true),
+        other => panic!("unexpected host call {other}"),
+    });
+    let response = schema
+        .execute(r#"mutation { requestAccess(feature:CALLS) }"#)
+        .await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    let response = schema
+        .execute(r#"mutation { openAccessibilitySettings }"#)
+        .await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+}
+
+#[tokio::test]
+async fn access_request_requires_a_feature_before_calling_the_host() {
+    let (_dir, schema) = fixture();
+    stub(schema_host(&schema), |method, _| {
+        panic!("unexpected host call {method}")
+    });
+    let response = schema.execute("mutation { requestAccess }").await;
+    assert!(!response.errors.is_empty());
+}
+
+#[tokio::test]
+async fn access_feature_rejects_unknown_values_before_host_dispatch() {
+    let (_dir, schema) = fixture();
+    stub(schema_host(&schema), |method, _| {
+        panic!("unexpected host call {method}")
+    });
+    for feature in ["CALL_LOGS", "UNKNOWN"] {
+        let response = schema
+            .execute(format!("mutation {{ requestAccess(feature:{feature}) }}"))
+            .await;
+        assert!(!response.errors.is_empty());
+    }
+}
