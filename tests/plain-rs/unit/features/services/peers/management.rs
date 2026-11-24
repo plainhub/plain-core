@@ -145,7 +145,7 @@ async fn relay_rechecks_credentials_and_addresses_under_the_database_lock() {
         .unwrap();
     state.db.with_conn(|connection| {
         connection
-            .execute("UPDATE peers SET token=NULL WHERE id='peer'", [])
+            .execute("UPDATE peers SET manage_token=NULL WHERE id='peer'", [])
             .unwrap()
     });
     assert!(
@@ -156,7 +156,7 @@ async fn relay_rechecks_credentials_and_addresses_under_the_database_lock() {
     state.db.with_conn(|connection| {
         connection
             .execute(
-                "UPDATE peers SET token=?1,ip='127.0.0.1' WHERE id='peer'",
+                "UPDATE peers SET manage_token=?1,ip='127.0.0.1' WHERE id='peer'",
                 [plain_libs::utils::base64::base64_decode(&peer.token)],
             )
             .unwrap()

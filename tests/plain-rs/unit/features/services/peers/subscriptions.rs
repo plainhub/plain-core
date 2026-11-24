@@ -34,7 +34,7 @@ async fn rejects_missing_unpaired_chat_only_and_changed_signing_identity_before_
     assert!(PeerSubscription::open(state.clone(), wrong, Default::default()).is_err());
     state
         .db
-        .with_conn(|connection| connection.execute("UPDATE peers SET token=NULL WHERE id='peer'", []))
+        .with_conn(|connection| connection.execute("UPDATE peers SET manage_token=NULL WHERE id='peer'", []))
         .unwrap();
     assert!(PeerSubscription::open(state, target(&peer), Default::default()).is_err());
     server.shutdown().await;
@@ -50,7 +50,7 @@ async fn chat_rekey_preserves_management_but_unpair_revokes_and_close_releases_p
     state
         .db
         .with_conn(|connection| {
-            connection.execute("UPDATE peers SET key=?1 WHERE id='peer'", [[61u8; 32]])
+            connection.execute("UPDATE peers SET chat_token=?1 WHERE id='peer'", [[61u8; 32]])
         })
         .unwrap();
     assert!(session.current().is_ok());

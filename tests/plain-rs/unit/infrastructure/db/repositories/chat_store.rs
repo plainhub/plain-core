@@ -22,7 +22,7 @@ fn checked_chat_storage_is_atomic_literal_and_preserves_unrelated_conversations_
     let before = peers::get(&db, "peer").unwrap().unwrap();
     let mut after = before.clone();
     after.ip = "::1".into();
-    db.with_conn(|c| c.execute("UPDATE peers SET key=?1 WHERE id='peer'", [[36u8; 32]]))
+    db.with_conn(|c| c.execute("UPDATE peers SET chat_token=?1 WHERE id='peer'", [[36u8; 32]]))
         .unwrap();
     assert_eq!(
         peers::patch(&db, &before, &after).unwrap().unwrap().key,

@@ -411,7 +411,7 @@ async fn encrypted_snapshots_keep_socket_delivery_live_and_discard_revoked_crede
     }
     state.db.with_conn(|connection| {
         connection
-            .execute("UPDATE peers SET token=NULL WHERE id=?1", [&peer.id])
+            .execute("UPDATE peers SET manage_token=NULL WHERE id=?1", [&peer.id])
             .unwrap()
     });
     release.notify_one();
@@ -427,7 +427,7 @@ async fn encrypted_snapshots_keep_socket_delivery_live_and_discard_revoked_crede
     state.db.with_conn(|connection| {
         connection
             .execute(
-                "UPDATE peers SET token=?1 WHERE id=?2",
+                "UPDATE peers SET manage_token=?1 WHERE id=?2",
                 plain_libs::rusqlite::params![plain_libs::utils::base64::base64_decode(&peer.token), peer.id],
             )
             .unwrap()

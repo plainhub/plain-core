@@ -126,7 +126,7 @@ async fn unpair_removes_subscription_and_rolled_back_updates_do_not_reconfigure_
     state.db.with_conn(|connection| {
         let transaction = connection.unchecked_transaction().unwrap();
         assert_eq!(transaction
-            .execute("UPDATE peers SET key=NULL WHERE id=?1", ["706c6169-0001-8000-8000-000000000002"])
+            .execute("UPDATE peers SET chat_token=NULL WHERE id=?1", ["706c6169-0001-8000-8000-000000000002"])
             .unwrap(), 1);
         transaction.rollback().unwrap();
     });

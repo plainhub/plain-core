@@ -103,7 +103,7 @@ fn import_peers(source: &Connection, target: &Connection) -> Result<()> {
         let device_type = enum_text(row.get("device_type")?, "OTHER");
         let (created, updated) = super::rows::dates(row)?;
         target.execute(
-            "INSERT INTO peers(id,name,ip,key,public_key,port,status,device_type,created_at,updated_at) \
+            "INSERT INTO peers(id,name,ip,chat_token,public_key,port,status,device_type,created_at,updated_at) \
              VALUES (?1,?2,?3,?4,?5,NULLIF(?6,0),?7,?8,?9,?10) ON CONFLICT(id) DO NOTHING",
             params![id, name, ip, key_blob::optional(&key)?, key_blob::optional(&public_key)?, port, status, device_type, created, updated],
         )?;

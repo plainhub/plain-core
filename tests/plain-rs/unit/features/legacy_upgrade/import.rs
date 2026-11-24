@@ -61,7 +61,7 @@ fn imports_an_older_room_database_with_channel_and_pairing_references() {
         .unwrap();
     current_db.with_conn(|db| {
         assert_eq!(
-            db.query_row("SELECT key FROM peers WHERE id=?1", [LOCAL], |r| r
+            db.query_row("SELECT chat_token FROM peers WHERE id=?1", [LOCAL], |r| r
                 .get::<_, [u8; 32]>(0))
                 .unwrap(),
             [0x43; 32]
@@ -261,7 +261,7 @@ fn deferred_import_reads_backup_and_deletes_only_the_imported_data() {
     assert_eq!(deliveries["results"][0]["peerId"], PEER);
     db.with_conn(|conn| {
         let peer_key: [u8; 32] = conn
-            .query_row("SELECT key FROM peers WHERE id=?1", [PEER], |row| {
+            .query_row("SELECT chat_token FROM peers WHERE id=?1", [PEER], |row| {
                 row.get(0)
             })
             .unwrap();

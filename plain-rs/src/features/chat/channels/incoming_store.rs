@@ -49,7 +49,7 @@ pub(crate) fn ensure_peers(c: &Connection, items: &[MemberPeerInfo], actor: &str
             public_key(&item.public_key)?;
         }
         let now = now_iso();
-        if c.execute("INSERT INTO peers(id,name,ip,key,public_key,status,port,device_type,token,created_at,updated_at) VALUES(?1,?2,?3,NULL,?4,?5,?6,?7,NULL,?8,?8)",params![item.id,item.name,item.ip,key_blob::optional(&item.public_key)?,PeerStatus::Channel,item.port,item.device_type,now])?!=1 { bail!("Member peer insert failed"); }
+        if c.execute("INSERT INTO peers(id,name,ip,chat_token,public_key,status,port,device_type,manage_token,created_at,updated_at) VALUES(?1,?2,?3,NULL,?4,?5,?6,?7,NULL,?8,?8)",params![item.id,item.name,item.ip,key_blob::optional(&item.public_key)?,PeerStatus::Channel,item.port,item.device_type,now])?!=1 { bail!("Member peer insert failed"); }
     }
     Ok(())
 }

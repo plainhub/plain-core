@@ -8,7 +8,7 @@ use crate::infrastructure::db::Db;
 use crate::infrastructure::db::now_iso;
 
 pub(crate) const PEER_COLS: &str =
-    "id,name,ip,key,public_key,status,port,device_type,token,created_at,updated_at";
+    "id,name,ip,chat_token,public_key,status,port,device_type,manage_token,created_at,updated_at";
 
 pub(crate) fn row_to_peer(row: &plain_libs::rusqlite::Row<'_>) -> plain_libs::rusqlite::Result<DPeer> {
     Ok(DPeer {
@@ -54,13 +54,13 @@ impl Db {
         let conn = self.0.lock().unwrap();
         let result = (|| -> plain_libs::rusqlite::Result<usize> {
             conn.execute(
-            "INSERT INTO peers (id,name,ip,key,public_key,status,port,device_type,token,created_at,updated_at)
+            "INSERT INTO peers (id,name,ip,chat_token,public_key,status,port,device_type,manage_token,created_at,updated_at)
              VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)
              ON CONFLICT(id) DO UPDATE SET
-               name=excluded.name, ip=excluded.ip, key=excluded.key,
+               name=excluded.name, ip=excluded.ip, chat_token=excluded.chat_token,
                public_key=excluded.public_key, status=excluded.status,
                port=excluded.port, device_type=excluded.device_type,
-               token=excluded.token, updated_at=excluded.updated_at",
+               manage_token=excluded.manage_token, updated_at=excluded.updated_at",
             params![
                 peer.id, peer.name, peer.ip, key_blob::optional(&peer.key)?, key_blob::optional(&peer.public_key)?,
                 peer.status, peer.port.map(i64::from), peer.device_type, key_blob::optional(&peer.token)?,
@@ -99,7 +99,7 @@ impl Db {
         let conn = self.0.lock().unwrap();
         let result = key_blob::optional(key).and_then(|key| {
             conn.execute(
-                "UPDATE peers SET status=?1, key=?2, updated_at=?3 WHERE id=?4",
+                "UPDATE peers SET status=?1, chat_token=?2, updated_at=?3 WHERE id=?4",
                 params![status, key, now, id],
             )
         });
@@ -147,15 +147,15 @@ impl Db {
         let now = now_iso();
         let conn = self.0.lock().unwrap();
         let result = conn.execute(
-            "INSERT INTO peers (id,name,ip,key,public_key,status,port,device_type,token,created_at,updated_at)
+            "INSERT INTO peers (id,name,ip,chat_token,public_key,status,port,device_type,manage_token,created_at,updated_at)
              VALUES (?1,?2,?3,?9,?7,CASE WHEN ?9 IS NOT NULL THEN 'PAIRED' ELSE 'UNPAIRED' END,?4,?5,?6,?8,?8)
              ON CONFLICT(id) DO UPDATE SET
-               token=excluded.token, ip=excluded.ip, port=excluded.port,
+               manage_token=excluded.manage_token, ip=excluded.ip, port=excluded.port,
                name=CASE WHEN excluded.name<>'' THEN excluded.name ELSE peers.name END,
                device_type=CASE WHEN excluded.device_type<>'' THEN excluded.device_type ELSE peers.device_type END,
                public_key=coalesce(excluded.public_key,peers.public_key),
-               key=coalesce(excluded.key,peers.key),
-               status=CASE WHEN excluded.key IS NOT NULL THEN 'PAIRED' ELSE peers.status END,
+               chat_token=coalesce(excluded.chat_token,peers.chat_token),
+               status=CASE WHEN excluded.chat_token IS NOT NULL THEN 'PAIRED' ELSE peers.status END,
                updated_at=excluded.updated_at
              WHERE peers.public_key IS NULL OR peers.public_key=?10",
             params![
@@ -177,7 +177,7 @@ impl Db {
         let now = now_iso();
         let conn = self.0.lock().unwrap();
         conn.execute(
-            "UPDATE peers SET token=NULL, updated_at=?1 WHERE id=?2",
+            "UPDATE peers SET manage_token=NULL, updated_at=?1 WHERE id=?2",
             params![now, id],
         )
         .map_err(|error| error.to_string())?;
@@ -188,7 +188,7 @@ impl Db {
     pub fn get_login_peers(&self) -> Vec<DPeer> {
         let conn = self.0.lock().unwrap();
         let mut stmt = match conn.prepare(&format!(
-            "SELECT {PEER_COLS} FROM peers WHERE token IS NOT NULL ORDER BY created_at DESC"
+            "SELECT {PEER_COLS} FROM peers WHERE manage_token IS NOT NULL ORDER BY created_at DESC"
         )) {
             Ok(s) => s,
             Err(_) => return vec![],

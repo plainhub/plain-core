@@ -245,16 +245,25 @@ fn login_credentials_are_raw_blobs_and_logout_clears_the_token() {
     )
     .unwrap();
 
+    db.with_conn(|conn| -> plain_libs::rusqlite::Result<()> {
+        let mut statement = conn.prepare("PRAGMA table_info(peers)")?;
+        let columns = statement
+            .query_map([], |row| row.get::<_, String>(1))?
+            .collect::<Result<Vec<_>, _>>()?;
+        assert!(!columns.iter().any(|name| matches!(name.as_str(), "key" | "token")));
+        Ok(())
+    }).unwrap();
+
     let credentials = || {
         db.with_conn(|c| c.query_row(
-            "SELECT key, public_key, token FROM peers WHERE id='test-peer'",
+            "SELECT chat_token, public_key, manage_token FROM peers WHERE id='test-peer'",
             [],
             |row| Ok((row.get::<_, Vec<u8>>(0)?, row.get::<_, Vec<u8>>(1)?, row.get::<_, Option<Vec<u8>>>(2)?)),
         )).unwrap()
     };
     assert_eq!(credentials(), (vec![0x80; 32], vec![0xa4; 32], Some(vec![0xef; 32])));
     assert_eq!(db.get_login_peers()[0].token, encode(&[0xef; 32]));
-    assert!(db.with_conn(|c| c.execute("UPDATE peers SET token='not a blob' WHERE id='test-peer'", [])).is_err());
+    assert!(db.with_conn(|c| c.execute("UPDATE peers SET manage_token='not a blob' WHERE id='test-peer'", [])).is_err());
 
     db.logout_peer("test-peer").unwrap();
     assert_eq!(credentials(), (vec![0x80; 32], vec![0xa4; 32], None));

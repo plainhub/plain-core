@@ -281,7 +281,7 @@ pub fn current(
 ) -> Result<bool> {
     let current = connection
         .query_row(
-            "SELECT token,ip,port FROM peers WHERE id=?1",
+            "SELECT manage_token,ip,port FROM peers WHERE id=?1",
             [peer_id],
             |row| {
                 Ok((

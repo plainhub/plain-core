@@ -154,7 +154,7 @@ fn mutate(
                 }
                 if retained {
                     tx.execute(
-                        "UPDATE peers SET key=NULL,status='CHANNEL',updated_at=?2 WHERE id=?1",
+                        "UPDATE peers SET chat_token=NULL,status='CHANNEL',updated_at=?2 WHERE id=?1",
                         params![id, crate::infrastructure::db::now_iso()],
                     )?
                 } else {

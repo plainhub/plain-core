@@ -57,12 +57,12 @@ pub fn save_confirmed(
         peer.updated_at = now_iso();
         let changed = if new {
             tx.execute(
-                "INSERT INTO peers(id,name,ip,key,public_key,status,port,device_type,token,created_at,updated_at) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)",
+                "INSERT INTO peers(id,name,ip,chat_token,public_key,status,port,device_type,manage_token,created_at,updated_at) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)",
                 params![peer.id,peer.name,peer.ip,key_blob::encode(&peer.key)?,key_blob::encode(&peer.public_key)?,peer.status,peer.port,peer.device_type,key_blob::optional(&peer.token)?,peer.created_at,peer.updated_at],
             )?
         } else {
             tx.execute(
-                "UPDATE peers SET name=?2,ip=?3,key=?4,public_key=?5,status=?6,port=?7,device_type=?8,updated_at=?9 WHERE id=?1",
+                "UPDATE peers SET name=?2,ip=?3,chat_token=?4,public_key=?5,status=?6,port=?7,device_type=?8,updated_at=?9 WHERE id=?1",
                 params![peer.id,peer.name,peer.ip,key_blob::encode(&peer.key)?,key_blob::encode(&peer.public_key)?,peer.status,peer.port,peer.device_type,peer.updated_at],
             )?
         };

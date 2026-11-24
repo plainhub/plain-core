@@ -125,7 +125,7 @@ async fn encrypted_app_observations_work_without_notification_support_and_cannot
     state.db.with_conn(|connection| {
         connection
             .execute(
-                "UPDATE peers SET token=?1,port=?2 WHERE id=?3",
+                "UPDATE peers SET manage_token=?1,port=?2 WHERE id=?3",
                 plain_libs::rusqlite::params![plain_libs::utils::base64::base64_decode(&peer.token), port, peer.id],
             )
             .unwrap()
@@ -140,7 +140,7 @@ async fn encrypted_app_observations_work_without_notification_support_and_cannot
     }
     state.db.with_conn(|connection| {
         connection
-            .execute("UPDATE peers SET token=NULL WHERE id=?1", [&peer.id])
+            .execute("UPDATE peers SET manage_token=NULL WHERE id=?1", [&peer.id])
             .unwrap()
     });
     release.notify_one();
@@ -153,7 +153,7 @@ async fn encrypted_app_observations_work_without_notification_support_and_cannot
     state.db.with_conn(|connection| {
         connection
             .execute(
-                "UPDATE peers SET token=?1 WHERE id=?2",
+                "UPDATE peers SET manage_token=?1 WHERE id=?2",
                 plain_libs::rusqlite::params![plain_libs::utils::base64::base64_decode(&peer.token), peer.id],
             )
             .unwrap()
