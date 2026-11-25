@@ -120,47 +120,85 @@ fn validate_attachment(item: &plain_libs::serde_json::Value) -> Result<()> {
 
     Ok(())
 }
-#[derive(serde::Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Filter {
     pub peer: Option<String>,
     pub channel: Option<String>,
     pub text: String,
-    pub offset: i64,
-    pub limit: Option<i64>,
-    pub descending: bool,
-    pub latest: bool,
-    pub count_only: bool,
 }
-pub fn list(db: &Db, filter: &Filter) -> Result<plain_libs::serde_json::Value> {
-    if filter.offset < 0
-        || filter.limit.is_some_and(|v| v < 0)
-        || (filter.peer.is_some() && filter.channel.is_some())
-    {
-        bail!("invalid chat pagination or target");
+
+impl Filter {
+    fn condition(&self) -> Result<&'static str> {
+        match (&self.peer, &self.channel) {
+            (Some(_), Some(_)) => bail!("Choose either peer or channel, not both"),
+            (Some(_), None) => Ok("channel_id IS NULL AND (from_id=?3 OR to_id=?3)"),
+            (None, Some(_)) => Ok("channel_id=?3"),
+            (None, None) => Ok("?3 IS NULL"),
+        }
     }
-    let pattern = format!(
-        "%{}%",
-        filter
-            .text
-            .replace('\\', "\\\\")
-            .replace('%', "\\%")
-            .replace('_', "\\_")
-    );
-    let condition = "(?1 IS NULL OR (channel_id IS NULL AND (from_id=?1 OR to_id=?1))) AND (?2 IS NULL OR channel_id=?2) AND (?3='' OR content LIKE ?4 ESCAPE '\\')";
-    let latest = if filter.latest {
-        " AND julianday(c.created_at)=(SELECT max(julianday(other.created_at)) FROM chats other WHERE (c.channel_id IS NOT NULL AND other.channel_id=c.channel_id) OR (c.channel_id IS NULL AND other.channel_id IS NULL AND other.from_id=c.from_id AND other.to_id=c.to_id))"
-    } else {
-        ""
-    };
-    db.with_conn(|c|->Result<plain_libs::serde_json::Value>{
- if filter.count_only { return Ok(plain_libs::serde_json::json!(c.query_row(&format!("SELECT count(*) FROM chats c WHERE {condition}{latest}"),params![filter.peer,filter.channel,filter.text,pattern],|r|r.get::<_,i64>(0))?)); }
- let order=if filter.descending || filter.latest {"DESC"}else{"ASC"};
- let mut s=c.prepare(&format!("SELECT {CHAT_COLS} FROM chats c WHERE {condition}{latest} ORDER BY julianday(created_at) {order},id {order} LIMIT ?5 OFFSET ?6"))?;
- let rows=s.query_map(params![filter.peer,filter.channel,filter.text,pattern,filter.limit.unwrap_or(-1),filter.offset],row_to_chat)?.collect::<plain_libs::rusqlite::Result<Vec<_>>>()?;
- Ok(plain_libs::serde_json::to_value(rows)?)
- })
+
+    fn target(&self) -> Option<&str> {
+        self.peer.as_deref().or(self.channel.as_deref())
+    }
+
+    fn pattern(&self) -> String {
+        format!(
+            "%{}%",
+            self.text.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_")
+        )
+    }
 }
+
+const TEXT_CONDITION: &str = r"(?1='' OR content LIKE ?2 ESCAPE '\')";
+
+pub fn list(
+    db: &Db,
+    filter: &Filter,
+    offset: i64,
+    limit: Option<i64>,
+    descending: bool,
+) -> Result<Vec<DChat>> {
+    if offset < 0 || limit.is_some_and(|value| value < 0) {
+        bail!("Invalid chat pagination");
+    }
+    let condition = filter.condition()?;
+    let pattern = filter.pattern();
+    let order = if descending { "DESC" } else { "ASC" };
+    Ok(db.with_conn(|c| {
+        let mut statement = c.prepare(&format!(
+            "SELECT {CHAT_COLS} FROM chats WHERE {TEXT_CONDITION} AND {condition}
+             ORDER BY julianday(created_at) {order}, id {order} LIMIT ?4 OFFSET ?5"
+        ))?;
+        statement
+            .query_map(params![filter.text, pattern, filter.target(), limit.unwrap_or(-1), offset], row_to_chat)?
+            .collect::<plain_libs::rusqlite::Result<Vec<_>>>()
+    })?)
+}
+
+pub fn count(db: &Db, filter: &Filter) -> Result<i64> {
+    let condition = filter.condition()?;
+    let pattern = filter.pattern();
+    Ok(db.with_conn(|c| {
+        c.query_row(
+            &format!("SELECT count(*) FROM chats WHERE {TEXT_CONDITION} AND {condition}"),
+            params![filter.text, pattern, filter.target()],
+            |row| row.get(0),
+        )
+    })?)
+}
+
+pub fn latest_conversation_candidates(db: &Db) -> Result<Vec<DChat>> {
+    Ok(db.with_conn(|c| {
+        let mut statement = c.prepare(&format!(
+            "SELECT {CHAT_COLS} FROM chats c WHERE julianday(c.created_at)=(
+                SELECT max(julianday(other.created_at)) FROM chats other
+                WHERE (c.channel_id IS NOT NULL AND other.channel_id=c.channel_id)
+                   OR (c.channel_id IS NULL AND other.channel_id IS NULL AND other.from_id=c.from_id AND other.to_id=c.to_id)
+            ) ORDER BY julianday(created_at) DESC, id DESC"
+        ))?;
+        statement.query_map([], row_to_chat)?.collect::<plain_libs::rusqlite::Result<Vec<_>>>()
+    })?)
+}
+
 pub fn status(
     db: &Db,
     id: &str,
@@ -213,18 +251,16 @@ pub fn ids(db: &Db, query: &str) -> Result<Vec<String>> {
     if channel.is_none() && peer.is_none() {
         return Ok(Vec::new());
     }
-    let rows: Vec<DChat> = plain_libs::serde_json::from_value(list(
+    let rows = list(
         db,
         &Filter {
             peer,
             channel,
             text: String::new(),
-            offset: 0,
-            limit: None,
-            descending: false,
-            latest: false,
-            count_only: false,
         },
-    )?)?;
+        0,
+        None,
+        false,
+    )?;
     Ok(rows.into_iter().map(|row| row.id).collect())
 }

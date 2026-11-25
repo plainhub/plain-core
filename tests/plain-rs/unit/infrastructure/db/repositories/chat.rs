@@ -7,16 +7,6 @@ fn seed_chat(db: &Db, id: &str, from_id: &str, to_id: &str, channel_id: &str) {
     db.insert_chat(&chat);
 }
 
-/// Seed with explicit, distinct timestamps — `created_at` has second
-/// resolution, so same-second inserts tie in the ORDER BY.
-fn seed_chat_at(db: &Db, id: &str, from_id: &str, to_id: &str, channel_id: &str, at: &str) {
-    let mut chat = DChat::new(from_id, to_id, channel_id, "{}");
-    chat.id = id.to_string();
-    chat.created_at = at.to_string();
-    chat.updated_at = at.to_string();
-    db.insert_chat(&chat);
-}
-
 #[test]
 fn get_chats_by_peer_returns_both_directions() {
     let db = Db::open(&unique_tmp_dir("peer-both").join("plain.db")).expect("open db");
@@ -31,65 +21,6 @@ fn get_chats_by_peer_returns_both_directions() {
         .map(|c| c.id)
         .collect();
     assert_eq!(ids, vec!["a".to_string(), "b".to_string()]);
-}
-
-#[test]
-fn get_chats_page_resolves_peer_and_channel_targets() {
-    let db = Db::open(&unique_tmp_dir("page-targets").join("plain.db")).expect("open db");
-    seed_chat_at(&db, "a", "me", "peer1", "", "2026-01-01T00:00:01.000Z");
-    seed_chat_at(&db, "b", "peer1", "me", "", "2026-01-01T00:00:02.000Z");
-    seed_chat_at(&db, "c", "me", "peer2", "", "2026-01-01T00:00:03.000Z");
-    seed_chat_at(&db, "d", "me", "", "ch1", "2026-01-01T00:00:04.000Z");
-
-    for target in ["peer1", "local", "unknown:id", "peer:", "channel:"] {
-        assert!(db.get_chats_page(target, "", 0, 50).is_err());
-    }
-    let ids: Vec<String> = db
-        .get_chats_page("peer:peer1", "", 0, 50)
-        .unwrap()
-        .into_iter()
-        .map(|c| c.id)
-        .collect();
-    assert_eq!(ids, vec!["a".to_string(), "b".to_string()]);
-    let ids: Vec<String> = db
-        .get_chats_page("channel:ch1", "", 0, 50)
-        .unwrap()
-        .into_iter()
-        .map(|c| c.id)
-        .collect();
-    assert_eq!(ids, vec!["d".to_string()]);
-    // Offset pages within one conversation.
-    let ids: Vec<String> = db
-        .get_chats_page("peer:peer1", "", 1, 1)
-        .unwrap()
-        .into_iter()
-        .map(|c| c.id)
-        .collect();
-    assert_eq!(ids, vec!["a".to_string()]);
-    // Text filter narrows by content substring.
-    let db2 = Db::open(&unique_tmp_dir("page-text").join("plain.db")).expect("open db");
-    let mut chat = DChat::new(
-        "me",
-        "peer1",
-        "",
-        r#"{"type":"MESSAGE","value":{"format":"PLAIN","items":[],"text":"hello world"}}"#,
-    );
-    chat.id = "x".to_string();
-    db2.insert_chat(&chat);
-    let ids: Vec<String> = db2
-        .get_chats_page("peer:peer1", "hello", 0, 50)
-        .unwrap()
-        .into_iter()
-        .map(|c| c.id)
-        .collect();
-    assert_eq!(ids, vec!["x".to_string()]);
-    let ids: Vec<String> = db2
-        .get_chats_page("peer:peer1", "nope", 0, 50)
-        .unwrap()
-        .into_iter()
-        .map(|c| c.id)
-        .collect();
-    assert!(ids.is_empty());
 }
 
 #[test]

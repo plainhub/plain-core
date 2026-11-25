@@ -59,9 +59,9 @@ async fn local_messages_edit_forward_and_clear_through_native_executor() {
         ),
     )
     .await;
-    let rows = execute(&server, r#"{ chatRecords(query:"peer:local text:edited sort:desc", offset:0, limit:20) {id} chatCount(query:"peer:local") chatConversations {id chat {id}} }"#.into()).await;
+    let rows = execute(&server, r#"{ chatItems(query:"peer:local text:edited", offset:0, limit:20, sortBy:NEWEST_FIRST) {id} chatCount(query:"peer:local") chatConversations {id chat {id}} }"#.into()).await;
     assert_eq!(rows["chatCount"], 2);
-    assert_eq!(rows["chatRecords"].as_array().unwrap().len(), 2);
+    assert_eq!(rows["chatItems"].as_array().unwrap().len(), 2);
     assert_eq!(rows["chatConversations"][0]["id"], "local");
     let unrelated = plain_rs::features::chat::messages::message_lifecycle::create(
         &state.db,

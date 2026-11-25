@@ -400,7 +400,7 @@ fn public_schema_exposes_the_contract_it_has_to_serve() {
         "addAudioPlaylistItems(id: ID!, query: String!): Boolean!",
         "removeAudioPlaylistItems(id: ID!, query: String!): ActionResult!",
         "chatChannels(refreshFromOwners: Boolean! = false): [ChatChannel!]!",
-        "chatItems(target: String!, query: String!, offset: Int!, limit: Int!): [ChatItem!]!",
+        "chatItems(query: String!, offset: Int!, limit: Int!, sortBy: ChatSortBy!): [ChatItem!]!",
         "chatConversations: [ChatConversation!]!",
         "acceptChatChannelInvite(id: ID!): Boolean!",
         "declineChatChannelInvite(id: ID!): Boolean!",

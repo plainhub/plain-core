@@ -1,4 +1,3 @@
-use plain_libs::anyhow::Result;
 use plain_libs::rusqlite::params;
 
 use crate::features::chat::enums::ChatStatus;
@@ -24,39 +23,6 @@ pub(crate) fn row_to_chat(row: &plain_libs::rusqlite::Row<'_>) -> plain_libs::ru
 }
 
 impl Db {
-    /// Read a `peer:<id>` or `channel:<id>` page, oldest first.
-    pub fn get_chats_page(
-        &self,
-        target: &str,
-        text: &str,
-        offset: i32,
-        limit: i32,
-    ) -> Result<Vec<DChat>> {
-        let (peer, channel) = crate::features::chat::messages::target::parse(target)?;
-        let conn = self.0.lock().unwrap();
-        let text = text.trim();
-        let (base_sql, p1): (&str, &str) = if channel.is_empty() {
-            ("WHERE channel_id IS NULL AND (to_id=?1 OR from_id=?1)", &peer)
-        } else {
-            ("WHERE channel_id=?1", &channel)
-        };
-        let text_clause = if text.is_empty() {
-            String::new()
-        } else {
-            format!(" AND content LIKE '%{}%'", text.replace('\'', "''"))
-        };
-        let sql = format!(
-            "SELECT {CHAT_COLS} FROM chats {base_sql}{text_clause} ORDER BY created_at DESC LIMIT ?2 OFFSET ?3"
-        );
-
-        let mut stmt = conn.prepare(&sql)?;
-        let mut chats = stmt
-            .query_map(params![p1, limit, offset], row_to_chat)?
-            .collect::<plain_libs::rusqlite::Result<Vec<_>>>()?;
-        chats.reverse();
-        Ok(chats)
-    }
-
     pub fn insert_chat(&self, chat: &DChat) -> plain_libs::rusqlite::Result<()> {
         let conn = self.0.lock().unwrap();
         conn.execute(

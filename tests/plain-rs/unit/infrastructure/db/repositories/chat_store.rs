@@ -74,21 +74,13 @@ fn checked_chat_storage_is_atomic_literal_and_preserves_unrelated_conversations_
         peer: Some("peer".into()),
         channel: None,
         text: String::new(),
-        offset: 0,
-        limit: Some(1),
-        descending: true,
-        latest: false,
-        count_only: false,
     };
-    let rows: Vec<DChat> =
-        plain_libs::serde_json::from_value(messages::list(&db, &filter).unwrap()).unwrap();
+    let rows = messages::list(&db, &filter, 0, Some(1), true).unwrap();
     assert_eq!(rows[0].id, "two");
-    filter.limit = None;
     filter.text = "%_".into();
-    filter.count_only = true;
-    assert_eq!(messages::list(&db, &filter).unwrap(), json!(1));
+    assert_eq!(messages::count(&db, &filter).unwrap(), 1);
     filter.text = "%' OR 1=1 --".into();
-    assert_eq!(messages::list(&db, &filter).unwrap(), json!(0));
+    assert_eq!(messages::count(&db, &filter).unwrap(), 0);
     assert_eq!(messages::ids(&db, "peer:peer").unwrap().len(), 2);
     assert_eq!(
         messages::ids(&db, "channel:channel").unwrap(),

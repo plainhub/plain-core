@@ -30,12 +30,11 @@ async fn conversation_reads_prepare_once_in_background_and_skip_searches_and_pag
         ("peer:peer text:needle", 0, 20),
         ("peer:peer", 20, 20),
         ("peer:peer", 0, 0),
-        ("peer:peer latest:true", 0, 20),
         ("peer:unknown", 0, 20),
     ] {
         let response = executor
             .execute(plain_graphql::Request::new(format!(
-                "{{chatRecords(query:{},offset:{offset},limit:{limit}){{id}}}}",
+                "{{chatItems(query:{},offset:{offset},limit:{limit},sortBy:NEWEST_FIRST){{id}}}}",
                 json!(query),
             )))
             .await;
@@ -52,9 +51,9 @@ async fn conversation_reads_prepare_once_in_background_and_skip_searches_and_pag
     assert!(requests.try_recv().is_err());
     for index in 0..20 {
         let document = if index % 2 == 0 {
-            r#"{chatRecords(query:"peer:peer",offset:0,limit:20){id}}"#
+            r#"{chatItems(query:"peer:peer",offset:0,limit:20,sortBy:OLDEST_FIRST){id}}"#
         } else {
-            r#"{chatItems(target:"peer:peer",query:"",offset:0,limit:20){id}}"#
+            r#"{chatItems(query:"peer:peer",offset:0,limit:20,sortBy:NEWEST_FIRST){id}}"#
         };
         let response = tokio::time::timeout(
             std::time::Duration::from_secs(1),

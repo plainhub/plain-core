@@ -287,8 +287,8 @@ async fn native_password_and_approval_pairing_enables_actual_chat_and_preserves_
     let sent = query(&first.native, "mutation($targets:[String!]!,$content:ChatContentInput!){sendChatItems(targets:$targets,content:$content){id status}}",
         json!({"targets":[format!("peer:{second_id}")],"content":content})).await;
     assert_eq!(sent["sendChatItems"][0]["status"], "SENT");
-    let received = query(&second.native, "query($target:String!){chatItems(target:$target,query:\"\",offset:0,limit:10){id fromId toId content{... on ChatMessageContent{__typename text format items{type attachment{id uri}}}}}}",
-        json!({"target":format!("peer:{first_id}")})).await;
+    let received = query(&second.native, "query($query:String!){chatItems(query:$query,offset:0,limit:10,sortBy:NEWEST_FIRST){id fromId toId content{... on ChatMessageContent{__typename text format items{type attachment{id uri}}}}}}",
+        json!({"query":format!("peer:{first_id}")})).await;
     let message = &received["chatItems"][0];
     assert_eq!(message["fromId"], first_id);
     assert_eq!(message["toId"], "me");

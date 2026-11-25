@@ -30,19 +30,7 @@ impl ChatCacher {
     pub fn conversations(db: &Db) -> Result<Vec<(String, DChat)>> {
         let peer_ids: HashSet<String> = peers::all(db)?.into_iter().map(|p| p.id).collect();
         let channel_ids: HashSet<String> = channels::all(db)?.into_iter().map(|c| c.id).collect();
-        let latest_chats: Vec<DChat> = plain_libs::serde_json::from_value(messages::list(
-            db,
-            &messages::Filter {
-                peer: None,
-                channel: None,
-                text: String::new(),
-                offset: 0,
-                limit: None,
-                descending: true,
-                latest: true,
-                count_only: false,
-            },
-        )?)?;
+        let latest_chats = messages::latest_conversation_candidates(db)?;
         let mut chat_cache = HashMap::<String, DChat>::new();
         for chat in latest_chats {
             let chat_id = if let Some(id) = chat.channel_id.as_ref().filter(|id| !id.is_empty()) {

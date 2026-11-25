@@ -43,11 +43,11 @@ async fn native_main_schema_reads_and_stops_idle_mdns_without_initializing_the_h
     assert_eq!(stopped["mdnsState"]["running"], false);
     let response = native
         .execute(plain_graphql::Request::new(
-            "{ chatRecords(query: \"peer:unknown-peer\", offset: 0, limit: 20) { id } }",
+            "{ chatItems(query: \"peer:unknown-peer\", offset: 0, limit: 20, sortBy: NEWEST_FIRST) { id } }",
         ))
         .await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
-    assert_eq!(response.data.into_json().unwrap()["chatRecords"], json!([]));
+    assert_eq!(response.data.into_json().unwrap()["chatItems"], json!([]));
     for field in [
         "receiver",
         "published",

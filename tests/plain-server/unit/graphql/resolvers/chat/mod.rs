@@ -82,7 +82,7 @@ async fn a_direct_message_has_no_channel_id() {
 
     let items = query(
         &schema,
-        r#"query { chatItems(target: "peer:peer-1", offset: 0, limit: 10, query: "") {
+        r#"query { chatItems(query:"peer:peer-1", offset: 0, limit: 10, sortBy: OLDEST_FIRST) {
             id fromId toId channelId content { ... on ChatMessageContent { __typename text format items { type attachment { id uri fileName size width height durationMs summary } } } ... on ChatShareContent { __typename shareId urlToken peerInfo { id ip port } name itemCount totalSize expiresAt } } status deliveryResults {peerId peerName error} createdAt updatedAt
         } }"#,
     )
@@ -106,7 +106,7 @@ async fn a_peer_prefixed_target_names_the_same_conversation() {
 
     let prefixed = query(
         &schema,
-        r#"query { chatItems(target: "peer:peer-1", offset: 0, limit: 10, query: "") { id } }"#,
+        r#"query { chatItems(query:"peer:peer-1", offset: 0, limit: 10, sortBy: OLDEST_FIRST) { id } }"#,
     )
     .await;
     assert_eq!(
@@ -125,7 +125,7 @@ async fn a_channel_message_carries_its_channel_and_stays_out_of_the_peer_list() 
 
     let channel = query(
         &schema,
-        r#"query { chatItems(target: "channel:chan-1", offset: 0, limit: 10, query: "") {
+        r#"query { chatItems(query:"channel:chan-1", offset: 0, limit: 10, sortBy: OLDEST_FIRST) {
             id channelId toId
         } }"#,
     )
@@ -136,7 +136,7 @@ async fn a_channel_message_carries_its_channel_and_stays_out_of_the_peer_list() 
 
     let peer = query(
         &schema,
-        r#"query { chatItems(target: "peer:peer-1", offset: 0, limit: 10, query: "") { id } }"#,
+        r#"query { chatItems(query:"peer:peer-1", offset: 0, limit: 10, sortBy: OLDEST_FIRST) { id } }"#,
     )
     .await;
     assert_eq!(
@@ -157,7 +157,7 @@ async fn a_page_comes_back_oldest_first() {
 
     let items = query(
         &schema,
-        r#"query { chatItems(target: "peer:peer-1", offset: 0, limit: 10, query: "") { id content { ... on ChatMessageContent { __typename text format items { type attachment { id uri fileName size width height durationMs summary } } } ... on ChatShareContent { __typename shareId urlToken peerInfo { id ip port } name itemCount totalSize expiresAt } } } }"#,
+        r#"query { chatItems(query:"peer:peer-1", offset: 0, limit: 10, sortBy: OLDEST_FIRST) { id content { ... on ChatMessageContent { __typename text format items { type attachment { id uri fileName size width height durationMs summary } } } ... on ChatShareContent { __typename shareId urlToken peerInfo { id ip port } name itemCount totalSize expiresAt } } } }"#,
     )
     .await;
     let rows = items["data"]["chatItems"].as_array().unwrap();
@@ -175,7 +175,7 @@ async fn the_text_field_filters_before_the_page_is_cut() {
 
     let items = query(
         &schema,
-        r#"query { chatItems(target: "peer:peer-1", offset: 0, limit: 10, query: "text:buy") { content { ... on ChatMessageContent { __typename text format items { type attachment { id uri fileName size width height durationMs summary } } } ... on ChatShareContent { __typename shareId urlToken peerInfo { id ip port } name itemCount totalSize expiresAt } } } }"#,
+        r#"query { chatItems(query:"peer:peer-1 text:buy", offset: 0, limit: 10, sortBy: OLDEST_FIRST) { content { ... on ChatMessageContent { __typename text format items { type attachment { id uri fileName size width height durationMs summary } } } ... on ChatShareContent { __typename shareId urlToken peerInfo { id ip port } name itemCount totalSize expiresAt } } } }"#,
     )
     .await;
     let rows = items["data"]["chatItems"].as_array().unwrap();
@@ -856,4 +856,45 @@ async fn remote_channel_attachment_import_requires_storage_before_creating_a_mes
         assert_eq!(state.db.get_all_chats().len(), 1);
     }
     server.shutdown().await;
+}
+
+#[tokio::test]
+async fn chat_items_sort_before_paging_and_never_reverse_the_page() {
+    let (_dir, schema) = fixture();
+    let db = database(&schema);
+    seed(db, "a", "me", "local", "", "hello world", T1);
+    seed(db, "b", "local", "me", "", "hello world", T1);
+    seed(db, "c", "me", "local", "", "hello world", T2);
+    seed(db, "d", "me", "local", "", "other", T2);
+    seed(db, "e", "me", "", "group", "hello world", T2);
+
+    for (sort, expected) in [
+        ("NEWEST_FIRST", json!([{"id":"c"}, {"id":"b"}])),
+        ("OLDEST_FIRST", json!([{"id":"a"}, {"id":"b"}])),
+    ] {
+        let filter = json!("peer:local text:\"hello world\"");
+        let response = query(&schema, &format!(
+            "{{ chatItems(query:{filter},offset:0,limit:2,sortBy:{sort}){{id}} chatCount(query:{filter}) }}"
+        )).await;
+        assert_eq!(response["data"]["chatItems"], expected, "{response}");
+        assert_eq!(response["data"]["chatCount"], 3, "{response}");
+    }
+
+    let response = query(&schema, r#"{chatItems(query:"",offset:2,limit:2,sortBy:NEWEST_FIRST){id}}"#).await;
+    assert_eq!(response["data"]["chatItems"], json!([{"id":"c"}, {"id":"b"}]), "{response}");
+
+    for document in [
+        r#"{chatItems(query:"",offset:0,limit:2){id}}"#,
+        r#"{chatItems(query:"latest:true",offset:0,limit:2,sortBy:NEWEST_FIRST){id}}"#,
+        r#"{chatItems(query:"sort:desc",offset:0,limit:2,sortBy:OLDEST_FIRST){id}}"#,
+        r#"{chatItems(query:"peer:",offset:0,limit:2,sortBy:NEWEST_FIRST){id}}"#,
+        r#"{chatItems(query:"channel:",offset:0,limit:2,sortBy:NEWEST_FIRST){id}}"#,
+        r#"{chatItems(query:"unknown:group",offset:0,limit:2,sortBy:NEWEST_FIRST){id}}"#,
+        r#"{chatItems(query:"peer:local channel:group",offset:0,limit:2,sortBy:NEWEST_FIRST){id}}"#,
+        r#"{chatItems(query:"",offset:-1,limit:2,sortBy:NEWEST_FIRST){id}}"#,
+        r#"{chatRecords(query:"",offset:0,limit:2){id}}"#,
+    ] {
+        let response = query(&schema, document).await;
+        assert!(response["errors"].is_array(), "{document}: {response}");
+    }
 }

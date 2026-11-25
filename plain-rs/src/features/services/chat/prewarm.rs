@@ -54,48 +54,20 @@ impl Driver for Native<'_> {
         }))
     }
 }
-fn conversation_peer(
-    filter: &crate::infrastructure::db::chat_store::messages::Filter,
-) -> Option<&str> {
-    if filter.offset != 0
-        || filter.count_only
-        || filter.latest
-        || !filter.text.is_empty()
-        || filter.channel.is_some()
-        || filter.limit.is_some_and(|limit| limit <= 0)
-    {
-        return None;
-    }
-    filter
-        .peer
-        .as_deref()
-        .filter(|id| !id.trim().is_empty() && *id != "local")
-}
-
-pub fn prepare_page(state: &CoreRuntime, target: &str, text: &str, offset: i32, limit: i32) {
-    let Ok((peer, channel)) = crate::features::chat::messages::target::parse(target) else {
-        return;
-    };
-    prepare_conversation(
-        state,
-        &crate::infrastructure::db::chat_store::messages::Filter {
-            peer: channel.is_empty().then_some(peer),
-            channel: (!channel.is_empty()).then_some(channel),
-            text: text.to_owned(),
-            offset: offset.into(),
-            limit: Some(limit.into()),
-            descending: true,
-            latest: false,
-            count_only: false,
-        },
-    );
-}
-
 pub fn prepare_conversation(
     state: &CoreRuntime,
     filter: &crate::infrastructure::db::chat_store::messages::Filter,
+    offset: i32,
+    limit: i32,
 ) {
-    let Some(id) = conversation_peer(filter) else {
+    if offset != 0 || limit <= 0 || !filter.text.is_empty() || filter.channel.is_some() {
+        return;
+    }
+    let Some(id) = filter
+        .peer
+        .as_deref()
+        .filter(|id| !id.trim().is_empty() && *id != "local")
+    else {
         return;
     };
     if *state.stop.borrow() {

@@ -12,10 +12,8 @@ async fn peer_targets_require_prefix_before_effects() {
     let id = json!(source["sendChatItems"][0]["id"].as_str().unwrap());
     let folder = json!(dir.path().to_string_lossy());
     for raw in ["local", "fixture-peer", "unknown:id", "", "peer:", "channel:"] {
-        let target = json!(raw);
         let targets = json!(["peer:local", raw]);
         let documents = [
-            format!("{{ chatItems(target:{target},query:\"\",offset:0,limit:10) {{id}} }}"),
             format!("mutation {{ sendChatItems(targets:{targets},content:{}) {{id}} }}", content_input(&content)),
             format!("mutation {{ forwardChatItems(id:{id},targets:{targets}) {{id}} }}"),
             format!("mutation {{ sendShare(shareId:\"missing\",targets:{targets}) {{id}} }}"),
@@ -31,7 +29,7 @@ async fn peer_targets_require_prefix_before_effects() {
             assert!(state.db.share_list().unwrap().is_empty(), "partial share: {document}");
         }
     }
-    let rows = execute(&server, "{ chatItems(target:\"peer:local\",query:\"\",offset:0,limit:10) {id toId} }".into()).await;
+    let rows = execute(&server, "{ chatItems(query:\"peer:local\",offset:0,limit:10,sortBy:NEWEST_FIRST) {id toId} }".into()).await;
     assert_eq!(rows["chatItems"].as_array().unwrap().len(), 1);
     assert_eq!(rows["chatItems"][0]["toId"], "local");
     server.shutdown().await;

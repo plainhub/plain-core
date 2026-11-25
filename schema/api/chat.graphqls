@@ -166,13 +166,14 @@ extend type Mutation {
 	sendShare(targets: [String!]!, shareId: ID!): [ChatItem!]!
 }
 
+enum ChatSortBy {
+	NEWEST_FIRST
+	OLDEST_FIRST
+}
+
 extend type Query {
 	chatConversations: [ChatConversation!]!
 	chatCount(query: String!): Int!
 	chatItem(id: ID!): ChatItem
-	"""
-	Messages in chronological order; `target`: `peer:<id>` or `channel:<id>`.
-	"""
-	chatItems(target: String!, query: String!, offset: Int!, limit: Int!): [ChatItem!]!
-	chatRecords(query: String!, offset: Int!, limit: Int!): [ChatItem!]!
+	chatItems(query: String!, offset: Int!, limit: Int!, sortBy: ChatSortBy!): [ChatItem!]!
 }
