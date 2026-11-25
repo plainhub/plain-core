@@ -383,11 +383,7 @@ fn found_device(
         version: value("ver="),
         platform: value("pf="),
         signature_public_key: value("pk="),
-        remote_access: match value("ra=").as_str() {
-            "1" => Some(true),
-            "0" => Some(false),
-            _ => None,
-        },
+        remote_access: crate::infrastructure::protocols::mdns::service_browser::remote_access_from_txt(&resolved.txt)?,
     })
 }
 
@@ -606,7 +602,7 @@ mod tests {
     fn parses_dns_sd_txt_and_creates_discovered_device() {
         let txt = parse_txt(&[
             16, b'i', b'd', b'=', b'1', b'v', b'm', b'2', b'0', b'q', b'x', b'4', b's', b'x', b'6',
-            b'y', b'6', 8, b'd', b'v', b'=', b'P', b'H', b'O', b'N', b'E',
+            b'y', b'6', 8, b'd', b'v', b'=', b'P', b'H', b'O', b'N', b'E', 4, b'r', b'a', b'=', b'1',
         ]);
         let service = ServiceName {
             name: "Galaxy S20 5G".into(),
@@ -626,6 +622,9 @@ mod tests {
         assert_eq!(device.ips, ["192.168.123.29"]);
         assert_eq!(device.port, 8443);
         assert_eq!(device.device_type, "PHONE");
+        assert!(device.remote_access);
+        let without_flag = ResolvedService { txt: vec!["id=fixture".into()], ..resolved };
+        assert!(found_device(&service, &without_flag, device.ips.clone()).is_none());
     }
 
     #[test]

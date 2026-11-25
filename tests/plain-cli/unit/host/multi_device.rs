@@ -126,7 +126,7 @@ async fn native_password_and_approval_pairing_enables_actual_chat_and_preserves_
             name: "Fixture".into(),
             ips: vec!["127.0.0.1".into()],
             port: second.port,
-            remote_access: Some(true),
+            remote_access: true,
             signature_public_key: plain_libs::utils::base64::base64_encode(
                 &plain_rs::features::prefs::security::signing_keypair(
                     &remote_state.prefs,

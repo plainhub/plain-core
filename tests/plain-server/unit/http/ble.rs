@@ -248,6 +248,7 @@ fn signed_nearby_request() -> (
             ips: vec![],
             signature: String::new(),
             aware_supported: false,
+            remote_access: false,
         },
     };
     request.payload.signature =

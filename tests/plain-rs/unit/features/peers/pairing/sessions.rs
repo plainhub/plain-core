@@ -111,6 +111,7 @@ fn incoming_request() -> crate::features::peers::pairing::protocol::PairingReque
             ips: vec![],
             signature: "request".into(),
             aware_supported: false,
+            remote_access: false,
         },
     }
 }

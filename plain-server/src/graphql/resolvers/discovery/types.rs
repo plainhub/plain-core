@@ -9,7 +9,7 @@ pub struct NearbyDevice {
     pub name: String,
     pub ips: Vec<String>,
     pub port: i32,
-    pub remote_access: Option<bool>,
+    pub remote_access: bool,
     pub signature_public_key: String,
     pub device_type: DeviceType,
     pub version: String,

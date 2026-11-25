@@ -17,6 +17,7 @@ fn sample_request() -> PairingRequest {
             ips: vec!["203.0.113.10".to_string(), "203.0.113.11".to_string()],
             signature: String::new(),
             aware_supported: false,
+            remote_access: false,
         },
     }
 }
@@ -26,7 +27,7 @@ fn request_signature_data_format_is_locked() {
     let req = sample_request();
     assert_eq!(
         req.signature_data(),
-        r#"["PAIR_REQUEST","client-a","SIGPK","KSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSk=","receiver","AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=","Mac",8443,"COMPUTER","ECDH",1700000000000,["203.0.113.10","203.0.113.11"],false]"#
+        r#"["PAIR_REQUEST","client-a","SIGPK","KSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSk=","receiver","AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=","Mac",8443,"COMPUTER","ECDH",1700000000000,["203.0.113.10","203.0.113.11"],false,false]"#
     );
     // `from_ip` is stamped by the receiver and must not affect the signature.
     let mut stamped = req.clone();
@@ -68,6 +69,7 @@ fn wire_json_is_camelcase() {
     assert_eq!(json["ecdhPublicKey"], "ECDH");
     assert_eq!(json["signaturePublicKey"], "SIGPK");
     assert_eq!(json["awareSupported"], false);
+    assert_eq!(json["remoteAccess"], false);
     assert_eq!(json["fromIp"], "");
     let back: PairingRequest = plain_libs::serde_json::from_value(json).unwrap();
     assert_eq!(back.from_id, "client-a");

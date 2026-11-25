@@ -261,6 +261,7 @@ pub(super) async fn local_device(state: &CoreRuntime) -> plain_libs::anyhow::Res
         device_type: reply.device_type,
         ips: reply.ips,
         aware_supported: reply.aware_supported,
+        remote_access: reply.remote_access,
     })
 }
 pub async fn start_device(

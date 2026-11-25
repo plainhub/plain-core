@@ -45,7 +45,7 @@ pub struct FoundDevice {
     pub device_type: String,
     pub version: String,
     pub platform: String,
-    pub remote_access: Option<bool>,
+    pub remote_access: bool,
     pub signature_public_key: String,
 }
 
@@ -674,6 +674,7 @@ fn handle_packet(inner: &Inner, data: &[u8], sender: &str) {
     };
 
     for instance in complete {
+        let Some(remote_access) = remote_access_from_txt(&instance.txt_records) else { continue };
         let mut ips: Vec<String> = instance.ips.iter().cloned().collect();
         ips.sort();
         let mut ipv6: Vec<String> = instance.addrs_v6.iter().cloned().collect();
@@ -688,15 +689,16 @@ fn handle_packet(inner: &Inner, data: &[u8], sender: &str) {
             version: instance.version,
             platform: instance.platform,
             signature_public_key: instance.txt_records.iter().find_map(|entry| entry.strip_prefix("pk=").map(str::to_owned)).unwrap_or_default(),
-            remote_access: instance
-                .txt_records
-                .iter()
-                .find_map(|entry| match entry.as_str() {
-                    "ra=1" => Some(true),
-                    "ra=0" => Some(false),
-                    _ => None,
-                }),
+            remote_access,
         });
+    }
+}
+
+pub(crate) fn remote_access_from_txt(txt: &[String]) -> Option<bool> {
+    match txt.iter().find_map(|entry| entry.strip_prefix("ra="))? {
+        "1" => Some(true),
+        "0" => Some(false),
+        _ => None,
     }
 }
 
@@ -766,6 +768,14 @@ fn now_ms() -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn remote_access_requires_an_explicit_valid_txt_flag() {
+        assert_eq!(remote_access_from_txt(&["ra=1".into()]), Some(true));
+        assert_eq!(remote_access_from_txt(&["ra=0".into()]), Some(false));
+        assert_eq!(remote_access_from_txt(&["id=peer".into()]), None);
+        assert_eq!(remote_access_from_txt(&["ra=yes".into()]), None);
+    }
 
     fn test_instance(fqdn: &str) -> (String, Instance) {
         let key = fqdn.to_lowercase();
@@ -923,7 +933,7 @@ mod tests {
             service_type: service_type.to_string(),
             target_hostname: "plainapp-abc.local".to_string(),
             port: 8443,
-            txt_records: vec!["id=abc".to_string()],
+            txt_records: vec!["id=abc".to_string(), "ra=0".to_string()],
             ips: vec!["192.168.1.50".to_string()],
         }
     }
@@ -1116,7 +1126,7 @@ mod tests {
         let weak = Arc::downgrade(&browser.inner);
         browser.shutdown();
         browser.install_listener();
-        let service = crate::infrastructure::protocols::mdns::service_info::build_service_info(
+        let mut service = crate::infrastructure::protocols::mdns::service_info::build_service_info(
             "Remote",
             "remote.local",
             2443,
@@ -1128,6 +1138,7 @@ mod tests {
             false,
             false,
         );
+        service.txt_records.push("ra=1".into());
         let query = packet_codec::build_ptr_query(PLAINAPP_SERVICE_TYPE);
         let packet =
             plain_libs::protocols::mdns::service_response_builder::build_response_if_match(

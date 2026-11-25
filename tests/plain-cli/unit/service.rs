@@ -45,7 +45,7 @@ async fn management_pairing_with_cli_requires_password_without_second_approval()
             name: "Fixture".into(),
             ips: vec!["127.0.0.1".into()],
             port: remote.core.http_ports().await.unwrap().1,
-            remote_access: Some(true),
+            remote_access: true,
             signature_public_key: plain_libs::utils::base64::base64_encode(
                 &plain_rs::features::prefs::security::signing_keypair(
                     &remote_state.prefs,

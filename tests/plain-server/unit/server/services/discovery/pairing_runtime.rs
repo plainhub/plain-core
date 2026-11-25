@@ -35,6 +35,7 @@ fn device() -> Device {
         device_type: plain_rs::features::chat::enums::DeviceType::Phone,
         ips: vec!["127.0.0.1".into()],
         aware_supported: false,
+        remote_access: false,
     }
 }
 #[cfg(feature = "http_transport")]
@@ -107,6 +108,7 @@ async fn public_nearby_endpoint_runs_pairing_parser_in_rust() {
             ips: vec![],
             signature: String::new(),
             aware_supported: false,
+            remote_access: false,
         },
     };
     for (header, fresh, correct_target, discoverable, pinned, accepted) in [
@@ -425,7 +427,7 @@ async fn first_nearby_chat_pairing_waits_for_matching_code_approval_without_qr()
         name: "Nearby fixture".into(),
         ips: vec!["127.0.0.1".into()],
         port,
-        remote_access: Some(false),
+        remote_access: false,
         signature_public_key: plain_libs::utils::base64::base64_encode(&b_key[32..]),
         device_type: device().device_type,
         version: "test".into(),

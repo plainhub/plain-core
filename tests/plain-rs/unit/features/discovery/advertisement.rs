@@ -12,7 +12,7 @@ fn facts() -> Facts {
 }
 #[test]
 fn same_identity_and_os_facts_assemble_all_advertisements() {
-    let reply = reply("fixture", "中文.Device", 2443, facts()).unwrap();
+    let reply = reply("fixture", "中文.Device", 2443, true, facts()).unwrap();
     let service = mdns(&reply, "fixture.local").unwrap();
     assert_eq!(service.instance_name, "中文.Device");
     assert_eq!(service.service_type, "_plainapp._tcp.local");
@@ -28,14 +28,15 @@ fn same_identity_and_os_facts_assemble_all_advertisements() {
             "pf=IOS",
             "aw=1",
             "ar=0",
-            "pk="
+            "pk=",
+            "ra=1"
         ]
     );
     assert_eq!(
-        super::reply("fixture", "", 2443, facts()).unwrap().name,
+        super::reply("fixture", "", 2443, true, facts()).unwrap().name,
         "Actual tablet"
     );
-    assert!(super::reply("", "", 2443, facts()).is_err());
+    assert!(super::reply("", "", 2443, true, facts()).is_err());
     let mut no_port = reply.clone();
     no_port.port = 0;
     assert!(mdns(&no_port, "fixture.local").is_err());
@@ -55,31 +56,19 @@ fn uuid_only_advertisements_share_rust_filtering_and_canonicalization() {
     ] {
         assert!(decode_ble(&services).is_none());
     }
-    let reply = reply(id, "Device", 2443, facts()).unwrap();
+    let reply = reply(id, "Device", 2443, true, facts()).unwrap();
     assert!(reply.aware_supported);
     assert!(!reply.aware_running);
 }
 
 #[test]
-fn remote_access_advertisement_distinguishes_enabled_disabled_and_unknown() {
-    let mut reply = reply("fixture", "Device", 2443, facts()).unwrap();
-    assert_eq!(reply.remote_access, None);
-    assert!(
-        !mdns(&reply, "fixture.local")
-            .unwrap()
-            .txt_records
-            .iter()
-            .any(|value| value.starts_with("ra="))
-    );
+fn remote_access_advertisement_is_explicit_in_mdns_and_wire() {
     for enabled in [false, true] {
-        reply.remote_access = Some(enabled);
-        let service = mdns(&reply, "fixture.local").unwrap();
-        assert!(
-            service
-                .txt_records
-                .contains(&format!("ra={}", u8::from(enabled)))
-        );
-        let wire = plain_libs::serde_json::to_value(&reply).unwrap();
+        let reply = reply("fixture", "Device", 2443, enabled, facts()).unwrap();
+        assert!(mdns(&reply, "fixture.local").unwrap().txt_records.contains(&format!("ra={}", u8::from(enabled))));
+        let mut wire = plain_libs::serde_json::to_value(&reply).unwrap();
         assert_eq!(wire["remoteAccess"], enabled);
+        wire.as_object_mut().unwrap().remove("remoteAccess");
+        assert!(plain_libs::serde_json::from_value::<DiscoverReply>(wire).is_err());
     }
 }

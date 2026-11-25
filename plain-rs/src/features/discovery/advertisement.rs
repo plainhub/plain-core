@@ -16,7 +16,7 @@ pub struct Facts {
     pub aware_supported: bool,
     pub aware_running: bool,
 }
-pub fn reply(id: &str, name: &str, port: u16, facts: Facts) -> Result<DiscoverReply> {
+pub fn reply(id: &str, name: &str, port: u16, remote_access: bool, facts: Facts) -> Result<DiscoverReply> {
     ensure!(!id.is_empty(), "Missing client identity");
     Ok(DiscoverReply {
         id: id.into(),
@@ -26,7 +26,7 @@ pub fn reply(id: &str, name: &str, port: u16, facts: Facts) -> Result<DiscoverRe
             name.into()
         },
         port,
-        remote_access: None,
+        remote_access,
         signature_public_key: String::new(),
         device_type: facts.device_type,
         version: facts.version,
@@ -52,11 +52,7 @@ pub fn mdns(reply: &DiscoverReply, hostname: &str) -> Result<MdnsServiceInfo> {
         reply.aware_running,
     );
     service.txt_records.push(format!("pk={}", reply.signature_public_key));
-    if let Some(enabled) = reply.remote_access {
-        service
-            .txt_records
-            .push(format!("ra={}", u8::from(enabled)));
-    }
+    service.txt_records.push(format!("ra={}", u8::from(reply.remote_access)));
     Ok(service)
 }
 pub fn decode_ble(service_uuids: &[String]) -> Option<String> {

@@ -9,7 +9,7 @@ fn device(id: &str, method: DiscoveryMethod) -> Device {
         version: "1".into(),
         platform: "test".into(),
         last_seen_at: crate::infrastructure::db::now_iso(),
-        remote_access: None,
+        remote_access: false,
         signature_public_key: String::new(),
         discovery_methods: vec![method],
     }
@@ -19,7 +19,7 @@ fn scanning_restores_cached_remote_access_and_pairing_key() {
     let directory = plain_libs::temporary::tempdir().unwrap();
     let path = directory.path().join("nearby.db");
     let db = crate::infrastructure::db::Db::open(&path).unwrap();
-    let cases = [("disabled", Some(false)), ("enabled", Some(true)), ("unknown", None)];
+    let cases = [("disabled", false), ("enabled", true)];
     for (id, remote_access) in cases {
         let mut observed = device(id, DiscoveryMethod::Lan);
         observed.remote_access = remote_access;

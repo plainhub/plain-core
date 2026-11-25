@@ -4,7 +4,7 @@ pub struct DNearbyDeviceCache {
     pub name: String,
     pub ips: Vec<String>,
     pub port: u16,
-    pub remote_access: Option<bool>,
+    pub remote_access: bool,
     pub signature_public_key: String,
     pub device_type: crate::features::chat::enums::DeviceType,
     pub version: String,

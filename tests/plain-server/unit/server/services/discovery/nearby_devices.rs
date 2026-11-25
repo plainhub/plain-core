@@ -38,7 +38,7 @@ async fn rust_sweep_retires_unreachable_lan_records_without_a_host_bridge() {
         version: "1".into(),
         platform: "test".into(),
         last_seen_at: last_seen_at.clone(),
-        remote_access: None,
+        remote_access: false,
         signature_public_key: String::new(),
         discovery_methods: vec![
             plain_rs::features::discovery::nearby_devices::DiscoveryMethod::Lan,

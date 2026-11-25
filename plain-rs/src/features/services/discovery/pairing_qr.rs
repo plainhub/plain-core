@@ -135,6 +135,7 @@ pub fn create_display(
             timestamp: now_ms(),
             signature: String::new(),
             aware_supported: device.aware_supported,
+            remote_access: device.remote_access,
         },
     };
     request.payload.signature = ed25519_sign(&key, request.signature_data().as_bytes());

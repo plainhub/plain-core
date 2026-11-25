@@ -13,8 +13,7 @@ pub struct DiscoverReply {
     pub id: String,
     pub name: String,
     pub port: u16,
-    #[serde(default)]
-    pub remote_access: Option<bool>,
+    pub remote_access: bool,
     pub signature_public_key: String,
     pub device_type: DeviceType,
     pub version: String,

@@ -23,8 +23,21 @@ fn qr_carries_a_signed_request_and_rejects_legacy_or_modified_codes() {
             timestamp: crate::features::peers::pairing::now_ms(),
             signature: String::new(),
             aware_supported: false,
+            remote_access: false,
         },
     };
+    for enabled in [false, true] {
+        request.payload.remote_access = enabled;
+        request.payload.signature = ed25519_sign(&key, request.signature_data().as_bytes());
+        let code = format(&request).unwrap();
+        assert_eq!(parse(&code).unwrap().into_device().remote_access, enabled);
+        let mut wire: plain_libs::serde_json::Value = plain_libs::serde_json::from_str(&percent_decode(code.strip_prefix(PREFIX).unwrap())).unwrap();
+        wire["remoteAccess"] = (!enabled).into();
+        let altered = |value: &plain_libs::serde_json::Value| format!("{PREFIX}{}", url_encode(&value.to_string()));
+        assert!(parse(&altered(&wire)).is_err());
+        wire.as_object_mut().unwrap().remove("remoteAccess");
+        assert!(parse(&altered(&wire)).is_err());
+    }
     request.payload.signature = ed25519_sign(&key, request.signature_data().as_bytes());
     let code = format(&request).unwrap();
     let parsed = parse(&code).unwrap().into_request();

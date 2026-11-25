@@ -16,7 +16,7 @@ fn nearby_cache_survives_reopen_and_preserves_newer_sightings() {
         name: "Phone".into(),
         ips: vec!["203.0.113.2".into()],
         port: 8443,
-        remote_access: Some(true),
+        remote_access: true,
         signature_public_key: plain_libs::utils::base64::base64_encode(&[31; 32]),
         device_type: crate::features::chat::enums::DeviceType::Phone,
         version: "1".into(),
@@ -51,4 +51,24 @@ fn nearby_cache_survives_reopen_and_preserves_newer_sightings() {
     assert!(nearby::all(&db).unwrap().is_empty());
     drop(db);
     let _ = std::fs::remove_file(path);
+}
+
+
+#[test]
+fn nearby_cache_requires_a_boolean_remote_access_value() {
+    let dir = plain_libs::temporary::tempdir().unwrap();
+    let db = Db::open(&dir.path().join("nearby.db")).unwrap();
+    db.with_conn(|c| {
+        let sql = "INSERT INTO nearby_devices (id,name,ips,port,remote_access,device_type,version,platform,last_seen_at) VALUES(?1,'Fixture','[]',8443,?2,'PHONE','','','2026-11-25T00:00:00Z')";
+        for invalid in [None, Some(2_i32)] {
+            assert!(c.execute(sql, plain_libs::rusqlite::params!["invalid", invalid]).is_err());
+        }
+        for (id, remote_access) in [("disabled", false), ("enabled", true)] {
+            assert_eq!(c.execute(sql, plain_libs::rusqlite::params![id, remote_access]).unwrap(), 1);
+        }
+        Ok::<_, plain_libs::rusqlite::Error>(())
+    }).unwrap();
+    let rows = nearby::all(&db).unwrap();
+    assert_eq!(rows.iter().map(|row| (row.id.as_str(), row.remote_access)).collect::<Vec<_>>(),
+        vec![("disabled", false), ("enabled", true)]);
 }

@@ -55,7 +55,7 @@ type NearbyDevice {
 	name: String!
 	ips: [String!]!
 	port: Int!
-	remoteAccess: Boolean
+	remoteAccess: Boolean!
 	signaturePublicKey: String!
 	deviceType: DeviceType!
 	version: String!

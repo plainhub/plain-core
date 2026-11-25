@@ -27,6 +27,7 @@ fn device() -> Device {
         device_type: crate::features::chat::enums::DeviceType::Phone,
         ips: vec![],
         aware_supported: false,
+        remote_access: false,
     }
 }
 fn target(id: &str) -> Target {

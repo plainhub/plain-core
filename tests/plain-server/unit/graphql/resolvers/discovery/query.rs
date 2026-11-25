@@ -72,14 +72,14 @@ async fn nearby_snapshot_selects_recent_endpoints_and_restores_discovery_facts()
     let public_key = |id: &str| plain_libs::utils::base64::base64_encode(&[id.bytes().fold(0u8, u8::wrapping_add); 32]);
     let mut live_only = Vec::new();
     for (id, ip, port, hours_ago, remote_access) in [
-        ("old-id", "192.0.2.1", 8443, 4, None),
-        ("latest-id", "192.0.2.1", 8443, 1, Some(true)),
-        ("other-port", "192.0.2.1", 9443, 3, Some(false)),
-        ("other-ip", "192.0.2.2", 8443, 2, None),
-        ("expired", "192.0.2.3", 8443, 25, Some(true)),
-        ("boundary", "192.0.2.4", 8443, 24, None),
-        ("ble-first", "", 8443, 5, None),
-        ("ble-second", "", 8443, 6, None),
+        ("old-id", "192.0.2.1", 8443, 4, false),
+        ("latest-id", "192.0.2.1", 8443, 1, true),
+        ("other-port", "192.0.2.1", 9443, 3, false),
+        ("other-ip", "192.0.2.2", 8443, 2, false),
+        ("expired", "192.0.2.3", 8443, 25, true),
+        ("boundary", "192.0.2.4", 8443, 24, false),
+        ("ble-first", "", 8443, 5, false),
+        ("ble-second", "", 8443, 6, false),
     ] {
         let device = Device {
             id: id.into(),
@@ -120,10 +120,10 @@ async fn nearby_snapshot_selects_recent_endpoints_and_restores_discovery_facts()
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     assert_eq!(response.data.into_json().unwrap()["nearbyDevices"], plain_libs::serde_json::json!([
         {"id":"latest-id","bestIp":"192.0.2.1","port":8443,"remoteAccess":true,"signaturePublicKey":public_key("latest-id")},
-        {"id":"other-ip","bestIp":"192.0.2.2","port":8443,"remoteAccess":null,"signaturePublicKey":public_key("other-ip")},
+        {"id":"other-ip","bestIp":"192.0.2.2","port":8443,"remoteAccess":false,"signaturePublicKey":public_key("other-ip")},
         {"id":"other-port","bestIp":"192.0.2.1","port":9443,"remoteAccess":false,"signaturePublicKey":public_key("other-port")},
-        {"id":"ble-first","bestIp":"","port":8443,"remoteAccess":null,"signaturePublicKey":public_key("ble-first")},
-        {"id":"ble-second","bestIp":"","port":8443,"remoteAccess":null,"signaturePublicKey":public_key("ble-second")},
+        {"id":"ble-first","bestIp":"","port":8443,"remoteAccess":false,"signaturePublicKey":public_key("ble-first")},
+        {"id":"ble-second","bestIp":"","port":8443,"remoteAccess":false,"signaturePublicKey":public_key("ble-second")},
     ]));
     core.shutdown().await;
 }
@@ -142,7 +142,7 @@ async fn nearby_snapshot_keeps_one_row_for_a_shared_endpoint_when_preferred_addr
         name: "Fixture".into(),
         ips: vec!["2001:db8::1".into()],
         port: 8443,
-        remote_access: None,
+        remote_access: false,
         signature_public_key: plain_libs::utils::base64::base64_encode(&[37; 32]),
         device_type: plain_rs::features::chat::enums::DeviceType::Computer,
         version: "1".into(),
@@ -224,17 +224,17 @@ async fn pairing_code_query_returns_a_lan_ready_model_without_starting_discovery
         plain_rs::features::services::discovery::pairing::Device {
             name: "Device".into(), port: 8443,
             device_type: plain_rs::features::chat::enums::DeviceType::Computer,
-            ips: vec!["192.0.2.1".into()], aware_supported: false,
+            ips: vec!["192.0.2.1".into()], aware_supported: false, remote_access: true,
         },
     ).unwrap();
     let encoded = plain_libs::serde_json::to_string(&display.payload).unwrap();
     let response = native.execute(plain_graphql::Request::new(format!(
-        "{{ parsePairingQrCode(code: {encoded}) {{ id name port deviceType discoveryMethods }} }}"
+        "{{ parsePairingQrCode(code: {encoded}) {{ id name port deviceType discoveryMethods remoteAccess }} }}"
     ))).await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     assert_eq!(
         response.data.into_json().unwrap()["parsePairingQrCode"],
-        plain_libs::serde_json::json!({"id":"fixture","name":"Device","port":8443,"deviceType":"COMPUTER","discoveryMethods":["LAN","QR"]})
+        plain_libs::serde_json::json!({"id":"fixture","name":"Device","port":8443,"deviceType":"COMPUTER","discoveryMethods":["LAN","QR"],"remoteAccess":true})
     );
     let response = native
         .execute(plain_graphql::Request::new(

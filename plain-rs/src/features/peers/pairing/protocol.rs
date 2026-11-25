@@ -31,6 +31,7 @@ pub struct PairingRequestPayload {
     pub signature: String,
     #[serde(default)]
     pub aware_supported: bool,
+    pub remote_access: bool,
 }
 
 impl PairingRequestPayload {
@@ -60,6 +61,7 @@ impl PairingRequest {
             self.payload.timestamp,
             self.payload.ips,
             self.payload.aware_supported,
+            self.payload.remote_access,
         ])
         .to_string()
     }

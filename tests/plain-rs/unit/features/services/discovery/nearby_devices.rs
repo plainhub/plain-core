@@ -26,7 +26,7 @@ fn nearby_snapshot_keeps_only_recent_devices_and_latest_per_endpoint() {
             version: "1".into(),
             platform: "test".into(),
             last_seen_at: (now - plain_libs::chrono::Duration::hours(hours_ago)).to_rfc3339(),
-            remote_access: Some(id == "latest-id"),
+            remote_access: id == "latest-id",
             signature_public_key: String::new(),
             discovery_methods: vec![crate::features::discovery::nearby_devices::DiscoveryMethod::Lan],
         }).unwrap();
@@ -62,7 +62,7 @@ async fn nearby_rows_are_polled_without_discovery_events() {
         version: "1".into(),
         platform: "test".into(),
         last_seen_at: crate::infrastructure::db::now_iso(),
-        remote_access: None,
+        remote_access: false,
         signature_public_key: String::new(),
         discovery_methods: vec![crate::features::discovery::nearby_devices::DiscoveryMethod::Ble],
     };
@@ -115,7 +115,7 @@ async fn resident_peer_changes_emit_one_committed_notice_without_secrets_or_visi
         version: "1".into(),
         platform: "test".into(),
         last_seen_at: "2026-10-10T00:00:00.000Z".into(),
-        remote_access: None,
+        remote_access: false,
         signature_public_key: String::new(),
         discovery_methods: vec![crate::features::discovery::nearby_devices::DiscoveryMethod::Lan],
     };
@@ -202,7 +202,7 @@ async fn bluetooth_pause_does_not_preserve_stale_lan_devices() {
             version: "1".into(),
             platform: "test".into(),
             last_seen_at: "1970-01-01T00:00:00.000Z".into(),
-            remote_access: None,
+            remote_access: false,
             signature_public_key: String::new(),
             discovery_methods: methods,
         };

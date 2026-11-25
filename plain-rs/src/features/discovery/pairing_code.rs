@@ -86,7 +86,7 @@ impl Payload {
             version: String::new(),
             platform: String::new(),
             last_seen_at: crate::infrastructure::db::now_iso(),
-            remote_access: None,
+            remote_access: self.request.remote_access,
             signature_public_key: self.request.signature_public_key,
             discovery_methods: vec![DiscoveryMethod::Lan, DiscoveryMethod::Qr],
         }

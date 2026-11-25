@@ -4,7 +4,7 @@ use plain_libs::serde_json::json;
 #[test]
 fn ble_associations_match_signature_and_cleanup_without_consuming_replacements() {
     let runtime = Runtime::default();
-    let mut request:PairingRequest=plain_libs::serde_json::from_value(json!({"toId":"706c6169-0001-8000-8000-000000000001","targetPublicKey":"key","fromId":"peer","fromName":"fixture","port":2443,"deviceType":"PHONE","encryptionPublicKey":plain_libs::utils::base64::base64_encode(&[41; 32]),"ecdhPublicKey":"","signaturePublicKey":"","timestamp":1,"ips":[],"signature":"first","awareSupported":false})).unwrap();
+    let mut request:PairingRequest=plain_libs::serde_json::from_value(json!({"toId":"706c6169-0001-8000-8000-000000000001","targetPublicKey":"key","fromId":"peer","fromName":"fixture","port":2443,"deviceType":"PHONE","encryptionPublicKey":plain_libs::utils::base64::base64_encode(&[41; 32]),"ecdhPublicKey":"","signaturePublicKey":"","timestamp":1,"ips":[],"signature":"first","awareSupported":false,"remoteAccess":false})).unwrap();
     runtime.remember(&request, "mac-first").unwrap();
     request.payload.signature = "second".into();
     runtime.remember(&request, "mac-second").unwrap();
@@ -44,6 +44,7 @@ fn device() -> Device {
         device_type: crate::features::chat::enums::DeviceType::Phone,
         ips: vec!["127.0.0.1".into()],
         aware_supported: false,
+        remote_access: false,
     }
 }
 #[tokio::test]
@@ -452,7 +453,7 @@ async fn pairing_key_goes_only_to_the_host_and_is_redelivered_after_disconnect()
 async fn incoming_ble_message_succeeds_when_lan_address_is_invalid() {
     let (_directory, server) = fixture("706c6169-0001-8000-8000-000000000001");
     let state = server.runtime_state();
-    let request: PairingRequest = plain_libs::serde_json::from_value(json!({"toId":"706c6169-0001-8000-8000-000000000001","targetPublicKey":"key","fromId":"peer","fromName":"Fixture","port":2443,"deviceType":"PHONE","encryptionPublicKey":plain_libs::utils::base64::base64_encode(&[41; 32]),"ecdhPublicKey":"","signaturePublicKey":"","timestamp":1,"ips":[],"signature":"request","awareSupported":false})).unwrap();
+    let request: PairingRequest = plain_libs::serde_json::from_value(json!({"toId":"706c6169-0001-8000-8000-000000000001","targetPublicKey":"key","fromId":"peer","fromName":"Fixture","port":2443,"deviceType":"PHONE","encryptionPublicKey":plain_libs::utils::base64::base64_encode(&[41; 32]),"ecdhPublicKey":"","signaturePublicKey":"","timestamp":1,"ips":[],"signature":"request","awareSupported":false,"remoteAccess":false})).unwrap();
     state
         .pairing_runtime
         .remember(&request, "fixture-ble")

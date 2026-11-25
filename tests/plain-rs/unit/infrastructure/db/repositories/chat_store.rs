@@ -144,7 +144,7 @@ fn nearby_cache_keeps_newest_facts_and_all_records_survive_reopening() {
         name: "new".into(),
         ips: vec!["::1".into(), "127.0.0.1".into()],
         port: 443,
-        remote_access: Some(true),
+        remote_access: true,
         signature_public_key: plain_libs::utils::base64::base64_encode(&[31; 32]),
         device_type: crate::features::chat::enums::DeviceType::Phone,
         version: "1".into(),
@@ -153,7 +153,7 @@ fn nearby_cache_keeps_newest_facts_and_all_records_survive_reopening() {
     };
     nearby::save(&db, &item).unwrap();
     item.name = "stale".into();
-    item.remote_access = Some(false);
+    item.remote_access = false;
     item.signature_public_key = plain_libs::utils::base64::base64_encode(&[32; 32]);
     item.last_seen_at = "2026-10-04T00:00:01.000Z".into();
     nearby::save(&db, &item).unwrap();
@@ -162,7 +162,7 @@ fn nearby_cache_keeps_newest_facts_and_all_records_survive_reopening() {
     let rows = nearby::all(&db).unwrap();
     assert_eq!(rows[0].name, "new");
     assert_eq!(rows[0].ips.len(), 2);
-    assert_eq!(rows[0].remote_access, Some(true));
+    assert_eq!(rows[0].remote_access, true);
     assert_eq!(rows[0].signature_public_key, plain_libs::utils::base64::base64_encode(&[31; 32]));
     let now = |time: &str| plain_libs::chrono::DateTime::parse_from_rfc3339(time)
         .unwrap()

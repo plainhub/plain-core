@@ -6,6 +6,7 @@ fn device() -> Device {
         device_type: crate::features::chat::enums::DeviceType::Phone,
         ips: vec!["127.0.0.1".into()],
         aware_supported: false,
+        remote_access: false,
     }
 }
 fn prefs(dir: &std::path::Path, id: &str) -> Prefs {

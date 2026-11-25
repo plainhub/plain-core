@@ -25,6 +25,7 @@ fn device() -> pairing::Device {
         device_type: plain_rs::features::chat::enums::DeviceType::Phone,
         ips: vec![],
         aware_supported: false,
+        remote_access: false,
     }
 }
 #[tokio::test]

@@ -5,7 +5,7 @@ use plain_libs::serde_json::{Value, from_slice, from_value, json};
 fn response_signature_binds_qr_request_sender_and_response() {
     let request: PairingRequest = from_value(json!({
         "toId":"", "targetPublicKey":"", "fromId":"display", "fromName":"Fixture",
-        "port":8080, "deviceType":"COMPUTER", "encryptionPublicKey":plain_libs::utils::base64::base64_encode(&[41; 32]),"ecdhPublicKey":"ecdh", "signaturePublicKey":"identity",
+        "port":8080, "remoteAccess":true, "deviceType":"COMPUTER", "encryptionPublicKey":plain_libs::utils::base64::base64_encode(&[41; 32]),"ecdhPublicKey":"ecdh", "signaturePublicKey":"identity",
         "timestamp":1, "signature":"request-signature"
     })).unwrap();
     let response: PairingAccept = from_value(json!({

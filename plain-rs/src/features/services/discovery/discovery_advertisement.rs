@@ -15,8 +15,7 @@ pub async fn execute(state: &CoreRuntime, request: Request) -> Result<Value> {
     let settings = crate::features::prefs::settings::snapshot(&state.prefs)?;
     let name = settings.device_name;
     let port = state.public_ports().await.map(|ports| ports.1).unwrap_or(0);
-    let mut reply = advertisement::reply(&id, &name, port, facts(state).await?)?;
-    reply.remote_access = Some(settings.remote_access);
+    let mut reply = advertisement::reply(&id, &name, port, settings.remote_access, facts(state).await?)?;
     reply.signature_public_key = crate::features::prefs::security::snapshot(&state.prefs)?.signature_public_key;
     match request {
         Request::Reply {} => Ok(plain_libs::serde_json::to_value(reply)?),

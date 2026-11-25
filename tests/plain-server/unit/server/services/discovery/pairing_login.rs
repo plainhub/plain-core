@@ -134,7 +134,7 @@ async fn register_target(state: &ServerState, remote: &ServerState) -> String {
                 name: "Fixture".into(),
                 ips: vec!["127.0.0.1".into()],
                 port: remote.public_ports().await.unwrap().1,
-                remote_access: Some(true),
+                remote_access: true,
                 signature_public_key: base64_encode(&key[32..]),
                 device_type: plain_rs::features::chat::enums::DeviceType::Computer,
                 version: "1".into(),

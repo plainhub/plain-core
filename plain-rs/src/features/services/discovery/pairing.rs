@@ -16,6 +16,7 @@ pub struct Device {
     pub device_type: crate::features::chat::enums::DeviceType,
     pub ips: Vec<String>,
     pub aware_supported: bool,
+    pub remote_access: bool,
 }
 fn actor(prefs: &Prefs) -> Result<String> {
     prefs
@@ -48,6 +49,7 @@ fn request(
             ips: device.ips,
             signature: String::new(),
             aware_supported: device.aware_supported,
+            remote_access: device.remote_access,
         },
     };
     request.payload.signature =
