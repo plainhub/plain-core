@@ -125,7 +125,6 @@ input ContactInput {
 	source: String!
 	starred: Boolean!
 	notes: String!
-	groupIds: [ID!]
 	organization: ContactOrganizationInput
 	websites: [ContactWebsiteInput!]!
 	ims: [ContactImInput!]!

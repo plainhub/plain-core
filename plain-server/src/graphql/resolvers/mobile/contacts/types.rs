@@ -301,8 +301,6 @@ pub struct ContactInput {
     pub source: String,
     pub starred: bool,
     pub notes: String,
-    #[graphql(name = "groupIds")]
-    pub group_ids: Option<Vec<ID>>,
     pub organization: Option<ContactOrganizationInput>,
     pub websites: Vec<ContactWebsiteInput>,
     pub ims: Vec<ContactImInput>,

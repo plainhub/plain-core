@@ -219,7 +219,7 @@ async fn create_contact_reads_the_new_row_back_through_the_provider_search() {
             assert_eq!(params["accountType"], "local");
             assert_eq!(params["input"]["firstName"], "Ada");
             assert_eq!(params["input"]["phoneNumbers"][0]["type"], "MOBILE");
-            assert_eq!(params["input"]["groupIds"], json!(["7"]));
+            assert!(params["input"].get("groupIds").is_none());
             Value::from("raw-9")
         }
         "systemContactFacts" => {
@@ -237,7 +237,7 @@ async fn create_contact_reads_the_new_row_back_through_the_provider_search() {
                  prefix: "", firstName: "Ada", middleName: "", lastName: "Lovelace", suffix: "",
                  nickname: "", phoneNumbers: [{value:"+1 555", type:MOBILE, label:"mobile"}],
                  emails: [], addresses: [], events: [], source: "Local", starred: false,
-                 notes: "", groupIds: ["7"], websites: [], ims: [] }) { id firstName starred } }"#,
+                 notes: "", websites: [], ims: [] }) { id firstName starred } }"#,
         )
         .await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
@@ -259,7 +259,7 @@ async fn a_write_that_cannot_be_read_back_fails_the_mutation() {
             r#"mutation { updateContact(id:"gone", input: {
                  prefix: "", firstName: "Ada", middleName: "", lastName: "", suffix: "",
                  nickname: "", phoneNumbers: [], emails: [], addresses: [], events: [],
-                 source: "Local", starred: false, notes: "", groupIds: [], websites: [], ims: [] })
+                 source: "Local", starred: false, notes: "", websites: [], ims: [] })
                  { id } }"#,
         )
         .await;
@@ -419,4 +419,21 @@ async fn update_contact_without_group_ids_leaves_existing_groups_unchanged() {
         .await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     assert_eq!(response.data.into_json().unwrap()["updateContact"]["groups"], json!([{"id":"7"}]));
+}
+
+#[tokio::test]
+async fn contact_writes_reject_removed_group_ids_before_reaching_the_provider() {
+    let (_dir, schema) = fixture(json!(["CONTACTS"]));
+    let (_generation, mut requests) = schema_host(&schema).connect();
+    for operation in ["createContact(", "updateContact(id:\"raw-9\","] {
+        let response = schema.execute(format!(
+            r#"mutation {{ {operation}input:{{
+                prefix:"", firstName:"Ada", middleName:"", lastName:"", suffix:"",
+                nickname:"", phoneNumbers:[], emails:[], addresses:[], events:[],
+                source:"Local", starred:false, notes:"", groupIds:[], websites:[], ims:[]
+            }}) {{ id }} }}"#
+        )).await;
+        assert!(response.errors.iter().any(|error| error.message.contains("unknown field \"groupIds\"")), "{:?}", response.errors);
+        assert!(requests.try_recv().is_err());
+    }
 }
