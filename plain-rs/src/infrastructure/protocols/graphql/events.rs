@@ -224,6 +224,15 @@ pub const EVENTS: &[EventSpec] = &[
         capability: Some(Capability::Telephony),
     },
     EventSpec {
+        field: "clipboardHistoryChanged",
+        event: "CLIPBOARD_HISTORY_CHANGED",
+        aliases: &[],
+        invalidation: true,
+        selection: "",
+        access: &[AccessFeature::Clipboard],
+        capability: Some(Capability::Clipboard),
+    },
+    EventSpec {
         field: "clipboardChanged",
         event: "CLIPBOARD_CHANGED",
         aliases: &[],

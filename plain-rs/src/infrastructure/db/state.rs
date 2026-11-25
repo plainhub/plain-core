@@ -16,6 +16,8 @@ pub(super) struct State {
     pub(super) sessions: std::sync::RwLock<SessionSnapshot>,
     #[cfg(all(feature = "chat", feature = "library"))]
     pub(super) session_revision: std::sync::Arc<std::sync::atomic::AtomicU64>,
+    #[cfg(feature = "library")]
+    pub(super) clipboard: tokio::sync::watch::Sender<()>,
     pub(super) app_files: Mutex<()>,
     #[cfg(feature = "chat")]
     pub(super) peers: tokio::sync::watch::Sender<u64>,
@@ -74,6 +76,8 @@ impl State {
         Ok(Self {
             #[cfg(all(feature = "chat", feature = "library"))]
             media_paths,
+            #[cfg(feature = "library")]
+            clipboard: tokio::sync::watch::channel(()).0,
             app_files: Mutex::new(()),
             #[cfg(all(feature = "chat", feature = "library"))]
             sessions,
