@@ -2,6 +2,9 @@
 
 Shared Rust code for PlainApp desktop, mobile and command-line hosts.
 
+<details>
+<summary>Technical documentation</summary>
+
 ## Workspace
 
 ```text
@@ -157,6 +160,8 @@ node scripts/gen-schema.mjs --write
 This updates `schema/database.sql`, `schema/api/`, `schema/guest-api.graphqls` and `schema/peer-api.graphqls`. Omit `--write` to check them.
 After API changes, run `yarn graphql:codegen` in plain-desktop. Mobile reads the Core schema directly.
 
+</details>
+
 ## Deploy the CLI
 
 `plainapp` embeds the Web UI and runs as a Linux systemd service.
@@ -218,7 +223,8 @@ sudo systemctl enable --now plainapp
 The unit runs `/usr/local/bin/plainapp run`; copy the binary and enable the service as shown above.
 Listeners require a configured password.
 
-### Web UI
+<details>
+<summary>Web UI</summary>
 
 Run `bash build.sh` in plain-desktop to regenerate `assets/web`, then commit the assets with the Core changes.
 CLI and mobile builds embed this bundle.
@@ -227,12 +233,15 @@ To embed another bundle, set `PLAIN_WEB_DIST` to its absolute directory, or use 
 The directory must contain `index.html`. Without `assets/web` or an override, the build provides APIs only.
 For local frontend tests, `run --web-root <directory>` serves files from disk without rebuilding.
 
+</details>
+
 ### Configuration
 
 Ports default to `8080` and `8443` and can be changed in user settings.
 Linux root services automatically mount eligible unmounted filesystems at stable `/mnt/usbX` paths and monitor block-device changes.
 
-### Data and cache directories
+<details>
+<summary>Data and cache directories</summary>
 
 Without path overrides, Linux CLI commands and the installed service use `/var/lib/plainapp`. Other operating systems use `~/.plainapp/data` for the user running the process. `run`, `prefs`, `passwd` and `status` share the same directory selection.
 
@@ -296,6 +305,8 @@ Environment overrides: `PLAINAPP_DATA_DIR`, `PLAINAPP_CACHE_DIR`, `PLAINAPP_TLS_
 For isolated instances, `run` also accepts repeated `--media-dir` and `--web-root`.
 Use `<command> --help` for options on other commands.
 
+</details>
+
 ### Upgrade and removal
 
 Self-update is not implemented. Replace the executable and restart:
@@ -307,11 +318,15 @@ sudo systemctl restart plainapp
 
 `sudo plainapp uninstall` removes the unit, the certificate and the data directory. Pass `--keep-config` and `--keep-data` to retain them.
 
-### Releases
+<details>
+<summary>Releases</summary>
 
 To release the CLI, bump the version in `plain-cli/Cargo.toml` and update the lockfile. Run the **Release** workflow manually from the commit to publish. It builds and checks `plainapp` for Linux amd64 and arm64 using the committed Web assets, without AI image search. After verifying both archives and scanning them with VirusTotal, the workflow opens a GitHub Release draft with SHA-256 checksums, signed SLSA provenance, and links to the scan reports. Configure the repository’s `VIRUSTOTAL_API_KEY` secret first. Review the results and publish the draft in GitHub.
 
-## Work on desktop or app
+</details>
+
+<details>
+<summary>Work on desktop or app</summary>
 
 Keep plain-core next to plain-desktop or plain-app. In the consumer repository:
 
@@ -320,3 +335,5 @@ Keep plain-core next to plain-desktop or plain-app. In the consumer repository:
 ./scripts/core local --off  # Stop using local paths
 ./scripts/core update       # Lock this project to the latest remote commit
 ```
+
+</details>
