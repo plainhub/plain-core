@@ -22,6 +22,27 @@ download() {
     [[ $(wc -c < "$2") -le "$3" ]] || fail "Release download exceeded its size limit"
 }
 
+wait_for_ports() {
+    local attempt status ports
+    for ((attempt = 1; attempt <= 15; attempt++)); do
+        if status=$(sudo "$INSTALL_DIR/$BIN" status) &&
+            ports=$(awk '
+                $0 == "HTTP server: running" { running = 1 }
+                $1 == "http:" && $2 ~ /^[0-9]+$/ && $2 > 0 && $2 <= 65535 { http = $2 }
+                $1 == "https:" && $2 ~ /^[0-9]+$/ && $2 > 0 && $2 <= 65535 { https = $2 }
+                END {
+                    if (!running || !http || !https) exit 1
+                    print http, https
+                }
+            ' <<< "$status"); then
+            printf '%s\n' "$ports"
+            return
+        fi
+        if ((attempt < 15)); then sleep 1; fi
+    done
+    return 1
+}
+
 case "$(uname -m)" in
     x86_64 | amd64) ARCH="amd64" ;;
     aarch64 | arm64) ARCH="arm64" ;;
@@ -87,6 +108,8 @@ echo "[plainapp] Installed $BIN to $INSTALL_DIR."
 
 sudo "$INSTALL_DIR/$BIN" install
 sudo systemctl enable --now "$SERVICE"
+PORTS=$(wait_for_ports) || fail "Installed $BIN, but could not confirm its Web UI ports. Run: sudo $BIN status"
+read -r HTTP_PORT HTTPS_PORT <<< "$PORTS"
 
 IP=$(hostname -I 2>/dev/null | awk '{for (i=1;i<=NF;i++) if ($i!~/^127\./ && $i~/\./) {print $i; exit}}')
 IP=${IP:-localhost}
@@ -94,7 +117,7 @@ IP=${IP:-localhost}
 echo ""
 echo "[plainapp] Installation complete."
 echo "[plainapp] Access the web UI:"
-echo "  http://$IP:8080"
-echo "  https://$IP:8443  (self-signed certificate)"
+echo "  http://$IP:$HTTP_PORT"
+echo "  https://$IP:$HTTPS_PORT  (self-signed certificate)"
 echo "[plainapp] Sign in with the admin password configured during installation."
 echo "[plainapp] To change it later, stop the service and run: sudo $BIN passwd"

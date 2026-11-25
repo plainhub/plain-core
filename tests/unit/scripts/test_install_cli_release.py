@@ -15,7 +15,7 @@ INSTALLER = Path(__file__).resolve().parents[3] / "install.sh"
 
 @unittest.skipUnless(shutil.which("openssl") and shutil.which("sha256sum"), "installer tools required")
 class InstallCliReleaseTest(unittest.TestCase):
-    def run_installer(self, machine, damage=None, use_fixture_key=True):
+    def run_installer(self, machine, damage=None, use_fixture_key=True, ports=(8080, 8443), starting=False):
         with tempfile.TemporaryDirectory() as path:
             root = Path(path)
             checksums = []
@@ -52,11 +52,29 @@ case "$url" in
     *) exit 99 ;;
 esac
 """,
+                "sleep": "exit 0\n",
                 "sudo": """
 case "$1" in
     install) cat "$4" > "$TEST_ROOT/installed" ;;
-    /usr/local/bin/plainapp) [[ "$2" = install ]] ;;
-    systemctl) [[ "$2 $3 $4" = 'enable --now plainapp' ]] ;;
+    /usr/local/bin/plainapp)
+        case "$2" in
+            install) ;;
+            status)
+                [[ -f "$TEST_ROOT/started" ]]
+                if [[ -z "$TEST_PORTS" || ( "$TEST_STARTING" = 1 && ! -f "$TEST_ROOT/status-checked" ) ]]; then
+                    touch "$TEST_ROOT/status-checked"
+                    printf 'Service: running\\nHTTP server: stopped\\nhttp: not listening\\nhttps: not listening\\n'
+                else
+                    http=${TEST_PORTS% *}
+                    https=${TEST_PORTS#* }
+                    printf 'Service: running\\nHTTP server: running\\nhttp: %s (http://127.0.0.1:%s)\\nhttps: %s (https://127.0.0.1:%s)\\n' "$http" "$http" "$https" "$https"
+                fi
+                exit 0 ;;
+            *) exit 99 ;;
+        esac ;;
+    systemctl)
+        [[ "$2 $3 $4" = 'enable --now plainapp' ]]
+        touch "$TEST_ROOT/started" ;;
     *) exit 99 ;;
 esac
 printf '%s\\n' "$1" >> "$TEST_ROOT/sudo-calls"
@@ -67,7 +85,9 @@ printf '%s\\n' "$1" >> "$TEST_ROOT/sudo-calls"
                 command.chmod(0o700)
             env = dict(os.environ, PATH=f"{root}:{os.environ['PATH']}",
                        PLAINAPP_RELEASE_PUBLIC_KEY=base64.b64encode(public).decode(),
-                       TEST_MACHINE=machine, TEST_ROOT=str(root))
+                       TEST_MACHINE=machine, TEST_ROOT=str(root),
+                       TEST_PORTS=" ".join(map(str, ports)) if ports else "",
+                       TEST_STARTING="1" if starting else "0")
             if not use_fixture_key:
                 env.pop("PLAINAPP_RELEASE_PUBLIC_KEY")
             result = subprocess.run(["bash", str(INSTALLER)], env=env, capture_output=True, text=True)
@@ -82,6 +102,23 @@ printf '%s\\n' "$1" >> "$TEST_ROOT/sudo-calls"
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(calls, ["install", "/usr/local/bin/plainapp", "systemctl"])
                 self.assertEqual(installed, arch)
+                self.assertIn("http://localhost:8080", result.stdout)
+                self.assertIn("https://localhost:8443", result.stdout)
+
+    def test_prints_bound_ports_when_defaults_are_occupied(self):
+        result, _, _ = self.run_installer("aarch64", ports=(8180, 8543), starting=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("http://localhost:8180", result.stdout)
+        self.assertIn("https://localhost:8543", result.stdout)
+        self.assertNotIn("http://localhost:8080", result.stdout)
+        self.assertNotIn("https://localhost:8443", result.stdout)
+
+    def test_does_not_print_guessed_urls_when_listeners_never_start(self):
+        result, _, installed = self.run_installer("aarch64", ports=None)
+        self.assertEqual(installed, "arm64")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("could not confirm", result.stderr)
+        self.assertNotIn("Access the web UI:", result.stdout)
 
     def test_requires_valid_signature_tag_and_archive_before_installing(self):
         for damage, message in (("signature", "signature verification failed"),
