@@ -19,30 +19,40 @@ pub fn cleanup(db: &Db, items: &[Item], paths: &[String], roots: &[String]) -> D
         return Err(DomainError::Other("invalid deleted media receipt".into()));
     }
     db.audio_transaction(|tx, state| {
-        let encoded=plain_libs::serde_json::to_string(paths).map_err(|e|DomainError::Other(e.to_string()))?;
+        let encoded = (!paths.is_empty()).then(|| plain_libs::serde_json::to_string(paths))
+            .transpose().map_err(|e|DomainError::Other(e.to_string()))?;
         let mut media = items.to_vec();
-        {
+        let catalog_start = media.len();
+        if let Some(encoded) = &encoded {
             let mut statement=tx.prepare("SELECT data_type,id,path FROM file_catalog WHERE path IN (SELECT value FROM json_each(?1))")?;
-            media.extend(statement.query_map([&encoded],|row|Ok(Item { media_type:row.get(0)?,id:row.get(1)?,path:row.get(2)? }))?.collect::<plain_libs::rusqlite::Result<Vec<_>>>()?);
+            media.extend(statement.query_map([encoded],|row|Ok(Item { media_type:row.get(0)?,id:row.get(1)?,path:row.get(2)? }))?.collect::<plain_libs::rusqlite::Result<Vec<_>>>()?);
         }
+        let has_catalog_paths = media.len() != catalog_start;
+        let mut catalog_roots = Vec::with_capacity(roots.len());
         for root in roots {
+            let catalog_start = media.len();
             let prefix=directory_prefix(root);
             let mut statement=tx.prepare("SELECT data_type,id,path FROM file_catalog WHERE path=?1 OR substr(path,1,length(?2))=?2")?;
             media.extend(statement.query_map(params![root,prefix],|row|Ok(Item { media_type:row.get(0)?,id:row.get(1)?,path:row.get(2)? }))?.collect::<plain_libs::rusqlite::Result<Vec<_>>>()?);
+            catalog_roots.push(media.len() != catalog_start);
         }
         let mut seen=std::collections::HashSet::new();
         media.retain(|item| seen.insert((item.media_type, item.id.clone())));
         remove_identities(tx, &media)?;
-        if !paths.is_empty() {
+        if let Some(encoded) = &encoded {
             audio_queue::remove_paths_conn(&tx,paths, state)?;
-            tx.execute("DELETE FROM files WHERE id IN (SELECT file_id FROM file_catalog WHERE path IN (SELECT value FROM json_each(?1)))",[&encoded])?;
+            if has_catalog_paths {
+                tx.execute("DELETE FROM files WHERE id IN (SELECT file_id FROM file_catalog WHERE path IN (SELECT value FROM json_each(?1)))",[encoded])?;
+            }
             tx.execute("DELETE FROM tag_relations WHERE EXISTS(SELECT 1 FROM tags WHERE id=tag_relations.tag_id AND type=?1) AND target_key IN (SELECT value FROM json_each(?2))",params![DataType::File,encoded])?;
-            tx.execute("DELETE FROM image_embeddings WHERE path IN (SELECT value FROM json_each(?1))",[&encoded])?;
+            tx.execute("DELETE FROM image_embeddings WHERE path IN (SELECT value FROM json_each(?1))",[encoded])?;
         }
-        for root in roots {
+        for (root, has_catalog_rows) in roots.iter().zip(catalog_roots) {
             let prefix=directory_prefix(root);
             audio_queue::remove_root_paths_conn(&tx,root, state)?;
-            tx.execute("DELETE FROM files WHERE id IN (SELECT file_id FROM file_catalog WHERE path=?1 OR substr(path,1,length(?2))=?2)",params![root,prefix])?;
+            if has_catalog_rows {
+                tx.execute("DELETE FROM files WHERE id IN (SELECT file_id FROM file_catalog WHERE path=?1 OR substr(path,1,length(?2))=?2)",params![root,prefix])?;
+            }
             // Both directory separators are single ASCII bytes under SQLite's binary collation.
             let (parent, separator) = prefix.split_at(prefix.len() - 1);
             let upper = format!("{parent}{}", char::from(separator.as_bytes()[0] + 1));

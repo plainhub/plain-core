@@ -243,3 +243,67 @@ fn rebinding_swaps_provider_ids_atomically_and_rolls_back_on_failure() {
         2
     );
 }
+
+#[test]
+fn root_tag_move_seeks_the_source_path_and_its_descendants() {
+    db().with_conn(|conn| {
+        let plan = conn
+            .prepare(&format!("EXPLAIN QUERY PLAN {SELECT_ROOT_TAGS}"))
+            .unwrap()
+            .query_map(params![DataType::File, "/source", "/source/", "/source0"], |row| row.get::<_, String>(3))
+            .unwrap()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        assert!(plan.iter().any(|line| line.contains("target_key=?")), "{plan:?}");
+        assert!(plan.iter().any(|line| line.contains("target_key>? AND target_key<?")), "{plan:?}");
+        assert!(plan.iter().all(|line| !line.contains("TEMP B-TREE")), "{plan:?}");
+    });
+}
+
+#[test]
+fn root_tag_move_merges_existing_targets_and_preserves_neighbors() {
+    let db = db();
+    db.with_conn(|conn| conn.execute_batch(
+        "INSERT INTO tags VALUES('file','file','FILE','t','t');
+         INSERT INTO tag_relations(tag_id,target_key,created_at) VALUES
+         ('file','/源/one','early'),('file','/源/two','early'),
+         ('file','/target/two','late'),('file','/源0','neighbor');"
+    )).unwrap();
+
+    rebind(&db, &[], "/源", "/target").unwrap();
+
+    db.with_conn(|conn| {
+        let rows = conn.prepare("SELECT target_key,created_at FROM tag_relations ORDER BY target_key")
+            .unwrap()
+            .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)))
+            .unwrap()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        assert_eq!(rows, [
+            ("/target/one".to_owned(), "early".to_owned()),
+            ("/target/two".to_owned(), "early".to_owned()),
+            ("/源0".to_owned(), "neighbor".to_owned()),
+        ]);
+    });
+}
+
+#[test]
+fn root_tag_move_applies_an_exact_root_with_trailing_separator_once() {
+    let db = db();
+    db.with_conn(|conn| conn.execute_batch(
+        "INSERT INTO tags VALUES('file','file','FILE','t','t');
+         INSERT INTO tag_relations(tag_id,target_key,created_at) VALUES
+         ('file','/source/','early'),('file','/source/child','later');"
+    )).unwrap();
+    let (before, highest_source_rowid) = db.with_conn(|conn| {
+        let rowid = conn.query_row("SELECT max(rowid) FROM tag_relations", [], |row| row.get::<_, i64>(0)).unwrap();
+        (conn.total_changes(), rowid)
+    });
+    rebind(&db, &[], "/source/", "/destination").unwrap();
+    db.with_conn(|conn| {
+        assert_eq!(conn.query_row("SELECT count(*) FROM tag_relations WHERE target_key IN ('/destination','/destination/child')", [], |row| row.get::<_, i64>(0)).unwrap(), 2);
+        assert_eq!(conn.total_changes() - before, 4);
+        let moved_rowid = conn.query_row("SELECT min(rowid) FROM tag_relations", [], |row| row.get::<_, i64>(0)).unwrap();
+        assert!(moved_rowid > highest_source_rowid);
+    });
+}

@@ -105,13 +105,15 @@ pub fn rebind_with_aliases(
             if !roots.insert(source_root) { continue; }
         audio_queue::remove_root_paths_except_conn(tx,source_root,state,&retained)?;
 
-        let source_prefix = format!("{}/",source_root.trim_end_matches('/'));
-        let mut statement = tx.prepare("SELECT tag_id,target_key,created_at FROM tag_relations WHERE tag_id IN (SELECT id FROM tags WHERE type=?1) AND (target_key=?2 OR substr(target_key,1,length(?3))=?3)")?;
-        let relations = statement.query_map(params![DataType::File,source_root,source_prefix],|row|Ok((row.get::<_,String>(0)?,row.get::<_,String>(1)?,row.get::<_,String>(2)?)))?.collect::<plain_libs::rusqlite::Result<Vec<_>>>()?;
+        let source_base = source_root.trim_end_matches('/');
+        let source_prefix = format!("{source_base}/");
+        let source_upper = format!("{source_base}0");
+        let mut statement = tx.prepare(SELECT_ROOT_TAGS)?;
+        let relations = statement.query_map(params![DataType::File,source_root,source_prefix,source_upper],|row|Ok((row.get::<_,String>(0)?,row.get::<_,String>(1)?,row.get::<_,String>(2)?)))?.collect::<plain_libs::rusqlite::Result<Vec<_>>>()?;
         drop(statement);
         if !relations.is_empty() {
-            let mut insert = tx.prepare("INSERT INTO tag_relations(tag_id,target_key,created_at) VALUES(?1,?2,?3) ON CONFLICT(tag_id,target_key) DO UPDATE SET created_at=min(tag_relations.created_at,excluded.created_at)")?;
-            let mut delete = tx.prepare("DELETE FROM tag_relations WHERE tag_id=?1 AND target_key=?2")?;
+            let mut insert = tx.prepare_cached("INSERT INTO tag_relations(tag_id,target_key,created_at) VALUES(?1,?2,?3) ON CONFLICT(tag_id,target_key) DO UPDATE SET created_at=min(tag_relations.created_at,excluded.created_at)")?;
+            let mut delete = tx.prepare_cached("DELETE FROM tag_relations WHERE tag_id=?1 AND target_key=?2")?;
             for (tag,key,created) in relations {
                 let relative = if key==source_root { "" } else { &key[source_prefix.len()..] };
                 let destination = if relative.is_empty() { destination_root.to_owned() } else { format!("{}/{relative}",destination_root.trim_end_matches('/')) };
@@ -126,6 +128,14 @@ pub fn rebind_with_aliases(
         Ok(bindings.len())
     })
 }
+const SELECT_ROOT_TAGS: &str = "SELECT tag_id,target_key,created_at FROM tag_relations
+    WHERE target_key=?2 AND EXISTS (SELECT 1 FROM tags WHERE id=tag_relations.tag_id AND type=?1)
+    UNION ALL
+    SELECT tag_id,target_key,created_at FROM tag_relations
+    WHERE target_key>=?3 AND target_key<?4 AND target_key<>?2
+      AND EXISTS (SELECT 1 FROM tags WHERE id=tag_relations.tag_id AND type=?1)
+    ORDER BY target_key";
+
 fn invalid(message: &str) -> DomainError {
     DomainError::Other(message.into())
 }

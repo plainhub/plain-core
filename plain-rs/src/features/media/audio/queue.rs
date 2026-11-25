@@ -288,18 +288,16 @@ pub(crate) fn remove_root_paths_except_conn(
         )?
         .collect::<plain_libs::rusqlite::Result<Vec<_>>>()?;
     drop(statement);
-    let current = io::audio_by_path(c, &state.playback.path)?
-        .map(|track| track.path)
-        .unwrap_or_else(|| state.playback.path.clone());
+    let current = current_catalog_path(c, state)?;
     if (current == root || current.starts_with(&prefix))
         && !state
             .current_file_id
             .as_ref()
             .is_some_and(|id| retained_ids.contains(id))
     {
-        paths.push(current);
+        paths.push(current.clone());
     }
-    remove_paths_conn(c, &paths, state)
+    remove_paths_with_current_path(c, &paths, state, &current)
 }
 
 pub(crate) fn remove_paths_conn(
@@ -307,13 +305,35 @@ pub(crate) fn remove_paths_conn(
     paths: &[String],
     state: &mut super::state::State,
 ) -> DomainResult<()> {
-    let current = io::audio_by_path(c, &state.playback.path)?
-        .map(|track| track.path)
-        .unwrap_or_else(|| state.playback.path.clone());
+    if paths.is_empty() {
+        return Ok(());
+    }
+    let current = current_catalog_path(c, state)?;
+    remove_paths_with_current_path(c, paths, state, &current)
+}
+
+fn current_catalog_path(
+    c: &plain_libs::rusqlite::Connection,
+    state: &super::state::State,
+) -> DomainResult<String> {
+    let path = &state.playback.path;
+    let track = if path.is_empty() { None } else { io::audio_by_path(c, path)? };
+    Ok(track.map(|track| track.path).unwrap_or_else(|| path.clone()))
+}
+
+fn remove_paths_with_current_path(
+    c: &plain_libs::rusqlite::Connection,
+    paths: &[String],
+    state: &mut super::state::State,
+    current: &str,
+) -> DomainResult<()> {
+    if paths.is_empty() {
+        return Ok(());
+    }
     io::remove_queue_paths(c, paths)?;
     io::remove_history(c, paths)?;
     io::remove_playlist_items_by_paths(c, paths)?;
-    if paths.contains(&current) || paths.contains(&state.playback.path) {
+    if paths.iter().any(|path| path == current || *path == state.playback.path) {
         state.select("")?;
     }
     Ok(())

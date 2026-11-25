@@ -470,5 +470,52 @@ fn root_tag_cleanup_seeks_both_the_directory_and_its_descendants() {
             .unwrap().collect::<Result<Vec<_>, _>>().unwrap();
         assert!(plan.iter().any(|line| line.contains("target_key=?")), "{plan:?}");
         assert!(plan.iter().any(|line| line.contains("target_key>? AND target_key<?")), "{plan:?}");
+        assert!(plan.iter().any(|line| line.contains("SEARCH tags") && line.contains("id=?")), "{plan:?}");
+    });
+}
+
+#[test]
+fn directory_cleanup_does_not_requery_an_empty_file_catalog() {
+    use plain_libs::rusqlite::ffi;
+    use std::ffi::{CStr, c_void};
+
+    unsafe extern "C" fn count_catalog_accesses(
+        _: u32,
+        context: *mut c_void,
+        statement: *mut c_void,
+        _: *mut c_void,
+    ) -> i32 {
+        unsafe {
+            let sql = ffi::sqlite3_sql(statement.cast());
+            if !sql.is_null() && CStr::from_ptr(sql).to_bytes().windows(b"FROM file_catalog".len())
+                .any(|part| part == b"FROM file_catalog")
+            {
+                *context.cast::<usize>() += 1;
+            }
+        }
+        0
+    }
+
+    let db = Db::open(std::path::Path::new(":memory:")).unwrap();
+    db.with_conn(|conn| conn.execute_batch(
+        "INSERT INTO tags VALUES('file','file','FILE','t','t');
+         INSERT INTO tag_relations VALUES('file','/directory/a','t');"
+    )).unwrap();
+    let mut catalog_accesses = 0usize;
+    db.with_conn(|conn| unsafe {
+        assert_eq!(ffi::sqlite3_trace_v2(
+            conn.handle(), ffi::SQLITE_TRACE_STMT as u32, Some(count_catalog_accesses),
+            (&raw mut catalog_accesses).cast(),
+        ), ffi::SQLITE_OK);
+    });
+
+    let result = cleanup(&db, &[], &[], &["/directory".into()]);
+    db.with_conn(|conn| unsafe {
+        assert_eq!(ffi::sqlite3_trace_v2(conn.handle(), 0, None, std::ptr::null_mut()), ffi::SQLITE_OK);
+    });
+    result.unwrap();
+    assert_eq!(catalog_accesses, 1);
+    db.with_conn(|conn| {
+        assert_eq!(conn.query_row("SELECT COUNT(*) FROM tag_relations", [], |row| row.get::<_, i64>(0)).unwrap(), 0);
     });
 }
