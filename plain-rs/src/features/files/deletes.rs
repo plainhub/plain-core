@@ -33,15 +33,20 @@ pub fn cleanup(db: &Db, items: &[Item], paths: &[String], roots: &[String]) -> D
         let mut seen=std::collections::HashSet::new();
         media.retain(|item| seen.insert((item.media_type, item.id.clone())));
         remove_identities(tx, &media)?;
-        audio_queue::remove_paths_conn(&tx,paths, state)?;
-        tx.execute("DELETE FROM files WHERE id IN (SELECT file_id FROM file_catalog WHERE path IN (SELECT value FROM json_each(?1)))",[&encoded])?;
-        tx.execute("DELETE FROM tag_relations WHERE type=?1 AND target_key IN (SELECT value FROM json_each(?2))",params![DataType::File,encoded])?;
-        tx.execute("DELETE FROM image_embeddings WHERE path IN (SELECT value FROM json_each(?1))",[&encoded])?;
+        if !paths.is_empty() {
+            audio_queue::remove_paths_conn(&tx,paths, state)?;
+            tx.execute("DELETE FROM files WHERE id IN (SELECT file_id FROM file_catalog WHERE path IN (SELECT value FROM json_each(?1)))",[&encoded])?;
+            tx.execute("DELETE FROM tag_relations WHERE EXISTS(SELECT 1 FROM tags WHERE id=tag_relations.tag_id AND type=?1) AND target_key IN (SELECT value FROM json_each(?2))",params![DataType::File,encoded])?;
+            tx.execute("DELETE FROM image_embeddings WHERE path IN (SELECT value FROM json_each(?1))",[&encoded])?;
+        }
         for root in roots {
             let prefix=directory_prefix(root);
             audio_queue::remove_root_paths_conn(&tx,root, state)?;
             tx.execute("DELETE FROM files WHERE id IN (SELECT file_id FROM file_catalog WHERE path=?1 OR substr(path,1,length(?2))=?2)",params![root,prefix])?;
-            tx.execute("DELETE FROM tag_relations WHERE type=?1 AND (target_key=?2 OR substr(target_key,1,length(?3))=?3)",params![DataType::File,root,prefix])?;
+            // Both directory separators are single ASCII bytes under SQLite's binary collation.
+            let (parent, separator) = prefix.split_at(prefix.len() - 1);
+            let upper = format!("{parent}{}", char::from(separator.as_bytes()[0] + 1));
+            tx.execute(DELETE_ROOT_TAGS, params![DataType::File,root,prefix,upper])?;
             tx.execute("DELETE FROM image_embeddings WHERE path=?1 OR substr(path,1,length(?2))=?2",params![root,prefix])?;
         }
         Ok(())
@@ -105,12 +110,15 @@ ORDER BY f.id LIMIT ?5")?.query_map(params![scan_id, root, format!("{}/",root.tr
         remove_identities(tx, &rows)?;
         let encoded = plain_libs::serde_json::to_string(&rows).map_err(|error| DomainError::Other(error.to_string()))?;
         tx.execute("DELETE FROM files WHERE id IN (SELECT value->>'id' FROM json_each(?1))", [&encoded])?;
-        tx.execute("DELETE FROM tag_relations WHERE type=?2 AND target_key IN (SELECT value->>'path' FROM json_each(?1)) AND NOT EXISTS(SELECT 1 FROM file_catalog WHERE path=target_key)", params![&encoded, DataType::File])?;
+        tx.execute("DELETE FROM tag_relations WHERE EXISTS(SELECT 1 FROM tags WHERE id=tag_relations.tag_id AND type=?2) AND target_key IN (SELECT value->>'path' FROM json_each(?1)) AND NOT EXISTS(SELECT 1 FROM file_catalog WHERE path=target_key)", params![&encoded, DataType::File])?;
         Ok(rows)
     })
 }
 
 fn remove_identities(tx: &plain_libs::rusqlite::Connection, items: &[Item]) -> DomainResult<()> {
+    if items.is_empty() {
+        return Ok(());
+    }
     let encoded = plain_libs::serde_json::to_string(items)
         .map_err(|error| DomainError::Other(error.to_string()))?;
     let typed_ids = items
@@ -124,7 +132,7 @@ fn remove_identities(tx: &plain_libs::rusqlite::Connection, items: &[Item]) -> D
     let typed_ids = plain_libs::serde_json::to_string(&typed_ids)
         .map_err(|error| DomainError::Other(error.to_string()))?;
     tx.execute(
-        "DELETE FROM tag_relations WHERE (target_key,type) IN (SELECT value->>0,value->>1 FROM json_each(?1))",
+        "DELETE FROM tag_relations WHERE (target_key,tag_id) IN (SELECT r.target_key,r.tag_id FROM json_each(?1) j JOIN tag_relations r ON r.target_key=j.value->>0 JOIN tags t ON t.id=r.tag_id AND t.type=j.value->>1)",
         [&typed_ids],
     )?;
     for table in ["audio_queue_items", "audio_playlist_items"] {
@@ -134,6 +142,10 @@ fn remove_identities(tx: &plain_libs::rusqlite::Connection, items: &[Item]) -> D
     tx.execute("DELETE FROM image_embeddings WHERE file_id IN (SELECT value->>'id' FROM json_each(?1) WHERE value->>'media_type'=3)", [&encoded])?;
     Ok(())
 }
+
+const DELETE_ROOT_TAGS: &str = "DELETE FROM tag_relations
+    WHERE (target_key=?2 OR (target_key>=?3 AND target_key<?4))
+      AND EXISTS (SELECT 1 FROM tags WHERE id=tag_relations.tag_id AND type=?1)";
 
 fn directory_prefix(root: &str) -> String {
     let separator = if cfg!(windows) && !root.contains('/') {

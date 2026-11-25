@@ -78,7 +78,7 @@ fn doc(path: &str) -> plain_rs::infrastructure::db::MediaFileMetadata {
 }
 
 #[tokio::test]
-async fn tag_and_relation_store_the_graphql_enum_name() {
+async fn tag_owns_the_relation_type_and_graphql_count() {
     let (_dir, schema) = fixture();
     let response = schema
         .execute(r#"mutation { createTag(type:IMAGE, name:"holiday") { id name type count } }"#)
@@ -100,7 +100,7 @@ async fn tag_and_relation_store_the_graphql_enum_name() {
     let stored = database(&schema)
         .with_conn(|conn| {
             conn.query_row(
-                "SELECT typeof(t.type), t.type, typeof(r.type), r.type
+                "SELECT typeof(t.type), t.type, r.target_key
              FROM tags t JOIN tag_relations r ON r.tag_id=t.id WHERE t.id=?",
                 [&id],
                 |row| {
@@ -108,7 +108,6 @@ async fn tag_and_relation_store_the_graphql_enum_name() {
                         row.get::<_, String>(0)?,
                         row.get::<_, String>(1)?,
                         row.get::<_, String>(2)?,
-                        row.get::<_, String>(3)?,
                     ))
                 },
             )
@@ -116,7 +115,7 @@ async fn tag_and_relation_store_the_graphql_enum_name() {
         .unwrap();
     assert_eq!(
         stored,
-        ("text".into(), "IMAGE".into(), "text".into(), "IMAGE".into())
+        ("text".into(), "IMAGE".into(), "photo".into())
     );
 
     let response = schema
@@ -129,6 +128,7 @@ async fn tag_and_relation_store_the_graphql_enum_name() {
     assert_eq!(data["tags"].as_array().unwrap().len(), 1);
     assert_eq!(data["tags"][0]["id"], id.as_str());
     assert_eq!(data["tags"][0]["type"], "IMAGE");
+    assert_eq!(data["tags"][0]["count"], 1);
     // The kind filter is real: an audio list does not see an image tag.
     assert_eq!(data["audio"], json!([]));
 }

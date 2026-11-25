@@ -192,7 +192,7 @@ async fn physical_failure_preserves_queue_and_tag_references_for_only_the_failed
         connection.execute_batch("INSERT INTO tags(id,name,type,created_at,updated_at) VALUES('audio','audio','AUDIO','now','now'),('video','video','VIDEO','now','now');")?;
         for (index, id) in [&good, &bad].into_iter().enumerate() {
             connection.execute("INSERT INTO audio_queue_items(file_id,sort_order) VALUES(?1,?2)", plain_libs::rusqlite::params![id,index as i64])?;
-            connection.execute("INSERT INTO tag_relations(tag_id,target_key,type,created_at) VALUES('audio',?1,'AUDIO','now'),('video',?1,'VIDEO','now')", [id])?;
+            connection.execute("INSERT INTO tag_relations(tag_id,target_key,created_at) VALUES('audio',?1,'now'),('video',?1,'now')", [id])?;
         }
         Ok(())
     }).unwrap();
@@ -224,7 +224,7 @@ async fn physical_failure_preserves_queue_and_tag_references_for_only_the_failed
         );
         assert_eq!(
             connection.query_row(
-                "SELECT count(*) FROM tag_relations WHERE type='AUDIO'",
+                "SELECT count(*) FROM tag_relations JOIN tags ON tags.id=tag_id WHERE type='AUDIO'",
                 [],
                 |row| row.get::<_, i64>(0)
             )?,
@@ -232,7 +232,7 @@ async fn physical_failure_preserves_queue_and_tag_references_for_only_the_failed
         );
         assert_eq!(
             connection.query_row(
-                "SELECT count(*) FROM tag_relations WHERE type='VIDEO'",
+                "SELECT count(*) FROM tag_relations JOIN tags ON tags.id=tag_id WHERE type='VIDEO'",
                 [],
                 |row| row.get::<_, i64>(0)
             )?,

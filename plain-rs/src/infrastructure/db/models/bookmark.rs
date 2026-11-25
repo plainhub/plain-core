@@ -16,14 +16,14 @@ pub struct DBookmark {
 }
 
 impl DBookmark {
-    pub fn new(url: &str, group_id: &str) -> Self {
+    pub fn new(url: &str, group_id: Option<&str>) -> Self {
         let now = now_iso();
         Self {
             id: crate::features::record_id::generate(),
             url: url.to_string(),
             title: url.to_string(),
             favicon_path: String::new(),
-            group_id: (!group_id.is_empty()).then(|| group_id.to_owned()),
+            group_id: group_id.map(str::to_owned),
             pinned: false,
             click_count: 0,
             last_clicked_at: None,

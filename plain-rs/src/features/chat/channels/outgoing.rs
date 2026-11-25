@@ -49,8 +49,8 @@ impl Action {
         let channel_id = &channel.id;
         let (query, variables) = match self {
             Self::Invite => (
-                "mutation($channelId: ID!, $input: ChannelInviteInput!) { notifyChannelInvite(channelId: $channelId, input: $input) }",
-                json!({"channelId":channel_id,"input":{"state":require_state(state)?}}),
+                "mutation($channelId: ID!, $input: ChannelStateInput!) { notifyChannelInvite(channelId: $channelId, input: $input) }",
+                json!({"channelId":channel_id,"input":require_state(state)?}),
             ),
             Self::StateChanged => (
                 "mutation($channelId: ID!, $input: ChannelStateInput!) { notifyChannelStateChanged(channelId: $channelId, input: $input) }",

@@ -64,14 +64,9 @@ impl Mutation {
         &self,
         ctx: &Context<'_>,
         channel_id: ID,
-        input: ChannelInviteInput,
+        input: ChannelStateInput,
     ) -> plain_graphql::Result<bool> {
-        receive(
-            ctx,
-            channel_id,
-            Notification::Invite(input.state.try_into()?),
-        )
-        .await
+        receive(ctx, channel_id, Notification::Invite(input.try_into()?)).await
     }
 
     async fn notify_channel_state_changed(
@@ -153,11 +148,6 @@ async fn receive(
     )
     .await?;
     Ok(true)
-}
-
-#[derive(InputObject)]
-struct ChannelInviteInput {
-    state: ChannelStateInput,
 }
 
 #[derive(InputObject)]

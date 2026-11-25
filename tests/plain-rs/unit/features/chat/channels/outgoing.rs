@@ -55,10 +55,10 @@ fn channel_snapshots_include_each_member_once_and_sign_typed_variables() {
         vars,
         json!({
             "channelId":channel.id,
-            "input":{"state":{"name":"Group","version":channel.version,"signature":state.signature,"members":[
+            "input":{"name":"Group","version":channel.version,"signature":state.signature,"members":[
                 {"peerId":"owner","status":"JOINED","name":"Owner","deviceType":"COMPUTER","signaturePublicKey":base64_encode(&public),"encryptionPublicKey":base64_encode(&[41;32])},
                 {"peerId":"paired","status":"PENDING","name":"Paired member","deviceType":"OTHER","ip":"","signaturePublicKey":base64_encode(&[8;32]),"encryptionPublicKey":base64_encode(&[40;32]),"port":1234}
-            ]}}
+            ]}
         })
     );
 }

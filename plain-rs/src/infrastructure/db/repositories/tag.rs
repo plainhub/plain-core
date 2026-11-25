@@ -41,13 +41,10 @@ pub(crate) mod io {
         .optional()
     }
     pub fn insert_relations(c: &Connection, rels: &[(String, String)]) -> plain_libs::rusqlite::Result<()> {
-        let mut statement=c.prepare("INSERT OR IGNORE INTO tag_relations (tag_id,target_key,type,created_at) SELECT id,?2,type,?3 FROM tags WHERE id=?1")?;
+        let mut statement=c.prepare("INSERT INTO tag_relations(tag_id,target_key,created_at) VALUES(?1,?2,?3) ON CONFLICT(tag_id,target_key) DO NOTHING")?;
         for (tag_id, key) in rels {
             if tag_id.is_empty() || key.is_empty() {
                 continue;
-            }
-            if tag_by_id(c, tag_id)?.is_none() {
-                return Err(plain_libs::rusqlite::Error::QueryReturnedNoRows);
             }
             statement.execute(params![
                 tag_id,
@@ -113,8 +110,7 @@ pub fn rename_tag(db: &Db, id: &str, name: &str) -> plain_libs::rusqlite::Result
     })
 }
 pub fn delete_tag(db: &Db, id: &str) -> plain_libs::rusqlite::Result<()> {
-    transaction(db, |c| {
-        c.execute("DELETE FROM tag_relations WHERE tag_id=?", [id])?;
+    db.with_conn(|c| {
         c.execute("DELETE FROM tags WHERE id=?", [id])?;
         Ok(())
     })
@@ -133,15 +129,22 @@ pub fn relations_for_keys_of_kind(
     keys: &[String],
     kind: DataType,
 ) -> plain_libs::rusqlite::Result<Vec<TagRelationRow>> {
+    if keys.is_empty() {
+        return Ok(Vec::new());
+    }
+    let keys = plain_libs::serde_json::to_string(keys)
+        .map_err(|error| plain_libs::rusqlite::Error::ToSqlConversionFailure(Box::new(error)))?;
     db.with_conn(|c| {
-        let mut statement=c.prepare("SELECT r.tag_id,r.target_key FROM tag_relations r JOIN tags t ON t.id=r.tag_id AND t.type=r.type WHERE r.target_key=? AND t.type=? ORDER BY r.tag_id")?;
-        let mut out=Vec::new();
-        for key in keys {out.extend(statement.query_map(params![key,kind],row_to_relation)?.collect::<plain_libs::rusqlite::Result<Vec<_>>>()?);}
-        Ok(out)
+        c.prepare("SELECT r.tag_id,r.target_key FROM json_each(?1) k
+            JOIN tag_relations r ON r.target_key=k.value
+            JOIN tags t ON t.id=r.tag_id
+            WHERE t.type=?2 ORDER BY k.key,r.tag_id")?
+            .query_map(params![keys,kind],row_to_relation)?
+            .collect()
     })
 }
 pub fn tags_for_key_of_kind(db: &Db, key: &str, kind: DataType) -> plain_libs::rusqlite::Result<Vec<TagRow>> {
-    db.with_conn(|c|c.prepare(&format!("SELECT {TAG_COLUMNS} FROM tags WHERE type=?1 AND id IN (SELECT tag_id FROM tag_relations WHERE target_key=?2 AND type=?1) ORDER BY id"))?.query_map(params![kind,key],row_to_tag)?.collect())
+    db.with_conn(|c|c.prepare(&format!("SELECT {TAG_COLUMNS} FROM tags WHERE type=?1 AND id IN (SELECT tag_id FROM tag_relations WHERE target_key=?2) ORDER BY id"))?.query_map(params![kind,key],row_to_tag)?.collect())
 }
 pub fn keys_for_tag(db: &Db, id: &str) -> plain_libs::rusqlite::Result<Vec<String>> {
     db.with_conn(|c| {
@@ -176,9 +179,9 @@ pub(crate) fn move_file_path(
         return Ok(());
     }
     let kind = DataType::File;
-    conn.execute("INSERT INTO tag_relations(tag_id,target_key,type,created_at) SELECT tag_id,?1,type,created_at FROM tag_relations WHERE type=?2 AND target_key=?3 ON CONFLICT(tag_id,target_key,type) DO UPDATE SET created_at=min(tag_relations.created_at,excluded.created_at)",params![destination,kind,source])?;
+    conn.execute("INSERT INTO tag_relations(tag_id,target_key,created_at) SELECT tag_id,?1,created_at FROM tag_relations WHERE EXISTS(SELECT 1 FROM tags WHERE id=tag_relations.tag_id AND type=?2) AND target_key=?3 ON CONFLICT(tag_id,target_key) DO UPDATE SET created_at=min(tag_relations.created_at,excluded.created_at)",params![destination,kind,source])?;
     conn.execute(
-        "DELETE FROM tag_relations WHERE type=?1 AND target_key=?2",
+        "DELETE FROM tag_relations WHERE EXISTS(SELECT 1 FROM tags WHERE id=tag_relations.tag_id AND type=?1) AND target_key=?2",
         params![kind, source],
     )?;
     Ok(())

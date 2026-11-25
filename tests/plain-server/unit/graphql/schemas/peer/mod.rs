@@ -9,7 +9,7 @@ async fn peer_schema_preserves_required_arguments_and_exposes_channel_state() {
     for field in [
         "createChatItem(content: String!): [ChatItem!]!",
         "channelState(channelId: ID!): ChannelState",
-        "notifyChannelInvite(channelId: ID!, input: ChannelInviteInput!): Boolean!",
+        "notifyChannelInvite(channelId: ID!, input: ChannelStateInput!): Boolean!",
         "notifyChannelStateChanged(channelId: ID!, input: ChannelStateInput!): Boolean!",
         "notifyChannelMemberRemoved(channelId: ID!, removedPeerId: ID!, version: Long!): Boolean!",
         "notifyChannelDeleted(channelId: ID!, version: Long!): Boolean!",
@@ -405,7 +405,7 @@ async fn signed_channel_notifications_apply_once_and_enforce_route_and_recipient
             plain_libs::serde_json::from_slice::<Value>(&data).unwrap()
         }
     };
-    let invitation = "mutation($channelId:ID!,$input:ChannelInviteInput!){notifyChannelInvite(channelId:$channelId,input:$input)}";
+    let invitation = "mutation($channelId:ID!,$input:ChannelStateInput!){notifyChannelInvite(channelId:$channelId,input:$input)}";
     let sign = |snapshot: &mut Value| {
         let input = json!(["channel-roster", "channel", snapshot["version"], snapshot["name"], snapshot["members"]]);
         snapshot["signature"] = json!(plain_libs::crypto::ed25519_sign(&signer, input.to_string().as_bytes()));
@@ -418,7 +418,7 @@ async fn signed_channel_notifications_apply_once_and_enforce_route_and_recipient
         {"peerId":"new-peer","status":"JOINED","deviceType":"PHONE","port":443,"signaturePublicKey":base64_encode(&member_signature),"encryptionPublicKey":base64_encode(&[83;32])}
     ]});
     sign(&mut snapshot);
-    let variables = json!({"channelId":"channel","input":{"state":snapshot}});
+    let variables = json!({"channelId":"channel","input":snapshot});
     for _ in 0..2 {
         let accepted = request(invitation, variables.clone(), "", [5; 32]).await;
         assert_eq!(accepted["data"]["notifyChannelInvite"], true, "{accepted}");

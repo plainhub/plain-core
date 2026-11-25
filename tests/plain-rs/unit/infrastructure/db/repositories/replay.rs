@@ -129,7 +129,7 @@ fn development_database_tools_cannot_read_or_erase_security_receipts() {
     );
     assert!(!devtools::tables(&db).iter().any(|t| t == "replay_receipts"));
     assert!(devtools::table_rows(&db, "replay_receipts", 0, 10).is_err());
-    assert!(devtools::delete_table_rows(&db, "REPLAY_RECEIPTS", &["x".into()]).is_err());
+    assert!(devtools::delete_table_rows(&db, "REPLAY_RECEIPTS", &[Default::default()]).is_err());
     let file = devtools::SqliteFile::system(dir.path().join("db.sqlite"));
     assert!(
         !file
@@ -140,7 +140,7 @@ fn development_database_tools_cannot_read_or_erase_security_receipts() {
     );
     assert!(file.table_rows_text("replay_receipts", 0, 10).is_err());
     assert!(
-        file.delete_table_rows("replay_receipts", &["x".into()])
+        file.delete_table_rows("replay_receipts", &[Default::default()])
             .is_err()
     );
     assert!(

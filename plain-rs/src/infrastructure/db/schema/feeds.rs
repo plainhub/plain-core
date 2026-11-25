@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS feed_entries (
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
-CREATE INDEX IF NOT EXISTS idx_feed_entries_feed_id ON feed_entries(feed_id);
+CREATE INDEX IF NOT EXISTS idx_feed_entries_feed_id_published_at_id ON feed_entries(feed_id,published_at DESC,id DESC);
 CREATE UNIQUE INDEX IF NOT EXISTS uidx_feed_entries_feed_id_source_entry_id ON feed_entries(feed_id, source_entry_id);",
     )
 }

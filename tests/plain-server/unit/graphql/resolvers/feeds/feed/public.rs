@@ -160,19 +160,18 @@ async fn entries_carry_their_feed_and_the_contract_entry_counts() {
     let entries = query(
         &schema,
         r#"query { feedEntries(query: "", offset: 0, limit: 10) {
-            id title rawId tags { name } feed { id }
+            id title tags { name } feed { id }
         } }"#,
     )
     .await;
     let list = entries["data"]["feedEntries"].as_array().unwrap();
     assert_eq!(list.len(), 3, "{entries}");
-    // Newest first, and every seeded row shares a timestamp, so the order
-    // inside the page is not something to assert on. Look the row up.
     let first = list
         .iter()
         .find(|row| row["title"] == "first")
         .unwrap_or_else(|| panic!("missing the seeded entry: {entries}"));
-    assert_eq!(first["rawId"], "raw-first");
+    let removed = schema.execute(r#"{feedEntries(query:"",offset:0,limit:1){rawId}}"#).await;
+    assert!(removed.errors.iter().any(|e| e.message.contains("rawId") && e.message.contains("FeedEntry")), "{:?}", removed.errors);
     assert_eq!(first["feed"]["id"], "counts");
     assert_eq!(first["tags"].as_array().map(Vec::len), Some(0));
 
@@ -392,7 +391,7 @@ async fn deleting_entries_in_one_main_mutation_cleans_only_the_selected_feed_rel
     seed_feed(db, "other", "Other");
     seed_entry(db, "selected", "remove", "");
     seed_entry(db, "other", "keep", "");
-    db.with_conn(|connection| connection.execute_batch("INSERT INTO tags VALUES ('feed-tag','Feed','FEED_ENTRY','2026-01-01','2026-01-01'),('note-tag','Note','NOTE','2026-01-01','2026-01-01'); INSERT INTO tag_relations VALUES ('feed-tag','entry-remove','FEED_ENTRY','2026-01-01'),('feed-tag','entry-keep','FEED_ENTRY','2026-01-01'),('note-tag','entry-remove','NOTE','2026-01-01');")).unwrap();
+    db.with_conn(|connection| connection.execute_batch("INSERT INTO tags VALUES ('feed-tag','Feed','FEED_ENTRY','2026-01-01','2026-01-01'),('note-tag','Note','NOTE','2026-01-01','2026-01-01'); INSERT INTO tag_relations(tag_id,target_key,created_at) VALUES('feed-tag','entry-remove','2026-01-01'),('feed-tag','entry-keep','2026-01-01'),('note-tag','entry-remove','2026-01-01');")).unwrap();
     let response = query(
         &schema,
         r#"mutation { deleteFeedEntries(query: "feed_id:selected") { affectedCount } }"#,

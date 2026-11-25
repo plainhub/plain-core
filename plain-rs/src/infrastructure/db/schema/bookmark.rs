@@ -7,7 +7,7 @@ pub(crate) fn init(conn: &Connection) -> plain_libs::rusqlite::Result<()> {
     url TEXT NOT NULL,
     title TEXT NOT NULL,
     favicon_path TEXT NOT NULL,
-    group_id TEXT,
+    group_id TEXT REFERENCES bookmark_groups(id),
     pinned INTEGER NOT NULL CHECK(pinned IN (0,1)),
     click_count INTEGER NOT NULL CHECK(click_count>=0),
     last_clicked_at TEXT,

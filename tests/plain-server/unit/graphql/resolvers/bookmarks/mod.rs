@@ -201,7 +201,7 @@ async fn bookmark_http_lifecycle_metadata_and_reference_counts() {
     let duplicate = call_variables(
         server.port,
         &token,
-        "mutation($url: String!) {addBookmarks(urls:[$url],groupId:\"\") {id}}",
+        "mutation($url: String!) {addBookmarks(urls:[$url],groupId:null) {id}}",
         plain_libs::serde_json::json!({"url": format!("{origin}/page")}),
     )
     .await;
@@ -318,6 +318,11 @@ async fn bookmark_http_lifecycle_metadata_and_reference_counts() {
             .group_id,
         None
     );
+    let stale = call(server.port, &token, &edit.replace("Edited", "Stale edit")).await;
+    assert!(stale.get("errors").is_some(), "{stale}");
+    let retained = plain_rs::infrastructure::db::bookmark::get_bookmark_by_id(&db, id).unwrap().unwrap();
+    assert_eq!(retained.title, "Edited");
+    assert!(retained.group_id.is_none());
     assert_eq!(
         call(
             server.port,
@@ -368,9 +373,9 @@ async fn delete_bookmark_group_emits_stored_rows_after_database_changes() {
     use plain_rs::infrastructure::db::bookmark as store;
     let group = store::DBookmarkGroup::new("Owned group");
     store::insert_bookmark_group(&db, &group).unwrap();
-    let mut selected = store::DBookmark::new("https://fixture.invalid/selected", &group.id);
+    let mut selected = store::DBookmark::new("https://fixture.invalid/selected", Some(&group.id));
     selected.id = "owned".into();
-    let neighbor = store::DBookmark::new("https://fixture.invalid/neighbor", "");
+    let neighbor = store::DBookmark::new("https://fixture.invalid/neighbor", None);
     store::insert_bookmark(&db, &selected).unwrap();
     store::insert_bookmark(&db, &neighbor).unwrap();
     db.with_conn(|conn| conn.execute_batch("CREATE TRIGGER observed_bookmark_change BEFORE UPDATE OF group_id ON bookmarks WHEN OLD.id='owned' BEGIN UPDATE bookmarks SET sort_order=42 WHERE id=OLD.id; END;")).unwrap();
@@ -401,6 +406,7 @@ async fn delete_bookmark_group_emits_stored_rows_after_database_changes() {
     assert_eq!(stored.group_id, None);
     assert_eq!(stored.sort_order, 42);
     assert_eq!(emitted.as_array().unwrap().len(), 1);
+    assert_eq!(emitted[0].get("groupId"), Some(&plain_libs::serde_json::Value::Null));
     assert_eq!(emitted[0]["id"], selected.id);
     assert_eq!(emitted[0]["sortOrder"], stored.sort_order);
     assert_eq!(emitted[0]["updatedAt"], stored.updated_at);
@@ -459,7 +465,7 @@ async fn background_metadata_keeps_created_rows_and_successful_title_on_fetch_fa
     let rows = plain_rs::features::services::bookmarks::add_bookmarks(
         &state.db,
         vec![format!("{origin}/missing"), format!("{origin}/no-icon")],
-        "",
+        None,
     )
     .unwrap();
     plain_rs::features::services::bookmarks::start_metadata_update(
@@ -496,7 +502,7 @@ async fn background_metadata_keeps_created_rows_and_successful_title_on_fetch_fa
     let failed_save = plain_rs::features::services::bookmarks::add_bookmarks(
         &state.db,
         vec![format!("{origin}/with-icon")],
-        "",
+        None,
     )
     .unwrap();
     state.db.with_conn(|conn| conn.execute_batch("CREATE TRIGGER reject_metadata BEFORE UPDATE OF title ON bookmarks BEGIN SELECT RAISE(ABORT,'expected metadata storage failure'); END;")).unwrap();
@@ -524,4 +530,30 @@ async fn background_metadata_keeps_created_rows_and_successful_title_on_fetch_fa
     );
     server.shutdown().await;
     web.abort();
+}
+
+#[tokio::test]
+async fn add_bookmarks_validates_group_and_accepts_null_or_omitted() {
+    let directory = plain_libs::temporary::tempdir().unwrap();
+    let token = plain_libs::utils::base64::base64_encode(&[19; 32]);
+    let prefs = Arc::new(plain_rs::features::prefs::Prefs::load(&directory.path().join("prefs.json")).unwrap());
+    let server = ContentServer::start(directory.path(), &token, prefs).unwrap();
+    let query = "mutation($urls:[String!]!,$groupId:ID) { addBookmarks(urls:$urls,groupId:$groupId){id groupId} }";
+    let url = "http://127.0.0.1:1/page";
+    let result = call_variables(server.port, &token, query, plain_libs::serde_json::json!({"urls":[url],"groupId":"missing"})).await;
+    let db = &server.runtime_state().db;
+    assert_eq!(db.with_conn(|c| c.query_row("SELECT COUNT(*) FROM bookmarks", [], |r| r.get::<_, i32>(0)).unwrap()), 0);
+    assert!(result.get("errors").is_some(), "{result}");
+    for variables in [
+        plain_libs::serde_json::json!({"urls":[url]}),
+        plain_libs::serde_json::json!({"urls":[format!("{url}/other")],"groupId":null}),
+    ] {
+        let result = call_variables(server.port, &token, query, variables).await;
+        assert!(result.get("errors").is_none(), "{result}");
+        let row = &result["data"]["addBookmarks"][0];
+        assert_eq!(row.get("groupId"), Some(&plain_libs::serde_json::Value::Null));
+        let stored = plain_rs::infrastructure::db::bookmark::get_bookmark_by_id(db, row["id"].as_str().unwrap()).unwrap().unwrap();
+        assert!(stored.group_id.is_none());
+    }
+    server.shutdown().await;
 }

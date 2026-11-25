@@ -49,7 +49,7 @@ fn tables_lists_shared_database_bare_and_sorted() {
 }
 
 #[test]
-fn rows_count_and_id_key_use_shared_database() {
+fn rows_and_count_use_shared_database() {
     let db = dbs("route");
     db.with_conn(|conn| {
         conn.execute(
@@ -67,31 +67,16 @@ fn rows_count_and_id_key_use_shared_database() {
     });
 
     assert_eq!(table_row_count(&db, "chats").unwrap(), 1);
-    assert_eq!(table_id_key(&db, "chats").unwrap(), "id".to_string());
     let rows = table_rows(&db, "chats", 0, 10).unwrap();
     let v: plain_libs::serde_json::Value = plain_libs::serde_json::from_str(&rows[0]).unwrap();
     assert_eq!(v["id"], plain_libs::serde_json::json!("c1"));
 
     assert_eq!(table_row_count(&db, "tags").unwrap(), 2);
-    assert_eq!(table_id_key(&db, "tags").unwrap(), "id".to_string());
     assert_eq!(table_rows(&db, "tags", 1, 1).unwrap().len(), 1);
     let cols = table_columns(&db, "tags").unwrap();
     assert_eq!(
         cols.iter().map(|c| c.name.as_str()).collect::<Vec<_>>(),
         vec!["id", "name", "type", "created_at", "updated_at"]
-    );
-}
-
-#[test]
-fn composite_primary_key_reports_first_key_column() {
-    let db = dbs("composite");
-    assert_eq!(
-        table_id_key(&db, "tag_relations").unwrap(),
-        "tag_id".to_string()
-    );
-    assert_eq!(
-        table_id_key(&db, "favorite_folders").unwrap(),
-        "root_path".to_string()
     );
 }
 
@@ -111,10 +96,9 @@ fn prefixed_unknown_and_unsafe_table_names_are_rejected() {
     ] {
         assert!(table_row_count(&db, bad).is_err(), "{bad}");
         assert!(table_rows(&db, bad, 0, 10).is_err(), "{bad}");
-        assert!(table_id_key(&db, bad).is_err(), "{bad}");
         assert!(table_columns(&db, bad).is_err(), "{bad}");
         assert!(
-            delete_table_rows(&db, bad, &["x".to_string()]).is_err(),
+            delete_table_rows(&db, bad, &[Default::default()]).is_err(),
             "{bad}"
         );
     }
@@ -133,13 +117,13 @@ fn delete_removes_only_named_rows() {
     });
 
     assert_eq!(
-        delete_table_rows(&db, "tags", &["t2".to_string()]).unwrap(),
+        delete_table_rows(&db, "tags", &[plain_libs::serde_json::from_value(plain_libs::serde_json::json!({"id":"t2"})).unwrap()]).unwrap(),
         1
     );
     assert_eq!(table_row_count(&db, "tags").unwrap(), 2);
     assert_eq!(table_row_count(&db, "chats").unwrap(), 0);
 
-    assert!(delete_table_rows(&db, "tags", &[]).is_err());
+    assert_eq!(delete_table_rows(&db, "tags", &[]).unwrap(), 0);
 }
 
 #[test]

@@ -453,12 +453,27 @@ impl Db {
         &self,
         entries: &[FeedEntryRow],
     ) -> plain_libs::rusqlite::Result<Vec<FeedEntryRow>> {
+        if entries.is_empty() {
+            return Ok(Vec::new());
+        }
         self.with_conn(|c| {
             let tx = c.unchecked_transaction()?;
             let mut inserted = Vec::new();
-            for entry in entries {
-                let count = tx.execute("INSERT INTO feed_entries(id,title,url,image,description,author,content,feed_id,source_entry_id,published_at,is_read,created_at,updated_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13) ON CONFLICT(feed_id,source_entry_id) DO NOTHING", params![entry.id,entry.title,entry.url,entry.image,entry.description,entry.author,entry.content,entry.feed_id,entry.source_entry_id,plain_libs::utils::dbtime::normalize(&entry.published_at)?,entry.is_read,plain_libs::utils::dbtime::normalize(&entry.created_at)?,plain_libs::utils::dbtime::normalize(&entry.updated_at)?])?;
-                if count > 0 { inserted.push(tx.query_row(&format!("SELECT {ENTRY_COLUMNS} FROM feed_entries WHERE id=?1"),[&entry.id],entry_from_row)?); }
+            {
+                let mut insert = tx.prepare("INSERT INTO feed_entries(id,title,url,image,description,author,content,feed_id,source_entry_id,published_at,is_read,created_at,updated_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13) ON CONFLICT(feed_id,source_entry_id) DO NOTHING")?;
+                let mut read = tx.prepare(&format!("SELECT {ENTRY_COLUMNS} FROM feed_entries WHERE id=?1"))?;
+                for entry in entries {
+                    let count = insert.execute(params![
+                        entry.id, entry.title, entry.url, entry.image, entry.description,
+                        entry.author, entry.content, entry.feed_id, entry.source_entry_id,
+                        plain_libs::utils::dbtime::normalize(&entry.published_at)?, entry.is_read,
+                        plain_libs::utils::dbtime::normalize(&entry.created_at)?,
+                        plain_libs::utils::dbtime::normalize(&entry.updated_at)?,
+                    ])?;
+                    if count > 0 {
+                        inserted.push(read.query_row([&entry.id], entry_from_row)?);
+                    }
+                }
             }
             tx.commit()?;
             Ok(inserted)

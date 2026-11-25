@@ -3,7 +3,7 @@ type Bookmark {
 	url: String!
 	title: String!
 	faviconPath: String!
-	groupId: ID!
+	groupId: ID
 	pinned: Boolean!
 	clickCount: Int!
 	sortOrder: Int!
@@ -29,7 +29,7 @@ input BookmarkInput {
 	Omit to keep the current icon; use an empty string to clear it.
 	"""
 	faviconUrl: String
-	groupId: ID!
+	groupId: ID
 	pinned: Boolean!
 	sortOrder: Int!
 }
@@ -40,7 +40,7 @@ type PageMetadata {
 }
 
 extend type Mutation {
-	addBookmarks(urls: [String!]!, groupId: ID!): [Bookmark!]!
+	addBookmarks(urls: [String!]!, groupId: ID): [Bookmark!]!
 	createBookmarkGroup(name: String!): BookmarkGroup!
 	deleteBookmarkGroup(id: ID!): Boolean!
 	deleteBookmarks(ids: [ID!]!): ActionResult!

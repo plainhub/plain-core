@@ -186,8 +186,8 @@ fn import_tags(
             _ => &key,
         };
         target.execute(
-            "INSERT INTO tag_relations(tag_id,target_key,type,created_at) VALUES (?1,?2,?3,?4) ON CONFLICT DO NOTHING",
-            params![short_id::convert(&row.get::<_, String>("tag_id")?)?, key, kind, date(row, "created_at")?],
+            "INSERT INTO tag_relations(tag_id,target_key,created_at) VALUES (?1,?2,?3) ON CONFLICT DO NOTHING",
+            params![short_id::convert(&row.get::<_, String>("tag_id")?)?, key, date(row, "created_at")?],
         )?;
         Ok(())
     })

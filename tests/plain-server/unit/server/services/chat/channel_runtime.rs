@@ -100,7 +100,7 @@ async fn signed_invites_ack_keys_and_deleted_broadcast_use_rust_snapshot() {
                     if field == "notifyChannelInvite" {
                         assert_eq!(p["peer"]["id"], "paired");
                         assert_eq!(
-                            wire["variables"]["input"]["state"]["members"][0]["deviceType"],
+                            wire["variables"]["input"]["members"][0]["deviceType"],
                             "COMPUTER"
                         );
                     }

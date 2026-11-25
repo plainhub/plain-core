@@ -1,7 +1,3 @@
-input ChannelInviteInput {
-	state: ChannelStateInput!
-}
-
 input ChannelMemberInput {
 	peerId: ID!
 	status: ChannelMemberStatus!
@@ -158,7 +154,7 @@ scalar Long
 
 type Mutation {
 	createChatItem(content: String!): [ChatItem!]!
-	notifyChannelInvite(channelId: ID!, input: ChannelInviteInput!): Boolean!
+	notifyChannelInvite(channelId: ID!, input: ChannelStateInput!): Boolean!
 	notifyChannelStateChanged(channelId: ID!, input: ChannelStateInput!): Boolean!
 	notifyChannelMemberRemoved(channelId: ID!, removedPeerId: ID!, version: Long!): Boolean!
 	notifyChannelDeleted(channelId: ID!, version: Long!): Boolean!

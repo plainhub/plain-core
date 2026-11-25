@@ -269,8 +269,9 @@ fn filesystem_rename_preserves_file_identity_flags_and_both_tag_kinds() {
         .remove(0);
     db.with_conn(|connection| {
         connection.execute("UPDATE files SET favorited=1 WHERE id=?1", [&first.id])?;
-        connection.execute("INSERT INTO tag_relations(tag_id,target_key,type,created_at) VALUES('media-tag',?1,?2,'2026-10-21T00:00:00.000Z'),('file-tag',?3,?4,'2026-10-21T00:00:00.000Z')",
-            params![first.id,DataType::Image,first.path,DataType::File])?;
+        connection.execute_batch("INSERT INTO tags VALUES('media-tag','media','IMAGE','t','t'),('file-tag','file','FILE','t','t')")?;
+        connection.execute("INSERT INTO tag_relations(tag_id,target_key,created_at) VALUES('media-tag',?1,'2026-10-21T00:00:00.000Z'),('file-tag',?2,'2026-10-21T00:00:00.000Z')",
+            params![first.id,first.path])?;
         Ok::<_, plain_libs::rusqlite::Error>(())
     }).unwrap();
     std::fs::rename(&source, &destination).unwrap();

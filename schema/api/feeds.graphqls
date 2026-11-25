@@ -19,7 +19,6 @@ type FeedEntry {
 	author: String!
 	content: String!
 	feedId: ID!
-	rawId: String!
 	read: Boolean!
 	publishedAt: Instant!
 	createdAt: Instant!

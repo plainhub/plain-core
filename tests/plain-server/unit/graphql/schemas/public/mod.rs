@@ -328,7 +328,7 @@ fn public_schema_exposes_the_contract_it_has_to_serve() {
         "bookmarks: [Bookmark!]!",
         "pageMetadata(url: String!): PageMetadata!",
         "bookmarkGroups: [BookmarkGroup!]!",
-        "addBookmarks(urls: [String!]!, groupId: ID!): [Bookmark!]!",
+        "addBookmarks(urls: [String!]!, groupId: ID): [Bookmark!]!",
         "updateBookmark(id: ID!, input: BookmarkInput!): Bookmark!",
         "deleteBookmarks(ids: [ID!]!): ActionResult!",
         "recordBookmarkClick(id: ID!): Boolean!",

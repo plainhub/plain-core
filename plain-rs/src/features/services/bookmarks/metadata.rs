@@ -67,7 +67,7 @@ pub fn emit_updated(events: &broadcast::Sender<WsEvent>, items: &[DBookmark]) {
                 "url": b.url,
                 "title": b.title,
                 "faviconPath": b.favicon_path,
-                "groupId": b.group_id.as_deref().unwrap_or_default(),
+                "groupId": b.group_id,
                 "pinned": b.pinned,
                 "clickCount": b.click_count,
                 "lastClickedAt": b.last_clicked_at,

@@ -50,7 +50,7 @@ fn database_record_creators_use_uuid_v7_and_updates_preserve_identity() {
         note.id,
         tag.id,
         clipboard.id,
-        DBookmark::new("https://example.com", "").id,
+        DBookmark::new("https://example.com", None).id,
         DBookmarkGroup::new("Group").id,
         DChannel::new("Channel", "owner").id,
         DChat::new("from", "to", "", "content").id,

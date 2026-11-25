@@ -6,7 +6,7 @@ fn bookmark_store_survives_reopen_and_ungroups_on_group_delete() {
     let db = Db::open(&path).unwrap();
     let group = DBookmarkGroup::new("Links");
     insert_bookmark_group(&db, &group).unwrap();
-    let bookmark = DBookmark::new("https://example.com", &group.id);
+    let bookmark = DBookmark::new("https://example.com", Some(&group.id));
     insert_bookmark(&db, &bookmark).unwrap();
     assert_eq!(get_bookmarks_by_group_id(&db, &group.id).len(), 1);
     drop(db);
@@ -32,13 +32,13 @@ fn listing_order_pins_first_then_sort_then_created() {
     )
     .unwrap();
     let older = now_iso_minus(3600);
-    let mut b1 = DBookmark::new("https://1.example", "");
+    let mut b1 = DBookmark::new("https://1.example", None);
     b1.sort_order = 2;
     b1.created_at = older.clone();
     b1.updated_at = older.clone();
-    let mut b2 = DBookmark::new("https://2.example", "");
+    let mut b2 = DBookmark::new("https://2.example", None);
     b2.sort_order = 1;
-    let mut b3 = DBookmark::new("https://3.example", "");
+    let mut b3 = DBookmark::new("https://3.example", None);
     b3.sort_order = 1;
     b3.created_at = older.clone();
     b3.updated_at = older.clone();
@@ -67,7 +67,7 @@ fn explicit_updates_preserve_clicks_and_replace_only_requested_favicons() {
         &crate::infrastructure::db::chat_tests::unique_tmp_dir("bookmark-update").join("plain.db"),
     )
     .unwrap();
-    let mut original = DBookmark::new("https://example.com/page", "");
+    let mut original = DBookmark::new("https://example.com/page", None);
     original.favicon_path = "original-icon".into();
     insert_bookmark(&db, &original).unwrap();
     record_click(&db, &original.id).unwrap();
@@ -104,7 +104,7 @@ fn bookmark_lookup_distinguishes_missing_rows_from_decode_failures() {
     )
     .unwrap();
     assert!(get_bookmark_by_id(&db, "missing").unwrap().is_none());
-    let bookmark = DBookmark::new("https://example.com/page", "");
+    let bookmark = DBookmark::new("https://example.com/page", None);
     insert_bookmark(&db, &bookmark).unwrap();
     db.with_conn(|conn| {
         conn.execute(
@@ -120,7 +120,7 @@ fn bookmark_lookup_distinguishes_missing_rows_from_decode_failures() {
 fn metadata_updates_only_matching_created_fields_and_preserves_other_changes() {
     let directory = plain_libs::temporary::tempdir().unwrap();
     let db = Db::open(&directory.path().join("plain.db")).unwrap();
-    let original = DBookmark::new("https://example.com/page", "");
+    let original = DBookmark::new("https://example.com/page", None);
     insert_bookmark(&db, &original).unwrap();
     record_click(&db, &original.id).unwrap();
     let mut edited = original.clone();

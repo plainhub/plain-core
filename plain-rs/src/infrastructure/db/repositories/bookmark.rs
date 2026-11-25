@@ -220,7 +220,6 @@ pub fn update_bookmark_group(db: &Db, group: &DBookmarkGroup) -> plain_libs::rus
 pub fn delete_bookmark_group(db: &Db, id: &str) -> plain_libs::rusqlite::Result<Vec<DBookmark>> {
     db.with_conn(|conn| {
         let tx = conn.unchecked_transaction()?;
-        tx.execute("DELETE FROM bookmark_groups WHERE id=?", params![id])?;
         let updated = {
             let mut statement = tx.prepare(&format!(
                 "UPDATE bookmarks SET group_id=NULL, updated_at=?1 WHERE group_id=?2 RETURNING {BOOKMARK_COLUMNS}"
@@ -228,6 +227,7 @@ pub fn delete_bookmark_group(db: &Db, id: &str) -> plain_libs::rusqlite::Result<
             statement.query_map(params![now_iso(), id], row_to_bookmark)?
                 .collect::<plain_libs::rusqlite::Result<Vec<_>>>()?
         };
+        tx.execute("DELETE FROM bookmark_groups WHERE id=?", params![id])?;
         tx.commit()?;
         Ok(updated)
     })

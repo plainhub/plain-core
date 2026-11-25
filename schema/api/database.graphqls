@@ -23,7 +23,7 @@ type DbTableColumn {
 
 extend type Mutation {
 	createDbTableRow(table: String!, row: JSON!): Boolean!
-	deleteDbTableRows(table: String!, ids: [String!]!): Boolean!
+	deleteDbTableRows(table: String!, keys: [JSON!]!): ActionResult!
 }
 
 extend type Query {

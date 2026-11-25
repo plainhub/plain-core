@@ -186,3 +186,32 @@ fn feed_entry_identity_is_scoped_to_the_source_not_the_url() {
     assert_eq!(count.len(), 2);
     assert_eq!(db.feed_entry_count("").unwrap(), 2);
 }
+
+#[test]
+fn tag_relations_take_their_type_only_from_the_tag() {
+    let db = Db::open(Path::new(":memory:")).unwrap();
+    let tag = crate::features::tags::create_tag(&db, DataType::Note, "fixture").unwrap();
+    crate::features::tags::update_relations(&db, DataType::Note, &["shared".into()], &[tag.id.clone()], &[]).unwrap();
+    db.with_conn(|c| {
+        assert!(c.execute("INSERT INTO tag_relations(tag_id,target_key,type,created_at) VALUES(?1,'shared','IMAGE','t')", [&tag.id]).is_err());
+        assert!(c.execute("INSERT INTO tag_relations(tag_id,target_key,created_at) VALUES(?1,'shared','t')", [&tag.id]).is_err());
+        assert!(c.execute("INSERT INTO tag_relations(tag_id,target_key,created_at) VALUES('absent','shared','t')", []).is_err());
+    });
+    assert_eq!(crate::features::tags::tag_by_id(&db, &tag.id).unwrap().unwrap().count, 1);
+}
+
+#[test]
+fn feed_page_uses_index_order_for_equal_publication_times() {
+    let db = Db::open(Path::new(":memory:")).unwrap();
+    db.with_conn(|c| c.execute_batch("INSERT INTO feed_entries SELECT 'b','','','','','','','first','b','2026-01-01',0,'t','t' UNION ALL SELECT 'a','','','','','','','first','a','2026-01-01',0,'t','t' UNION ALL SELECT 'c','','','','','','','second','c','2026-01-02',0,'t','t';")).unwrap();
+    let ids = db.feed_entries_list("feed_id:first", 1, 1).unwrap();
+    assert_eq!(ids[0].id,"a");
+    db.with_conn(|c| {
+        let plan = c.prepare("EXPLAIN QUERY PLAN SELECT * FROM feed_entries WHERE feed_id=?1 ORDER BY published_at DESC,id DESC LIMIT 1 OFFSET 1").unwrap()
+            .query_map(["first"], |r|r.get::<_,String>(3)).unwrap().collect::<Result<Vec<_>,_>>().unwrap();
+        assert!(!plan.iter().any(|s|s.contains("TEMP B-TREE")), "{plan:?}");
+    });
+}
+
+#[path = "schema_benchmarks.rs"]
+mod schema_benchmarks;

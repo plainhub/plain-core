@@ -139,18 +139,6 @@ fn rows_page_pages_by_offset_and_clamps_limit() {
 }
 
 #[test]
-fn primary_key_column_handles_single_composite_and_missing() {
-    let conn = conn();
-    assert_eq!(primary_key_column(&conn, "items").as_deref(), Some("id"));
-    // PRIMARY KEY (y, x): y is the first key column even though x is
-    // declared first.
-    assert_eq!(primary_key_column(&conn, "pair").as_deref(), Some("y"));
-    assert_eq!(primary_key_column(&conn, "no_pk"), None);
-    assert_eq!(primary_key_column(&conn, "nope"), None);
-    assert_eq!(primary_key_column(&conn, "items; DROP TABLE items"), None);
-}
-
-#[test]
 fn table_columns_reports_pragma_metadata() {
     let conn = conn();
     let cols = table_columns(&conn, "items");
@@ -198,33 +186,22 @@ fn delete_rows_removes_matching_ids_and_validates() {
             ("c", 3, None, "z", None),
         ],
     );
-    assert_eq!(delete_rows(&conn, "items", "id", &["b".into()]).unwrap(), 1);
+    let key = |id: &str| plain_libs::serde_json::from_value(plain_libs::serde_json::json!({"id": id})).unwrap();
+    for invalid in [
+        plain_libs::serde_json::json!({"n": "1"}),
+        plain_libs::serde_json::json!({"id": "a", "n": 1}),
+        plain_libs::serde_json::json!({"id": null}),
+    ] {
+        assert!(delete_rows(&conn, "items", &[key("b"), invalid.as_object().unwrap().clone()]).is_err());
+        assert_eq!(row_count(&conn, "items").unwrap(), 3);
+    }
+    assert_eq!(delete_rows(&conn, "items", &[key("b")]).unwrap(), 1);
     assert_eq!(row_count(&conn, "items").unwrap(), 2);
-    assert_eq!(
-        delete_rows(
-            &conn,
-            "items",
-            "id",
-            &["a".into(), "c".into(), "gone".into()]
-        )
-        .unwrap(),
-        2
-    );
+    assert_eq!(delete_rows(&conn, "items", &[key("a"),key("c"),key("gone")]).unwrap(), 2);
     assert_eq!(row_count(&conn, "items").unwrap(), 0);
-
-    // Empty ids and unsafe table/id names are rejected before any SQL.
-    assert!(matches!(
-        delete_rows(&conn, "items", "id", &[]).unwrap_err(),
-        SqliteBrowseError::Invalid(_)
-    ));
-    assert!(matches!(
-        delete_rows(&conn, "items; DROP TABLE items", "id", &["a".into()]).unwrap_err(),
-        SqliteBrowseError::Invalid(_)
-    ));
-    assert!(matches!(
-        delete_rows(&conn, "items", "id; DROP TABLE items", &["a".into()]).unwrap_err(),
-        SqliteBrowseError::Invalid(_)
-    ));
+    assert_eq!(delete_rows(&conn, "items", &[]).unwrap(), 0);
+    assert!(delete_rows(&conn, "items; DROP TABLE items", &[key("a")]).is_err());
+    assert!(delete_rows(&conn, "no_pk", &[key("a")]).is_err());
 }
 
 #[test]

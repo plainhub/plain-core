@@ -1,5 +1,6 @@
 use plain_graphql::Context;
 
+use crate::graphql::types::ActionResult;
 use plain_graphql::Json;
 
 use super::{app_db, has_path, spawn};
@@ -28,15 +29,15 @@ impl DbMutation {
         &self,
         ctx: &Context<'_>,
         table: String,
-        ids: Vec<String>,
-    ) -> plain_graphql::Result<bool> {
+        keys: Vec<Json<Map<String, Value>>>,
+    ) -> plain_graphql::Result<ActionResult> {
         let file = app_db(ctx).await?;
-        if ids.is_empty() {
-            return Ok(false);
-        }
-        if !has_path(&file) {
-            return Ok(false);
-        }
-        spawn(move || file.delete_table_rows(&table, &ids).map(|_| true)).await
+        let keys = keys.into_iter().map(|key| key.0).collect::<Vec<_>>();
+        spawn(move || {
+            Ok(ActionResult {
+                affected_count: file.delete_table_rows(&table, &keys)?.try_into()?,
+            })
+        })
+        .await
     }
 }

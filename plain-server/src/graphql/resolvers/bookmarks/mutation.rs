@@ -30,11 +30,11 @@ impl BookmarkMutation {
         &self,
         ctx: &Context<'_>,
         urls: Vec<String>,
-        group_id: ID,
+        group_id: Option<ID>,
     ) -> plain_graphql::Result<Vec<Bookmark>> {
         let db = ctx.data_unchecked::<Arc<Db>>();
         let created =
-            plain_rs::features::services::bookmarks::add_bookmarks(db, urls, group_id.as_str())?;
+            plain_rs::features::services::bookmarks::add_bookmarks(db, urls, group_id.as_ref().map(|id| id.as_str()))?;
         plain_rs::features::services::bookmarks::start_metadata_update(
             ctx.data_unchecked::<crate::server::ServerState>()
                 .core
@@ -56,7 +56,7 @@ impl BookmarkMutation {
             .ok_or_else(|| plain_graphql::Error::new("bookmark not found"))?;
         bookmark.url = input.url;
         bookmark.title = input.title;
-        bookmark.group_id = (!input.group_id.is_empty()).then(|| input.group_id.to_string());
+        bookmark.group_id = input.group_id.map(|id| id.to_string());
         bookmark.pinned = input.pinned;
         bookmark.sort_order = input.sort_order;
         let assets = ctx.data_unchecked::<Arc<plain_rs::features::services::feeds::FeedAssets>>();

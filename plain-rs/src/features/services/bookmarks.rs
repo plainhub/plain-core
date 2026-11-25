@@ -18,7 +18,7 @@ pub fn parse_bookmark_url(url: &str) -> Result<http_client::Url> {
 pub fn add_bookmarks(
     db: &Db,
     urls: Vec<String>,
-    group_id: &str,
+    group_id: Option<&str>,
 ) -> Result<Vec<bookmark::DBookmark>> {
     let urls = urls
         .into_iter()
@@ -30,6 +30,9 @@ pub fn add_bookmarks(
     }
     db.with_conn(|conn| {
         let tx = conn.unchecked_transaction()?;
+        if let Some(id) = group_id {
+            ensure!(tx.query_row("SELECT EXISTS(SELECT 1 FROM bookmark_groups WHERE id=?)", [id], |row| row.get::<_, bool>(0))?, "Bookmark group not found");
+        }
         let mut existing_urls = bookmark_urls(&tx)?;
         let mut added = Vec::new();
         for url in urls {
@@ -97,16 +100,16 @@ pub fn import_bookmarks(db: &Db, html: &str) -> Result<i32> {
                 continue;
             }
             let group_id = if group.is_empty() {
-                String::new()
+                None
             } else if let Some(id) = groups.get(&group) {
-                id.clone()
+                Some(id.clone())
             } else {
                 let created = bookmark::DBookmarkGroup::new(&group);
                 bookmark::insert_bookmark_group_with_conn(&tx, &created)?;
                 groups.insert(group, created.id.clone());
-                created.id
+                Some(created.id)
             };
-            let mut row = bookmark::DBookmark::new(&url, &group_id);
+            let mut row = bookmark::DBookmark::new(&url, group_id.as_deref());
             if !title.is_empty() {
                 row.title = title;
             }

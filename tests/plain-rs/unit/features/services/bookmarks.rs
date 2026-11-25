@@ -9,7 +9,7 @@ fn manual_add_validates_the_batch_and_skips_duplicate_urls() {
             add_bookmarks(
                 &db,
                 vec!["https://example.com/first".into(), invalid.into()],
-                ""
+                None
             )
             .is_err()
         );
@@ -23,14 +23,14 @@ fn manual_add_validates_the_batch_and_skips_duplicate_urls() {
             "https://example.com/".into(),
             "https://example.com/another".into(),
         ],
-        "",
+        None,
     )
     .unwrap();
     assert_eq!(added.len(), 2);
     assert_eq!(added[0].url, "https://example.com/");
     assert_eq!(added[1].url, "https://example.com/another");
     assert!(
-        add_bookmarks(&db, vec![added[0].url.clone()], "other")
+        add_bookmarks(&db, vec![added[0].url.clone()], None)
             .unwrap()
             .is_empty()
     );
@@ -47,7 +47,7 @@ fn import_keeps_titles_groups_and_existing_rows_and_deduplicates_repeated_files(
     let db = Db::open(&dir.path().join("plain.db")).unwrap();
     let group = bookmark::DBookmarkGroup::new("Saved & 中文");
     bookmark::insert_bookmark_group(&db, &group).unwrap();
-    let mut existing = bookmark::DBookmark::new("https://example.com/existing", &group.id);
+    let mut existing = bookmark::DBookmark::new("https://example.com/existing", Some(&group.id));
     existing.title = "Keep chosen title".into();
     existing.pinned = true;
     existing.click_count = 7;

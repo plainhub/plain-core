@@ -63,7 +63,7 @@ pub fn rebind_with_aliases(
         let current_path = state.playback.path.clone();
         for binding in bindings {
             let media_type = kind(binding.media_type)?;
-            let mut statement = tx.prepare("SELECT tag_id,created_at FROM tag_relations WHERE type=?1 AND target_key=?2")?;
+            let mut statement = tx.prepare("SELECT tag_id,created_at FROM tag_relations WHERE EXISTS(SELECT 1 FROM tags WHERE id=tag_relations.tag_id AND type=?1) AND target_key=?2")?;
             let tags = statement.query_map(params![media_type,binding.source_id],|row|Ok((row.get::<_,String>(0)?,row.get::<_,String>(1)?)))?.collect::<plain_libs::rusqlite::Result<Vec<_>>>()?;
             let progress = if matches!(media_type,DataType::Audio|DataType::Video) {
                 tx.query_row("SELECT position_ms,played_at,play_count FROM media_play_history WHERE file_id=?1 AND media_type=?2",params![binding.source_id,media_type],|row|Ok((row.get::<_,i64>(0)?,row.get::<_,String>(1)?,row.get::<_,i64>(2)?))).optional()?
@@ -74,13 +74,13 @@ pub fn rebind_with_aliases(
         for (binding,media_type,_,_,_) in &snapshots {
             if binding.source_id==binding.destination_id { continue; }
             if *media_type==DataType::Audio { audio_moves::remove_source(tx,&binding.source_id)?; }
-            tx.execute("DELETE FROM tag_relations WHERE type=?1 AND target_key=?2",params![media_type,binding.source_id])?;
+            tx.execute("DELETE FROM tag_relations WHERE EXISTS(SELECT 1 FROM tags WHERE id=tag_relations.tag_id AND type=?1) AND target_key=?2",params![media_type,binding.source_id])?;
             if matches!(media_type,DataType::Audio|DataType::Video) { tx.execute("DELETE FROM media_play_history WHERE file_id=?1 AND media_type=?2",params![binding.source_id,media_type])?; }
         }
         for (binding,media_type,tags,progress,references) in snapshots {
             if binding.source_id!=binding.destination_id {
                 for (tag,created) in tags {
-                    tx.execute("INSERT INTO tag_relations(tag_id,target_key,type,created_at) VALUES(?1,?2,?3,?4) ON CONFLICT(tag_id,target_key,type) DO UPDATE SET created_at=min(tag_relations.created_at,excluded.created_at)",params![tag,binding.destination_id,media_type,created])?;
+                    tx.execute("INSERT INTO tag_relations(tag_id,target_key,created_at) VALUES(?1,?2,?3) ON CONFLICT(tag_id,target_key) DO UPDATE SET created_at=min(tag_relations.created_at,excluded.created_at)",params![tag,binding.destination_id,created])?;
                 }
                 if matches!(media_type,DataType::Audio|DataType::Video) {
                     tx.execute("DELETE FROM media_play_history WHERE file_id=?1 AND media_type=?2",params![binding.destination_id,media_type])?;
@@ -106,15 +106,19 @@ pub fn rebind_with_aliases(
         audio_queue::remove_root_paths_except_conn(tx,source_root,state,&retained)?;
 
         let source_prefix = format!("{}/",source_root.trim_end_matches('/'));
-        let mut statement = tx.prepare("SELECT tag_id,target_key,created_at FROM tag_relations WHERE type=?1 AND (target_key=?2 OR substr(target_key,1,length(?3))=?3)")?;
+        let mut statement = tx.prepare("SELECT tag_id,target_key,created_at FROM tag_relations WHERE tag_id IN (SELECT id FROM tags WHERE type=?1) AND (target_key=?2 OR substr(target_key,1,length(?3))=?3)")?;
         let relations = statement.query_map(params![DataType::File,source_root,source_prefix],|row|Ok((row.get::<_,String>(0)?,row.get::<_,String>(1)?,row.get::<_,String>(2)?)))?.collect::<plain_libs::rusqlite::Result<Vec<_>>>()?;
         drop(statement);
-        for (tag,key,created) in relations {
-            let relative = if key==source_root { "" } else { &key[source_prefix.len()..] };
-            let destination = if relative.is_empty() { destination_root.to_owned() } else { format!("{}/{relative}",destination_root.trim_end_matches('/')) };
-            if destination==key { continue; }
-            tx.execute("INSERT INTO tag_relations(tag_id,target_key,type,created_at) VALUES(?1,?2,?3,?4) ON CONFLICT(tag_id,target_key,type) DO UPDATE SET created_at=min(tag_relations.created_at,excluded.created_at)",params![tag,destination,DataType::File,created])?;
-            tx.execute("DELETE FROM tag_relations WHERE tag_id=?1 AND target_key=?2 AND type=?3",params![tag,key,DataType::File])?;
+        if !relations.is_empty() {
+            let mut insert = tx.prepare("INSERT INTO tag_relations(tag_id,target_key,created_at) VALUES(?1,?2,?3) ON CONFLICT(tag_id,target_key) DO UPDATE SET created_at=min(tag_relations.created_at,excluded.created_at)")?;
+            let mut delete = tx.prepare("DELETE FROM tag_relations WHERE tag_id=?1 AND target_key=?2")?;
+            for (tag,key,created) in relations {
+                let relative = if key==source_root { "" } else { &key[source_prefix.len()..] };
+                let destination = if relative.is_empty() { destination_root.to_owned() } else { format!("{}/{relative}",destination_root.trim_end_matches('/')) };
+                if destination==key { continue; }
+                insert.execute(params![tag,destination,created])?;
+                delete.execute(params![tag,key])?;
+            }
         }
         tx.execute("DELETE FROM image_embeddings WHERE path=?1 OR substr(path,1,length(?2))=?2",params![source_root,source_prefix])?;
         }

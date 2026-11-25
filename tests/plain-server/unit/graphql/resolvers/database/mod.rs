@@ -68,11 +68,11 @@ async fn owned_database_browser_works_without_a_connected_host() {
     let row = &rows[0];
     assert_eq!(row["key"], "b");
     assert_eq!(row["size"], "43");
-    let response=schema.execute(r#"mutation {createDbTableRow(table:"test_rows",row:{key:"c",title:"Third"}) deleteDbTableRows(table:"test_rows",ids:["a","b"])}"#).await;
+    let response=schema.execute(r#"mutation {createDbTableRow(table:"test_rows",row:{key:"c",title:"Third"}) deleteDbTableRows(table:"test_rows",keys:[{key:"a"},{key:"b"}]){affectedCount}}"#).await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     assert_eq!(
         response.data.into_json().unwrap(),
-        json!({"createDbTableRow":true,"deleteDbTableRows":true})
+        json!({"createDbTableRow":true,"deleteDbTableRows":{"affectedCount":2}})
     );
     let response = schema
         .execute(r#"{dbTableRowCount(table:"test_rows")}"#)
@@ -80,7 +80,7 @@ async fn owned_database_browser_works_without_a_connected_host() {
     assert_eq!(response.data.into_json().unwrap()["dbTableRowCount"], 1);
 }
 #[tokio::test]
-async fn invalid_row_returns_an_error_and_empty_delete_is_false() {
+async fn invalid_row_returns_an_error_and_empty_delete_affects_zero() {
     let (_dir, schema) = fixture();
     let response = schema
         .execute(r#"mutation {createDbTableRow(table:"test_rows",row:{})}"#)
@@ -88,12 +88,12 @@ async fn invalid_row_returns_an_error_and_empty_delete_is_false() {
     assert_eq!(response.errors.len(), 1);
     assert_eq!(response.errors[0].message, "row must not be empty");
     let response = schema
-        .execute(r#"mutation {deleteDbTableRows(table:"test_rows",ids:[])}"#)
+        .execute(r#"mutation {deleteDbTableRows(table:"test_rows",keys:[]){affectedCount}}"#)
         .await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     assert_eq!(
         response.data.into_json().unwrap(),
-        json!({"deleteDbTableRows":false})
+        json!({"deleteDbTableRows":{"affectedCount":0}})
     );
 }
 
@@ -105,7 +105,9 @@ async fn json_null_is_stored_as_sql_null_and_null_text_is_preserved() {
         .await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     assert_eq!(response.data.into_json().unwrap()["createDbTableRow"], true);
-    let db = schema.data::<Arc<plain_rs::infrastructure::db::Db>>().unwrap();
+    let db = schema
+        .data::<Arc<plain_rs::infrastructure::db::Db>>()
+        .unwrap();
     let stored: (bool, bool, String) = db.with_conn(|conn| {
         conn.query_row(
             "SELECT size IS NULL, bytes IS NULL, title FROM test_rows WHERE key='c'",
@@ -134,7 +136,7 @@ async fn database_write_errors_are_returned_without_changing_rows() {
             "Table not found or invalid identifier",
         ),
         (
-            r#"mutation {deleteDbTableRows(table:"missing_table",ids:["a"])}"#,
+            r#"mutation {deleteDbTableRows(table:"missing_table",keys:[{key:"a"}]){affectedCount}}"#,
             "Table not found or invalid identifier",
         ),
     ] {
@@ -146,25 +148,38 @@ async fn database_write_errors_are_returned_without_changing_rows() {
             response.errors
         );
     }
-    let db = schema.data::<Arc<plain_rs::infrastructure::db::Db>>().unwrap();
+    let db = schema
+        .data::<Arc<plain_rs::infrastructure::db::Db>>()
+        .unwrap();
     db.with_conn(|conn| {
         conn.execute_batch("CREATE TRIGGER reject_test_row_delete BEFORE DELETE ON test_rows BEGIN SELECT RAISE(ABORT, 'test deletion rejected'); END;")
             .unwrap();
     });
     let response = schema
-        .execute(r#"mutation {deleteDbTableRows(table:"test_rows",ids:["a"])}"#)
+        .execute(
+            r#"mutation {deleteDbTableRows(table:"test_rows",keys:[{key:"a"}]){affectedCount}}"#,
+        )
         .await;
     assert_eq!(response.errors.len(), 1);
-    assert!(response.errors[0].message.contains("test deletion rejected"));
+    assert!(
+        response.errors[0]
+            .message
+            .contains("test deletion rejected")
+    );
     let rows: Vec<(String, String)> = db.with_conn(|conn| {
-        let mut statement = conn.prepare("SELECT key,title FROM test_rows ORDER BY key").unwrap();
+        let mut statement = conn
+            .prepare("SELECT key,title FROM test_rows ORDER BY key")
+            .unwrap();
         statement
             .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
             .unwrap()
             .collect::<Result<_, _>>()
             .unwrap()
     });
-    assert_eq!(rows, vec![("a".into(), "First".into()), ("b".into(), "Second".into())]);
+    assert_eq!(
+        rows,
+        vec![("a".into(), "First".into()), ("b".into(), "Second".into())]
+    );
 }
 #[test]
 fn an_unknown_column_type_is_unknown() {
@@ -183,8 +198,8 @@ async fn developer_mode_is_checked_for_every_database_request() {
         "{dbTableRowCount(table:\"test_rows\")}",
         "{dbTableRows(table:\"test_rows\",offset:0,limit:1)}",
         r#"mutation {createDbTableRow(table:"test_rows",row:{key:"denied"})}"#,
-        r#"mutation {deleteDbTableRows(table:"test_rows",ids:["a"])}"#,
-        r#"mutation {deleteDbTableRows(table:"test_rows",ids:[])}"#,
+        r#"mutation {deleteDbTableRows(table:"test_rows",keys:[{key:"a"}]){affectedCount}}"#,
+        r#"mutation {deleteDbTableRows(table:"test_rows",keys:[]){affectedCount}}"#,
     ];
     for enabled in [false, true, false] {
         prefs.set("developer_mode", enabled).unwrap();
@@ -258,4 +273,126 @@ async fn row_variables_are_objects_and_invalid_shapes_do_not_write() {
         .execute(r#"{dbTableRows(table:"test_rows",offset:3,limit:1)}"#)
         .await;
     assert_eq!(response.data.into_json().unwrap()["dbTableRows"], json!([]));
+}
+
+#[tokio::test]
+async fn partial_primary_key_cannot_delete_sibling_folders() {
+    let (_dir, schema) = fixture();
+    let db = schema
+        .data::<Arc<plain_rs::infrastructure::db::Db>>()
+        .unwrap();
+    db.with_conn(|c| {
+        c.execute_batch(
+            "INSERT INTO favorite_folders VALUES('root','one',NULL),('root','two',NULL)",
+        )
+        .unwrap()
+    });
+    let legacy = schema
+        .execute(r#"mutation { deleteDbTableRows(table:"favorite_folders", ids:["root"]) }"#)
+        .await;
+    let remaining = || {
+        db.with_conn(|c| {
+            c.query_row("SELECT COUNT(*) FROM favorite_folders", [], |r| {
+                r.get::<_, i32>(0)
+            })
+            .unwrap()
+        })
+    };
+    assert_eq!(remaining(), 2);
+    assert!(!legacy.errors.is_empty());
+    let partial = schema.execute(r#"mutation { deleteDbTableRows(table:"favorite_folders",keys:[{root_path:"root",relative_path:"one"},{root_path:"root"}]) { affectedCount } }"#).await;
+    assert!(!partial.errors.is_empty());
+    assert_eq!(remaining(), 2);
+    let full = r#"mutation { deleteDbTableRows(table:"favorite_folders",keys:[{root_path:"root",relative_path:"one"}]) { affectedCount } }"#;
+    for count in [1, 0] {
+        let result = schema.execute(full).await;
+        assert!(result.errors.is_empty(), "{:?}", result.errors);
+        assert_eq!(
+            result.data.into_json().unwrap()["deleteDbTableRows"]["affectedCount"],
+            count
+        );
+    }
+    assert_eq!(remaining(), 1);
+    assert_eq!(
+        db.with_conn(|c| c
+            .query_row("SELECT relative_path FROM favorite_folders", [], |r| r
+                .get::<_, String>(
+                0
+            ))
+            .unwrap()),
+        "two"
+    );
+}
+
+#[tokio::test]
+async fn tables_without_primary_keys_are_read_only() {
+    let (_dir, schema) = fixture();
+    let db = schema
+        .data::<Arc<plain_rs::infrastructure::db::Db>>()
+        .unwrap();
+    db.with_conn(|conn| {
+        conn.execute_batch("CREATE TABLE unkeyed (label TEXT); INSERT INTO unkeyed VALUES ('keep')")
+    })
+    .unwrap();
+    for mutation in [
+        r#"mutation { createDbTableRow(table:"unkeyed", row:{label:"extra"}) }"#,
+        r#"mutation { deleteDbTableRows(table:"unkeyed", keys:[{label:"keep"}]) { affectedCount } }"#,
+    ] {
+        assert!(!schema.execute(mutation).await.errors.is_empty());
+    }
+    let rows = schema
+        .execute(r#"{dbTableRows(table:"unkeyed",offset:0,limit:10)}"#)
+        .await;
+    assert_eq!(
+        rows.data.into_json().unwrap()["dbTableRows"],
+        json!([{"label":"keep"}])
+    );
+}
+
+#[tokio::test]
+async fn deleting_a_tag_target_or_sms_keeps_its_sibling() {
+    let (_dir, schema) = fixture();
+    let db = schema
+        .data::<Arc<plain_rs::infrastructure::db::Db>>()
+        .unwrap();
+    db.with_conn(|c| {
+        c.execute_batch(
+            "INSERT INTO tags VALUES('a','Notes','NOTE','t','t');
+        INSERT INTO tag_relations VALUES('a','first','t'),('a','second','t');
+        INSERT INTO trashed_sms VALUES('42',0,'t'),('42',1,'t');",
+        )
+    })
+    .unwrap();
+    for (table, key, remaining) in [
+        (
+            "tag_relations",
+            r#"{tag_id:"a",target_key:"first"}"#,
+            json!({"tag_id":"a","target_key":"second","created_at":"t"}),
+        ),
+        (
+            "trashed_sms",
+            r#"{message_id:"42",is_mms:"0"}"#,
+            json!({"message_id":"42","is_mms":"1","trashed_at":"t"}),
+        ),
+    ] {
+        let result = schema
+            .execute(format!(
+                r#"mutation {{deleteDbTableRows(table:"{table}",keys:[{key}]){{affectedCount}}}}"#
+            ))
+            .await;
+        assert!(result.errors.is_empty(), "{:?}", result.errors);
+        assert_eq!(
+            result.data.into_json().unwrap()["deleteDbTableRows"]["affectedCount"],
+            1
+        );
+        let result = schema
+            .execute(format!(
+                r#"{{dbTableRows(table:"{table}",offset:0,limit:5)}}"#
+            ))
+            .await;
+        assert_eq!(
+            result.data.into_json().unwrap()["dbTableRows"],
+            json!([remaining])
+        );
+    }
 }

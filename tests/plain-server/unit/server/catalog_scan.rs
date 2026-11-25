@@ -606,7 +606,7 @@ async fn nomedia_reclassification_preserves_file_identity_and_user_state() {
     db.with_conn(|conn| -> plain_libs::rusqlite::Result<()> {
         conn.execute("UPDATE files SET favorited=1 WHERE id=?1", [id])?;
         conn.execute("INSERT INTO tags(id,name,type,created_at,updated_at) VALUES('nomedia-tag','Tag','AUDIO','2026-01-01','2026-01-01')", [])?;
-        conn.execute("INSERT INTO tag_relations(tag_id,target_key,type,created_at) VALUES('nomedia-tag',?1,?2,'2026-01-01')", plain_libs::rusqlite::params![original.id, DataType::Audio])?;
+        conn.execute("INSERT INTO tag_relations(tag_id,target_key,created_at) VALUES('nomedia-tag',?1,'2026-01-01')", plain_libs::rusqlite::params![original.id])?;
         Ok(())
     }).unwrap();
     let marker = directory.path().join(".nomedia");

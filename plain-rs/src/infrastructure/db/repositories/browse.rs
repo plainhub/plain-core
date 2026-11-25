@@ -6,13 +6,11 @@
 //! - [`row_count`] / [`rows_page`] — count + one page of rows, each row a
 //!   JSON string (`SELECT *`, natural rowid order; numbers stay numbers,
 //!   blobs render as hex, NULL as null)
-//! - [`table_columns`] / [`primary_key_column`] / [`column_type_of`] —
+//! - [`table_columns`] / [`column_type_of`] —
 //!   `PRAGMA table_info` metadata
 //! - [`delete_rows`] / [`insert_row`] — row mutations by primary key
 //!
-//! Table and column names are only ever interpolated after
-//! [`is_safe_identifier`] validation (values always go through bound
-//! parameters).
+//! Request identifiers are validated, schema-derived column names are quoted, and values are bound.
 
 use plain_libs::rusqlite::Connection;
 
@@ -163,27 +161,6 @@ fn rows_page_values(
     Ok(out)
 }
 
-/// First declared primary key column of `table`, `None` when the table
-/// declares none (or is missing). `pk` is 1, 2, … in key order; the
-/// lowest wins, which is the first column of a composite key.
-pub fn primary_key_column(conn: &Connection, table: &str) -> Option<String> {
-    if !is_safe_identifier(table) {
-        return None;
-    }
-    let mut stmt = conn
-        .prepare(&format!("PRAGMA table_info(`{table}`)"))
-        .ok()?;
-    let rows = stmt
-        .query_map([], |row| {
-            Ok((row.get::<_, String>(1)?, row.get::<_, i64>(5)?))
-        })
-        .ok()?;
-    rows.flatten()
-        .filter(|(_, pk)| *pk > 0)
-        .min_by_key(|(_, pk)| *pk)
-        .map(|(name, _)| name)
-}
-
 /// Column metadata of one table in declaration order; empty when the
 /// table is missing or its name is unsafe.
 pub fn table_columns(conn: &Connection, table: &str) -> Vec<TableColumnMeta> {
@@ -208,29 +185,57 @@ pub fn table_columns(conn: &Connection, table: &str) -> Vec<TableColumnMeta> {
     rows.flatten().collect()
 }
 
-/// Delete rows of one table where `id_key` (usually the primary key
-/// column) matches one of `ids`. On a composite-key table this deletes
-/// every row sharing the first key column's value. Returns the number of
-/// rows removed.
-pub fn delete_rows(conn: &Connection, table: &str, id_key: &str, ids: &[String]) -> Result<usize> {
-    check_table(table)?;
-    if !is_safe_identifier(id_key) {
-        return Err(SqliteBrowseError::Invalid(format!(
-            "invalid id column: {id_key}"
-        )));
-    }
-    if ids.is_empty() {
+fn primary_key(conn: &Connection, table: &str) -> Result<Vec<String>> {
+    let columns = conn
+        .prepare("SELECT name FROM pragma_table_info(?1) WHERE pk > 0 ORDER BY pk")?
+        .query_map([table], |row| row.get::<_, String>(0))?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    if columns.is_empty() {
         return Err(SqliteBrowseError::Invalid(
-            "ids must not be empty".to_string(),
+            "Table has no primary key".into(),
         ));
     }
-    let placeholders = (1..=ids.len())
-        .map(|i| format!("?{i}"))
+    Ok(columns)
+}
+
+pub fn delete_rows(
+    conn: &Connection,
+    table: &str,
+    keys: &[plain_libs::serde_json::Map<String, plain_libs::serde_json::Value>],
+) -> Result<usize> {
+    use plain_libs::serde_json::Value;
+
+    check_table(table)?;
+    let tx = conn.unchecked_transaction()?;
+    let columns = primary_key(&tx, table)?;
+    let predicate = columns
+        .iter()
+        .map(|name| format!("\"{}\" = ?", name.replace('"', "\"\"")))
         .collect::<Vec<_>>()
-        .join(", ");
-    let sql = format!("DELETE FROM `{table}` WHERE `{id_key}` IN ({placeholders})");
-    conn.execute(&sql, plain_libs::rusqlite::params_from_iter(ids.iter()))
-        .map_err(SqliteBrowseError::Sqlite)
+        .join(" AND ");
+    let mut statement = tx.prepare(&format!("DELETE FROM `{table}` WHERE {predicate}"))?;
+    let mut total = 0;
+    for key in keys {
+        if key.len() != columns.len() {
+            return Err(SqliteBrowseError::Invalid(
+                "Expected the complete primary key".into(),
+            ));
+        }
+        let values = columns
+            .iter()
+            .map(|column| match key.get(column) {
+                Some(Value::String(value)) => Ok(value.clone()),
+                Some(Value::Number(value)) => Ok(value.to_string()),
+                _ => Err(SqliteBrowseError::Invalid(format!(
+                    "Invalid primary key column: {column}"
+                ))),
+            })
+            .collect::<Result<Vec<_>>>()?;
+        total += statement.execute(rusqlite::params_from_iter(values))?;
+    }
+    drop(statement);
+    tx.commit()?;
+    Ok(total)
 }
 
 /// Insert one row built from a JSON object. Values bind as text (SQLite
@@ -252,6 +257,7 @@ pub fn insert_row(
             "row contains an invalid column name".to_string(),
         ));
     }
+    primary_key(conn, table)?;
     let keys: Vec<&String> = row.keys().collect();
     let columns = keys
         .iter()

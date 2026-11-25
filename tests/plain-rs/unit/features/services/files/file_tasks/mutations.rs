@@ -155,8 +155,9 @@ async fn deletion_cleans_catalog_without_reindexing_missing_files_and_repeat_is_
     let state = core.runtime_state();
     let source = directory.path().join("source.txt");
     std::fs::write(&source, b"fixture").unwrap();
+    state.db.with_conn(|connection| connection.execute_batch("INSERT INTO tags VALUES('file','file','FILE','t','t')")).unwrap();
     state.db.with_conn(|connection| connection.execute(
-        "INSERT INTO tag_relations(tag_id,target_key,type,created_at) VALUES('file',?1,'FILE','first')", [source.to_str().unwrap()]
+        "INSERT INTO tag_relations(tag_id,target_key,created_at) VALUES('file',?1,'first')", [source.to_str().unwrap()]
     )).unwrap();
     state.media_scans.close().unwrap();
     let later = directory.path().join("later.txt");

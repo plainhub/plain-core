@@ -42,25 +42,15 @@ pub fn table_rows(db: &Db, table: &str, offset: i64, limit: i64) -> Result<Vec<S
         .map_err(browse_err)
 }
 
-pub fn table_id_key(db: &Db, table: &str) -> Result<String> {
-    checked(db, table)?;
-    Ok(db.with_conn(|conn| {
-        browse::primary_key_column(conn, table).unwrap_or_else(|| "rowid".to_string())
-    }))
-}
-
 pub fn table_columns(db: &Db, table: &str) -> Result<Vec<TableColumnMeta>> {
     checked(db, table)?;
     Ok(db.with_conn(|conn| browse::table_columns(conn, table)))
 }
 
-pub fn delete_table_rows(db: &Db, table: &str, ids: &[String]) -> Result<usize> {
+pub fn delete_table_rows(db: &Db, table: &str, keys: &[Map<String, Value>]) -> Result<usize> {
     checked(db, table)?;
-    db.with_conn(|conn| {
-        let key = browse::primary_key_column(conn, table).unwrap_or_else(|| "rowid".to_string());
-        browse::delete_rows(conn, table, &key, ids)
-    })
-    .map_err(browse_err)
+    db.with_conn(|conn| browse::delete_rows(conn, table, keys))
+        .map_err(browse_err)
 }
 
 pub struct TableSchema {
@@ -144,14 +134,15 @@ impl SqliteFile {
         browse::insert_row(&conn, table, row).map_err(browse_err)
     }
 
-    pub fn delete_table_rows(&self, table: &str, ids: &[String]) -> Result<usize> {
+    pub fn delete_table_rows(&self, table: &str, keys: &[Map<String, Value>]) -> Result<usize> {
         let conn = self.open()?;
         self.checked(&conn, table)?;
-        browse::delete_rows(&conn, table, &self.id_key(&conn, table), ids).map_err(browse_err)
+        browse::delete_rows(&conn, table, keys).map_err(browse_err)
     }
 
     fn open(&self) -> Result<Connection> {
         let conn = Connection::open_with_flags(&self.path, OpenFlags::SQLITE_OPEN_READ_WRITE)?;
+        conn.pragma_update(None, "foreign_keys", true)?;
         conn.busy_timeout(Duration::from_secs(5))?;
         Ok(conn)
     }
@@ -165,10 +156,6 @@ impl SqliteFile {
         } else {
             bail!("Table not found or invalid identifier: {table}")
         }
-    }
-
-    fn id_key(&self, conn: &Connection, table: &str) -> String {
-        browse::primary_key_column(conn, table).unwrap_or_else(|| "id".to_string())
     }
 }
 

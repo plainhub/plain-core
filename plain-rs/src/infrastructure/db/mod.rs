@@ -214,13 +214,6 @@ impl Db {
         self.with_conn(|conn| crate::infrastructure::db::browse::table_columns(conn, table))
     }
 
-    pub fn primary_key_column(&self, table: &str) -> String {
-        const FALLBACK: &str = "id";
-        self.with_conn(|conn| {
-            crate::infrastructure::db::browse::primary_key_column(conn, table)
-                .unwrap_or_else(|| FALLBACK.to_string())
-        })
-    }
 }
 
 #[cfg(test)]

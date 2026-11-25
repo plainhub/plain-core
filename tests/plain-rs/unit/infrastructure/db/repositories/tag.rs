@@ -109,13 +109,20 @@ fn tag_type_round_trips_all_enum_names_and_rejects_old_codes() {
                 )
                 .is_err()
             );
-            assert!(
-                conn.execute(
-                    "INSERT INTO tag_relations VALUES('invalid','example',?,'now')",
-                    [invalid],
-                )
-                .is_err()
-            );
         }
     });
+}
+
+#[test]
+fn typed_bulk_lookup_preserves_input_order_and_repeated_keys() {
+    let db = test_db("tag_order");
+    for (id, kind) in [("z", DataType::File), ("a", DataType::File), ("note", DataType::Note)] {
+        crate::infrastructure::db::tag::insert_tag(&db, &tag(id, kind, id)).unwrap();
+        crate::features::tags::add_relations(&db, &[(id.into(), "key2".into())]).unwrap();
+    }
+    crate::features::tags::add_relations(&db, &[("z".into(), "key1".into())]).unwrap();
+    let keys = ["key2", "absent", "key1", "key2"].map(String::from);
+    let rows = crate::features::tags::relations_for_keys_of_kind(&db, &keys, DataType::File).unwrap();
+    let actual = rows.iter().map(|r|(r.target_key.as_str(),r.tag_id.as_str())).collect::<Vec<_>>();
+    assert_eq!(actual, [("key2","a"),("key2","z"),("key1","z"),("key2","a"),("key2","z")]);
 }

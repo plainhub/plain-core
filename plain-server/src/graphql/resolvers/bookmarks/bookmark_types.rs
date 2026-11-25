@@ -14,7 +14,7 @@ pub struct Bookmark {
     pub url: String,
     pub title: String,
     pub favicon_path: String,
-    pub group_id: ID,
+    pub group_id: Option<ID>,
     pub pinned: bool,
     pub click_count: i32,
     #[graphql(skip)]
@@ -33,7 +33,7 @@ impl From<DBookmark> for Bookmark {
             url: b.url,
             title: b.title,
             favicon_path: b.favicon_path,
-            group_id: b.group_id.unwrap_or_default().into(),
+            group_id: b.group_id.map(ID::from),
             pinned: b.pinned,
             click_count: b.click_count,
             last_clicked_at: b.last_clicked_at,
@@ -80,7 +80,7 @@ pub struct BookmarkInput {
     pub title: String,
     /// Omit to keep the current icon; use an empty string to clear it.
     pub favicon_url: Option<String>,
-    pub group_id: ID,
+    pub group_id: Option<ID>,
     pub pinned: bool,
     pub sort_order: i32,
 }

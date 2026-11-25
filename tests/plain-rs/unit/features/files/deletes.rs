@@ -2,7 +2,7 @@ use super::*;
 #[test]
 fn deleted_receipts_cascade_atomically_and_preserve_failed_and_foreign_records() {
     let db = Db::open(std::path::Path::new(":memory:")).unwrap();
-    db.with_conn(|c|c.execute_batch("INSERT INTO tag_relations(tag_id,target_key,type,created_at) VALUES('video','old','VIDEO','first'),('foreign','old','NOTE','first'),('file','/root/deleted','FILE','first'),('failed','/root/failed','FILE','first'),('sibling','/root_sibling/file','FILE','first'); INSERT INTO media_play_history(media_type,file_id,position_ms,played_at,play_count) VALUES('VIDEO','old',4000000001,'first',0),('VIDEO','keep',4000000002,'first',0); INSERT INTO platform_audio_media(file_id,path,title,artist,duration_ms) VALUES('test:/root/deleted','/root/deleted','gone','',1),('test:/root/failed','/root/failed','keep','',1),('test:/root_sibling/file','/root_sibling/file','keep','',1); INSERT INTO audio_queue_items(file_id,sort_order) VALUES('test:/root/deleted',0),('test:/root/failed',1),('test:/root_sibling/file',2);")).unwrap();
+    db.with_conn(|c|c.execute_batch("INSERT INTO tags VALUES('video','video','VIDEO','t','t'),('foreign','foreign','NOTE','t','t'),('file','file','FILE','t','t'),('failed','failed','FILE','t','t'),('sibling','sibling','FILE','t','t'); INSERT INTO tag_relations(tag_id,target_key,created_at) VALUES('video','old','first'),('foreign','old','first'),('file','/root/deleted','first'),('failed','/root/failed','first'),('sibling','/root_sibling/file','first'); INSERT INTO media_play_history(media_type,file_id,position_ms,played_at,play_count) VALUES('VIDEO','old',4000000001,'first',0),('VIDEO','keep',4000000002,'first',0); INSERT INTO platform_audio_media(file_id,path,title,artist,duration_ms) VALUES('test:/root/deleted','/root/deleted','gone','',1),('test:/root/failed','/root/failed','keep','',1),('test:/root_sibling/file','/root_sibling/file','keep','',1); INSERT INTO audio_queue_items(file_id,sort_order) VALUES('test:/root/deleted',0),('test:/root/failed',1),('test:/root_sibling/file',2);")).unwrap();
     db.with_conn(|c|c.execute_batch("INSERT INTO image_embeddings(file_id,path,embedding) VALUES('private','/root/deleted',x'3f800000'),('pending','/root/failed',x'3f800000'),('sibling','/root_sibling/file',x'3f800000');")).unwrap();
     cleanup(
         &db,
@@ -106,7 +106,8 @@ fn deletion_uses_current_catalog_identities_and_preserves_partial_failures_and_f
         .unwrap();
     let video = &created[0].id;
     db.with_conn(|c| -> plain_libs::rusqlite::Result<()> {
-        c.execute("INSERT INTO tag_relations(tag_id,target_key,type,created_at) VALUES('media',?1,'VIDEO','first'),('foreign',?1,'NOTE','first')",[video])?;
+        c.execute_batch("INSERT INTO tags VALUES('media','media','VIDEO','t','t'),('foreign','foreign','NOTE','t','t')")?;
+        c.execute("INSERT INTO tag_relations(tag_id,target_key,created_at) VALUES('media',?1,'first'),('foreign',?1,'first')",[video])?;
         c.execute("INSERT INTO media_play_history(media_type,file_id,position_ms,played_at,play_count) VALUES('VIDEO',?1,123,'first',0)",[video])?;
         Ok(())
     }).unwrap();
@@ -129,7 +130,7 @@ fn deletion_uses_current_catalog_identities_and_preserves_partial_failures_and_f
     db.with_conn(|c| -> plain_libs::rusqlite::Result<()> {
         assert_eq!(
             c.query_row(
-                "SELECT count(*) FROM tag_relations WHERE target_key=?1 AND type='VIDEO'",
+                "SELECT count(*) FROM tag_relations JOIN tags ON tags.id=tag_id WHERE target_key=?1 AND type='VIDEO'",
                 [video],
                 |r| r.get::<_, i64>(0)
             )?,
@@ -137,7 +138,7 @@ fn deletion_uses_current_catalog_identities_and_preserves_partial_failures_and_f
         );
         assert_eq!(
             c.query_row(
-                "SELECT count(*) FROM tag_relations WHERE target_key=?1 AND type='NOTE'",
+                "SELECT count(*) FROM tag_relations JOIN tags ON tags.id=tag_id WHERE target_key=?1 AND type='NOTE'",
                 [video],
                 |r| r.get::<_, i64>(0)
             )?,
@@ -200,7 +201,8 @@ fn catalog_deletion_failure_rolls_back_all_associated_state_cleanup() {
         .unwrap()
         .remove(0);
     db.with_conn(|c| -> plain_libs::rusqlite::Result<()> {
-        c.execute("INSERT INTO tag_relations(tag_id,target_key,type,created_at) VALUES('media',?1,'VIDEO','first')",[&created.id])?;
+        c.execute_batch("INSERT INTO tags VALUES('media','media','VIDEO','t','t')")?;
+        c.execute("INSERT INTO tag_relations(tag_id,target_key,created_at) VALUES('media',?1,'first')",[&created.id])?;
         c.execute("INSERT INTO media_play_history(media_type,file_id,position_ms,played_at,play_count) VALUES('VIDEO',?1,123,'first',0)",[&created.id])?;
         c.execute_batch("CREATE TRIGGER reject_catalog_delete BEFORE DELETE ON files BEGIN SELECT RAISE(ABORT,'catalog delete rejected'); END;")?;
         Ok(())
@@ -248,8 +250,9 @@ fn missing_paths_keep_user_state_until_confirmed_permanent_deletion() {
         .unwrap()
         .unwrap();
     db.with_conn(|c| -> plain_libs::rusqlite::Result<()> {
+        c.execute_batch("INSERT INTO tags VALUES('media','media','VIDEO','t','t')")?;
         c.execute(
-            "INSERT INTO tag_relations(tag_id,target_key,type,created_at) VALUES('media',?1,'VIDEO','first')",
+            "INSERT INTO tag_relations(tag_id,target_key,created_at) VALUES('media',?1,'first')",
             [&gone.id],
         )?;
         c.execute(
@@ -321,7 +324,8 @@ fn retired_identity_preserves_replacement_and_file_tags_at_the_same_path() {
         .unwrap()
         .remove(0);
     db.with_conn(|connection| {
-        connection.execute("INSERT INTO tag_relations(tag_id,target_key,type,created_at) VALUES('old',?1,'VIDEO','first'),('replacement',?2,'IMAGE','first'),('file',?3,'FILE','first'),('neighbor',?4,'FILE','first')", params![old.id,new.id,path("root/replaced.mp4"),path("root/neighbor")])?;
+        connection.execute_batch("INSERT INTO tags VALUES('old','old','VIDEO','t','t'),('replacement','replacement','IMAGE','t','t'),('file','file','FILE','t','t'),('neighbor','neighbor','FILE','t','t')")?;
+        connection.execute("INSERT INTO tag_relations(tag_id,target_key,created_at) VALUES('old',?1,'first'),('replacement',?2,'first'),('file',?3,'first'),('neighbor',?4,'first')", params![old.id,new.id,path("root/replaced.mp4"),path("root/neighbor")])?;
         connection.execute("INSERT INTO media_play_history(file_id,media_type,position_ms,played_at,play_count) VALUES(?1,'VIDEO',123,'first',0)", [&old.id])?;
         Ok::<_,plain_libs::rusqlite::Error>(())
     }).unwrap();
@@ -374,7 +378,7 @@ INSERT INTO files(id,volume_id,path,file_name,kind,updated_at,last_seen_scan_id,
 ('outside','scan','root_%_sibling/old.rs','old.rs','FILE','now',NULL,NULL,NULL),
 ('trash','scan','root_%/trash.rs','trash.rs','FILE','now',NULL,'now','root_%/original.rs'),
 ('offline','offline','old.rs','old.rs','FILE','now',NULL,NULL,NULL);
-INSERT INTO tag_relations(tag_id,target_key,type,created_at) VALUES('audio','audio','AUDIO','now'),('path','/scan/root_%/old.ogg','FILE','now'),('foreign','audio','NOTE','now');
+INSERT INTO tags VALUES('audio','audio','AUDIO','t','t'),('path','path','FILE','t','t'),('foreign','foreign','NOTE','t','t'); INSERT INTO tag_relations(tag_id,target_key,created_at) VALUES('audio','audio','now'),('path','/scan/root_%/old.ogg','now'),('foreign','audio','now');
 INSERT INTO audio_queue_items(file_id,sort_order) VALUES('audio',0);
 INSERT INTO audio_playlists(id,name,created_at,updated_at) VALUES('playlist','Playlist','now','now');
 INSERT INTO audio_playlist_items(id,playlist_id,file_id,sort_order,added_at) VALUES('item','playlist','audio',0,'now');
@@ -429,7 +433,7 @@ CREATE TRIGGER reject_scan_delete BEFORE DELETE ON files BEGIN SELECT RAISE(ABOR
         }
         assert_eq!(
             conn.query_row(
-                "SELECT COUNT(*) FROM tag_relations WHERE type IN ('AUDIO','FILE')",
+                "SELECT COUNT(*) FROM tag_relations JOIN tags ON tags.id=tag_id WHERE type IN ('AUDIO','FILE')",
                 [],
                 |row| row.get::<_, i64>(0)
             )?,
@@ -437,7 +441,7 @@ CREATE TRIGGER reject_scan_delete BEFORE DELETE ON files BEGIN SELECT RAISE(ABOR
         );
         assert_eq!(
             conn.query_row(
-                "SELECT COUNT(*) FROM tag_relations WHERE type='NOTE'",
+                "SELECT COUNT(*) FROM tag_relations JOIN tags ON tags.id=tag_id WHERE type='NOTE'",
                 [],
                 |row| row.get::<_, i64>(0)
             )?,
@@ -455,4 +459,16 @@ fn root_volume_reconciliation_preserves_other_mounted_volumes() {
     let removed = reconcile_scan_batch(&db, "internal", std::path::Path::new("/fixture"), "current", &[], 256, "").unwrap();
     assert_eq!(removed.iter().map(|row| row.id.as_str()).collect::<Vec<_>>(), vec!["internal-old"], "rebuilding a parent volume must not reconcile a mounted child volume");
     assert!(db.file("usb-keep").unwrap().is_some());
+}
+
+#[test]
+fn root_tag_cleanup_seeks_both_the_directory_and_its_descendants() {
+    let db = Db::open(std::path::Path::new(":memory:")).unwrap();
+    db.with_conn(|conn| {
+        let plan = conn.prepare(&format!("EXPLAIN QUERY PLAN {DELETE_ROOT_TAGS}")).unwrap()
+            .query_map(params![DataType::File, "/dir", "/dir/", "/dir0"], |row| row.get::<_, String>(3))
+            .unwrap().collect::<Result<Vec<_>, _>>().unwrap();
+        assert!(plan.iter().any(|line| line.contains("target_key=?")), "{plan:?}");
+        assert!(plan.iter().any(|line| line.contains("target_key>? AND target_key<?")), "{plan:?}");
+    });
 }

@@ -189,9 +189,11 @@ async fn media_move_case(missing_destination: bool) {
     let audio_path = source.join("audio").to_str().unwrap().to_owned();
     db.with_conn(|c| -> plain_libs::rusqlite::Result<()> {
         for (kind, id, tag) in [("AUDIO","1","audio"),("VIDEO","2","video"),("IMAGE","3","image"),("DOC","4","document")] {
-            c.execute("INSERT INTO tag_relations(tag_id,target_key,type,created_at) VALUES(?1,?2,?3,'first')",plain_libs::rusqlite::params![tag,id,kind])?;
+            c.execute("INSERT INTO tags VALUES(?1,?1,?2,'t','t')", [tag,kind])?;
+            c.execute("INSERT INTO tag_relations(tag_id,target_key,created_at) VALUES(?1,?2,'first')", [tag,id])?;
         }
-        c.execute("INSERT INTO tag_relations(tag_id,target_key,type,created_at) VALUES('file',?1,'FILE','first')",[source.join("document").to_str().unwrap()])?;
+        c.execute_batch("INSERT INTO tags VALUES('file','file','FILE','t','t')")?;
+        c.execute("INSERT INTO tag_relations(tag_id,target_key,created_at) VALUES('file',?1,'first')",[source.join("document").to_str().unwrap()])?;
         c.execute_batch("INSERT INTO media_play_history(media_type,file_id,position_ms,play_count,played_at) VALUES('VIDEO','2',4000000001,0,'first');")?;
         c.execute("INSERT INTO audio_queue_items(file_id,sort_order) SELECT id,0 FROM file_catalog WHERE path=?1",[&audio_path])?;
 
