@@ -65,35 +65,18 @@ jobs:
           unpacked=$(mktemp -d)
           tar -xzf "$archive" -C "$unpacked"
           cmp "$plain" "$unpacked/plainapp"
-          "$unpacked/plainapp" --version
-          "$unpacked/plainapp" --help
-
-      - name: Verify Linux service install and uninstall
-        timeout-minutes: 6
-        shell: bash
-        env:
-          TARGET: ${{ matrix.target }}
-        run: |
-          test ! -e /usr/local/bin/plainapp
-          test ! -e /var/lib/plainapp
-          sudo install -m 0755 "target/$TARGET/release/plainapp" /usr/local/bin/plainapp
-          openssl rand -base64 32 | sudo plainapp passwd --stdin
-          sudo plainapp install
-          sudo systemctl enable --now plainapp.service
-          curl -fsS --max-time 5 --retry 12 --retry-connrefused --retry-delay 1 http://127.0.0.1:8080/health
-          sudo plainapp status
-          sudo plainapp uninstall --keep-config --keep-data
-          if systemctl is-active --quiet plainapp.service; then exit 1; fi
-          test ! -e /etc/systemd/system/plainapp.service
-          test ! -e /usr/local/bin/plainapp
-          sudo test -f /var/lib/plainapp/prefs.json
-          sudo test -f /var/lib/plainapp/plain.db
 
       - uses: actions/upload-artifact@v4
         with:
           name: plainapp-linux-${{ matrix.arch }}
           path: plainapp-linux-${{ matrix.arch }}.tar.gz
           if-no-files-found: error
+
+  smoke:
+    needs: binary
+    uses: ./.github/workflows/test.yml
+    with:
+      release_smoke: true
 
   hashes:
     needs: binary
@@ -162,7 +145,7 @@ jobs:
 
   release:
     name: Create GitHub Release draft
-    needs: [hashes, provenance, virustotal]
+    needs: [hashes, provenance, virustotal, smoke]
     runs-on: ubuntu-24.04
     permissions:
       contents: write

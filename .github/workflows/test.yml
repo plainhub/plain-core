@@ -9,12 +9,17 @@ on:
         description: Include the native AI image search engine and tests
         type: boolean
         default: false
+  workflow_call:
+    inputs:
+      release_smoke:
+        type: boolean
+        required: true
 
 permissions:
   contents: read
 
 concurrency:
-  group: rust-tests-${{ github.ref }}-${{ inputs.ai_image_search && 'ai' || 'standard' }}
+  group: rust-tests-${{ github.ref }}-${{ inputs.release_smoke && 'release' || inputs.ai_image_search && 'ai' || 'standard' }}
   cancel-in-progress: true
 
 env:
@@ -23,6 +28,7 @@ env:
 jobs:
   test:
     name: Build and test Rust workspace
+    if: ${{ !inputs.release_smoke }}
     runs-on: ubuntu-24.04
     env:
       CC: gcc-14
@@ -56,3 +62,49 @@ jobs:
 
       - name: Run Rust unit tests
         run: cargo test --workspace --locked --no-fail-fast --features "$AI_FEATURE"
+
+      - name: Run CLI release script tests
+        run: python3 -m unittest discover -s tests/unit/scripts -p 'test_*cli_release.py'
+
+  release-smoke:
+    name: CLI service ${{ matrix.arch }}
+    if: ${{ inputs.release_smoke }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 10
+    permissions: {}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: plainapp-linux-${{ matrix.arch }}
+
+      - name: Verify Linux service install and uninstall
+        shell: bash
+        env:
+          ARCH: ${{ matrix.arch }}
+        run: |
+          tar -xzf "plainapp-linux-$ARCH.tar.gz" plainapp
+          ./plainapp --version
+          ./plainapp --help
+          test ! -e /usr/local/bin/plainapp
+          test ! -e /var/lib/plainapp
+          sudo apt-get update
+          sudo install -m 0755 plainapp /usr/local/bin/plainapp
+          openssl rand -base64 32 | sudo plainapp passwd --stdin
+          sudo plainapp install
+          sudo systemctl enable --now plainapp.service
+          curl -fsS --max-time 5 --retry 12 --retry-connrefused --retry-delay 1 http://127.0.0.1:8080/health
+          sudo plainapp status
+          sudo plainapp uninstall --keep-config --keep-data
+          if systemctl is-active --quiet plainapp.service; then exit 1; fi
+          test ! -e /etc/systemd/system/plainapp.service
+          test ! -e /usr/local/bin/plainapp
+          sudo test -f /var/lib/plainapp/prefs.json
+          sudo test -f /var/lib/plainapp/plain.db
