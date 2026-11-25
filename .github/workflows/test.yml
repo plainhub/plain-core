@@ -75,8 +75,10 @@ jobs:
       matrix:
         include:
           - arch: amd64
+            target: x86_64-unknown-linux-gnu
             runner: ubuntu-24.04
           - arch: arm64
+            target: aarch64-unknown-linux-gnu
             runner: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v4
@@ -88,23 +90,29 @@ jobs:
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@1.99.0
+        with:
+          targets: ${{ matrix.target }}
 
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
         with:
-          key: cli-service-${{ matrix.arch }}
+          key: cli-release-${{ matrix.target }}
 
       - name: Build the CLI with the committed Web UI
-        run: cargo build --release --locked -p plainapp
+        run: cargo build --release --locked --target ${{ matrix.target }} -p plainapp
 
       - name: Verify Linux service install and uninstall
         shell: bash
+        env:
+          TARGET: ${{ matrix.target }}
         run: |
-          target/release/plainapp --version
-          target/release/plainapp --help
+          trap 'sudo systemctl status plainapp.service --no-pager || true; sudo journalctl -u plainapp.service --no-pager -n 60 || true' ERR
+          binary="target/$TARGET/release/plainapp"
+          "$binary" --version
+          "$binary" --help
           test ! -e /usr/local/bin/plainapp
           test ! -e /var/lib/plainapp
-          sudo install -m 0755 target/release/plainapp /usr/local/bin/plainapp
+          sudo install -m 0755 "$binary" /usr/local/bin/plainapp
           openssl rand -base64 32 | sudo plainapp passwd --stdin
           sudo plainapp install
           sudo systemctl enable --now plainapp.service

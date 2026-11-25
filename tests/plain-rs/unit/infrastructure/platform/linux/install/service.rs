@@ -7,7 +7,9 @@ fn install_updates_existing_unit_to_the_actual_binary() {
     write_service(&path, "/opt/other/plainapp").unwrap();
     write_service(&path, BINARY_PATH).unwrap();
     let unit = std::fs::read_to_string(&path).unwrap();
-    assert!(unit.contains("ExecStart=/usr/local/bin/plainapp run\n"));
+    assert!(
+        unit.contains("[Service]\nType=simple\nUser=root\nExecStart=/usr/local/bin/plainapp run\n")
+    );
     assert!(!unit.contains("/opt/other/plainapp"));
     assert!(unit.contains("Restart=on-failure"));
 }
