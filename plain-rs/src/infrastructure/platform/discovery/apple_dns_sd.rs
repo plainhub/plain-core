@@ -128,12 +128,12 @@ struct State {
 }
 
 #[derive(Clone)]
-pub struct MacDnsSdBrowser {
+pub struct AppleDnsSdBrowser {
     state: Arc<State>,
     on_device: Arc<dyn Fn(FoundDevice) + Send + Sync>,
 }
 
-impl MacDnsSdBrowser {
+impl AppleDnsSdBrowser {
     pub fn new(on_device: impl Fn(FoundDevice) + Send + Sync + 'static) -> Self {
         Self {
             state: Arc::new(State {
@@ -151,9 +151,13 @@ impl MacDnsSdBrowser {
         }
         let browser = self.clone();
         std::thread::Builder::new()
-            .name("macos-dns-sd-browser".into())
+            .name("apple-dns-sd-browser".into())
             .spawn(move || browser.browse_loop())
-            .expect("spawn macOS DNS-SD browser");
+            .expect("spawn Apple DNS-SD browser");
+    }
+
+    pub fn stop(&self) {
+        self.state.started.store(false, Ordering::SeqCst);
     }
 
     pub fn snapshot(&self) -> Vec<MdnsServiceSnapshot> {
@@ -188,7 +192,7 @@ impl MacDnsSdBrowser {
     }
 
     fn browse_loop(&self) {
-        loop {
+        while self.state.started.load(Ordering::SeqCst) {
             let (tx, rx) = mpsc::channel::<BrowseEvent>();
             let context = Box::into_raw(Box::new(tx));
             let mut raw = ptr::null_mut();
@@ -213,7 +217,7 @@ impl MacDnsSdBrowser {
             let reference = ServiceRef(raw);
             self.record("search_started", "_plainapp._tcp.local");
             let mut active: HashMap<String, Arc<AtomicBool>> = HashMap::new();
-            loop {
+            while self.state.started.load(Ordering::SeqCst) {
                 if process_one(&reference, 500).is_err() {
                     break;
                 }
@@ -249,6 +253,9 @@ impl MacDnsSdBrowser {
             self.state.snapshots.lock().unwrap().clear();
             drop(reference);
             unsafe { drop(Box::from_raw(context)) };
+            if !self.state.started.load(Ordering::SeqCst) {
+                break;
+            }
             self.record("search_restarted", "DNS-SD connection closed");
             std::thread::sleep(Duration::from_secs(2));
         }
@@ -620,10 +627,10 @@ mod tests {
             port: 8443,
             txt,
         };
-        let device = found_device(&service, &resolved, vec!["192.168.123.29".into()]).unwrap();
+        let device = found_device(&service, &resolved, vec!["192.0.2.1".into()]).unwrap();
         assert_eq!(device.id, "1vm20qx4sx6y6");
         assert_eq!(device.name, "Galaxy S20 5G");
-        assert_eq!(device.ips, ["192.168.123.29"]);
+        assert_eq!(device.ips, ["192.0.2.1"]);
         assert_eq!(device.port, 8443);
         assert_eq!(device.device_type, "PHONE");
     }
@@ -637,7 +644,7 @@ mod tests {
             hostname: "phone.local.".into(),
             port: 8443,
             txt_records: vec!["id=phone-1".into()],
-            ips: vec!["192.168.1.2".into()],
+            ips: vec!["192.0.2.2".into()],
             ip6s: vec![],
             complete: true,
         };
@@ -649,7 +656,7 @@ mod tests {
         assert_eq!(combined.len(), 1);
         assert_eq!(
             combined["phone._plainapp._tcp.local."].ips,
-            ["10.0.0.2", "192.168.1.2"]
+            ["10.0.0.2", "192.0.2.2"]
         );
     }
 }
