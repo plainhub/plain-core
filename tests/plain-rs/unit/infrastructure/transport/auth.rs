@@ -54,6 +54,12 @@ fn seed_paired_peer(db: &Db) -> (String, [u8; 32], [u8; 64]) {
     ("peer-a".into(), key, kp)
 }
 
+const RECIPIENT: &str = "recipient";
+
+fn authenticate(db: &Db, sender: &str, channel: &str, body: &[u8]) -> Result<AuthenticatedPeer, AuthError> {
+    authenticate_for(db, sender, RECIPIENT, channel, body, || Ok([41; 32]))
+}
+
 const NONCE: &str = "ad3d447d-9eb5-4f25-a415-726b887159ca";
 
 fn now_ms() -> i64 {
@@ -90,7 +96,7 @@ fn signed_payload(kp: &[u8], channel: &str, request: &str) -> String {
         plain_libs::serde_json::from_str(request).unwrap();
     value["signature"] = "".into();
     let mut wire: SignedEnvelope = plain_libs::serde_json::from_value(value).unwrap();
-    wire.signature = ed25519_sign(kp, &wire.signing_bytes(channel, None));
+    wire.signature = ed25519_sign(kp, &wire.signing_bytes((!channel.is_empty()).then_some(channel), RECIPIENT));
     plain_libs::serde_json::to_string(&wire).unwrap()
 }
 fn build_body(kp: &[u8], key: &[u8; 32], content: &str, timestamp: i64) -> Vec<u8> {
@@ -186,11 +192,14 @@ fn authenticate_channel_decrypts_the_binary_body_and_checks_the_inner_signature(
     prefs.set("client_id", "recipient").unwrap();
     security::bootstrap(&prefs).unwrap();
     let recipient = security::encryption_public_key(&prefs).unwrap();
-    let wire = crate::infrastructure::transport::contract::chat_item_request(&kp, "{}", "channel").unwrap();
+    let receive = |body: &[u8]| super::authenticate(&db, &prefs, "peer-a", "channel", body);
+    let wire = crate::infrastructure::transport::contract::chat_item_request("{}").unwrap();
     let seal = |key: &[u8; 32], intended: &str| {
-        super::super::channel_request::seal(
-            key, "channel", "peer-a", intended, Some("message-id"), &kp, wire.as_bytes(),
-        ).unwrap()
+        let mut request: SignedEnvelope = plain_libs::serde_json::from_str(&wire).unwrap();
+        request.message_id = Some("message-id".into());
+        request.sign(&kp, Some("channel"), intended).unwrap();
+        let plaintext = plain_libs::serde_json::to_vec(&request).unwrap();
+        super::super::channel_request::seal(key, "channel", &plaintext).unwrap()
     };
     let (body, response_key) = seal(&recipient, "recipient");
     assert!(plain_libs::serde_json::from_slice::<plain_libs::serde_json::Value>(&body).is_err());
@@ -203,27 +212,27 @@ fn authenticate_channel_decrypts_the_binary_body_and_checks_the_inner_signature(
     assert_eq!(body.len(), 32 + plaintext.len() + 16);
     assert_eq!(request.message_id.as_deref(), Some("message-id"));
     assert!(!request.signature.is_empty());
-    let received = authenticate_channel(&db, &prefs, "peer-a", "channel", &body).unwrap();
+    let received = receive(&body).unwrap();
     assert_eq!(received.message_id.as_deref(), Some("message-id"));
     assert_eq!(received.key, response_key);
     let (wrong_recipient, _) = seal(&recipient, "other");
-    assert!(matches!(authenticate_channel(&db, &prefs, "peer-a", "channel", &wrong_recipient), Err(AuthError::BadSignature)));
+    assert!(matches!(receive(&wrong_recipient), Err(AuthError::BadSignature)));
     let wrong_key = plain_libs::crypto::hpke::public_key(&[23; 32]);
     let (wrong_cipher, _) = seal(&wrong_key, "recipient");
-    assert!(matches!(authenticate_channel(&db, &prefs, "peer-a", "channel", &wrong_cipher), Err(AuthError::DecryptFailed)));
+    assert!(matches!(receive(&wrong_cipher), Err(AuthError::DecryptFailed)));
     let mut damaged = body;
     damaged[32] ^= 1;
-    assert!(matches!(authenticate_channel(&db, &prefs, "peer-a", "channel", &damaged), Err(AuthError::DecryptFailed)));
+    assert!(matches!(receive(&damaged), Err(AuthError::DecryptFailed)));
     let mut altered = request;
     altered.message_id = Some("changed".into());
     let (enc, context) = plain_libs::crypto::hpke::setup_sender(&recipient, &info).unwrap();
     let ciphertext = context.seal(b"channel", &plain_libs::serde_json::to_vec(&altered).unwrap()).unwrap();
     let reencrypted = [enc.as_slice(), &ciphertext].concat();
-    assert!(matches!(authenticate_channel(&db, &prefs, "peer-a", "channel", &reencrypted), Err(AuthError::BadSignature)));
+    assert!(matches!(receive(&reencrypted), Err(AuthError::BadSignature)));
     let old_wrapper = plain_libs::serde_json::to_vec(&plain_libs::serde_json::json!({"messageId":"message-id","sealed":"x","signature":"x"})).unwrap();
-    assert!(authenticate_channel(&db, &prefs, "peer-a", "channel", &old_wrapper).is_err());
+    assert!(receive(&old_wrapper).is_err());
     let old = encrypt_peer(&peer_key, wire.as_bytes()).unwrap();
-    assert!(authenticate_channel(&db, &prefs, "peer-a", "channel", &old).is_err());
+    assert!(receive(&old).is_err());
     assert!(matches!(
         authenticate(&db, "peer-a", "", &build_body(&kp, &peer_key, "{}", now_ms())),
         Err(AuthError::NotPaired)
@@ -259,7 +268,7 @@ fn signed_context_rejects_reencrypted_cross_channel_direct_and_legacy_frames() {
     let payload = signed_payload(&kp, "first", &request);
     let old = encrypt_peer(&key, payload.as_bytes()).unwrap();
     assert!(matches!(authenticate(&db, &peer, "", &old), Err(AuthError::BadSignature)));
-    assert!(matches!(authenticate(&db, &peer, "first", &old), Err(AuthError::MissingFields)));
+    assert!(matches!(authenticate(&db, &peer, "first", &old), Err(AuthError::DecryptFailed)));
     let direct = signed_payload(&kp, "", &request_at("{}", now_ms()));
     assert!(
         authenticate(
@@ -277,7 +286,7 @@ fn signed_context_rejects_reencrypted_cross_channel_direct_and_legacy_frames() {
             "first",
             &encrypt_peer(&[41; 32], direct.as_bytes()).unwrap()
         ),
-        Err(AuthError::MissingFields)
+        Err(AuthError::DecryptFailed)
     ));
     assert_eq!(
         db.with_conn(|c| c.query_row("SELECT COUNT(*) FROM chats", [], |r| r.get::<_, i64>(0)))
@@ -293,7 +302,7 @@ fn graphql_rejects_status_signature_purpose() {
     let mut wire: SignedEnvelope =
         plain_libs::serde_json::from_str(&signed_payload(&kp, "", &request)).unwrap();
     let mut tuple: plain_libs::serde_json::Value =
-        plain_libs::serde_json::from_slice(&wire.signing_bytes("", None)).unwrap();
+        plain_libs::serde_json::from_slice(&wire.signing_bytes(None, RECIPIENT)).unwrap();
     tuple[0] = "PEER_STATUS".into();
     wire.signature = ed25519_sign(&kp, tuple.to_string().as_bytes());
     let payload = plain_libs::serde_json::to_string(&wire).unwrap();
@@ -487,11 +496,41 @@ fn peer_signature_has_explicit_leading_purpose() {
         message_id: None,
     };
     assert_eq!(
-        wire.signing_bytes("", None),
-        br#"["PEER_REQUEST","","id","{ __typename }",{}]"#
+        wire.signing_bytes(None, RECIPIENT),
+        br#"["PEER_REQUEST",null,"id","{ __typename }",{},"recipient",null]"#
     );
     assert_eq!(
-        wire.signing_bytes("channel", Some(("sender", "recipient"))),
-        br#"["PEER_REQUEST","channel","id","{ __typename }",{},"sender","recipient",null]"#
+        wire.signing_bytes(Some("channel"), RECIPIENT),
+        br#"["PEER_REQUEST","channel","id","{ __typename }",{},"recipient",null]"#
     );
+}
+
+#[test]
+fn peer_verification_requires_the_local_recipient_and_an_unambiguous_sender_key() {
+    let db = Db::open(std::path::Path::new(":memory:")).unwrap();
+    let (sender, key, kp) = seed_paired_peer(&db);
+    let body = build_body(&kp, &key, "{}", now_ms());
+    assert!(matches!(
+        authenticate_for(&db, &sender, "other", "", &body, || unreachable!()),
+        Err(AuthError::BadSignature)
+    ));
+    let mut alias = peer(&db, &sender).unwrap();
+    alias.id = "another-peer".into();
+    db.upsert_peer(&alias);
+    assert!(matches!(authenticate(&db, &alias.id, "", &body), Err(AuthError::UnknownPeer)));
+    assert!(matches!(authenticate(&db, &sender, "", &body), Err(AuthError::UnknownPeer)));
+}
+
+#[test]
+fn direct_send_and_verify_share_the_seven_field_signature() {
+    use super::super::contract::{PeerDispatch, peer_request};
+    let db = Db::open(std::path::Path::new(":memory:")).unwrap();
+    let (sender, key, kp) = seed_paired_peer(&db);
+    let target = DPeer::new(RECIPIENT, "Recipient", "", None, DeviceType::Computer);
+    let dispatch = PeerDispatch {
+        peer: &target, client_id: &sender, channel_id: "", key: &key, signing_key: &kp, message_id: None,
+    };
+    let body = peer_request("{ __typename }", plain_libs::serde_json::json!({})).unwrap();
+    let (ciphertext, _) = dispatch.seal(&body).unwrap();
+    assert!(authenticate(&db, &sender, "", &ciphertext).is_ok());
 }

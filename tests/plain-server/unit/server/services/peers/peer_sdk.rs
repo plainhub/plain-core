@@ -161,11 +161,9 @@ async fn aware_host_only_moves_raw_socket_bytes_rust_performs_tls_crypto_and_gra
             }
         }
     });
-    let wire = plain_rs::infrastructure::transport::contract::signed_request(
-        &kp,
+    let wire = plain_rs::infrastructure::transport::contract::peer_request(
         "query { __typename }",
         json!({}),
-        "",
     )
     .unwrap();
     let result = tokio::time::timeout(

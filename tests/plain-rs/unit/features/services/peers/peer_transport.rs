@@ -43,6 +43,9 @@ fn peer() -> DPeer {
     p.key = plain_libs::utils::base64::base64_encode(&[7; 32]);
     p
 }
+fn test_request() -> String {
+    crate::infrastructure::transport::contract::peer_request("{ __typename }", json!({})).unwrap()
+}
 fn state() -> (
     plain_libs::temporary::TempDir,
     crate::test_runtime::Core,
@@ -76,7 +79,7 @@ async fn authenticated_reply_accepts_discovery_refresh_and_rejects_revoked_pairi
         let sender = state.clone();
         let call =
             tokio::spawn(
-                async move { send(&sender, &peer(), "", &[7; 32], "signed request").await },
+                async move { send(&sender, &peer(), "", &[7; 32], &test_request()).await },
             );
         let caps = requests.recv().await.unwrap();
         host.reply(generation, json!({"id":caps["id"],"result":["BLE"]}))
@@ -185,7 +188,7 @@ async fn rust_falls_back_from_unavailable_socket_and_authenticates_raw_ble_busin
                     assert_eq!(client_id, expected_client_id);
                     assert_eq!(channel_id, "channel");
                     let (plain, response_key) = crate::features::services::peers::ble_transport::test_channel_wire(
-                        &body, &[7; 32], &channel_id, &client_id, &recipient, &sender_public,
+                        &body, &[7; 32], &channel_id, &recipient, &sender_public,
                     );
                     let payload: plain_libs::serde_json::Value =
                         plain_libs::serde_json::from_str(&plain).unwrap();
@@ -204,8 +207,8 @@ async fn rust_falls_back_from_unavailable_socket_and_authenticates_raw_ble_busin
             host.reply(generation, response).unwrap();
         }
     });
-    let request = crate::infrastructure::transport::contract::signed_request(
-        &[], QUERY, json!({}), "channel",
+    let request = crate::infrastructure::transport::contract::peer_request(
+        QUERY, json!({}),
     ).unwrap();
     let response = send(&state, &peer(), "channel", &plain_libs::crypto::hpke::public_key(&[7; 32]), &request)
         .await
@@ -220,10 +223,10 @@ async fn rust_falls_back_from_unavailable_socket_and_authenticates_raw_ble_busin
 async fn cancel_releases_route_and_malformed_raw_ble_response_is_terminal() {
     let (_dir, server, state) = state();
     let host = state.host.clone();
-    let (generation, mut receiver) = host.connect();
+    let (generation, mut receiver) = crate::test_support::HostRequests::connect(&host);
     let request_state = state.clone();
     let call =
-        tokio::spawn(async move { send(&request_state, &peer(), "", &[7; 32], "signed").await });
+        tokio::spawn(async move { send(&request_state, &peer(), "", &[7; 32], &test_request()).await });
     let caps = receiver.recv().await.unwrap();
     host.reply(generation, json!({"id":caps["id"],"result":["BLE"]}))
         .unwrap();
@@ -233,7 +236,7 @@ async fn cancel_releases_route_and_malformed_raw_ble_response_is_terminal() {
     assert!(state.transport.active().is_empty());
     let request_state = state.clone();
     let call =
-        tokio::spawn(async move { send(&request_state, &peer(), "", &[7; 32], "signed").await });
+        tokio::spawn(async move { send(&request_state, &peer(), "", &[7; 32], &test_request()).await });
     let caps = receiver.recv().await.unwrap();
     host.reply(generation, json!({"id":caps["id"],"result":["BLE"]}))
         .unwrap();
@@ -276,13 +279,14 @@ async fn queued_ble_chat_does_not_sign_or_send_until_its_slot_opens() {
     let (generation, mut requests) = crate::test_support::HostRequests::connect(&state.host);
     let signed = std::sync::atomic::AtomicUsize::new(0);
     let actor = state.native_client_id().unwrap();
-    let dispatch = |peer| PeerDispatch { peer, client_id: &actor, channel_id: "", key: &[7; 32], signing_key: &[], message_id: None };
+    let signing_key = crate::features::prefs::security::signing_keypair(&state.prefs).unwrap();
+    let dispatch = |peer| PeerDispatch { peer, client_id: &actor, channel_id: "", key: &[7; 32], signing_key: &signing_key, message_id: None };
     let first_dispatch = dispatch(&first);
     let second_dispatch = dispatch(&second);
-    let mut a = std::pin::pin!(send_chat(&state, &first_dispatch, || Ok("first".into()), Attempt::Automatic));
+    let mut a = std::pin::pin!(send_chat(&state, &first_dispatch, || crate::infrastructure::transport::contract::chat_item_request("first"), Attempt::Automatic));
     let mut b = std::pin::pin!(send_chat(&state, &second_dispatch, || {
         signed.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-        Ok("second".into())
+        crate::infrastructure::transport::contract::chat_item_request("second")
     }, Attempt::Automatic));
     macro_rules! pending {
         ($send:ident) => {

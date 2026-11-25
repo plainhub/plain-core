@@ -47,27 +47,25 @@ pub struct SignedEnvelope {
     pub message_id: Option<String>,
 }
 impl SignedEnvelope {
-    pub fn signing_bytes(&self, channel: &str, peers: Option<(&str, &str)>) -> Vec<u8> {
-        use plain_libs::serde_json::{self, json};
-        let mut fields = vec![
-            json!(crate::infrastructure::signature::SignaturePurpose::PeerRequest),
-            json!(channel),
-            json!(self.request_id),
-            json!(self.query),
-            json!(self.variables),
-        ];
-        if let Some((sender, recipient)) = peers {
-            fields.extend([json!(sender), json!(recipient), json!(self.message_id)]);
-        }
-        serde_json::to_vec(&fields).expect("peer signing fields are JSON")
+    pub fn signing_bytes(&self, channel: Option<&str>, recipient: &str) -> Vec<u8> {
+        plain_libs::serde_json::to_vec(&(
+            crate::infrastructure::signature::SignaturePurpose::PeerRequest,
+            channel,
+            &self.request_id,
+            &self.query,
+            &self.variables,
+            recipient,
+            &self.message_id,
+        ))
+        .expect("peer signing fields are JSON")
     }
     pub(super) fn sign(
         &mut self,
         key: &[u8],
-        channel: &str,
-        peers: Option<(&str, &str)>,
+        channel: Option<&str>,
+        recipient: &str,
     ) -> Result<(), String> {
-        self.signature = plain_libs::crypto::ed25519_sign(key, &self.signing_bytes(channel, peers));
+        self.signature = plain_libs::crypto::ed25519_sign(key, &self.signing_bytes(channel, recipient));
         if self.signature.is_empty() {
             return Err("Invalid peer signing keypair".into());
         }

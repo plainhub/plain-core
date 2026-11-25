@@ -145,13 +145,13 @@ pub async fn send_checked(
 pub(crate) async fn send_chat(
     state: &CoreRuntime,
     dispatch: &PeerDispatch<'_>,
-    sign: impl Fn() -> Result<String, String>,
+    build_request: impl Fn() -> Result<String, String>,
     attempt: Attempt,
 ) -> Result<Value, String> {
     send_checked_with_attempt(
         state,
         dispatch,
-        || sign().map(Cow::Owned),
+        || build_request().map(Cow::Owned),
         attempt,
         Some(&state.chat_lanes),
         || Ok(()),

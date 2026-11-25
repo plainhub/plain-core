@@ -62,7 +62,6 @@ async fn signed_invites_ack_keys_and_deleted_broadcast_use_rust_snapshot() {
     let (generation, mut rx) = crate::test_support::HostRequests::connect(&state.host);
     let host = state.host.clone();
     let prefs = state.prefs.clone();
-    let actor = state.native_client_id().unwrap();
     let channel_id = channel.id.clone();
     let ble = state.ble_transport.clone();
     let responder = tokio::spawn(async move {
@@ -84,7 +83,7 @@ async fn signed_invites_ack_keys_and_deleted_broadcast_use_rust_snapshot() {
                         (body, key)
                     } else {
                         plain_rs::features::services::peers::ble_transport::test_channel_wire(
-                            &body, &[22; 32], &cid, &actor, id, &public,
+                            &body, &[22; 32], &cid, id, &public,
                         )
                     };
                     let pieces: plain_rs::infrastructure::transport::graphql_request::SignedEnvelope = plain_libs::serde_json::from_str(&body).unwrap();
@@ -320,7 +319,6 @@ async fn peer_key_changes_before_physical_send_are_rejected_and_accept_leave_dec
         "Peer changed before send"
     );
     let host = state.host.clone();
-    let actor = state.native_client_id().unwrap();
     let sender = plain_rs::features::prefs::security::get_entry(&state.prefs, "signature_public_key")
         .unwrap().unwrap().as_str().unwrap().to_owned();
     let ble = state.ble_transport.clone();
@@ -334,7 +332,7 @@ async fn peer_key_changes_before_physical_send_are_rejected_and_accept_leave_dec
                     let p = &req["params"];
                     let plain_rs::infrastructure::protocols::ble::Request::PeerGraphql { channel_id, body, .. } = ble.request_for_test(p) else { panic!("Expected peer request") };
                     let (body, response_key) = plain_rs::features::services::peers::ble_transport::test_channel_wire(
-                        &body, &[22; 32], &channel_id, &actor, "owner", &sender,
+                        &body, &[22; 32], &channel_id, "owner", &sender,
                     );
                     let wire: Value = plain_libs::serde_json::from_str::<Value>(&body).unwrap();
                     let query = wire["query"].as_str().unwrap();

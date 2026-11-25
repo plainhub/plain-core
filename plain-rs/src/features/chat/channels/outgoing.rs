@@ -2,7 +2,7 @@ use super::incoming_store as store;
 use super::messages::{ChannelMember, MemberSnapshot, State};
 use crate::features::chat::enums::DeviceType;
 use crate::infrastructure::db::{DChannel, Db};
-use crate::infrastructure::transport::contract::signed_request;
+use crate::infrastructure::transport::contract::peer_request;
 use plain_libs::anyhow::{Result, bail};
 use plain_libs::serde_json::{Value, json};
 use plain_libs::utils::base64::{base64_decode, base64_encode};
@@ -87,8 +87,8 @@ pub struct Request {
 }
 
 impl Request {
-    pub fn sign(&self, keypair: &[u8], channel_id: &str) -> Result<String> {
-        signed_request(keypair, self.query, self.variables.clone(), channel_id)
+    pub fn payload(&self) -> Result<String> {
+        peer_request(self.query, self.variables.clone())
             .map_err(plain_libs::anyhow::Error::msg)
     }
 }

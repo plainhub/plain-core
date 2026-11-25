@@ -131,7 +131,7 @@ async fn deliver(
                     .ok_or_else(|| plain_libs::anyhow::anyhow!("Channel member encryption key unavailable"))?;
                 public_key.to_vec()
             };
-            let wire = wire.get_or_try_init(|| async { request.sign(&keypair, cid) }).await?;
+            let wire = wire.get_or_try_init(|| async { request.payload() }).await?;
             let response = crate::features::services::peers::peer_transport::send_checked(
                 state,
                 &peer,

@@ -59,11 +59,9 @@ async fn direct_tls_peer_exchange_uses_xchacha_and_current_identity_without_host
         SaveMode::Insert,
     )
     .unwrap();
-    let wire = plain_rs::infrastructure::transport::contract::signed_request(
-        &kp,
+    let wire = plain_rs::infrastructure::transport::contract::peer_request(
         "query { __typename }",
         json!({}),
-        "",
     )
     .unwrap();
     let result = plain_rs::features::services::peers::peer_transport::send(
@@ -115,11 +113,9 @@ async fn queued_peer_send_uses_refreshed_address_with_unchanged_pairing() {
         SaveMode::Insert,
     )
     .unwrap();
-    let wire = plain_rs::infrastructure::transport::contract::signed_request(
-        &kp,
+    let wire = plain_rs::infrastructure::transport::contract::peer_request(
         "query { __typename }",
         json!({}),
-        "",
     )
     .unwrap();
     let capacity = state
@@ -143,11 +139,9 @@ async fn queued_peer_send_uses_refreshed_address_with_unchanged_pairing() {
     assert_eq!(response["data"]["__typename"], "Query");
     let mut without_address = remote.clone();
     without_address.ip.clear();
-    let wire = plain_rs::infrastructure::transport::contract::signed_request(
-        &kp,
+    let wire = plain_rs::infrastructure::transport::contract::peer_request(
         "query { __typename }",
         json!({}),
-        "",
     )
     .unwrap();
     let response = plain_rs::features::services::peers::peer_transport::send(

@@ -175,8 +175,8 @@ async fn refresh_from_owner(
     const QUERY: &str = "query($channelId: ID!) { channelState(channelId: $channelId) { name version signature members { peerId status name deviceType ip port signaturePublicKey encryptionPublicKey } } }";
     let Some(peer) = peers::get(&state.db, owner)? else { return Ok(()) };
     let Some(key) = peer.encryption_public_key else { return Ok(()) };
-    let request = crate::infrastructure::transport::contract::signed_request(
-        &[], QUERY, json!({"channelId": id}), id,
+    let request = crate::infrastructure::transport::contract::peer_request(
+        QUERY, json!({"channelId": id}),
     ).map_err(plain_libs::anyhow::Error::msg)?;
     let response = crate::features::services::peers::peer_transport::send(state, &peer, id, &key, &request)
         .await.map_err(plain_libs::anyhow::Error::msg)?;

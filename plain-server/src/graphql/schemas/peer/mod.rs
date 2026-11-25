@@ -32,11 +32,7 @@ pub(crate) async fn execute(
     body: &[u8],
 ) -> (u16, Vec<u8>) {
     use plain_rs::infrastructure::transport::auth;
-    let result = if channel_id.is_empty() {
-        auth::authenticate(&state.db, client_id, channel_id, body)
-    } else {
-        auth::authenticate_channel(&state.db, &state.prefs, client_id, channel_id, body)
-    };
+    let result = auth::authenticate(&state.db, &state.prefs, client_id, channel_id, body);
     let authenticated = match result {
         Ok(authenticated) => authenticated,
         Err(error) => return (error.http_status(), vec![]),

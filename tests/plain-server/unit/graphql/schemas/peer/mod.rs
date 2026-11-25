@@ -136,7 +136,7 @@ async fn encrypted_public_and_ble_rpc_share_auth_executor_and_receipts() {
                     let plain_rs::infrastructure::protocols::ble::Request::PeerGraphql { channel_id, body, .. } =
                         ble.request_for_test(&request["params"]) else { panic!("Expected peer request") };
                     let (wire, response_key) = plain_rs::features::services::peers::ble_transport::test_channel_wire(
-                        &body, &[22;32], &channel_id, &advertised_client_id,
+                        &body, &[22;32], &channel_id,
                         "706c6169-89f1-81c6-8bc7-6b67c2ffa178",
                         &plain_libs::utils::base64::base64_encode(&local_public_key),
                     );
@@ -191,7 +191,7 @@ async fn encrypted_public_and_ble_rpc_share_auth_executor_and_receipts() {
                 .get("variables")
                 .cloned()
                 .unwrap_or_else(|| json!({})),
-            "",
+            &client_id,
         )
         .unwrap();
         plain_rs::infrastructure::transport::http_request::encrypt_raw(
@@ -356,7 +356,7 @@ async fn signed_channel_notifications_apply_once_and_enforce_route_and_recipient
     use plain_rs::infrastructure::db::DPeer;
     use plain_rs::infrastructure::db::chat_store::{SaveMode, channels, peers};
     use plain_rs::infrastructure::transport::{
-        contract::{PeerDispatch, signed_request}, http_response,
+        contract::{PeerDispatch, peer_request}, http_response,
     };
     let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs = std::sync::Arc::new(
@@ -384,7 +384,7 @@ async fn signed_channel_notifications_apply_once_and_enforce_route_and_recipient
         let signer = &signer;
         let target = &target;
         async move {
-            let wire = signed_request(signer, query, variables, context).unwrap();
+            let wire = peer_request(query, variables).unwrap();
             let key = if context.is_empty() { key } else { local_key };
             let dispatch = PeerDispatch { peer: target, client_id: "owner", channel_id: context,
                 key: &key, signing_key: signer, message_id: None };
@@ -393,7 +393,7 @@ async fn signed_channel_notifications_apply_once_and_enforce_route_and_recipient
                 let plaintext = plain_rs::infrastructure::transport::http_request::decrypt_raw(
                     &key, "POST", "/peer_graphql", &body,
                 ).unwrap();
-                assert_eq!(plaintext, wire.as_bytes());
+                assert!(plain_libs::serde_json::from_slice::<Value>(&plaintext).unwrap()["signature"].as_str().is_some_and(|signature| !signature.is_empty()));
                 assert_eq!(body.len(), 24 + plaintext.len() + 16);
             }
             let (status, response) = execute(state, "owner", context, &body).await;
@@ -463,9 +463,9 @@ async fn signed_channel_notifications_apply_once_and_enforce_route_and_recipient
         r#"mutation($content: String!) { createChatItem(content:$content) { id } ...Control }
            fragment Control on Mutation { notifyChannelDeleted(channelId:"channel",version:3) }"#,
     ] {
-        let control = signed_request(
-            &signer, query,
-            json!({"content":r#"{"type":"MESSAGE","value":{"text":"fixture","format":"PLAIN","items":[]}}"#}), "channel",
+        let control = peer_request(
+            query,
+            json!({"content":r#"{"type":"MESSAGE","value":{"text":"fixture","format":"PLAIN","items":[]}}"#}),
         ).unwrap();
         let (body, _) = plain_rs::features::services::peers::ble_transport::test_seal_peer_request(&dispatch, &control);
         assert_eq!(execute(&state, "owner", "channel", &body).await.0, 400);
@@ -478,14 +478,14 @@ async fn signed_channel_notifications_apply_once_and_enforce_route_and_recipient
         let member_signer = &member_signer;
         async move {
             let wire = plain_rs::infrastructure::transport::contract::chat_item_request(
-                member_signer, r#"{"type":"MESSAGE","value":{"text":"unpaired delivery","format":"PLAIN","items":[]}}"#, "channel",
+                r#"{"type":"MESSAGE","value":{"text":"unpaired delivery","format":"PLAIN","items":[]}}"#,
             ).unwrap();
             let dispatch = PeerDispatch { peer: target, client_id: "new-peer", channel_id: "channel",
                 key: &local_key, signing_key: member_signer, message_id: Some(id) };
             let (body, key) = plain_rs::features::services::peers::ble_transport::test_seal_peer_request(&dispatch, &wire);
             let local_peer = peers::get(&state.db, "new-peer").unwrap().unwrap();
             let (plaintext, _) = plain_rs::features::services::peers::ble_transport::test_channel_wire(
-                &body, &local_seed, "channel", "new-peer", &target.id, &local_peer.public_key,
+                &body, &local_seed, "channel", &target.id, &local_peer.public_key,
             );
             assert_eq!(body.len(), 32 + plaintext.len() + 16);
             let payload: Value = plain_libs::serde_json::from_str(&plaintext).unwrap();

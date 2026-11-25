@@ -18,12 +18,12 @@ impl PeerTransport for Transport {
     async fn queued_message(
         &self,
         dispatch: &PeerDispatch<'_>,
-        sign: impl Fn() -> Result<String, String> + Send + Sync,
+        build_request: impl Fn() -> Result<String, String> + Send + Sync,
     ) -> Result<(), String> {
         let response = crate::features::services::peers::peer_transport::send_chat(
             &self.state,
             dispatch,
-            sign,
+            build_request,
             self.attempt,
         )
         .await?;

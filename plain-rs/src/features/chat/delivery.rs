@@ -264,14 +264,14 @@ impl Delivery {
         let dispatch = PeerDispatch {
             peer: &peer, client_id, channel_id: cid, key: &key, signing_key, message_id,
         };
-        let signed = std::sync::OnceLock::<(String, tokio::time::Instant)>::new();
+        let queued_request = std::sync::OnceLock::<(String, tokio::time::Instant)>::new();
         let error = transport
             .queued_message(&dispatch, || {
                 if !cid.is_empty() {
                     self.require_joined(cid, client_id, target)
                         .map_err(|e| e.to_string())?;
                 }
-                if let Some((request, issued)) = signed.get() {
+                if let Some((request, issued)) = queued_request.get() {
                     if issued.elapsed().as_millis()
                         >= u128::from(crate::infrastructure::transport::auth::GRAPHQL_WINDOW_MS)
                     {
@@ -281,8 +281,8 @@ impl Delivery {
                     }
                     return Ok(request.clone());
                 }
-                let request = chat_item_request(signing_key, content, cid)?;
-                let _ = signed.set((request.clone(), tokio::time::Instant::now()));
+                let request = chat_item_request(content)?;
+                let _ = queued_request.set((request.clone(), tokio::time::Instant::now()));
                 Ok(request)
             })
             .await

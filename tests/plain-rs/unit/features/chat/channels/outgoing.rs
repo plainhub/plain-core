@@ -36,15 +36,10 @@ fn channel_snapshots_include_each_member_once_and_sign_typed_variables() {
         &Action::Invite
             .request(&channel, "paired", Some(&state))
             .unwrap()
-            .sign(&keys, "")
+            .payload()
             .unwrap(),
     )
     .unwrap();
-    assert!(plain_libs::crypto::ed25519_verify(
-        &base64_encode(&public),
-        &envelope.signing_bytes("", None),
-        &envelope.signature
-    ));
     assert!(
         envelope
             .query

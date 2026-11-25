@@ -61,30 +61,19 @@ impl AuthError {
         }
     }
 }
-fn decrypt(
-    key: &[u8],
-    public_key: &str,
-    channel_id: &str,
-    body: &[u8],
-) -> Result<Envelope, AuthError> {
-    let plaintext = super::http_request::decrypt_raw(key, "POST", "/peer_graphql", body)
-        .ok_or(AuthError::DecryptFailed)?;
-    verify(public_key, channel_id, None, &plaintext)
-}
-
 fn verify(
     public_key: &str,
-    channel_id: &str,
-    peers: Option<(&str, &str)>,
+    channel_id: Option<&str>,
+    recipient_id: &str,
     plaintext: &[u8],
 ) -> Result<Envelope, AuthError> {
     let (signed, id) = parse(plaintext)?;
     if signed.signature.is_empty()
-        || signed.message_id.as_ref().is_some_and(|id| id.is_empty() || peers.is_none())
+        || signed.message_id.as_ref().is_some_and(|id| id.is_empty() || channel_id.is_none())
     {
         return Err(AuthError::MissingFields);
     }
-    if !ed25519_verify(public_key, &signed.signing_bytes(channel_id, peers), &signed.signature) {
+    if !ed25519_verify(public_key, &signed.signing_bytes(channel_id, recipient_id), &signed.signature) {
         return Err(AuthError::BadSignature);
     }
     Ok(Envelope {
@@ -108,49 +97,63 @@ fn parse(plaintext: &[u8]) -> Result<(SignedEnvelope, RequestId), AuthError> {
     Ok((signed, id))
 }
 
-pub fn authenticate(
-    db: &Db,
-    client_id: &str,
-    channel_id: &str,
-    body: &[u8],
-) -> Result<AuthenticatedPeer, AuthError> {
-    if !channel_id.is_empty() {
-        return Err(AuthError::MissingFields);
-    }
-    let peer = peer(db, client_id)?;
-    if !peer.is_paired() {
-        return Err(AuthError::NotPaired);
-    }
-    let key = base64_decode(&peer.key);
-    let envelope = decrypt(&key, &peer.public_key, channel_id, body)?;
-    admit(db, peer, channel_id, key, envelope)
-}
-
 #[cfg(feature = "prefs")]
-pub fn authenticate_channel(
+pub fn authenticate(
     db: &Db,
     prefs: &crate::features::prefs::Prefs,
     client_id: &str,
     channel_id: &str,
     body: &[u8],
 ) -> Result<AuthenticatedPeer, AuthError> {
-    let peer = peer(db, client_id)?;
-    let actor = prefs.get::<String>(crate::features::prefs::pref_keys::CLIENT_ID)
+    let recipient_id = prefs
+        .get::<String>(crate::features::prefs::pref_keys::CLIENT_ID)
         .map_err(|_| AuthError::Storage)?
+        .filter(|id| !id.is_empty())
         .ok_or(AuthError::Storage)?;
-    let private = crate::features::prefs::security::encryption_private_key(prefs)
-        .map_err(|_| AuthError::Storage)?;
-    let (plaintext, key) = super::channel_request::open(&private, channel_id, body)
-        .ok_or(AuthError::DecryptFailed)?;
-    let envelope = verify(&peer.public_key, channel_id, Some((client_id, &actor)), &plaintext)?;
-    admit(db, peer, channel_id, key.to_vec(), envelope)
+    authenticate_for(db, client_id, &recipient_id, channel_id, body, || {
+        crate::features::prefs::security::encryption_private_key(prefs)
+            .map_err(|_| AuthError::Storage)
+    })
+}
+
+fn authenticate_for(
+    db: &Db,
+    client_id: &str,
+    recipient_id: &str,
+    channel_id: &str,
+    body: &[u8],
+    channel_key: impl FnOnce() -> Result<[u8; 32], AuthError>,
+) -> Result<AuthenticatedPeer, AuthError> {
+    let peer = peer(db, client_id)?;
+    let channel = (!channel_id.is_empty()).then_some(channel_id);
+    let (plaintext, key) = if let Some(channel) = channel {
+        let (plaintext, key) = super::channel_request::open(&channel_key()?, channel, body)
+            .ok_or(AuthError::DecryptFailed)?;
+        (plaintext, key.to_vec())
+    } else {
+        if !peer.is_paired() {
+            return Err(AuthError::NotPaired);
+        }
+        let key = base64_decode(&peer.key);
+        let plaintext = super::http_request::decrypt_raw(&key, "POST", "/peer_graphql", body)
+            .ok_or(AuthError::DecryptFailed)?;
+        (plaintext, key)
+    };
+    let envelope = verify(&peer.public_key, channel, recipient_id, &plaintext)?;
+    admit(db, peer, channel_id, key, envelope)
 }
 
 fn peer(db: &Db, client_id: &str) -> Result<DPeer, AuthError> {
     db.with_conn(|c| {
         c
             .query_row(
-                &format!("SELECT {PEER_COLS} FROM peers WHERE id=?1"),
+                // A signature identifies the sender only if its key belongs to one peer.
+                &format!(
+                    "SELECT {PEER_COLS} FROM peers WHERE id=?1 AND NOT EXISTS (
+                        SELECT 1 FROM peers AS other
+                        WHERE other.id<>peers.id AND other.signature_public_key=peers.signature_public_key
+                    )"
+                ),
                 [client_id],
                 row_to_peer,
             )

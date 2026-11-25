@@ -5,7 +5,8 @@
 //! actual HTTP POST is the app's job via the [`PeerTransport`] trait —
 //! Native hosts use the shared async HTTP client.
 
-use plain_libs::serde_json::json;
+use super::graphql_request::SignedEnvelope;
+use plain_libs::serde_json::{self, Value, json};
 
 use plain_libs::utils::http_url::build_url;
 
@@ -25,14 +26,16 @@ pub struct PeerDispatch<'a> {
 impl PeerDispatch<'_> {
     pub(crate) fn seal(&self, payload: &str) -> Result<(Vec<u8>, [u8; 32]), String> {
         let key: &[u8; 32] = self.key.try_into().map_err(|_| "Invalid peer encryption key")?;
-        let sealed = if self.channel_id.is_empty() {
-            super::http_request::encrypt_raw(key, "POST", "/peer_graphql", payload.as_bytes())
-                .map(|body| (body, *key))
+        let channel = (!self.channel_id.is_empty()).then_some(self.channel_id);
+        let mut request: SignedEnvelope = serde_json::from_str(payload).map_err(|e| e.to_string())?;
+        request.message_id = self.message_id.map(ToOwned::to_owned);
+        request.sign(self.signing_key, channel, &self.peer.id)?;
+        let bytes = serde_json::to_vec(&request).map_err(|e| e.to_string())?;
+        let sealed = if let Some(channel) = channel {
+            super::channel_request::seal(key, channel, &bytes)
         } else {
-            super::channel_request::seal(
-                key, self.channel_id, self.client_id, &self.peer.id,
-                self.message_id, self.signing_key, payload.as_bytes(),
-            )
+            super::http_request::encrypt_raw(key, "POST", "/peer_graphql", &bytes)
+                .map(|body| (body, *key))
         };
         sealed.ok_or_else(|| "Invalid peer encryption key".to_owned())
     }
@@ -58,10 +61,10 @@ pub trait PeerTransport: Send + Sync {
     fn queued_message(
         &self,
         dispatch: &PeerDispatch<'_>,
-        sign: impl Fn() -> Result<String, String> + Send + Sync,
+        build_request: impl Fn() -> Result<String, String> + Send + Sync,
     ) -> impl std::future::Future<Output = Result<(), String>> + Send {
         async move {
-            let body = sign()?;
+            let body = build_request()?;
             tokio::time::timeout(CHAT_DELIVERY_TIMEOUT, self.message(dispatch, &body))
                 .await
                 .map_err(|_| "Peer delivery unconfirmed after 20s".to_string())?
@@ -87,9 +90,9 @@ impl<T: PeerTransport> PeerTransport for std::sync::Arc<T> {
     async fn queued_message(
         &self,
         dispatch: &PeerDispatch<'_>,
-        sign: impl Fn() -> Result<String, String> + Send + Sync,
+        build_request: impl Fn() -> Result<String, String> + Send + Sync,
     ) -> Result<(), String> {
-        (**self).queued_message(dispatch, sign).await
+        (**self).queued_message(dispatch, build_request).await
     }
 }
 
@@ -174,36 +177,35 @@ pub fn message_response(value: &plain_libs::serde_json::Value) -> Result<(), Str
 
 pub const CREATE_CHAT_ITEM: &str = "mutation CreateChatItem($content: String!) { createChatItem(content: $content) { id fromId toId createdAt } }";
 
-pub fn signed_request(
-    kp_bytes: &[u8],
-    query: &str,
-    variables: plain_libs::serde_json::Value,
-    channel_id: &str,
-) -> Result<String, String> {
-    let mut request = super::graphql_request::SignedEnvelope {
+fn request(query: &str, variables: Value) -> Result<SignedEnvelope, String> {
+    let Value::Object(variables) = variables else {
+        return Err("Expected GraphQL variables object".into());
+    };
+    Ok(SignedEnvelope {
         signature: String::new(),
         message_id: None,
         request_id: crate::features::record_id::generate(),
         query: query.to_owned(),
-        variables: match variables {
-            plain_libs::serde_json::Value::Object(map) => map,
-            _ => return Err("Expected GraphQL variables object".into()),
-        },
-    };
-    if channel_id.is_empty() {
-        request.sign(kp_bytes, channel_id, None)?;
-    }
-    plain_libs::serde_json::to_string(&request).map_err(|e| e.to_string())
+        variables,
+    })
 }
-pub fn chat_item_request(
+
+pub fn peer_request(query: &str, variables: Value) -> Result<String, String> {
+    serde_json::to_string(&request(query, variables)?).map_err(|e| e.to_string())
+}
+
+#[cfg(any(test, feature = "test-seams"))]
+pub fn signed_request(
     kp_bytes: &[u8],
-    content: &str,
-    channel_id: &str,
+    query: &str,
+    variables: Value,
+    recipient_id: &str,
 ) -> Result<String, String> {
-    signed_request(
-        kp_bytes,
-        CREATE_CHAT_ITEM,
-        json!({"content":content}),
-        channel_id,
-    )
+    let mut request = request(query, variables)?;
+    request.sign(kp_bytes, None, recipient_id)?;
+    serde_json::to_string(&request).map_err(|e| e.to_string())
+}
+
+pub fn chat_item_request(content: &str) -> Result<String, String> {
+    peer_request(CREATE_CHAT_ITEM, json!({"content":content}))
 }

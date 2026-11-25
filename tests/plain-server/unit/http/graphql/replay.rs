@@ -261,7 +261,7 @@ async fn distinct_keys_reject_cross_route_frames_and_signed_envelopes_require_pe
             &keypair,
             "{ __typename }",
             plain_libs::serde_json::json!({}),
-            "",
+            &state.native_client_id().unwrap(),
         )
         .unwrap(),
     ];

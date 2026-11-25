@@ -78,7 +78,7 @@ async fn host_transport_preserves_signed_wire_and_requires_an_actual_receipt() {
                 let crate::infrastructure::protocols::ble::Request::PeerGraphql { body, .. } =
                     ble.request_for_test(&request["params"]) else { panic!("Expected peer request") };
                 let (wire, response_key) = crate::features::services::peers::ble_transport::test_channel_wire(
-                    &body, &RECIPIENT_KEY, CHANNEL, ACTOR, "fixture", &public_key,
+                    &body, &RECIPIENT_KEY, CHANNEL, "fixture", &public_key,
                 );
                 let envelope: SignedEnvelope = plain_libs::serde_json::from_str(&wire).unwrap();
                 assert_eq!(envelope.query, CREATE_CHAT_ITEM);
@@ -98,7 +98,7 @@ async fn host_transport_preserves_signed_wire_and_requires_an_actual_receipt() {
     let dispatch = PeerDispatch { peer: &peer, client_id: ACTOR, channel_id: CHANNEL, key: &key, signing_key: &signing_key, message_id: Some("message") };
     let send = || {
         transport.queued_message(&dispatch, || {
-            chat_item_request(&signing_key, CONTENT, CHANNEL)
+            chat_item_request(CONTENT)
         })
     };
     send().await.unwrap();
