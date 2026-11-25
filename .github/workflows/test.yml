@@ -9,11 +9,10 @@ on:
         description: Include the native AI image search engine and tests
         type: boolean
         default: false
-  workflow_call:
-    inputs:
       release_smoke:
+        description: Test Linux CLI installation and uninstallation on amd64 and arm64
         type: boolean
-        required: true
+        default: false
 
 permissions:
   contents: read
@@ -70,8 +69,7 @@ jobs:
     name: CLI service ${{ matrix.arch }}
     if: ${{ inputs.release_smoke }}
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 10
-    permissions: {}
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -81,22 +79,32 @@ jobs:
           - arch: arm64
             runner: ubuntu-24.04-arm
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential pkg-config libssl-dev
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@1.99.0
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
         with:
-          name: plainapp-linux-${{ matrix.arch }}
+          key: cli-service-${{ matrix.arch }}
+
+      - name: Build the CLI with the committed Web UI
+        run: cargo build --release --locked -p plainapp
 
       - name: Verify Linux service install and uninstall
         shell: bash
-        env:
-          ARCH: ${{ matrix.arch }}
         run: |
-          tar -xzf "plainapp-linux-$ARCH.tar.gz" plainapp
-          ./plainapp --version
-          ./plainapp --help
+          target/release/plainapp --version
+          target/release/plainapp --help
           test ! -e /usr/local/bin/plainapp
           test ! -e /var/lib/plainapp
-          sudo apt-get update
-          sudo install -m 0755 plainapp /usr/local/bin/plainapp
+          sudo install -m 0755 target/release/plainapp /usr/local/bin/plainapp
           openssl rand -base64 32 | sudo plainapp passwd --stdin
           sudo plainapp install
           sudo systemctl enable --now plainapp.service

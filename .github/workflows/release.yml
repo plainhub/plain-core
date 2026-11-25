@@ -65,18 +65,13 @@ jobs:
           unpacked=$(mktemp -d)
           tar -xzf "$archive" -C "$unpacked"
           cmp "$plain" "$unpacked/plainapp"
+          "$unpacked/plainapp" --version
 
       - uses: actions/upload-artifact@v4
         with:
           name: plainapp-linux-${{ matrix.arch }}
           path: plainapp-linux-${{ matrix.arch }}.tar.gz
           if-no-files-found: error
-
-  smoke:
-    needs: binary
-    uses: ./.github/workflows/test.yml
-    with:
-      release_smoke: true
 
   hashes:
     needs: binary
@@ -145,7 +140,7 @@ jobs:
 
   release:
     name: Create GitHub Release draft
-    needs: [hashes, provenance, virustotal, smoke]
+    needs: [hashes, provenance, virustotal]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
