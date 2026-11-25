@@ -176,6 +176,7 @@ jobs:
         run: |
           : "${SIGNING_KEY:?Configure RELEASE_SIGNING_PRIVATE_KEY}"
           : "${PUBLIC_KEY:?Configure RELEASE_SIGNING_PUBLIC_KEY}"
+          grep -Fxq "RELEASE_PUBLIC_KEY='$PUBLIC_KEY'" install.sh
           version=$(python3 -c 'import tomllib; print(tomllib.load(open("plain-cli/Cargo.toml", "rb"))["package"]["version"])')
           schema=$(sha256sum schema/database.sql | cut -d ' ' -f1)
           (cd artifacts && sha256sum --check --strict checksums.txt)
@@ -211,6 +212,14 @@ jobs:
           (cd artifacts && sha256sum --check checksums.txt)
           {
             cat <<'NOTES'
+          ## Install
+
+          ```sh
+          curl -fsSL https://raw.githubusercontent.com/plainhub/plain-core/main/install.sh | bash
+          ```
+
+          The installer selects the Linux package and checks its release signature and checksum before installing it.
+
           ## What's Changed
 
           ### Improvements

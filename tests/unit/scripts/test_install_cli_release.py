@@ -15,7 +15,7 @@ INSTALLER = Path(__file__).resolve().parents[3] / "install.sh"
 
 @unittest.skipUnless(shutil.which("openssl") and shutil.which("sha256sum"), "installer tools required")
 class InstallCliReleaseTest(unittest.TestCase):
-    def run_installer(self, machine, damage=None):
+    def run_installer(self, machine, damage=None, use_fixture_key=True):
         with tempfile.TemporaryDirectory() as path:
             root = Path(path)
             checksums = []
@@ -68,6 +68,8 @@ printf '%s\\n' "$1" >> "$TEST_ROOT/sudo-calls"
             env = dict(os.environ, PATH=f"{root}:{os.environ['PATH']}",
                        PLAINAPP_RELEASE_PUBLIC_KEY=base64.b64encode(public).decode(),
                        TEST_MACHINE=machine, TEST_ROOT=str(root))
+            if not use_fixture_key:
+                env.pop("PLAINAPP_RELEASE_PUBLIC_KEY")
             result = subprocess.run(["bash", str(INSTALLER)], env=env, capture_output=True, text=True)
             calls = root / "sudo-calls"
             installed = root / "installed"
@@ -91,3 +93,9 @@ printf '%s\\n' "$1" >> "$TEST_ROOT/sudo-calls"
                 self.assertIn(message, result.stderr)
                 self.assertEqual(calls, [])
                 self.assertIsNone(installed)
+
+    def test_default_trust_rejects_an_unknown_signing_key(self):
+        result, calls, _ = self.run_installer("x86_64", use_fixture_key=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("signature verification failed", result.stderr)
+        self.assertEqual(calls, [])

@@ -6,6 +6,7 @@ REPO="plainhub/plain-core"
 BIN="plainapp"
 SERVICE="plainapp"
 INSTALL_DIR="/usr/local/bin"
+RELEASE_PUBLIC_KEY='MCowBQYDK2VwAyEAwJ82lZQXMtwiMdQ67VxPVZXljZUAYDfudpvxAxBiImg='
 
 fail() {
     echo "[plainapp] ERROR: $1" >&2
@@ -30,7 +31,7 @@ esac
 command -v curl >/dev/null || fail "curl is required"
 command -v openssl >/dev/null || fail "OpenSSL 3 is required for release signature verification"
 command -v sha256sum >/dev/null || fail "sha256sum is required"
-trusted_key=${PLAINAPP_RELEASE_PUBLIC_KEY:?Set PLAINAPP_RELEASE_PUBLIC_KEY to the trusted release public key}
+trusted_key=${PLAINAPP_RELEASE_PUBLIC_KEY:-$RELEASE_PUBLIC_KEY}
 
 echo "[plainapp] Detecting platform... $ARCH"
 

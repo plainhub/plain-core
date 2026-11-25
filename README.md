@@ -168,6 +168,13 @@ After API changes, run `yarn graphql:codegen` in plain-desktop. Mobile reads the
 
 ### Install
 
+```bash
+curl -fsSL https://raw.githubusercontent.com/plainhub/plain-core/main/install.sh | bash
+```
+
+<details>
+<summary>Verify the installer before running it</summary>
+
 In an empty directory, set `tag` to the published signed release you want to install. Verify the [release public key](release-signing.pub) through a trusted channel, then export its single-line Base64 DER value as `PLAINAPP_RELEASE_PUBLIC_KEY`.
 
 ```bash
@@ -185,6 +192,8 @@ In an empty directory, set `tag` to the published signed release you want to ins
   bash ./install.sh "$tag"
 )
 ```
+
+</details>
 
 The installer uses `curl`, OpenSSL 3 and `sha256sum` to verify the release signature and the matching archive before installing the binary and starting the service.
 First installation requires an admin password entered through a terminal; reinstalling preserves it.
