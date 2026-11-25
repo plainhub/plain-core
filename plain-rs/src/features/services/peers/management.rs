@@ -450,6 +450,7 @@ async fn connection_loop(
                         .await?;
                 }
                 let messages = async {
+                    let mut rejected = std::collections::HashSet::new();
                     let mut clipboard_id = None;
                     let mut clipboard_sequence = 0_u64;
                     let mut clipboard_update = true;
@@ -511,8 +512,15 @@ async fn connection_loop(
                                     Incoming::Ready => {
                                         data_changed.notify_one();
                                     }
-                                    Incoming::Rejected(error) => {
-                                        log::debug!("Management subscription rejected: {error}")
+                                    Incoming::Rejected { id, reason } => {
+                                        log::debug!("Management subscription rejected: {id}: {reason}");
+                                        if clipboard_id.as_ref() == Some(&id) {
+                                            clipboard_id = None;
+                                        } else if let Some(spec) = management_wire::operations()
+                                            .find(|spec| spec.field == id)
+                                        {
+                                            rejected.insert(spec.field);
+                                        }
                                     }
                                     Incoming::Clipboard(operation, change) => {
                                         if clipboard_id.as_ref() != Some(&operation) {
@@ -554,7 +562,14 @@ async fn connection_loop(
                                         data_changed.notify_one();
                                         delay = Duration::from_secs(1);
                                         if kind == "ACCESS_UPDATED" {
-                                            break;
+                                            clipboard_update = true;
+                                            for spec in management_wire::operations()
+                                                .filter(|spec| rejected.remove(spec.field))
+                                            {
+                                                let message = management_wire::subscribe(spec, spec.field.into());
+                                                let frame = management_wire::encode(&message, &key, &mut stream)?;
+                                                socket.send(Message::Binary(frame.into())).await?;
+                                            }
                                         }
                                     }
                                 }

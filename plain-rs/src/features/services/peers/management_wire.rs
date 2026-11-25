@@ -41,7 +41,7 @@ pub(super) enum Incoming {
     ClipboardComplete(String),
     Pong,
     Ready,
-    Rejected(String),
+    Rejected { id: String, reason: String },
 }
 pub(super) fn event(frame: &[u8], key: &[u8], stream: &mut websocket::Stream) -> Result<Incoming> {
     let plain = stream
@@ -79,14 +79,14 @@ pub(super) fn event(frame: &[u8], key: &[u8], stream: &mut websocket::Stream) ->
             }
             Ok(Incoming::Event(spec.event))
         }
-        ServerMessage::Error { id, payload } => Ok(Incoming::Rejected(format!(
-            "{id}: {}",
-            payload
+        ServerMessage::Error { id, payload } => Ok(Incoming::Rejected {
+            id,
+            reason: payload
                 .iter()
                 .map(|error| error.message.as_str())
                 .collect::<Vec<_>>()
-                .join(", ")
-        ))),
+                .join(", "),
+        }),
         ServerMessage::Complete { id } if id.starts_with("clipboardChanged:") => {
             Ok(Incoming::ClipboardComplete(id))
         }
