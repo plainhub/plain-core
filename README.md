@@ -183,7 +183,8 @@ sudo plainapp passwd   # change the admin password without stopping the service
 - `http://<host>:8080` — HTTP
 - `https://<host>:8443` — HTTPS with a self-signed certificate created on first start for `plainapp.local` and `localhost`
 
-### Preferences
+<details>
+<summary>Preferences</summary>
 
 Set preferences through the running service:
 
@@ -209,6 +210,8 @@ Management uses the existing local Unix socket with a private directory, owner-o
 The installed Linux service runs as root, so management commands require `sudo`; this does not protect against programs already able to execute arbitrary root commands.
 User-run instances trust that OS account, including other programs running as that account.
 No management TCP port or shared secret is added.
+
+</details>
 
 ### Install manually
 
