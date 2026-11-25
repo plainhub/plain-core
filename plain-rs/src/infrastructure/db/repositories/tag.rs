@@ -132,16 +132,28 @@ pub fn relations_for_keys_of_kind(
     if keys.is_empty() {
         return Ok(Vec::new());
     }
-    let keys = plain_libs::serde_json::to_string(keys)
+    let json = plain_libs::serde_json::to_string(keys)
         .map_err(|error| plain_libs::rusqlite::Error::ToSqlConversionFailure(Box::new(error)))?;
-    db.with_conn(|c| {
-        c.prepare("SELECT r.tag_id,r.target_key FROM json_each(?1) k
-            JOIN tag_relations r ON r.target_key=k.value
-            JOIN tags t ON t.id=r.tag_id
-            WHERE t.type=?2 ORDER BY k.key,r.tag_id")?
-            .query_map(params![keys,kind],row_to_relation)?
-            .collect()
-    })
+    let mut matches = db.with_conn(|conn| {
+        conn.prepare(
+            "SELECT k.key,r.tag_id FROM json_each(?1) k
+             JOIN tag_relations r ON r.target_key=k.value
+             JOIN tags t ON t.id=r.tag_id
+             WHERE t.type=?2",
+        )?
+            .query_map(params![json, kind], |row| {
+                Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))
+            })?
+            .collect::<plain_libs::rusqlite::Result<Vec<_>>>()
+    })?;
+    matches.sort_unstable();
+    Ok(matches
+        .into_iter()
+        .map(|(index, tag_id)| TagRelationRow {
+            tag_id,
+            target_key: keys[index as usize].clone(),
+        })
+        .collect())
 }
 pub fn tags_for_key_of_kind(db: &Db, key: &str, kind: DataType) -> plain_libs::rusqlite::Result<Vec<TagRow>> {
     db.with_conn(|c|c.prepare(&format!("SELECT {TAG_COLUMNS} FROM tags WHERE type=?1 AND id IN (SELECT tag_id FROM tag_relations WHERE target_key=?2) ORDER BY id"))?.query_map(params![kind,key],row_to_tag)?.collect())

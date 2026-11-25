@@ -116,6 +116,7 @@ fn tag_type_round_trips_all_enum_names_and_rejects_old_codes() {
 #[test]
 fn typed_bulk_lookup_preserves_input_order_and_repeated_keys() {
     let db = test_db("tag_order");
+    db.with_conn(|conn| conn.execute_batch("PRAGMA reverse_unordered_selects=ON")).unwrap();
     for (id, kind) in [("z", DataType::File), ("a", DataType::File), ("note", DataType::Note)] {
         crate::infrastructure::db::tag::insert_tag(&db, &tag(id, kind, id)).unwrap();
         crate::features::tags::add_relations(&db, &[(id.into(), "key2".into())]).unwrap();
@@ -125,4 +126,49 @@ fn typed_bulk_lookup_preserves_input_order_and_repeated_keys() {
     let rows = crate::features::tags::relations_for_keys_of_kind(&db, &keys, DataType::File).unwrap();
     let actual = rows.iter().map(|r|(r.target_key.as_str(),r.tag_id.as_str())).collect::<Vec<_>>();
     assert_eq!(actual, [("key2","a"),("key2","z"),("key1","z"),("key2","a"),("key2","z")]);
+}
+
+#[test]
+fn batch_lookup_avoids_sqlite_sorts_and_reprepares() {
+    use plain_libs::rusqlite::ffi;
+    use std::ffi::c_void;
+
+    #[derive(Default)]
+    struct Counts {
+        queries: usize,
+        sorts: i32,
+        reprepares: i32,
+    }
+
+    unsafe extern "C" fn record(_: u32, ctx: *mut c_void, stmt: *mut c_void, _: *mut c_void) -> i32 {
+        unsafe {
+            let counts = &mut *ctx.cast::<Counts>();
+            counts.queries += 1;
+            counts.sorts += ffi::sqlite3_stmt_status(stmt.cast(), ffi::SQLITE_STMTSTATUS_SORT, 1);
+            counts.reprepares += ffi::sqlite3_stmt_status(stmt.cast(), ffi::SQLITE_STMTSTATUS_REPREPARE, 1);
+        }
+        0
+    }
+
+    let db = test_db("tag_batch_plan");
+    db.with_conn(|conn| conn.execute_batch(
+        "INSERT INTO tags VALUES('f','files','FILE','t','t'),('n','notes','NOTE','t','t');
+         INSERT INTO tag_relations VALUES('f','a','t'),('f','b','t'),('n','a','t');
+         ANALYZE;",
+    )).unwrap();
+    let mut counts = Counts::default();
+    db.with_conn(|conn| unsafe {
+        assert_eq!(ffi::sqlite3_trace_v2(conn.handle(), ffi::SQLITE_TRACE_PROFILE as u32,
+            Some(record), (&raw mut counts).cast()), ffi::SQLITE_OK);
+    });
+    let hit = crate::features::tags::relations_for_keys_of_kind(&db, &["b".into(), "a".into()], DataType::File);
+    let miss = crate::features::tags::relations_for_keys_of_kind(&db, &["absent".into()], DataType::Note);
+    db.with_conn(|conn| unsafe {
+        assert_eq!(ffi::sqlite3_trace_v2(conn.handle(), 0, None, std::ptr::null_mut()), ffi::SQLITE_OK);
+    });
+    assert_eq!(hit.unwrap().len(), 2);
+    assert!(miss.unwrap().is_empty());
+    assert_eq!(counts.queries, 2);
+    assert_eq!(counts.sorts, 0);
+    assert_eq!(counts.reprepares, 0);
 }
