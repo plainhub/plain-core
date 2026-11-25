@@ -1,10 +1,10 @@
 //! Nearby-device discovery stack: LAN service discovery (mDNS browser +
-//! responder), peer online/offline state, the macOS dns_sd FFI browser,
+//! responder), peer online/offline state, the Apple dns_sd FFI browser,
 //! and Windows mDNS firewall diagnostics.
 
 pub mod firewall;
-#[cfg(target_os = "macos")]
-pub mod macos_dns_sd;
+#[cfg(any(target_os = "macos", target_os = "ios"))]
+pub mod apple_dns_sd;
 
 pub use firewall::MdnsFirewallStatus;
 

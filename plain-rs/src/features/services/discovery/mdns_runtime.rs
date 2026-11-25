@@ -72,10 +72,8 @@ impl Drop for OwnerLease {
 }
 struct Session {
     browser: MdnsServiceBrowser,
-    /// macOS only. The system DNS-SD browser sees devices the sandboxed
-    /// browser cannot, which is what nearby discovery is for.
-    #[cfg(target_os = "macos")]
-    system_browser: crate::infrastructure::platform::discovery::macos_dns_sd::MacDnsSdBrowser,
+    #[cfg(any(target_os = "macos", target_os = "ios"))]
+    system_browser: crate::infrastructure::platform::discovery::apple_dns_sd::AppleDnsSdBrowser,
     hostname: Arc<RwLock<String>>,
     scanning: Arc<AtomicBool>,
     context: Context,
@@ -91,6 +89,8 @@ impl Drop for Session {
             .context
             .devices
             .scanning_modes(Some(false), None, vec![]);
+        #[cfg(any(target_os = "macos", target_os = "ios"))]
+        self.system_browser.stop();
         self.browser.shutdown();
     }
 }
@@ -191,7 +191,7 @@ impl Runtime {
     pub fn browser_activity(
         &self,
     ) -> Vec<crate::infrastructure::platform::discovery::MdnsActivity> {
-        #[cfg(target_os = "macos")]
+        #[cfg(any(target_os = "macos", target_os = "ios"))]
         {
             let guard = self.session.lock().unwrap();
             guard
@@ -199,7 +199,7 @@ impl Runtime {
                 .map(|session| session.system_browser.activity())
                 .unwrap_or_default()
         }
-        #[cfg(not(target_os = "macos"))]
+        #[cfg(not(any(target_os = "macos", target_os = "ios")))]
         {
             Vec::new()
         }
@@ -328,7 +328,7 @@ impl Runtime {
         browser.install_listener();
         // The system browser reports the same device shape as the sandboxed
         // one, so it feeds the same observer and the same event stream.
-        #[cfg(target_os = "macos")]
+        #[cfg(any(target_os = "macos", target_os = "ios"))]
         let system_browser = {
             let system_observer = context.clone();
             let system_visible = scanning.clone();
@@ -337,7 +337,7 @@ impl Runtime {
             let system_status = state.peer_status.clone();
             let system_db = state.db.clone();
             let system_browser =
-                crate::infrastructure::platform::discovery::macos_dns_sd::MacDnsSdBrowser::new(
+                crate::infrastructure::platform::discovery::apple_dns_sd::AppleDnsSdBrowser::new(
                     move |found| {
                         let Some(runtime) = system_weak.upgrade() else {
                             return;
@@ -357,7 +357,7 @@ impl Runtime {
                             platform: found.platform,
                             last_seen_at: crate::infrastructure::db::now_iso(),
                             remote_access: found.remote_access,
-                signature_public_key: found.signature_public_key,
+                            signature_public_key: found.signature_public_key,
                             discovery_methods: vec![DiscoveryMethod::Lan],
                         };
                         match system_observer.seen(
@@ -391,7 +391,7 @@ impl Runtime {
         };
         *self.session.lock().unwrap() = Some(Session {
             browser,
-            #[cfg(target_os = "macos")]
+            #[cfg(any(target_os = "macos", target_os = "ios"))]
             system_browser,
             hostname: hostname.clone(),
             scanning,
@@ -655,7 +655,7 @@ fn browser_services(
 ) -> Vec<crate::infrastructure::protocols::mdns::service_browser::MdnsServiceSnapshot> {
     #[allow(unused_mut)]
     let mut services = session.browser.snapshot();
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "macos", target_os = "ios"))]
     services.extend(session.system_browser.snapshot());
     services
 }
