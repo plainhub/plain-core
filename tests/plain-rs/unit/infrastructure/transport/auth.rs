@@ -118,14 +118,6 @@ fn authenticate_roundtrip_paired_peer() {
     assert_eq!(authed.peer.id, id);
     assert_eq!(authed.graphql_json, request);
     assert_eq!(authed.key, key.to_vec());
-    assert_eq!(
-        authed.timestamp,
-        super::super::graphql_request::Envelope::parse(&request)
-            .unwrap()
-            .id()
-            .unwrap()
-            .timestamp()
-    );
 }
 #[test]
 fn authenticate_rejects_unknown_peer_and_unpaired() {
@@ -487,22 +479,32 @@ fn graphql_freshness_is_one_minute() {
     }
 }
 #[test]
-fn peer_signature_has_explicit_leading_purpose() {
-    let wire = SignedEnvelope {
+fn peer_signature_matches_portable_seven_field_vectors() {
+    // The fixed Ed25519 signatures are independently generated with Node crypto.
+    let kp = plain_libs::crypto::ed25519_keypair_from_seed(&[0x11; 32]);
+    let query = "{ __typename }";
+    let request_id = "01a1cd7b-b900-7331-9331-313131313133";
+    let variables = plain_libs::serde_json::from_str(r#"{"z":true,"a":[{"b":2,"a":1}]}"#).unwrap();
+    let mut wire = SignedEnvelope {
         signature: String::new(),
-        request_id: "id".into(),
-        query: "{ __typename }".into(),
-        variables: Default::default(),
+        request_id: request_id.into(),
+        query: query.into(),
+        variables,
         message_id: None,
     };
-    assert_eq!(
-        wire.signing_bytes(None, RECIPIENT),
-        br#"["PEER_REQUEST",null,"id","{ __typename }",{},"recipient",null]"#
-    );
-    assert_eq!(
-        wire.signing_bytes(Some("channel"), RECIPIENT),
-        br#"["PEER_REQUEST","channel","id","{ __typename }",{},"recipient",null]"#
-    );
+    for (channel, message, canonical, signature) in [
+        (None, None, r#"["PEER_REQUEST",null,"01a1cd7b-b900-7331-9331-313131313133","{ __typename }",{"a":[{"a":1,"b":2}],"z":true},"recipient",null]"#,
+            "yK6/HREJVnfA2P87R2s1kcI0vs2SfVTdlBQFifudVXrLM9mlwOponOYMuWpB6/Wz9YsdqXHr6Iz6DCzhWnL7Ag=="),
+        (None, Some("message"), r#"["PEER_REQUEST",null,"01a1cd7b-b900-7331-9331-313131313133","{ __typename }",{"a":[{"a":1,"b":2}],"z":true},"recipient","message"]"#,
+            "/+avtUEUEhOo+89wQzYuGEY91GSqgNrCyLeNd2NRRF9fL8PP0txXTBR3AjIkbaim+KHQy2OStLmpO7DIVHDnCQ=="),
+        (Some("channel"), Some("message"), r#"["PEER_REQUEST","channel","01a1cd7b-b900-7331-9331-313131313133","{ __typename }",{"a":[{"a":1,"b":2}],"z":true},"recipient","message"]"#,
+            "/97foLAYNaUzGXjk6UydCl2gXGnzRnQ+Xsg6E+iIyJh5kx8w4CDarjN4xr61rq6crOBxoFRmPT1D8OlgXMVCAA=="),
+    ] {
+        wire.message_id = message.map(str::to_owned);
+        assert_eq!(wire.signing_bytes(channel, RECIPIENT), canonical.as_bytes());
+        wire.sign(&kp, channel, RECIPIENT).unwrap();
+        assert_eq!(wire.signature, signature);
+    }
 }
 
 #[test]
@@ -533,4 +535,35 @@ fn direct_send_and_verify_share_the_seven_field_signature() {
     let body = peer_request("{ __typename }", plain_libs::serde_json::json!({})).unwrap();
     let (ciphertext, _) = dispatch.seal(&body).unwrap();
     assert!(authenticate(&db, &sender, "", &ciphertext).is_ok());
+}
+
+#[test]
+fn message_signatures_bind_every_payload_field_and_the_conversation() {
+    use plain_libs::serde_json::{json, to_vec};
+    let (kp, public) = plain_libs::crypto::ed25519_generate();
+    let public = plain_libs::utils::base64::base64_encode(&public);
+    for channel in [None, Some("fixture-channel")] {
+        let mut signed = SignedEnvelope {
+            signature: String::new(),
+            request_id: crate::features::record_id::generate(),
+            query: "mutation { createChatItem(content: $content) { id } }".into(),
+            variables: json!({"content": "fixture"}).as_object().unwrap().clone(),
+            message_id: Some("fixture-message".into()),
+        };
+        signed.sign(&kp, channel, RECIPIENT).unwrap();
+        let body = to_vec(&signed).unwrap();
+        assert!(verify(&public, channel, RECIPIENT, &body).is_ok());
+        assert!(matches!(verify(&public, channel, "different-device", &body), Err(AuthError::BadSignature)));
+        assert!(matches!(verify(&public, Some("different-channel"), RECIPIENT, &body), Err(AuthError::BadSignature)));
+        for (name, value) in [
+            ("requestId", json!(crate::features::record_id::generate())),
+            ("query", json!("{ __typename }")),
+            ("variables", json!({"content": "changed"})),
+            ("messageId", json!("different-message")),
+        ] {
+            let mut altered: plain_libs::serde_json::Value = plain_libs::serde_json::from_slice(&body).unwrap();
+            altered[name] = value;
+            assert!(matches!(verify(&public, channel, RECIPIENT, &to_vec(&altered).unwrap()), Err(AuthError::BadSignature)), "{name}");
+        }
+    }
 }

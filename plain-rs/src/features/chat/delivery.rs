@@ -246,7 +246,6 @@ impl Delivery {
             return Ok(result(Some("Peer not found in database".into())));
         };
         let cid = chat.channel_id.as_deref().unwrap_or_default();
-        let message_id = (!cid.is_empty()).then_some(chat.id.as_str());
         let key = if cid.is_empty() {
             if !peer.is_paired() {
                 return Ok(result(Some("peer unpaired".into())));
@@ -262,7 +261,7 @@ impl Delivery {
             return Ok(result(Some("Invalid peer transport key".into())));
         }
         let dispatch = PeerDispatch {
-            peer: &peer, client_id, channel_id: cid, key: &key, signing_key, message_id,
+            peer: &peer, client_id, channel_id: cid, key: &key, signing_key, message_id: Some(&chat.id),
         };
         let queued_request = std::sync::OnceLock::<(String, tokio::time::Instant)>::new();
         let error = transport

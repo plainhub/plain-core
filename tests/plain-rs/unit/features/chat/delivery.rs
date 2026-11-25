@@ -12,6 +12,7 @@ struct Transport {
     calls: AtomicUsize,
     db: Db,
     change_content: bool,
+    dispatches: std::sync::Mutex<Vec<(String, String)>>,
 }
 impl PeerTransport for Transport {
     async fn post<'a>(
@@ -33,6 +34,10 @@ impl PeerTransport for Transport {
         self.calls.fetch_add(1, Ordering::SeqCst);
         assert_eq!(dispatch.key, if channel_id.is_empty() { &[7; 32] } else { &[41; 32] });
         let graphql: Value = plain_libs::serde_json::from_str(&body).unwrap();
+        self.dispatches.lock().unwrap().push((
+            dispatch.message_id.expect("every delivery uses the saved message ID").into(),
+            graphql["requestId"].as_str().unwrap().into(),
+        ));
         let content: Value =
             plain_libs::serde_json::from_str(graphql["variables"]["content"].as_str().unwrap()).unwrap();
         assert_eq!(content["type"], "MESSAGE");
@@ -116,6 +121,7 @@ async fn routing_uses_current_db_and_retries_only_current_joined_members() {
         calls: AtomicUsize::new(0),
         db: db.clone(),
         change_content: false,
+        dispatches: Default::default(),
     };
     let delivery = Delivery::new(db.clone(), Arc::from(plain_libs::crypto::gen_token()));
     let local = message_lifecycle::create(&db, "local", "", TEXT).unwrap();
@@ -152,6 +158,11 @@ async fn routing_uses_current_db_and_retries_only_current_joined_members() {
             .status,
         ChatStatus::Sent
     );
+    let retried = delivery
+        .send(&transport, "706c6169-1ac2-825a-8c79-0951ec181d4a", &key, &peer.id, None)
+        .await.unwrap().chat.unwrap();
+    assert_eq!(retried.status, ChatStatus::Sent);
+    assert_eq!(retried.id, peer.id);
     let mut channel = crate::infrastructure::db::DChannel::new("group", "706c6169-1ac2-825a-8c79-0951ec181d4a");
     channel.id = "group".into();
 
@@ -212,6 +223,12 @@ async fn routing_uses_current_db_and_retries_only_current_joined_members() {
         2
     );
     assert_eq!(transport.calls.load(Ordering::SeqCst), count + 1);
+    let attempts = transport.dispatches.lock().unwrap();
+    assert_eq!(attempts.iter().map(|(message, _)| message.as_str()).collect::<Vec<_>>(),
+        vec![&peer.id, &peer.id, &group.id, &group.id, &group.id]);
+    assert_ne!(attempts[0].1, attempts[1].1);
+    assert_ne!(attempts[2].1, attempts[4].1);
+    assert_ne!(attempts[3].1, attempts[4].1);
 }
 #[tokio::test]
 async fn changed_content_cannot_be_marked_sent_by_an_older_attempt() {
@@ -221,6 +238,7 @@ async fn changed_content_cannot_be_marked_sent_by_an_older_attempt() {
         calls: AtomicUsize::new(0),
         db: db.clone(),
         change_content: true,
+        dispatches: Default::default(),
     };
     let chat = message_lifecycle::create(&db, "peer", "", TEXT).unwrap();
     assert!(

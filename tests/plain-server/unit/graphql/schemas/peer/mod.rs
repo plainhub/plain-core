@@ -183,29 +183,24 @@ async fn encrypted_public_and_ble_rpc_share_auth_executor_and_receipts() {
         .no_proxy()
         .build()
         .unwrap();
-    let wire = |document: Value| {
-        let envelope = plain_rs::infrastructure::transport::contract::signed_request(
-            &kp,
+    let wire = |document: Value, message_id: Option<&str>| {
+        use plain_rs::infrastructure::transport::contract::{PeerDispatch, peer_request};
+        let target = DPeer::new(&client_id, "Local", "", None, DeviceType::Computer);
+        let dispatch = PeerDispatch {
+            peer: &target, client_id: "706c6169-89f1-81c6-8bc7-6b67c2ffa178", channel_id: "",
+            key: &key, signing_key: &kp, message_id,
+        };
+        let envelope = peer_request(
             document["query"].as_str().unwrap(),
-            document
-                .get("variables")
-                .cloned()
-                .unwrap_or_else(|| json!({})),
-            &client_id,
-        )
-        .unwrap();
-        plain_rs::infrastructure::transport::http_request::encrypt_raw(
-            &key,
-            "POST",
-            "/peer_graphql",
-            envelope.as_bytes(),
-        )
-        .unwrap()
+            document.get("variables").cloned().unwrap_or_else(|| json!({})),
+        ).unwrap();
+        plain_rs::features::services::peers::ble_transport::test_seal_peer_request(&dispatch, &envelope).0
     };
     let mut received_events = server.runtime_state().events.subscribe();
     let public_url = format!("https://127.0.0.1:{https}/peer_graphql");
     let body = wire(
         json!({"query":"mutation Incoming($content:String!) { renamed:createChatItem(content:$content) { ...Fields } } fragment Fields on ChatItem { id fromId channelId content { ... on ChatMessageContent { __typename text format items { type attachment { id uri fileName size width height durationMs summary } } } ... on ChatShareContent { __typename shareId urlToken peerInfo { id ip port } name itemCount totalSize expiresAt } } createdAt updatedAt status }", "operationName":"Incoming", "variables":{"content":json!({"type":"MESSAGE","value":{"format":"PLAIN","items":[],"text":"hello"}}).to_string()}}),
+        Some("fixture-message"),
     );
     let response = client
         .post(&public_url)
@@ -235,7 +230,7 @@ async fn encrypted_public_and_ble_rpc_share_auth_executor_and_receipts() {
         plain_libs::serde_json::from_str::<Value>(&event.payload).unwrap(),
         json!([plain_rs::features::chat::service::chat_to_json(&stored)])
     );
-    let body = wire(json!({"query":"mutation { startAware }"}));
+    let body = wire(json!({"query":"mutation { startAware }"}), None);
     let response = client
         .post(&public_url)
         .header("c-id", "706c6169-89f1-81c6-8bc7-6b67c2ffa178")
@@ -255,7 +250,7 @@ async fn encrypted_public_and_ble_rpc_share_auth_executor_and_receipts() {
             .is_some_and(|errors| !errors.is_empty())
     );
     let body = wire(
-        json!({"query":"mutation { notifyChannelDeleted(channelId:\"unknown\",version:-1) }"}),
+        json!({"query":"mutation { notifyChannelDeleted(channelId:\"unknown\",version:-1) }"}), None,
     );
     let response = client
         .post(&public_url)
@@ -276,7 +271,7 @@ async fn encrypted_public_and_ble_rpc_share_auth_executor_and_receipts() {
         client
             .post(&public_url)
             .header("c-id", "706c6169-443e-8fb9-853c-6a0a69b6663d")
-            .body(wire(json!({"query":"mutation { startAware }"})))
+            .body(wire(json!({"query":"mutation { startAware }"}), None))
             .send()
             .await
             .unwrap()
@@ -296,7 +291,7 @@ async fn encrypted_public_and_ble_rpc_share_auth_executor_and_receipts() {
     .unwrap();
     let mut channel_events = server.runtime_state().events.subscribe();
     let body = wire(
-        json!({"query":"mutation Accept($channelId:ID!) { notifyChannelInviteResponse(channelId:$channelId, accept:true) }","variables":{"channelId":channel.id}}),
+        json!({"query":"mutation Accept($channelId:ID!) { notifyChannelInviteResponse(channelId:$channelId, accept:true) }","variables":{"channelId":channel.id}}), None,
     );
     let response = client
         .post(&public_url)
@@ -338,7 +333,7 @@ async fn encrypted_public_and_ble_rpc_share_auth_executor_and_receipts() {
         client
             .post(&public_url)
             .header("c-id", "706c6169-89f1-81c6-8bc7-6b67c2ffa178")
-            .body(wire(json!({"query":"mutation { startAware }"})))
+            .body(wire(json!({"query":"mutation { startAware }"}), None))
             .send()
             .await
             .unwrap()
@@ -542,4 +537,95 @@ fn peer_schema_matches_committed_sdl() {
             include_str!("../../../../../../schema/peer-api.graphqls")
         );
     }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn delivery_retries_after_lost_ack_and_restart_only_store_one_message() {
+    use plain_libs::utils::base64::base64_encode;
+    use plain_rs::features::chat::channels::{messages::ChannelMember, state as channel_state};
+    use plain_rs::features::chat::enums::{DeviceType, PeerStatus};
+    use plain_rs::infrastructure::db::{DPeer, chat_store::{SaveMode, channels, peers}};
+    use plain_rs::infrastructure::transport::{contract::{PeerDispatch, chat_item_request}, http_response};
+    use plain_rs::features::services::peers::ble_transport::test_seal_peer_request;
+    use crate::server::ContentServer;
+    let dir = plain_libs::temporary::tempdir().unwrap();
+    let prefs_path = dir.path().join("prefs.json");
+    let token = base64_encode(&[4; 32]);
+    let start = || {
+        let prefs = std::sync::Arc::new(plain_rs::features::prefs::Prefs::load(&prefs_path).unwrap());
+        ContentServer::start(dir.path(), &token, prefs).unwrap()
+    };
+    let server = start();
+    let state = server.runtime_state();
+    let actor = state.native_client_id().unwrap();
+    let target = DPeer::new(&actor, "Local", "", None, DeviceType::Computer);
+    let (signer, public) = plain_libs::crypto::ed25519_generate();
+    let key = [5; 32];
+    let mut sender = DPeer::new("sender", "Phone", "", None, DeviceType::Phone);
+    sender.status = PeerStatus::Paired;
+    sender.key = base64_encode(&key);
+    sender.public_key = base64_encode(&public);
+    peers::save(&state.db, &[sender], SaveMode::Insert).unwrap();
+    let mut channel = channel_state::create(&state.db, &actor, "Fixture").unwrap();
+    channel.members = plain_libs::serde_json::to_string(&[
+        ChannelMember::new(&actor), ChannelMember::new("sender"),
+    ]).unwrap();
+    channels::save(&state.db, std::slice::from_ref(&channel), SaveMode::Update).unwrap();
+    let encryption_key = plain_rs::features::prefs::security::encryption_public_key(&state.prefs).unwrap();
+
+    let make_request = || chat_item_request(
+        r#"{"type":"MESSAGE","value":{"text":"lost receipt","format":"PLAIN","items":[]}}"#,
+    ).unwrap();
+    let message_id = plain_rs::features::record_id::generate();
+    let modes = [("", &key), (channel.id.as_str(), &encryption_key)];
+    let dispatch = |channel_id, key, message_id| PeerDispatch {
+        peer: &target, client_id: "sender", channel_id, key, signing_key: &signer, message_id,
+    };
+    let mut first_attempts = Vec::new();
+    for (channel_id, key) in modes {
+        let request = make_request();
+        let (missing, missing_key) = test_seal_peer_request(&dispatch(channel_id, key, None), &request);
+        let (status, response) = execute(&state, "sender", channel_id, &missing).await;
+        assert_eq!(status, 200);
+        let data = http_response::Context::new(&missing).decrypt(&missing_key, &response).unwrap();
+        let result: Value = plain_libs::serde_json::from_slice(&data).unwrap();
+        assert_eq!(result["errors"][0]["message"], "Missing signed message ID");
+        let (first, key) = test_seal_peer_request(&dispatch(channel_id, key, Some(&message_id)), &make_request());
+        let (status, _lost_ack) = execute(&state, "sender", channel_id, &first).await;
+        assert_eq!(status, 200);
+        first_attempts.push((channel_id.to_owned(), first, key));
+    }
+    let original: std::collections::HashSet<_> = state.db.get_all_chats().into_iter().map(|chat| chat.id).collect();
+    assert_eq!(original.len(), 2);
+    drop(state);
+    server.shutdown().await;
+
+    let server = start();
+    let state = server.runtime_state();
+    assert_eq!(state.native_client_id().unwrap(), actor);
+    let mut events = state.events.subscribe();
+    for ((channel_id, key), first) in modes.into_iter().zip(first_attempts) {
+        let (retry, response_key) = test_seal_peer_request(&dispatch(channel_id, key, Some(&message_id)), &make_request());
+        let assert_duplicate = |attempt: (String, Vec<u8>, [u8; 32])| {
+            let state = state.clone();
+            tokio::spawn(async move {
+                let (channel_id, body, key) = attempt;
+                let (status, response) = execute(&state, "sender", &channel_id, &body).await;
+                assert_eq!(status, 200);
+                let response = http_response::Context::new(&body).decrypt(&key, &response).unwrap();
+                let result: Value = plain_libs::serde_json::from_slice(&response).unwrap();
+                assert_eq!(result, json!({"data":{"createChatItem":[]}}));
+            })
+        };
+        let a = assert_duplicate(first);
+        let b = assert_duplicate((channel_id.to_owned(), retry, response_key));
+        a.await.unwrap();
+        b.await.unwrap();
+    }
+    let current: std::collections::HashSet<_> = state.db.get_all_chats().into_iter().map(|chat| chat.id).collect();
+    assert_eq!(current, original);
+    while let Ok(event) = events.try_recv() {
+        assert_ne!(event.event_type, plain_rs::features::chat::events::WS_MESSAGE_CREATED);
+    }
+    server.shutdown().await;
 }

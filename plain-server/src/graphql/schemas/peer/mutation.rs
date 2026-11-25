@@ -21,19 +21,12 @@ impl Mutation {
             &content,
         )?;
         use plain_rs::features::chat::messages::message_lifecycle;
-        let received = if c.channel_id.is_empty() {
-            message_lifecycle::receive(
-                &c.state.db, &c.authenticated.peer.id, "", &content,
-                &c.authenticated.signature_b64, c.authenticated.timestamp,
-            )?
-        } else {
-            let message_id = c.authenticated.message_id.as_deref()
-                .ok_or_else(|| plain_graphql::Error::new("Missing signed channel message ID"))?;
-            let actor = c.state.native_client_id().map_err(plain_graphql::Error::new)?;
-            message_lifecycle::receive_channel(
-                &c.state.db, &actor, &c.authenticated.peer.id, &c.channel_id, message_id, &content,
-            )?
-        };
+        let message_id = c.authenticated.message_id.as_deref()
+            .ok_or_else(|| plain_graphql::Error::new("Missing signed message ID"))?;
+        let actor = c.state.native_client_id().map_err(plain_graphql::Error::new)?;
+        let received = message_lifecycle::receive(
+            &c.state.db, &actor, &c.authenticated.peer.id, &c.channel_id, message_id, &content,
+        )?;
         let Some(received) = received else {
             return Ok(vec![]);
         };

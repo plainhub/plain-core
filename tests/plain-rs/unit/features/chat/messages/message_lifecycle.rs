@@ -46,17 +46,15 @@ fn reception_is_atomic_and_receipt_survives_restart_and_message_deletion() {
         Some(1),
         crate::features::chat::enums::DeviceType::Phone,
     ));
-    let signature = plain_libs::utils::base64::base64_encode(&[7; 64]);
-    let timestamp = crate::features::peers::pairing::now_ms();
     db.with_conn(|c|c.execute_batch("CREATE TRIGGER fail_chat BEFORE INSERT ON chats BEGIN SELECT RAISE(ABORT,'fixture failure'); END;")).unwrap();
-    assert!(receive(&db, "peer", "", TEXT, &signature, timestamp).is_err());
+    assert!(receive(&db, "me", "peer", "", "message", TEXT).is_err());
     db.with_conn(|c| c.execute_batch("DROP TRIGGER fail_chat;"))
         .unwrap();
-    let first = receive(&db, "peer", "", TEXT, &signature, timestamp)
+    let first = receive(&db, "me", "peer", "", "message", TEXT)
         .unwrap()
         .unwrap();
     assert!(
-        receive(&db, "peer", "", TEXT, &signature, timestamp)
+        receive(&db, "me", "peer", "", "message", TEXT)
             .unwrap()
             .is_none()
     );
@@ -64,12 +62,12 @@ fn reception_is_atomic_and_receipt_survives_restart_and_message_deletion() {
     drop(db);
     let db = Db::open(&path).unwrap();
     assert!(
-        receive(&db, "peer", "", TEXT, &signature, timestamp)
+        receive(&db, "me", "peer", "", "message", TEXT)
             .unwrap()
             .is_none()
     );
-    assert!(receive(&db, "unknown", "", TEXT, &signature, timestamp).is_err());
-    assert!(receive(&db, "peer", "", TEXT, &signature, i64::MIN).is_err());
+    assert!(receive(&db, "me", "unknown", "", "message", TEXT).is_err());
+    assert!(receive(&db, "me", "peer", "", "", TEXT).is_err());
     crate::infrastructure::db::chat_store::peers::delete(&db, &["peer".into()]).unwrap();
     assert_eq!(
         db.with_conn(
@@ -183,7 +181,7 @@ fn channel_reception_requires_current_joined_membership_before_consuming_receipt
             )
         })
         .unwrap();
-        assert!(receive_channel(&db, "owner", "peer", &channel.id, "message", TEXT).is_err());
+        assert!(receive(&db, "owner", "peer", &channel.id, "message", TEXT).is_err());
         db.with_conn(|connection| -> plain_libs::anyhow::Result<()> {
             assert_eq!(
                 connection
@@ -202,7 +200,7 @@ fn channel_reception_requires_current_joined_membership_before_consuming_receipt
     channel.members =
         plain_libs::serde_json::to_string(&[ChannelMember::new("owner"), ChannelMember::new("peer")]).unwrap();
     channels::save(&db, std::slice::from_ref(&channel), SaveMode::Update).unwrap();
-    let received = receive_channel(&db, "owner", "peer", &channel.id, "message", TEXT)
+    let received = receive(&db, "owner", "peer", &channel.id, "message", TEXT)
         .unwrap()
         .unwrap();
     assert_eq!(
@@ -210,14 +208,14 @@ fn channel_reception_requires_current_joined_membership_before_consuming_receipt
         Some(channel.id.as_str())
     );
     assert!(
-        receive_channel(&db, "owner", "peer", &channel.id, "message", TEXT)
+        receive(&db, "owner", "peer", &channel.id, "message", TEXT)
             .unwrap()
             .is_none()
     );
     channel.members = plain_libs::serde_json::to_string(&[ChannelMember::new("owner")]).unwrap();
     channels::save(&db, std::slice::from_ref(&channel), SaveMode::Update).unwrap();
     assert!(
-        receive_channel(&db, "owner", "peer", &channel.id, "next-message", TEXT)
+        receive(&db, "owner", "peer", &channel.id, "next-message", TEXT)
         .is_err()
     );
     db.with_conn(|connection| -> plain_libs::anyhow::Result<()> {
@@ -233,6 +231,30 @@ fn channel_reception_requires_current_joined_membership_before_consuming_receipt
         Ok(())
     })
     .unwrap();
+}
+
+#[test]
+fn receipts_are_scoped_by_sender_and_conversation() {
+    use crate::features::chat::channels::messages::ChannelMember;
+    use crate::infrastructure::db::chat_store::{SaveMode, channels};
+    use crate::features::chat::enums::DeviceType;
+    let db = db();
+    db.upsert_peer(&DPeer::new("other", "Other", "", Some(1), DeviceType::Phone));
+    let mut groups: Vec<_> = ["first", "second"].into_iter()
+        .map(|name| DChannel::new(name, "me")).collect();
+    for group in &mut groups {
+        group.members = plain_libs::serde_json::to_string(&[
+            ChannelMember::new("me"), ChannelMember::new("peer"), ChannelMember::new("other"),
+        ]).unwrap();
+    }
+    channels::save(&db, &groups, SaveMode::Insert).unwrap();
+    for sender in ["peer", "other"] {
+        for scope in ["", groups[0].id.as_str(), groups[1].id.as_str()] {
+            assert!(receive(&db, "me", sender, scope, "same-id", TEXT).unwrap().is_some());
+            assert!(receive(&db, "me", sender, scope, "same-id", TEXT).unwrap().is_none());
+        }
+    }
+    assert_eq!(db.get_all_chats().len(), 6);
 }
 
 fn attachment_fixture() -> (plain_libs::temporary::TempDir, Db, app_file_store::ImportResult) {
@@ -333,7 +355,6 @@ fn failed_attachment_batch_does_not_claim_imports_or_leave_partial_messages() {
 
 fn assert_invalid_attachment(content: Value, db: &Db, file: &app_file_store::ImportResult) {
     let content = content.to_string();
-    let signature = plain_libs::utils::base64::base64_encode(&[7; 64]);
     db.upsert_peer(&DPeer::new(
         "peer",
         "Fixture",
@@ -353,11 +374,11 @@ fn assert_invalid_attachment(content: Value, db: &Db, file: &app_file_store::Imp
     assert!(
         receive(
             db,
+            "me",
             "peer",
             "",
-            &content,
-            &signature,
-            crate::features::peers::pairing::now_ms()
+            "message",
+            &content
         )
         .is_err(),
         "accepted incoming {content}"
@@ -439,11 +460,9 @@ fn message_validates_attachment_types_and_requires_content() {
 #[test]
 fn received_message_previews_are_created_by_local_core() {
     let db = db();
-    let signature = plain_libs::utils::base64::base64_encode(&[7; 64]);
-    let timestamp = crate::features::peers::pairing::now_ms();
     let mut supplied: Value = plain_libs::serde_json::from_str(TEXT).unwrap();
     supplied["value"]["linkPreviews"] = json!([{"url":"https://example.org","image":"fid:sender-only"}]);
-    assert!(receive(&db, "peer", "", &supplied.to_string(), &signature, timestamp).is_err());
+    assert!(receive(&db, "me", "peer", "", "message", &supplied.to_string()).is_err());
     assert!(db.get_all_chats().is_empty());
-    assert!(receive(&db, "peer", "", TEXT, &signature, timestamp).unwrap().is_some());
+    assert!(receive(&db, "me", "peer", "", "message", TEXT).unwrap().is_some());
 }

@@ -43,7 +43,7 @@ pub(crate) async fn execute(
         Ok(request) => request,
         Err(_) => return (400, vec![]),
     };
-    if authenticated.message_id.is_some() && !is_channel_delivery(&mut request) {
+    if authenticated.message_id.is_some() && !is_message_delivery(&mut request) {
         return (400, vec![]);
     }
     let key = authenticated.key.clone();
@@ -66,7 +66,7 @@ pub(crate) async fn execute(
     }
 }
 
-fn is_channel_delivery(request: &mut plain_graphql::Request) -> bool {
+fn is_message_delivery(request: &mut plain_graphql::Request) -> bool {
     use plain_graphql::parser::types::OperationType;
     use plain_graphql::parser::types::Selection;
     let Ok(document) = request.parsed_query() else { return false };

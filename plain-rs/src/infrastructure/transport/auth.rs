@@ -7,22 +7,16 @@ use plain_libs::crypto::ed25519_verify;
 use plain_libs::rusqlite::OptionalExtension;
 use plain_libs::utils::base64::base64_decode;
 use std::time::{SystemTime, UNIX_EPOCH};
-// Existing chat receipt lifetime; independent of HTTP request freshness.
-pub(crate) const TIMESTAMP_WINDOW_MS: u64 = 5 * 60 * 1000;
 pub(crate) const GRAPHQL_WINDOW_MS: u64 = 60_000;
 
 pub struct AuthenticatedPeer {
     pub peer: DPeer,
     pub key: Vec<u8>,
-    pub signature_b64: String,
-    pub timestamp: i64,
     pub graphql_json: String,
     pub message_id: Option<String>,
 }
 pub struct Envelope {
     pub request_id: RequestId,
-    pub signature_b64: String,
-    pub timestamp: i64,
     message_id: Option<String>,
     pub content: String,
 }
@@ -69,7 +63,7 @@ fn verify(
 ) -> Result<Envelope, AuthError> {
     let (signed, id) = parse(plaintext)?;
     if signed.signature.is_empty()
-        || signed.message_id.as_ref().is_some_and(|id| id.is_empty() || channel_id.is_none())
+        || signed.message_id.as_ref().is_some_and(|id| id.is_empty())
     {
         return Err(AuthError::MissingFields);
     }
@@ -79,8 +73,6 @@ fn verify(
     Ok(Envelope {
         content: signed.graphql_json(),
         request_id: id,
-        signature_b64: signed.signature,
-        timestamp: id.timestamp(),
         message_id: signed.message_id,
     })
 }
@@ -192,8 +184,6 @@ fn admit(
     Ok(AuthenticatedPeer {
         peer,
         key,
-        signature_b64: envelope.signature_b64,
-        timestamp: envelope.timestamp,
         graphql_json: envelope.content,
         message_id: envelope.message_id,
     })

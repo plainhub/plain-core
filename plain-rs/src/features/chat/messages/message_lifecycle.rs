@@ -98,56 +98,26 @@ fn create_in_transaction(
 }
 pub fn receive(
     db: &Db,
-    from_id: &str,
-    channel_id: &str,
-    content: &str,
-    signature: &str,
-    timestamp: i64,
-) -> Result<Option<Received>> {
-    if !channel_id.is_empty() {
-        bail!("Channel messages require a signed message ID");
-    }
-    let raw = plain_libs::utils::base64::base64_decode(signature);
-    let now = crate::features::peers::pairing::now_ms();
-    if raw.len() != 64
-        || timestamp <= 0
-        || now.abs_diff(timestamp) > crate::infrastructure::transport::auth::TIMESTAMP_WINDOW_MS
-    {
-        bail!("Invalid message receipt");
-    }
-    let input = plain_libs::serde_json::to_vec(&(from_id, channel_id, raw, timestamp))?;
-    let receipt = plain_libs::utils::base64::base64_encode(&Sha256::digest(input));
-    persist_received(db, from_id, content, None, &receipt, Some(timestamp))
-}
-
-pub fn receive_channel(
-    db: &Db,
     actor: &str,
     from_id: &str,
     channel_id: &str,
     message_id: &str,
     content: &str,
 ) -> Result<Option<Received>> {
-    let input = plain_libs::serde_json::to_vec(&("channel", channel_id, from_id, message_id))?;
+    if message_id.is_empty() {
+        bail!("Missing signed message ID");
+    }
+    let target = (!channel_id.is_empty()).then_some(channel_id);
+    let scope = if target.is_some() { "channel" } else { "direct" };
+    let input = plain_libs::serde_json::to_vec(&(scope, channel_id, from_id, message_id))?;
     let receipt = plain_libs::utils::base64::base64_encode(&Sha256::digest(input));
-    persist_received(db, from_id, content, Some((channel_id, actor)), &receipt, None)
-}
-
-fn persist_received(
-    db: &Db,
-    from_id: &str,
-    content: &str,
-    target: Option<(&str, &str)>,
-    receipt: &str,
-    timestamp: Option<i64>,
-) -> Result<Option<Received>> {
     db.with_conn(|c| -> Result<Option<Received>> {
         let tx = c.unchecked_transaction()?;
         let peer = tx
             .query_row(&format!("SELECT {PEER_COLS} FROM peers WHERE id=?1"), [from_id], row_to_peer)
             .optional()?
             .ok_or_else(|| plain_libs::anyhow::anyhow!("Invalid peer"))?;
-        let channel = if let Some((id, actor)) = target {
+        let channel = if let Some(id) = target {
             let channel = tx
                 .query_row(&format!("SELECT {CHANNEL_COLS} FROM chat_channels WHERE id=?1"), [id], row_to_channel)
                 .optional()?
@@ -167,15 +137,8 @@ fn persist_received(
         if parsed["type"] == "MESSAGE" && parsed["value"].get("linkPreviews").is_some() {
             bail!("Peer messages cannot include local link previews");
         }
-        if timestamp.is_some() {
-            let expires = crate::features::peers::pairing::now_ms()
-                .saturating_sub(crate::infrastructure::transport::auth::TIMESTAMP_WINDOW_MS as i64);
-            tx.execute("DELETE FROM chat_receipts WHERE sent_at<?1",
-                [crate::infrastructure::db::iso_from_unix_millis(expires)])?;
-        }
-        let sent_at = timestamp.map(crate::infrastructure::db::iso_from_unix_millis);
-        if tx.execute("INSERT INTO chat_receipts(receipt_id,peer_id,sent_at) VALUES(?1,?2,?3) ON CONFLICT(receipt_id) DO NOTHING",
-            params![receipt, from_id, sent_at])? == 0
+        if tx.execute("INSERT INTO chat_receipts(receipt_id,peer_id) VALUES(?1,?2) ON CONFLICT(receipt_id) DO NOTHING",
+            params![receipt, from_id])? == 0
         {
             tx.commit()?;
             return Ok(None);
