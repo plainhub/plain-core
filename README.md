@@ -168,11 +168,25 @@ After API changes, run `yarn graphql:codegen` in plain-desktop. Mobile reads the
 
 ### Install
 
+In an empty directory, set `tag` to the published signed release you want to install. Verify the [release public key](release-signing.pub) through a trusted channel, then export its single-line Base64 DER value as `PLAINAPP_RELEASE_PUBLIC_KEY`.
+
 ```bash
-curl -fsSL https://raw.githubusercontent.com/plainhub/plain-core/main/install.sh | bash
+(
+  set -euo pipefail
+  base="https://github.com/plainhub/plain-core/releases/download/${tag:?Set the release tag}"
+  for file in install.sh release-manifest.txt release-manifest.sig; do
+    curl --disable -fsSL --proto '=https' --proto-redir '=https' -o "$file" "$base/$file"
+  done
+  printf '%s' "${PLAINAPP_RELEASE_PUBLIC_KEY:?Set the trusted release public key}" \
+    | openssl base64 -d -A > release-key.der
+  openssl pkeyutl -verify -pubin -keyform DER -inkey release-key.der -rawin \
+    -in release-manifest.txt -sigfile release-manifest.sig
+  grep '  install\.sh$' release-manifest.txt | sha256sum --check --strict
+  bash ./install.sh "$tag"
+)
 ```
 
-The installer downloads the matching release, installs dependencies and starts the service.
+The installer uses `curl`, OpenSSL 3 and `sha256sum` to verify the release signature and the matching archive before installing the binary and starting the service.
 First installation requires an admin password entered through a terminal; reinstalling preserves it.
 For unattended installation, provision it first with `plainapp passwd --stdin` using protected standard input.
 
@@ -312,19 +326,20 @@ Use `<command> --help` for options on other commands.
 
 ### Upgrade and removal
 
-Self-update is not implemented. Replace the executable and restart:
+On Linux, run the update command while the installed system service is running:
 
 ```sh
-install -m 0755 new/plainapp /usr/local/bin/plainapp
-sudo systemctl restart plainapp
+sudo plainapp update
 ```
 
-`sudo plainapp uninstall` removes the unit, the certificate and the data directory. Pass `--keep-config` and `--keep-data` to retain them.
+The updater verifies the latest stable release's signature and archive checksum before replacing the binary. It skips versions with a different database schema and checks that the new service starts. If the restart fails and the old service is no longer running, the updater reports the saved binary for manual recovery.
+
+`sudo plainapp uninstall` stops and disables the service, then removes the unit, binary and application data. Use `--keep-config` to retain settings and TLS credentials, and `--keep-data` to retain the database and app files.
 
 <details>
 <summary>Releases</summary>
 
-To release the CLI, bump the version in `plain-cli/Cargo.toml` and update the lockfile. Run the **Release** workflow manually from the commit to publish. It builds and checks `plainapp` for Linux amd64 and arm64 using the committed Web assets, without AI image search. After verifying both archives and scanning them with VirusTotal, the workflow opens a GitHub Release draft with SHA-256 checksums, signed SLSA provenance, and links to the scan reports. Configure the repository’s `VIRUSTOTAL_API_KEY` secret first. Review the results and publish the draft in GitHub.
+To release the CLI, bump the version in `plain-cli/Cargo.toml` and update the lockfile. Configure `VIRUSTOTAL_API_KEY`, the `RELEASE_SIGNING_PRIVATE_KEY` secret (Ed25519 PEM), and the `RELEASE_SIGNING_PUBLIC_KEY` variable (single-line Base64 DER). Run the **Release** workflow from the release commit. It builds and checks `plainapp` for Linux amd64 and arm64 using the committed Web assets, without AI image search. The workflow creates a GitHub Release draft with a signed manifest, SHA-256 checksums, SLSA provenance, and links to the scan reports. Review the draft and publish it manually in GitHub. Publishing triggers the Discord announcement when `RELEASE_WEBHOOK_URL` is configured.
 
 </details>
 

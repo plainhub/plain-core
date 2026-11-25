@@ -22,6 +22,38 @@ fn service_write_failure_is_returned() {
 }
 
 #[test]
+fn uninstall_can_keep_configuration_and_tls_without_keeping_application_data() {
+    let directory = plain_libs::temporary::tempdir().unwrap();
+    let data = directory.path();
+    let paths = DataPaths::new(data);
+    let certificate = data.join("tls/custom.pem");
+    let private_key = data.join("tls/custom.key");
+    fs::create_dir(data.join("tls")).unwrap();
+    for path in [
+        paths.lock(),
+        paths.prefs(),
+        paths.tls_identity(),
+        paths.database(),
+        certificate.clone(),
+        private_key.clone(),
+        data.join("tls/unused"),
+    ] {
+        fs::write(path, "fixture").unwrap();
+    }
+    let keep = [
+        &paths.lock(),
+        &paths.prefs(),
+        &paths.tls_identity(),
+        &certificate,
+        &private_key,
+    ];
+    remove_data_except(data, &keep.map(|path| path.as_path())).unwrap();
+    assert!(keep.into_iter().all(|path| path.is_file()));
+    assert!(!paths.database().exists());
+    assert!(!data.join("tls/unused").exists());
+}
+
+#[test]
 fn restart_moves_the_control_command_to_a_collected_scope_before_restarting() {
     let directory = plain_libs::temporary::tempdir().unwrap();
     let script = directory.path().join("systemd-run");

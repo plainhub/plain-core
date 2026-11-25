@@ -1,4 +1,6 @@
-use plain_libs::anyhow::Result;
+use crate::infrastructure::data_paths::DataPaths;
+use plain_libs::anyhow::{Result, ensure};
+use std::fs;
 use std::path::Path;
 
 pub const SERVICE_PATH: &str = "/etc/systemd/system/plainapp.service";
@@ -59,18 +61,86 @@ pub fn uninstall(
     keep_data: bool,
 ) -> Result<()> {
     require_root()?;
+    let unit = Path::new(SERVICE_PATH);
+    let binary = Path::new(BINARY_PATH);
+    let directory = fs::File::open(binary.parent().unwrap())?;
+    directory.try_lock()?;
+    let paths = DataPaths::new(data);
+    if !keep_data && data.try_exists()? {
+        ensure!(
+            data.parent().is_some()
+                && fs::symlink_metadata(data)?.is_dir()
+                && (paths.lock().is_file() || paths.database().is_file()),
+            "Refusing to remove an unrecognized PlainApp data directory"
+        );
+    }
+    if unit.try_exists()? {
+        ensure!(
+            fs::symlink_metadata(unit)?.is_file()
+                && fs::read_to_string(unit)?
+                    .lines()
+                    .any(|line| line == "ExecStart=/usr/local/bin/plainapp run"),
+            "Refusing to uninstall an unmanaged PlainApp service"
+        );
+        let status = std::process::Command::new("systemctl")
+            .args(["disable", "--now", "plainapp.service"])
+            .status()?;
+        ensure!(
+            status.success(),
+            "Could not stop and disable the PlainApp service"
+        );
+        remove_file(unit)?;
+        let status = std::process::Command::new("systemctl")
+            .arg("daemon-reload")
+            .status()?;
+        ensure!(status.success(), "systemd unit reload failed");
+    }
     if !keep_config {
         remove_file(cert)?;
         remove_file(key)?;
     }
     if !keep_data {
-        match std::fs::remove_dir_all(data) {
-            Ok(()) => {}
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-            Err(error) => return Err(error.into()),
+        if keep_config {
+            remove_data_except(
+                data,
+                &[
+                    &paths.prefs(),
+                    &paths.tls_identity(),
+                    cert,
+                    key,
+                    &paths.lock(),
+                ],
+            )?;
+        } else if data.try_exists()? {
+            fs::remove_dir_all(data)?;
         }
     }
-    remove_file(Path::new(SERVICE_PATH))
+    remove_file(binary)
+}
+
+fn remove_data_except(directory: &Path, preserve: &[&Path]) -> Result<()> {
+    let entries = match fs::read_dir(directory) {
+        Ok(entries) => entries,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => return Err(error.into()),
+    };
+    for entry in entries {
+        let entry = entry?;
+        let path = entry.path();
+        if preserve.contains(&path.as_path()) {
+            continue;
+        }
+        if entry.file_type()?.is_dir() {
+            if preserve.iter().any(|file| file.starts_with(&path)) {
+                remove_data_except(&path, preserve)?;
+            } else {
+                fs::remove_dir_all(&path)?;
+            }
+        } else {
+            remove_file(&path)?;
+        }
+    }
+    Ok(())
 }
 
 pub fn restart() -> Result<()> {

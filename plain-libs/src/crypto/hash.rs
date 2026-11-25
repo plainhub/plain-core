@@ -3,9 +3,16 @@
 //! `sha512_hex` matches the web frontends' admin-password hash format:
 //! lowercase hex of the SHA-512 digest of the UTF-8 password.
 
-use sha2::{Digest, Sha512};
+use sha2::{Digest, Sha256, Sha512};
+use std::io::{self, Read};
 
 use crate::utils::hex::bytes_to_hex;
+
+pub fn sha256_reader(mut reader: impl Read) -> io::Result<String> {
+    let mut hash = Sha256::new();
+    io::copy(&mut reader, &mut hash)?;
+    Ok(bytes_to_hex(&hash.finalize()))
+}
 
 /// Returns SHA-512(input) as lowercase hex.
 pub fn sha512_hex(input: &str) -> String {

@@ -1,0 +1,29 @@
+name: Release to Discord
+
+on:
+  release:
+    types: [published]
+
+permissions: {}
+
+jobs:
+  notify-discord:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Send release announcement
+        shell: bash
+        env:
+          RELEASE_WEBHOOK_URL: ${{ secrets.RELEASE_WEBHOOK_URL }}
+        run: |
+          : "${RELEASE_WEBHOOK_URL:?Configure the RELEASE_WEBHOOK_URL secret}"
+          jq -c '{
+            username: "Release",
+            allowed_mentions: {parse: []},
+            embeds: [{
+              title: ("New Release: " + (.release.name // .release.tag_name)),
+              url: .release.html_url,
+              description: ((.release.body // "")[:4000]),
+              timestamp: .release.published_at
+            }]
+          }' "$GITHUB_EVENT_PATH" |
+            curl --fail --silent --show-error --max-time 30 --json @- "$RELEASE_WEBHOOK_URL"

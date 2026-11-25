@@ -17,6 +17,8 @@ jobs:
   binary:
     name: plainapp ${{ matrix.arch }}
     runs-on: ${{ matrix.runner }}
+    env:
+      PLAINAPP_RELEASE_PUBLIC_KEY: ${{ vars.RELEASE_SIGNING_PUBLIC_KEY }}
     strategy:
       fail-fast: false
       matrix:
@@ -46,7 +48,10 @@ jobs:
           key: cli-release-${{ matrix.target }}
 
       - name: Build plainapp with the committed Web UI
-        run: cargo build --release --locked --target ${{ matrix.target }} -p plainapp
+        run: |
+          : "${PLAINAPP_RELEASE_PUBLIC_KEY:?Configure RELEASE_SIGNING_PUBLIC_KEY}"
+          test "$(cat release-signing.pub)" = "$PLAINAPP_RELEASE_PUBLIC_KEY"
+          cargo build --release --locked --target ${{ matrix.target }} -p plainapp
 
       - name: Verify and package
         env:
@@ -62,6 +67,27 @@ jobs:
           cmp "$plain" "$unpacked/plainapp"
           "$unpacked/plainapp" --version
           "$unpacked/plainapp" --help
+
+      - name: Verify Linux service install and uninstall
+        timeout-minutes: 6
+        shell: bash
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          test ! -e /usr/local/bin/plainapp
+          test ! -e /var/lib/plainapp
+          sudo install -m 0755 "target/$TARGET/release/plainapp" /usr/local/bin/plainapp
+          openssl rand -base64 32 | sudo plainapp passwd --stdin
+          sudo plainapp install
+          sudo systemctl enable --now plainapp.service
+          curl -fsS --max-time 5 --retry 12 --retry-connrefused --retry-delay 1 http://127.0.0.1:8080/health
+          sudo plainapp status
+          sudo plainapp uninstall --keep-config --keep-data
+          if systemctl is-active --quiet plainapp.service; then exit 1; fi
+          test ! -e /etc/systemd/system/plainapp.service
+          test ! -e /usr/local/bin/plainapp
+          sudo test -f /var/lib/plainapp/prefs.json
+          sudo test -f /var/lib/plainapp/plain.db
 
       - uses: actions/upload-artifact@v4
         with:
@@ -164,6 +190,27 @@ jobs:
           name: ${{ needs.provenance.outputs.provenance-name }}
           path: artifacts
 
+      - name: Sign release manifest
+        shell: bash
+        env:
+          SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_PRIVATE_KEY }}
+          PUBLIC_KEY: ${{ vars.RELEASE_SIGNING_PUBLIC_KEY }}
+        run: |
+          : "${SIGNING_KEY:?Configure RELEASE_SIGNING_PRIVATE_KEY}"
+          : "${PUBLIC_KEY:?Configure RELEASE_SIGNING_PUBLIC_KEY}"
+          version=$(python3 -c 'import tomllib; print(tomllib.load(open("plain-cli/Cargo.toml", "rb"))["package"]["version"])')
+          schema=$(sha256sum schema/database.sql | cut -d ' ' -f1)
+          (cd artifacts && sha256sum --check --strict checksums.txt)
+          { printf 'version %s\nschema %s\n' "$version" "$schema"; cat artifacts/checksums.txt; sha256sum install.sh; } > artifacts/release-manifest.txt
+          key=$(mktemp)
+          trap 'rm -f "$key"' EXIT
+          printf '%s\n' "$SIGNING_KEY" > "$key"
+          public=$(openssl pkey -in "$key" -pubout -outform DER | openssl base64 -A)
+          test "$public" = "$PUBLIC_KEY"
+          test "$(printf '%s' "$public" | openssl base64 -d -A | od -An -tx1 -N12 | tr -d ' \n')" = 302a300506032b6570032100
+          openssl pkeyutl -sign -inkey "$key" -rawin -in artifacts/release-manifest.txt -out artifacts/release-manifest.sig
+          test "$(wc -c < artifacts/release-manifest.sig)" -eq 64
+
       - name: Create draft with both Linux packages
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -210,7 +257,9 @@ jobs:
 
           ## SHA-256 Checksums
           Run `sha256sum --check checksums.txt` in the directory containing both archives.
+          The installer and `plainapp update` verify the Ed25519 signature in `release-manifest.sig` before checking the archive checksum.
           NOTES
           } > release-notes.md
           gh release create "$tag" --draft --target "$GITHUB_SHA" --title "PlainApp CLI $version" --notes-file release-notes.md \
-            artifacts/plainapp-linux-amd64.tar.gz artifacts/plainapp-linux-arm64.tar.gz artifacts/checksums.txt "artifacts/$PROVENANCE_NAME"
+            artifacts/plainapp-linux-amd64.tar.gz artifacts/plainapp-linux-arm64.tar.gz artifacts/checksums.txt "artifacts/$PROVENANCE_NAME" \
+            artifacts/release-manifest.txt artifacts/release-manifest.sig install.sh

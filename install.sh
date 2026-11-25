@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 # plainapp installer
-# Usage:  curl -fsSL https://raw.githubusercontent.com/plainhub/plain-core/main/install.sh | bash
 set -euo pipefail
 
 REPO="plainhub/plain-core"
@@ -14,17 +13,12 @@ fail() {
 }
 
 fetch() {
-    if command -v curl &>/dev/null; then
-        curl -fsSL "$1"
-    elif command -v wget &>/dev/null; then
-        wget -qO- "$1"
-    else
-        fail "curl or wget is required"
-    fi
+    curl --disable -fsSL --proto '=https' --proto-redir '=https' --connect-timeout 15 --max-time 600 --max-filesize "$2" "$1"
 }
 
 download() {
-    fetch "$1" >"$2" || fail "Failed to download $1"
+    fetch "$1" "$3" >"$2" || fail "Failed to download $1"
+    [[ $(wc -c < "$2") -le "$3" ]] || fail "Release download exceeded its size limit"
 }
 
 case "$(uname -m)" in
@@ -33,28 +27,59 @@ case "$(uname -m)" in
     *) fail "Unsupported architecture: $(uname -m). Only amd64 and arm64 are supported." ;;
 esac
 
+command -v curl >/dev/null || fail "curl is required"
+command -v openssl >/dev/null || fail "OpenSSL 3 is required for release signature verification"
+command -v sha256sum >/dev/null || fail "sha256sum is required"
+trusted_key=${PLAINAPP_RELEASE_PUBLIC_KEY:?Set PLAINAPP_RELEASE_PUBLIC_KEY to the trusted release public key}
+
 echo "[plainapp] Detecting platform... $ARCH"
 
-TAG=$(
-    fetch "https://api.github.com/repos/${REPO}/releases/latest" |
-        grep '"tag_name"' |
-        sed 's/.*"tag_name": *"//' |
-        sed 's/".*//'
-)
-
+[[ $# -le 1 ]] || fail "Usage: bash install.sh [release-tag]"
+TAG=${1:-}
 if [[ -z "$TAG" ]]; then
-    fail "Could not find a release. Is there a published release?"
+    TAG=$(
+        fetch "https://api.github.com/repos/${REPO}/releases/latest" 1048576 |
+            grep '"tag_name"' |
+            sed 's/.*"tag_name": *"//' |
+            sed 's/".*//'
+    )
+fi
+
+if [[ ! "$TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+    fail "Could not find a published stable release"
 fi
 
 echo "[plainapp] Latest version: $TAG"
 ASSET="${BIN}-linux-${ARCH}.tar.gz"
-URL="https://github.com/${REPO}/releases/download/${TAG}/${ASSET}"
-echo "[plainapp] Downloading $ASSET ..."
+BASE="https://github.com/${REPO}/releases/download/${TAG}"
 
 WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
-download "$URL" "$WORK/$ASSET"
-tar -xzf "$WORK/$ASSET" -C "$WORK" || fail "Failed to extract $ASSET."
+download "$BASE/release-manifest.txt" "$WORK/release-manifest.txt" 4096
+download "$BASE/release-manifest.sig" "$WORK/release-manifest.sig" 64
+printf '%s' "$trusted_key" | openssl base64 -d -A > "$WORK/release-key.der"
+[[ $(wc -c < "$WORK/release-key.der") -eq 44 ]] &&
+    [[ $(od -An -tx1 -N12 "$WORK/release-key.der" | tr -d ' \n') == 302a300506032b6570032100 ]] ||
+    fail "Invalid release signing public key"
+openssl pkeyutl -verify -pubin -keyform DER -inkey "$WORK/release-key.der" -rawin \
+    -in "$WORK/release-manifest.txt" -sigfile "$WORK/release-manifest.sig" >/dev/null \
+    || fail "Release manifest signature verification failed"
+hash=$(awk -v version="${TAG#v}" -v archive="$ASSET" '
+    NR == 1 { if ($0 != "version " version) exit 1 }
+    NR == 2 { if ($1 != "schema" || length($2) != 64 || $2 ~ /[^0-9a-f]/ || NF != 2) exit 1 }
+    NR >= 3 && NR <= 5 {
+        name = (NR == 3 ? "plainapp-linux-amd64.tar.gz" : (NR == 4 ? "plainapp-linux-arm64.tar.gz" : "install.sh"))
+        if (length($1) != 64 || $1 ~ /[^0-9a-f]/ || $0 != $1 "  " name) exit 1
+        if (name == archive) hash = $1
+    }
+    END { if (NR != 5 || length(hash) != 64) exit 1; print hash }
+' "$WORK/release-manifest.txt") || fail "Invalid release manifest"
+
+echo "[plainapp] Downloading $ASSET ..."
+download "$BASE/$ASSET" "$WORK/$ASSET" 134217728
+(cd "$WORK" && printf '%s  %s\n' "$hash" "$ASSET" | sha256sum --check --status) || fail "Release archive checksum mismatch"
+[[ $(tar -tzf "$WORK/$ASSET") == plainapp ]] || fail "Unexpected release archive contents"
+tar -xOzf "$WORK/$ASSET" plainapp > "$WORK/plainapp" || fail "Failed to extract $ASSET"
 
 sudo install -m 0755 "$WORK/$BIN" "$INSTALL_DIR/$BIN"
 echo "[plainapp] Installed $BIN to $INSTALL_DIR."
