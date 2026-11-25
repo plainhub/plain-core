@@ -215,7 +215,7 @@ async fn reload(ctx: &Context<'_>, id: &str, phase: &str) -> plain_graphql::Resu
 
 /// The payload shape the platform's `ContactInput` deserializes.
 fn contact_input(input: &ContactInput) -> Value {
-    json!({
+    let mut params = json!({
         "prefix": input.prefix,
         "firstName": input.first_name,
         "middleName": input.middle_name,
@@ -243,9 +243,12 @@ fn contact_input(input: &ContactInput) -> Value {
         "source": input.source,
         "starred": input.starred,
         "notes": input.notes,
-        "groupIds": input.group_ids.iter().map(|id| Value::from(id.0.clone())).collect::<Vec<_>>(),
         "organization": input.organization.as_ref().map(|org| json!({
             "company": org.company, "title": org.title,
         })),
-    })
+    });
+    if let Some(ids) = &input.group_ids {
+        params["groupIds"] = json!(ids.iter().map(|id| id.0.as_str()).collect::<Vec<_>>());
+    }
+    params
 }

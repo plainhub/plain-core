@@ -395,3 +395,28 @@ async fn contact_deletion_rejects_non_narrowing_queries_before_provider_calls() 
         );
     }
 }
+
+#[tokio::test]
+async fn update_contact_without_group_ids_leaves_existing_groups_unchanged() {
+    let (_dir, schema) = fixture(json!(["CONTACTS"]));
+    stub(schema_host(&schema), |method, params| match method {
+        "systemUpdateContact" => {
+            assert_eq!(params["id"], "raw-9");
+            assert_eq!(params["input"]["phoneNumbers"][0]["value"], "5550102");
+            assert!(params["input"].get("groupIds").is_none(), "{params}");
+            json!(true)
+        }
+        "systemContactFacts" => contact_page("raw-9"),
+        other => panic!("unexpected host call {other}"),
+    });
+    let response = schema
+        .execute(r#"mutation { updateContact(id:"raw-9", input:{
+            prefix:"", firstName:"Ada", middleName:"", lastName:"", suffix:"",
+            nickname:"", phoneNumbers:[{value:"5550102",type:MOBILE,label:""}],
+            emails:[], addresses:[], events:[], source:"", starred:false, notes:"",
+            websites:[], ims:[]
+        }) { id groups { id } } }"#)
+        .await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    assert_eq!(response.data.into_json().unwrap()["updateContact"]["groups"], json!([{"id":"7"}]));
+}
