@@ -19,6 +19,33 @@ impl DeviceSubscriptions {
     async fn content_changed(&self, ctx: &Context<'_>) -> Result<BoxStream<'static, Result<bool>>> {
         events::stream(ctx, "CONTENT_CHANGED").await
     }
+    async fn clipboard_history_changed(
+        &self,
+        ctx: &Context<'_>,
+    ) -> Result<BoxStream<'static, Result<bool>>> {
+        use crate::graphql::executor::RequestOrigin;
+        use crate::server::ServerState;
+        use futures_util::{StreamExt, stream};
+        let state = ctx.data::<ServerState>()?.clone();
+        let origin = *ctx.data::<RequestOrigin>()?;
+        let spec = plain_rs::infrastructure::protocols::graphql::events::EVENTS
+            .iter()
+            .find(|spec| spec.field == "clipboardHistoryChanged")
+            .unwrap();
+        let changes = state.db.clipboard_changes();
+        events::authorize(&state, origin, spec).await?;
+        if let Some(ready) = ctx.data_opt::<super::session::SubscriptionReady>() {
+            ready.0.send_replace(true);
+        }
+        Ok(
+            stream::unfold((changes, state), move |(mut changes, state)| async move {
+                changes.changed().await.ok()?;
+                let result = events::authorize(&state, origin, spec).await.map(|_| true);
+                Some((result, (changes, state)))
+            })
+            .boxed(),
+        )
+    }
     async fn clipboard_changed(
         &self,
         ctx: &Context<'_>,

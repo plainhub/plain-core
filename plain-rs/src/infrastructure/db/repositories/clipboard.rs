@@ -18,6 +18,10 @@ fn clipboard_from_row(row: &plain_libs::rusqlite::Row<'_>) -> plain_libs::rusqli
 }
 
 impl Db {
+    pub fn clipboard_changes(&self) -> tokio::sync::watch::Receiver<()> {
+        self.1.clipboard.subscribe()
+    }
+
     pub fn clipboard_record(&self, row: &ClipboardRow, distinguish_metadata: bool) -> plain_libs::rusqlite::Result<(ClipboardRow, bool)> {
         self.with_conn(|c| {
             let tx = c.unchecked_transaction()?;
@@ -33,6 +37,9 @@ impl Db {
                 tx.query_row(&format!("SELECT {CLIPBOARD_COLUMNS} FROM clipboards WHERE hash=?1 AND (NOT ?2 OR (label=?3 AND sensitive=?4)) ORDER BY {CLIPBOARD_ORDER} LIMIT 1"), params![row.hash, distinguish_metadata, row.label, row.sensitive], clipboard_from_row)?
             };
             tx.commit()?;
+            if inserted {
+                self.1.clipboard.send_replace(());
+            }
             Ok((item, inserted))
         })
     }
@@ -68,10 +75,14 @@ impl Db {
     pub fn clipboard_delete_query(&self, query: &str) -> Result<usize, String> {
         let (clause, values) = bulk_filter(query)?;
         self.with_conn(|c| {
-            c.execute(
+            let count = c.execute(
                 &format!("DELETE FROM clipboards WHERE {clause}"),
                 params_from_iter(values),
-            )
+            )?;
+            if count > 0 {
+                self.1.clipboard.send_replace(());
+            }
+            Ok::<_, plain_libs::rusqlite::Error>(count)
         })
         .map_err(|error| error.to_string())
     }

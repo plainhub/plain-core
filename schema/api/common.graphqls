@@ -226,6 +226,7 @@ type Subscription {
 	deviceNameUpdated: String!
 	accessUpdated: Boolean!
 	contentChanged: Boolean!
+	clipboardHistoryChanged: Boolean!
 	clipboardChanged: ClipboardChange!
 	screenMirrorState: MirrorState!
 	screenMirrorVideoCodec: MirrorCodecConfiguration
