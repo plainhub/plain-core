@@ -241,13 +241,14 @@ No management TCP port or shared secret is added.
 ```sh
 cargo build --release --locked -p plainapp --features ai-image-search
 install -m 0755 target/release/plainapp /usr/local/bin/plainapp
-sudo plainapp install                     # admin password, ffmpeg and Avahi
+sudo plainapp install                     # admin password and systemd unit
 sudo systemctl enable --now plainapp
 ```
 
-`plainapp install` configures the password, dependencies and `/etc/systemd/system/plainapp.service`.
+`plainapp install` configures the password and `/etc/systemd/system/plainapp.service`.
 The unit runs `/usr/local/bin/plainapp run`; copy the binary and enable the service as shown above.
 Listeners require a configured password.
+PlainApp handles mDNS discovery directly. FFmpeg and ffprobe are optional tools for video conversion and codec probing.
 
 <details>
 <summary>Web UI</summary>

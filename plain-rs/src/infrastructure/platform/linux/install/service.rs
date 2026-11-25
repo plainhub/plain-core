@@ -16,9 +16,14 @@ pub fn require_root() -> Result<()> {
 
 pub fn install() -> Result<()> {
     require_root()?;
-    super::deps::install_all_deps();
-    write_service(Path::new(SERVICE_PATH), BINARY_PATH)?;
-    if super::packages::has_cmd("systemctl") {
+    install_unit(Path::new(SERVICE_PATH), BINARY_PATH)
+}
+
+fn install_unit(path: &Path, binary: &str) -> Result<()> {
+    write_service(path, binary)?;
+    if std::env::var_os("PATH").is_some_and(|path| {
+        std::env::split_paths(&path).any(|directory| directory.join("systemctl").is_file())
+    }) {
         let status = std::process::Command::new("systemctl")
             .arg("daemon-reload")
             .status()?;

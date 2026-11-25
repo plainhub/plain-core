@@ -14,7 +14,12 @@ fn paths(root: &std::path::Path) -> AppPaths {
 fn installation_sets_a_password_and_reinstallation_never_prompts_or_overwrites_it() {
     let root = plain_libs::temporary::tempdir().unwrap();
     let paths = paths(root.path());
-    prepare_password(&paths, || Ok("installed password".into())).unwrap();
+    let mut output = Vec::new();
+    prepare_password(&paths, || Ok("installed password".into()), &mut output).unwrap();
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "Please set up a password for web login.\nAdmin password configured.\n"
+    );
     let prefs = Prefs::load(&default_path(&paths.data_dir)).unwrap();
     let hash = security::password_credential(&prefs).unwrap().unwrap();
     assert!(!hash.record.is_empty());
@@ -25,7 +30,9 @@ fn installation_sets_a_password_and_reinstallation_never_prompts_or_overwrites_i
     );
     assert!(!prefs.get_or("login_require_approval", true));
     let before = std::fs::read(default_path(&paths.data_dir)).unwrap();
-    prepare_password(&paths, || panic!("Upgrade must not prompt")).unwrap();
+    output.clear();
+    prepare_password(&paths, || panic!("Upgrade must not prompt"), &mut output).unwrap();
+    assert!(output.is_empty());
     assert_eq!(
         std::fs::read(default_path(&paths.data_dir)).unwrap(),
         before
@@ -43,10 +50,14 @@ fn canceled_or_invalid_installation_never_creates_a_password() {
         let root = plain_libs::temporary::tempdir().unwrap();
         let paths = paths(root.path());
         assert!(
-            prepare_password(&paths, || match value {
-                Some(value) => Ok(value.into()),
-                None => plain_libs::anyhow::bail!("No interactive terminal"),
-            })
+            prepare_password(
+                &paths,
+                || match value {
+                    Some(value) => Ok(value.into()),
+                    None => plain_libs::anyhow::bail!("No interactive terminal"),
+                },
+                &mut std::io::sink()
+            )
             .is_err()
         );
         let prefs = Prefs::load(&default_path(&paths.data_dir)).unwrap();
@@ -58,7 +69,12 @@ fn canceled_or_invalid_installation_never_creates_a_password() {
 fn reinstallation_enforces_password_login_without_approval_and_preserves_credentials() {
     let root = plain_libs::temporary::tempdir().unwrap();
     let paths = paths(root.path());
-    prepare_password(&paths, || Ok("installed password".into())).unwrap();
+    prepare_password(
+        &paths,
+        || Ok("installed password".into()),
+        &mut std::io::sink(),
+    )
+    .unwrap();
     let prefs = Prefs::load(&default_path(&paths.data_dir)).unwrap();
     let credential = security::password_credential(&prefs).unwrap();
     prefs
@@ -73,7 +89,12 @@ fn reinstallation_enforces_password_login_without_approval_and_preserves_credent
             _ => {}
         }
     }
-    prepare_password(&paths, || panic!("Existing password must be preserved")).unwrap();
+    prepare_password(
+        &paths,
+        || panic!("Existing password must be preserved"),
+        &mut std::io::sink(),
+    )
+    .unwrap();
     let prefs = Prefs::load(&default_path(&paths.data_dir)).unwrap();
     assert_eq!(security::password_credential(&prefs).unwrap(), credential);
     assert_eq!(prefs.entries(), expected);
@@ -86,7 +107,14 @@ fn invalid_stored_credentials_fail_without_prompting_or_overwriting_them() {
     std::fs::create_dir_all(&paths.data_dir).unwrap();
     let prefs = Prefs::load(&default_path(&paths.data_dir)).unwrap();
     prefs.set("opaque_server_setup", 42).unwrap();
-    assert!(prepare_password(&paths, || panic!("Invalid credentials must not prompt")).is_err());
+    assert!(
+        prepare_password(
+            &paths,
+            || panic!("Invalid credentials must not prompt"),
+            &mut std::io::sink()
+        )
+        .is_err()
+    );
     assert_eq!(
         Prefs::load(&default_path(&paths.data_dir))
             .unwrap()

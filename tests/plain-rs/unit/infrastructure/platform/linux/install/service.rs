@@ -1,6 +1,61 @@
 use super::*;
 
 #[test]
+fn install_only_reloads_systemd_without_installing_packages() {
+    use std::os::unix::fs::PermissionsExt;
+    use std::process::Command;
+
+    if let Some(path) = std::env::var_os("PLAINAPP_TEST_INSTALL_UNIT") {
+        install_unit(Path::new(&path), BINARY_PATH).unwrap();
+        return;
+    }
+
+    let directory = plain_libs::temporary::tempdir().unwrap();
+    let root = directory.path();
+    let unit = root.join("plainapp.service");
+    std::os::unix::fs::symlink("/bin/bash", root.join("bash")).unwrap();
+    for name in ["apt-get", "systemctl"] {
+        let path = root.join(name);
+        fs::write(
+            &path,
+            "#!/bin/sh\nprintf '%s %s\\n' \"${0##*/}\" \"$*\" >> commands\n",
+        )
+        .unwrap();
+        fs::set_permissions(path, fs::Permissions::from_mode(0o755)).unwrap();
+    }
+    let child = Command::new(std::env::current_exe().unwrap())
+        .args([
+            "--exact",
+            concat!(
+                module_path!(),
+                "::install_only_reloads_systemd_without_installing_packages"
+            )
+            .split_once("::")
+            .unwrap()
+            .1,
+        ])
+        .current_dir(root)
+        .env("PATH", root)
+        .env("PLAINAPP_TEST_INSTALL_UNIT", &unit)
+        .output()
+        .unwrap();
+
+    assert!(
+        child.status.success(),
+        "{}",
+        String::from_utf8_lossy(&child.stdout)
+    );
+    assert_eq!(
+        fs::read_to_string(unit).unwrap(),
+        render_service(BINARY_PATH)
+    );
+    assert_eq!(
+        fs::read_to_string(root.join("commands")).unwrap(),
+        "systemctl daemon-reload\n"
+    );
+}
+
+#[test]
 fn install_updates_existing_unit_to_the_actual_binary() {
     let directory = plain_libs::temporary::tempdir().unwrap();
     let path = directory.path().join("system/plainapp.service");
