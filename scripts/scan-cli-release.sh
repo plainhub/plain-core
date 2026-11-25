@@ -9,7 +9,7 @@ api_request() {
     curl --fail-with-body --silent --show-error --max-time 90 --header "x-apikey: $VT_API_KEY" "$@"
 }
 
-printf '## VirusTotal scan\n\n| Archive | Flagged | Report |\n| --- | --- | --- |\n'
+printf '### VirusTotal Scan\n| File | Status | Scan Report |\n|------|--------|-------------|\n'
 for arch in amd64 arm64; do
     name="plainapp-linux-$arch.tar.gz"
     file="$artifacts/$name"
@@ -35,5 +35,10 @@ for arch in amd64 arm64; do
         | [(.malicious + .suspicious), (.malicious + .suspicious + .harmless + .undetected)]
         | @tsv' <<< "$response")
     test "$total" -gt 0
-    printf '| `%s` | %s/%s | [Report](https://www.virustotal.com/gui/file/%s/detection) |\n' "$name" "$flagged" "$total" "$digest"
+    if ((flagged == 0)); then
+        printf -v status '%s %s/%s %s' '✅' "$flagged" "$total" 'Clean'
+    else
+        printf -v status '%s %s/%s %s' '⚠️' "$flagged" "$total" 'Detected'
+    fi
+    printf '| `%s` | %s | [View Report](https://www.virustotal.com/gui/file/%s/detection) |\n' "$name" "$status" "$digest"
 done

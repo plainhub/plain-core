@@ -33,6 +33,7 @@ case "$url" in
     https://www.virustotal.com/api/v3/analyses/stub%2Fid)
         case "$VT_TEST_MODE" in
             completed) printf '{"data":{"attributes":{"status":"completed","stats":{"malicious":1,"suspicious":1,"harmless":30,"undetected":20}}}}' ;;
+            clean) printf '{"data":{"attributes":{"status":"completed","stats":{"malicious":0,"suspicious":0,"harmless":31,"undetected":21}}}}' ;;
             pending) printf '{"data":{"attributes":{"status":"queued"}}}' ;;
             failed) exit 22 ;;
         esac
@@ -50,8 +51,15 @@ esac
     def test_scans_both_archives_and_counts_flags(self):
         result = self.run_scan("completed", large=True)
         self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("### VirusTotal Scan\n| File | Status | Scan Report |", result.stdout)
         for arch in ("amd64", "arm64"):
-            self.assertIn(f"| `plainapp-linux-{arch}.tar.gz` | 2/52 | [Report]", result.stdout)
+            self.assertIn(f"| `plainapp-linux-{arch}.tar.gz` | ⚠️ 2/52 Detected | [View Report]", result.stdout)
+
+    def test_labels_zero_detections_as_clean(self):
+        result = self.run_scan("clean")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        for arch in ("amd64", "arm64"):
+            self.assertIn(f"| `plainapp-linux-{arch}.tar.gz` | ✅ 0/52 Clean | [View Report]", result.stdout)
 
     def test_incomplete_or_failed_scan_cannot_generate_release_report(self):
         for mode in ("pending", "failed"):

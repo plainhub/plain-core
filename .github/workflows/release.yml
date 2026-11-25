@@ -185,11 +185,32 @@ jobs:
           fi
           (cd artifacts && sha256sum --check checksums.txt)
           {
-            echo '## Verify the downloads'
-            echo
-            echo 'Run `sha256sum --check checksums.txt` in the directory containing both archives.'
-            printf 'Use `slsa-verifier verify-artifact <archive> --provenance-path %s --source-uri github.com/%s` to verify the build source.\n\n' "$PROVENANCE_NAME" "$GITHUB_REPOSITORY"
+            cat <<'NOTES'
+          ## What's Changed
+
+          ### Improvements
+
+          ### Fixes
+
+          ## Security
+
+          NOTES
             cat artifacts/virustotal.md
+            cat <<'NOTES'
+
+          ### SLSA Provenance (Level 3)
+          The `.intoto.jsonl` file is a signed SLSA provenance document covering all release archives.
+          Verify with [slsa-verifier](https://github.com/slsa-framework/slsa-verifier):
+          ```sh
+          slsa-verifier verify-artifact plainapp-linux-amd64.tar.gz \
+          NOTES
+            printf '%s\n' "  --provenance-path $PROVENANCE_NAME \\" "  --source-uri github.com/$GITHUB_REPOSITORY"
+            cat <<'NOTES'
+          ```
+
+          ## SHA-256 Checksums
+          Run `sha256sum --check checksums.txt` in the directory containing both archives.
+          NOTES
           } > release-notes.md
-          gh release create "$tag" --draft --target "$GITHUB_SHA" --title "PlainApp CLI $version" --generate-notes --notes-file release-notes.md \
+          gh release create "$tag" --draft --target "$GITHUB_SHA" --title "PlainApp CLI $version" --notes-file release-notes.md \
             artifacts/plainapp-linux-amd64.tar.gz artifacts/plainapp-linux-arm64.tar.gz artifacts/checksums.txt "artifacts/$PROVENANCE_NAME"
