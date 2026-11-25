@@ -243,7 +243,6 @@ fn contact_input(input: &ContactInput) -> Value {
         "source": input.source,
         "starred": input.starred,
         "notes": input.notes,
-        "groupIds": input.group_ids.iter().map(|id| Value::from(id.0.clone())).collect::<Vec<_>>(),
         "organization": input.organization.as_ref().map(|org| json!({
             "company": org.company, "title": org.title,
         })),

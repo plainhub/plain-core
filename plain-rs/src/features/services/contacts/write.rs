@@ -133,12 +133,6 @@ fn validate_contact_input(input: &Value, require_source: bool) -> plain_libs::an
     entries(input, "events")?;
     entries(input, "websites")?;
     entries(input, "ims")?;
-    if let Some(groups) = object.get("groupIds") {
-        let groups = groups
-            .as_array()
-            .ok_or_else(|| plain_libs::anyhow::anyhow!("groupIds must be an array"))?;
-        plain_libs::anyhow::ensure!(groups.len() <= MAX_ENTRIES, "groupIds has too many items");
-    }
     if let Some(organization) = object.get("organization") {
         plain_libs::anyhow::ensure!(
             organization.is_null() || organization.is_object(),

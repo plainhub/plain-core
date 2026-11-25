@@ -15,7 +15,6 @@ fn contact(source: &str, extra: Value) -> Value {
         "source": source,
         "starred": false,
         "notes": "",
-        "groupIds": [],
         "websites": [],
         "ims": [],
     });
