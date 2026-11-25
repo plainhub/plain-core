@@ -134,6 +134,11 @@ input ChatSharePeerInput {
 	port: Int!
 }
 
+enum ChatSortBy {
+	NEWEST_FIRST
+	OLDEST_FIRST
+}
+
 enum ChatStatus {
 	SENT
 	FAILED
@@ -164,11 +169,6 @@ extend type Mutation {
 	sendChatItems(targets: [String!]!, content: ChatContentInput!): [ChatItem!]!
 	sendFolderShare(targets: [String!]!, path: String!, name: String!, expiresAt: Instant): [ChatItem!]!
 	sendShare(targets: [String!]!, shareId: ID!): [ChatItem!]!
-}
-
-enum ChatSortBy {
-	NEWEST_FIRST
-	OLDEST_FIRST
 }
 
 extend type Query {
