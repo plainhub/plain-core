@@ -9,6 +9,10 @@ use std::sync::Arc;
 
 const GRANTED: &str = r#"["IMAGES","VIDEOS","AUDIO","DOCS","FILES"]"#;
 
+#[cfg(feature = "ai-image-search")]
+#[path = "image_model_import.rs"]
+mod image_model_import;
+
 fn stub(host: Arc<Host>, handler: impl Fn(&str, Value) -> Value + Send + 'static) {
     let (generation, mut requests) = host.connect();
     let host = host.clone();

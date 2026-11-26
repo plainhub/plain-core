@@ -1,0 +1,70 @@
+{
+  "formatVersion": 1,
+  "id": "named-inputs",
+  "name": "Named inputs",
+  "license": "Apache-2.0",
+  "source": "local",
+  "dimensions": 4,
+  "minimumScore": 0.0,
+  "files": [
+    {
+      "name": "nhwc_mean.onnx",
+      "size": 283,
+      "sha256": "7c1e666a6dbfba9bf20124c663a70a99c8619aaab6d5d6ecd6947fac6aea4831"
+    },
+    {
+      "name": "named_text.onnx",
+      "size": 632,
+      "sha256": "eb2b9ce7beaab07b40e28cf8bc4f59fbcab202b70f9d4a59d672d3de6710e59e"
+    },
+    {
+      "name": "tokenizer.json",
+      "size": 362,
+      "sha256": "2c473e97fe2a5f2d5f8e1cd80454b2fcf4e94599c194991e8ec46c7b9912a543"
+    }
+  ],
+  "image": {
+    "file": "nhwc_mean.onnx",
+    "input": "pixels",
+    "output": "embedding"
+  },
+  "text": {
+    "file": "named_text.onnx",
+    "inputs": [
+      {
+        "name": "tokens",
+        "role": "ids"
+      },
+      {
+        "name": "segments",
+        "role": "typeIds"
+      },
+      {
+        "name": "attention",
+        "role": "attentionMask"
+      }
+    ],
+    "output": "embedding"
+  },
+  "tokenizer": {
+    "file": "tokenizer.json",
+    "contextLength": 6,
+    "padToken": "[PAD]"
+  },
+  "preprocess": {
+    "size": 24,
+    "resize": "stretch",
+    "layout": "nhwc",
+    "interpolation": "bilinear",
+    "mean": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "std": [
+      1.0,
+      1.0,
+      1.0
+    ]
+  }
+}

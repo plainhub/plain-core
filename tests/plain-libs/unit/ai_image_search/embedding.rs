@@ -5,6 +5,98 @@ use crate::ai_image_search::models::test_fixture::fixture;
 use crate::ai_image_search::preprocess;
 
 #[cfg(feature = "onnx-runtime")]
+fn import_image_encoder(model: &[u8], expected: [f32; 4]) {
+    let directory = crate::temporary::tempdir().unwrap();
+    let mut manifest = fixture(directory.path());
+    std::fs::write(directory.path().join(&manifest.image.file), model).unwrap();
+    let image = manifest
+        .files
+        .iter_mut()
+        .find(|file| file.name == manifest.image.file)
+        .unwrap();
+    image.size = model.len() as u64;
+    image.sha256 = format!("{:x}", Sha256::digest(model));
+    manifest.preprocess.size = 16;
+    manifest.preprocess.mean = [0.0; 3];
+    manifest.preprocess.std = [1.0; 3];
+    let engine = Engine::open(directory.path().into(), manifest).unwrap();
+    let image = directory.path().join("gradient.png");
+    crate::image::RgbImage::from_fn(96, 64, |x, y| {
+        crate::image::Rgb([
+            (x * 255 / 95) as u8,
+            (y * 255 / 63) as u8,
+            ((x + 2 * y) % 256) as u8,
+        ])
+    })
+    .save(&image)
+    .unwrap();
+    let result = engine.image(&image).unwrap().unwrap();
+    for (value, expected) in result.iter().zip(expected) {
+        assert!((value - expected).abs() < 1e-5, "{result:?}");
+    }
+}
+
+#[cfg(feature = "onnx-runtime")]
+#[test]
+fn imports_a_region_encoder_and_samples_its_image_features() {
+    import_image_encoder(
+        include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../plain-rs/testdata/image_search/roi_align.onnx"
+        )),
+        [0.3686542, 0.36889288, 0.32116455, 0.7904843],
+    );
+}
+
+#[cfg(feature = "onnx-runtime")]
+#[test]
+fn imports_a_model_with_conditional_outputs_and_a_loop_capturing_outer_values() {
+    import_image_encoder(
+        include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../plain-rs/testdata/image_search/control_flow.onnx"
+        )),
+        [0.5730256, 0.57310337, 0.5624586, 0.16381265],
+    );
+}
+
+#[cfg(feature = "onnx-runtime")]
+#[test]
+fn imports_a_model_with_lp_pool() {
+    import_image_encoder(
+        include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../plain-rs/testdata/image_search/lp_pool.onnx"
+        )),
+        [0.6109104, 0.61207587, 0.4977555, 0.066264704],
+    );
+}
+
+#[cfg(feature = "onnx-runtime")]
+#[test]
+fn imports_a_model_with_max_unpool() {
+    import_image_encoder(
+        include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../plain-rs/testdata/image_search/max_unpool.onnx"
+        )),
+        [0.38373765, 0.3841037, 0.33403698, 0.77047324],
+    );
+}
+
+#[cfg(feature = "onnx-runtime")]
+#[test]
+fn imports_a_model_calling_nested_local_functions_with_a_default_attribute() {
+    import_image_encoder(
+        include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../plain-rs/testdata/image_search/local_functions.onnx"
+        )),
+        [0.51519865, 0.5156901, 0.44847152, 0.51721114],
+    );
+}
+
+#[cfg(feature = "onnx-runtime")]
 #[test]
 fn real_runtime_executes_paired_encoders_and_reloads_released_sessions() {
     let directory = crate::temporary::tempdir().unwrap();
@@ -31,6 +123,48 @@ fn real_runtime_executes_paired_encoders_and_reloads_released_sessions() {
     engine.release_all();
     assert_eq!(engine.text("image").unwrap()[0], 1.0);
     assert_eq!(engine.image(&path).unwrap().unwrap()[0], 1.0);
+}
+#[cfg(feature = "onnx-runtime")]
+#[test]
+fn drops_the_active_encoder_before_loading_the_other_graph() {
+    let directory = crate::temporary::tempdir().unwrap();
+    let manifest = fixture(directory.path());
+    let engine = Engine::open(directory.path().into(), manifest.clone()).unwrap();
+    assert_eq!(
+        engine
+            .session
+            .lock()
+            .unwrap()
+            .as_ref()
+            .map(|(image, _)| *image),
+        Some(false)
+    );
+    let model = directory.path().join(&manifest.image.file);
+    let moved = directory.path().join("saved.onnx");
+    std::fs::rename(&model, &moved).unwrap();
+    assert!(
+        engine
+            .image_tensor(vec![0.; (3 * manifest.preprocess.size.pow(2)) as usize])
+            .is_err()
+    );
+    assert!(engine.session.lock().unwrap().is_none());
+    std::fs::rename(moved, model).unwrap();
+    assert_eq!(
+        engine
+            .image_tensor(vec![0.; (3 * manifest.preprocess.size.pow(2)) as usize])
+            .unwrap(),
+        [1., 0., 0., 0.]
+    );
+    assert_eq!(
+        engine
+            .session
+            .lock()
+            .unwrap()
+            .as_ref()
+            .map(|(image, _)| *image),
+        Some(true)
+    );
+    assert_eq!(engine.text("cat").unwrap(), [1., 0., 0., 0.]);
 }
 #[cfg(feature = "onnx-runtime")]
 #[test]
