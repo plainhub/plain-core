@@ -1,6 +1,8 @@
 use crate::anyhow::{Result, ensure};
 use crate::utils::base64::{base64_decode_checked, base64_encode};
 
+pub const RELEASE_SIGNING_PUBLIC_KEY: &str = include_str!("../../../release-signing.pub");
+
 pub fn verify_manifest<'a>(
     manifest: &'a [u8],
     signature: &[u8],

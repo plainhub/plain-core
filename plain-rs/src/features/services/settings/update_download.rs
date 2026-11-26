@@ -6,6 +6,7 @@ use crate::infrastructure::types::Long;
 use crate::runtime::Runtime as CoreRuntime;
 use futures_util::StreamExt;
 use plain_libs::anyhow::{Result, anyhow, ensure};
+use plain_libs::crypto::release::RELEASE_SIGNING_PUBLIC_KEY;
 use plain_libs::protocols::http_client;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -17,6 +18,9 @@ use std::{
     time::Duration,
 };
 use tokio::{io::AsyncWriteExt, sync::watch};
+
+mod proof;
+use proof::{Asset, Proof, VerifiedRelease};
 
 #[derive(
     Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, plain_graphql::Enum,
@@ -84,8 +88,18 @@ pub struct Runtime {
     command: tokio::sync::Mutex<Option<Task>>,
     state: Mutex<State>,
     closed: AtomicBool,
+    #[cfg(any(test, feature = "test-seams"))]
+    test_public_key: OnceLock<String>,
 }
 impl Runtime {
+    fn public_key(&self) -> &str {
+        #[cfg(any(test, feature = "test-seams"))]
+        if let Some(key) = self.test_public_key.get() {
+            return key;
+        }
+        RELEASE_SIGNING_PUBLIC_KEY.trim()
+    }
+
     pub fn schedule_reconcile(state: &CoreRuntime) {
         let state = state.clone();
         tokio::spawn(async move {
@@ -136,6 +150,22 @@ impl Runtime {
         }
         snapshot
     }
+    fn expose_verified(&self, state: &CoreRuntime, path: String) -> AppUpdateDownload {
+        let snapshot = self.state.lock().unwrap().snapshot.clone();
+        if snapshot.status == AppUpdateDownloadStatus::Completed && snapshot.file_path == path {
+            return snapshot;
+        }
+        self.publish(
+            state,
+            AppUpdateDownload {
+                status: AppUpdateDownloadStatus::Completed,
+                progress: 100,
+                file_path: path,
+                ..Default::default()
+            },
+        )
+    }
+
     pub(super) fn invalidate(&self) {
         if let Some(cancel) = &self.state.lock().unwrap().cancel {
             cancel.send_replace(true);
@@ -216,12 +246,17 @@ async fn execute_owned(state: CoreRuntime, command: Command) -> Result<AppUpdate
                 "No application update available"
             );
             let identity = Identity::from(&info);
-            validate_url(&identity.url)?;
-            discard(&state, &info.downloaded_apk_path)?;
-            updates::update(
-                &state,
-                plain_libs::serde_json::json!({"downloadedApkPath":""}),
-            )?;
+            Asset::for_update(&identity)?;
+            if !info.downloaded_apk_path.is_empty() {
+                if let Some(path) = recheck(&state, &info).await? {
+                    return Ok(runtime.expose_verified(&state, path));
+                }
+                forget_download(&state, &info.downloaded_apk_path)?;
+                runtime.publish(&state, AppUpdateDownload::default());
+                return Err(anyhow!(
+                    "Cached update no longer verifies; download it again"
+                ));
+            }
             let id = plain_libs::utils::uuid::Uuid::new_v4().into_string();
             let (cancel, receiver) = watch::channel(false);
             runtime.state.lock().unwrap().cancel = Some(cancel.clone());
@@ -252,7 +287,7 @@ async fn execute_owned(state: CoreRuntime, command: Command) -> Result<AppUpdate
             if snapshot.status == AppUpdateDownloadStatus::Downloading {
                 return Ok(snapshot);
             }
-            let restored = match restored(&state, &info) {
+            let restored = match recheck(&state, &info).await {
                 Ok(restored) => restored,
                 Err(error) => {
                     if !*state.stop.borrow() {
@@ -269,26 +304,10 @@ async fn execute_owned(state: CoreRuntime, command: Command) -> Result<AppUpdate
                 }
             };
             if let Some(path) = restored {
-                if snapshot.status == AppUpdateDownloadStatus::Completed
-                    && snapshot.file_path == path
-                {
-                    return Ok(snapshot);
-                }
-                return Ok(runtime.publish(
-                    &state,
-                    AppUpdateDownload {
-                        status: AppUpdateDownloadStatus::Completed,
-                        progress: 100,
-                        file_path: path,
-                        ..Default::default()
-                    },
-                ));
+                return Ok(runtime.expose_verified(&state, path));
             }
             if !info.downloaded_apk_path.is_empty() {
-                updates::update(
-                    &state,
-                    plain_libs::serde_json::json!({"downloadedApkPath":""}),
-                )?;
+                forget_download(&state, &info.downloaded_apk_path)?;
             }
             if snapshot.status == AppUpdateDownloadStatus::Completed {
                 return Ok(runtime.publish(&state, AppUpdateDownload::default()));
@@ -365,22 +384,31 @@ async fn transfer(
     cancel: &mut watch::Receiver<bool>,
 ) -> Result<String> {
     let mut stop = state.stop.clone();
+    let asset = Asset::for_update(identity)?;
+    let client = client()?;
+    let proof = tokio::select! {
+        biased;
+        _=canceled(cancel, &mut stop)=>return Err(anyhow!("Update download canceled")),
+        proof=asset.download_proof(client)=>proof?,
+    };
+    let release = proof.verify(identity, state.update_checks.download.public_key())?;
     let response = tokio::select! {
         biased;
         _=canceled(cancel, &mut stop)=>return Err(anyhow!("Update download canceled")),
-        response=client()?.get(validate_url(&identity.url)?).send()=>response?,
+        response=client.get(asset.url).send()=>response?,
     }
     .error_for_status()?;
     let total = response.content_length();
     let stream = response
         .bytes_stream()
         .map(|chunk| chunk.map_err(plain_libs::anyhow::Error::from));
-    save_stream(state, id, identity, stream, total, cancel).await
+    save_stream(state, id, identity, release, stream, total, cancel).await
 }
 async fn save_stream<B: AsRef<[u8]>>(
     state: &CoreRuntime,
     id: &str,
     identity: &Identity,
+    release: VerifiedRelease,
     stream: impl futures_util::Stream<Item = Result<B>>,
     total: Option<u64>,
     cancel: &mut watch::Receiver<bool>,
@@ -454,6 +482,12 @@ async fn save_stream<B: AsRef<[u8]>>(
     .await;
     drop(output);
     result?;
+    let staged_dir = staging.path().to_owned();
+    tokio::task::spawn_blocking(move || {
+        release.verify_package(&staged_dir.join("package"))?;
+        release.write_proof(&staged_dir)
+    })
+    .await??;
     let _settings = tokio::select! {
         biased;
         _=canceled(cancel, &mut stop)=>return Err(anyhow!("Update download canceled")),
@@ -505,6 +539,12 @@ fn percentage(downloaded: u64, total: Option<u64>) -> i32 {
         .map(|total| ((downloaded as u128 * 100 / total as u128).min(99)) as i32)
         .unwrap_or(0)
 }
+async fn recheck(state: &CoreRuntime, info: &UpdateInfo) -> Result<Option<String>> {
+    let state = state.clone();
+    let info = info.clone();
+    tokio::task::spawn_blocking(move || restored(&state, &info)).await?
+}
+
 fn restored(state: &CoreRuntime, info: &UpdateInfo) -> Result<Option<String>> {
     let version = &state.host.startup().app_version;
     if info.downloaded_apk_path.is_empty()
@@ -534,10 +574,13 @@ fn restored(state: &CoreRuntime, info: &UpdateInfo) -> Result<Option<String>> {
         return Ok(None);
     };
     let length = std::fs::metadata(path)?.len();
-    Ok(
-        (saved == Identity::from(info) && length > 0 && (saved.size == 0 || saved.size == length))
-            .then(|| info.downloaded_apk_path.clone()),
-    )
+    if saved != Identity::from(info) || length == 0 || (saved.size > 0 && saved.size != length) {
+        return Ok(None);
+    }
+    let verified = Proof::read(&parent)
+        .and_then(|proof| proof.verify(&saved, state.update_checks.download.public_key()))
+        .and_then(|release| release.verify_package(path));
+    Ok(verified.is_ok().then(|| info.downloaded_apk_path.clone()))
 }
 
 fn owned_directory(state: &CoreRuntime, path: &Path) -> Option<PathBuf> {
@@ -556,6 +599,14 @@ fn owned_directory(state: &CoreRuntime, path: &Path) -> Option<PathBuf> {
     }
     Some(parent.to_owned())
 }
+fn forget_download(state: &CoreRuntime, path: &str) -> Result<()> {
+    discard(state, path)?;
+    updates::update(
+        state,
+        plain_libs::serde_json::json!({"downloadedApkPath":""}),
+    )
+}
+
 fn discard(state: &CoreRuntime, path: &str) -> Result<()> {
     if let Some(directory) = owned_directory(state, Path::new(path)) {
         std::fs::remove_dir_all(directory)?;
@@ -570,12 +621,31 @@ mod tests;
 #[cfg(any(test, feature = "test-seams"))]
 pub mod test_fixture {
     use super::*;
+    pub fn trust_release_key(state: &CoreRuntime) {
+        let identity = Identity::from(&updates::info(state).unwrap());
+        let (_, key) = proof::fixture(&identity, b"");
+        let _ = state.update_checks.download.test_public_key.set(key);
+    }
+
     pub async fn save(state: &CoreRuntime, id: &str, chunks: Vec<Vec<u8>>) -> Result<String> {
         let identity = Identity::from(&updates::info(state)?);
+        trust_release_key(state);
+        let bytes: Vec<u8> = chunks.iter().flatten().copied().collect();
+        let (proof, key) = proof::fixture(&identity, &bytes);
+        let release = proof.verify(&identity, &key)?;
         let total = chunks.iter().map(|chunk| chunk.len() as u64).sum();
         let (_cancel, mut receiver) = watch::channel(false);
         let stream =
             futures_util::stream::iter(chunks.into_iter().map(Ok::<_, plain_libs::anyhow::Error>));
-        save_stream(state, id, &identity, stream, Some(total), &mut receiver).await
+        save_stream(
+            state,
+            id,
+            &identity,
+            release,
+            stream,
+            Some(total),
+            &mut receiver,
+        )
+        .await
     }
 }

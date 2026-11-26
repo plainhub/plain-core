@@ -20,14 +20,19 @@ fn progress_is_bounded_without_overflow_and_unknown_lengths_do_not_invent_progre
     }
 }
 
-fn setup() -> (plain_libs::temporary::TempDir, ContentServer, CoreRuntime, Identity) {
+fn setup() -> (
+    plain_libs::temporary::TempDir,
+    ContentServer,
+    CoreRuntime,
+    Identity,
+) {
     let dir = plain_libs::temporary::tempdir().unwrap();
     let core = ContentServer::open_with_cache(&dir.path().join("data"), &dir.path().join("cache"))
         .unwrap();
     let state = core.runtime_state();
     updates::update(
         &state,
-        json!({"newVersion":"999.0.0","downloadUrl":"https://example.invalid/update","size":4}),
+        json!({"newVersion":"999.0.0","downloadUrl":"https://github.com/plainhub/plain-app/releases/download/v999.0.0/PlainApp-999.0.0-Old-32bit.apk","size":4}),
     )
     .unwrap();
     let identity =
@@ -35,7 +40,14 @@ fn setup() -> (plain_libs::temporary::TempDir, ContentServer, CoreRuntime, Ident
     (dir, core, state, identity)
 }
 
-fn allow_updates(state: &CoreRuntime) -> tokio::sync::mpsc::UnboundedReceiver<plain_libs::serde_json::Value> {
+fn verified(identity: &Identity) -> VerifiedRelease {
+    let (proof, key) = proof::fixture(identity, b"abcd");
+    proof.verify(identity, &key).unwrap()
+}
+
+fn allow_updates(
+    state: &CoreRuntime,
+) -> tokio::sync::mpsc::UnboundedReceiver<plain_libs::serde_json::Value> {
     let host = state.host.clone();
     let (generation, mut requests) = host.connect();
     let (sent, received) = tokio::sync::mpsc::unbounded_channel();
@@ -71,6 +83,7 @@ async fn truncated_or_failed_streams_remove_staging_and_never_publish_a_download
                 &state,
                 "FAILED",
                 &identity,
+                verified(&identity),
                 futures_util::stream::iter(chunks),
                 Some(4),
                 &mut receiver
@@ -96,6 +109,7 @@ async fn truncated_or_failed_streams_remove_staging_and_never_publish_a_download
             &state,
             "wrong-length",
             &identity,
+            verified(&identity),
             futures_util::stream::iter([Ok(&b"abcd"[..])]),
             Some(5),
             &mut receiver
@@ -124,6 +138,7 @@ async fn cancellation_interrupts_a_pending_body_and_cleans_staging_before_join_r
             &worker_state,
             "CANCELED",
             &identity,
+            verified(&identity),
             body,
             None,
             &mut receiver,
@@ -157,6 +172,7 @@ async fn changed_release_or_missing_artifact_cannot_be_reported_as_completed() {
             &state,
             "stale",
             &identity,
+            verified(&identity),
             futures_util::stream::iter([Ok(&b"abcd"[..])]),
             Some(4),
             &mut receiver
@@ -175,6 +191,7 @@ async fn changed_release_or_missing_artifact_cannot_be_reported_as_completed() {
         &state,
         "removed",
         &identity,
+        verified(&identity),
         futures_util::stream::iter([Ok(&b"abcd"[..])]),
         Some(4),
         &mut receiver,
@@ -309,6 +326,7 @@ async fn clearing_application_cache_waits_for_the_active_body_before_deleting_it
                 &worker_state,
                 "cache-clear",
                 &identity,
+                verified(&identity),
                 body,
                 None,
                 &mut receiver
@@ -336,5 +354,133 @@ async fn clearing_application_cache_waits_for_the_active_body_before_deleting_it
             .status,
         AppUpdateDownloadStatus::Idle
     );
+    core.stop_core().await;
+}
+
+#[tokio::test]
+async fn same_size_mutation_of_a_retained_download_cannot_install_after_restart() {
+    let (dir, core, state, _) = setup();
+    let _reports = allow_updates(&state);
+    let path = test_fixture::save(&state, "tampered", vec![b"abcd".to_vec()])
+        .await
+        .unwrap();
+    std::fs::write(&path, b"ABCD").unwrap();
+    core.stop_core().await;
+    let core = ContentServer::open_with_cache(&dir.path().join("data"), &dir.path().join("cache"))
+        .unwrap();
+    let state = core.runtime_state();
+    test_fixture::trust_release_key(&state);
+    let snapshot = execute_owned(state.clone(), Command::Reconcile)
+        .await
+        .unwrap();
+    assert_ne!(snapshot.status, AppUpdateDownloadStatus::Completed);
+    assert!(snapshot.file_path.is_empty());
+    core.stop_core().await;
+}
+
+#[tokio::test]
+async fn transfer_with_correct_length_but_wrong_digest_never_exposes_a_package() {
+    let (_dir, core, state, identity) = setup();
+    let _reports = allow_updates(&state);
+    let (_cancel, mut receiver) = watch::channel(false);
+    let error = save_stream(
+        &state,
+        "invalid-digest",
+        &identity,
+        verified(&identity),
+        futures_util::stream::iter([Ok(&b"ABCD"[..])]),
+        Some(4),
+        &mut receiver,
+    )
+    .await
+    .unwrap_err();
+    assert!(error.to_string().contains("APK checksum"));
+    assert!(
+        updates::info(&state)
+            .unwrap()
+            .downloaded_apk_path
+            .is_empty()
+    );
+    assert_eq!(
+        std::fs::read_dir(state.cache.app_updates())
+            .unwrap()
+            .count(),
+        0
+    );
+    core.stop_core().await;
+}
+
+#[test]
+fn release_asset_rejects_other_repositories_versions_and_query_strings() {
+    let valid = "https://github.com/plainhub/plain-app/releases/download/v4.0.0/PlainApp-4.0.0-Old-32bit.apk";
+    let identity = |url| Identity {
+        version: "4.0.0".into(),
+        url,
+        size: 4,
+    };
+    assert!(Asset::for_update(&identity(valid.into())).is_ok());
+    for url in [
+        valid.replace("plainhub/plain-app", "plainhub/plain-desktop"),
+        valid.replace("v4.0.0/", "v4.0.1/"),
+        valid.replace("PlainApp-4.0.0", "PlainApp-4.0.1"),
+        format!("{valid}?alternate=1"),
+    ] {
+        assert!(Asset::for_update(&identity(url)).is_err());
+    }
+}
+
+#[tokio::test]
+async fn restored_package_without_its_signed_proof_is_discarded() {
+    let (dir, core, state, _) = setup();
+    let _reports = allow_updates(&state);
+    let path = test_fixture::save(&state, "unsigned", vec![b"abcd".to_vec()])
+        .await
+        .unwrap();
+    let parent = Path::new(&path).parent().unwrap();
+    std::fs::remove_file(parent.join("release-manifest.sig")).unwrap();
+    core.stop_core().await;
+    let core = ContentServer::open_with_cache(&dir.path().join("data"), &dir.path().join("cache"))
+        .unwrap();
+    let state = core.runtime_state();
+    test_fixture::trust_release_key(&state);
+    let snapshot = execute_owned(state.clone(), Command::Reconcile)
+        .await
+        .unwrap();
+    assert_ne!(snapshot.status, AppUpdateDownloadStatus::Completed);
+    assert!(!Path::new(&path).exists());
+    assert!(
+        updates::info(&state)
+            .unwrap()
+            .downloaded_apk_path
+            .is_empty()
+    );
+    core.stop_core().await;
+}
+
+#[tokio::test]
+async fn install_request_rechecks_the_exact_cached_bytes_without_starting_a_new_download() {
+    let (_dir, core, state, _) = setup();
+    let _reports = allow_updates(&state);
+    let path = test_fixture::save(&state, "for-install", vec![b"abcd".to_vec()])
+        .await
+        .unwrap();
+    let snapshot = execute_owned(state.clone(), Command::Start).await.unwrap();
+    assert_eq!(snapshot.status, AppUpdateDownloadStatus::Completed);
+    assert_eq!(snapshot.file_path, path);
+    assert!(state.update_checks.download.command.lock().await.is_none());
+
+    std::fs::write(&path, b"ABCD").unwrap();
+    let error = execute_owned(state.clone(), Command::Start)
+        .await
+        .unwrap_err();
+    assert!(error.to_string().contains("no longer verifies"));
+    assert!(
+        updates::info(&state)
+            .unwrap()
+            .downloaded_apk_path
+            .is_empty()
+    );
+    assert!(!Path::new(&path).exists());
+    assert!(state.update_checks.download.command.lock().await.is_none());
     core.stop_core().await;
 }

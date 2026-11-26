@@ -1,8 +1,8 @@
 use crate::server::ContentServer;
 use crate::server::ServerState;
+use plain_libs::serde_json::json;
 use plain_rs::features::services::settings::update_download::*;
 use plain_rs::features::services::settings::updates;
-use plain_libs::serde_json::json;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
@@ -15,13 +15,15 @@ fn setup() -> (plain_libs::temporary::TempDir, ContentServer, ServerState) {
     let state = core.runtime_state();
     updates::update(
         &state,
-        json!({"newVersion":"999.0.0","downloadUrl":"https://example.invalid/update","size":4}),
+        json!({"newVersion":"999.0.0","downloadUrl":"https://github.com/plainhub/plain-app/releases/download/v999.0.0/PlainApp-999.0.0-Old-32bit.apk","size":4}),
     )
     .unwrap();
     (dir, core, state)
 }
 
-fn allow_updates(state: &ServerState) -> tokio::sync::mpsc::UnboundedReceiver<plain_libs::serde_json::Value> {
+fn allow_updates(
+    state: &ServerState,
+) -> tokio::sync::mpsc::UnboundedReceiver<plain_libs::serde_json::Value> {
     let host = state.host.clone();
     let (generation, mut requests) = host.connect();
     let (sent, received) = tokio::sync::mpsc::unbounded_channel();
@@ -81,6 +83,7 @@ async fn complete_stream_is_published_with_identity_and_restored_without_client_
         ContentServer::open_with_cache(&_dir.path().join("data"), &_dir.path().join("cache"))
             .unwrap();
     let state = core.runtime_state();
+    test_fixture::trust_release_key(&state);
     let bridge = Arc::new(core.host_events().unwrap());
     let (sent, mut reports) = tokio::sync::mpsc::unbounded_channel();
     let serving = tokio::spawn(bridge.serve(move |method, params| {
