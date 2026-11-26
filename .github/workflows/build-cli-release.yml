@@ -1,0 +1,131 @@
+name: Build and attest PlainApp CLI
+on: workflow_call
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  binary:
+    name: plainapp ${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+    env:
+      PLAINAPP_RELEASE_PUBLIC_KEY: ${{ vars.RELEASE_SIGNING_PUBLIC_KEY }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            target: x86_64-unknown-linux-gnu
+            runner: ubuntu-24.04
+          - arch: arm64
+            target: aarch64-unknown-linux-gnu
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential pkg-config libssl-dev python3
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@1.99.0
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: cli-release-${{ matrix.target }}
+
+      - name: Build plainapp with the committed Web UI
+        run: |
+          : "${PLAINAPP_RELEASE_PUBLIC_KEY:?Configure RELEASE_SIGNING_PUBLIC_KEY}"
+          test "$(cat release-signing.pub)" = "$PLAINAPP_RELEASE_PUBLIC_KEY"
+          cargo build --release --locked --target ${{ matrix.target }} -p plainapp
+
+      - name: Verify and package
+        env:
+          TARGET: ${{ matrix.target }}
+          ARCH: ${{ matrix.arch }}
+        run: |
+          plain="target/$TARGET/release/plainapp"
+          archive="plainapp-linux-$ARCH.tar.gz"
+          tar -czf "$archive" -C "$(dirname "$plain")" plainapp
+          test "$(tar -tzf "$archive")" = plainapp
+          unpacked=$(mktemp -d)
+          tar -xzf "$archive" -C "$unpacked"
+          cmp "$plain" "$unpacked/plainapp"
+          "$unpacked/plainapp" --version
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: plainapp-linux-${{ matrix.arch }}
+          path: plainapp-linux-${{ matrix.arch }}.tar.gz
+          if-no-files-found: error
+
+  provenance:
+    name: Attest and verify both release archives
+    needs: binary
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          path: artifacts
+          pattern: plainapp-linux-*
+          merge-multiple: true
+
+      - name: Hash both release archives
+        working-directory: artifacts
+        run: sha256sum plainapp-linux-amd64.tar.gz plainapp-linux-arm64.tar.gz > checksums.txt
+
+      - name: Attest both release archives
+        id: attest
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: |
+            artifacts/plainapp-linux-amd64.tar.gz
+            artifacts/plainapp-linux-arm64.tar.gz
+
+      - name: Verify provenance against the build commit
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BUNDLE: ${{ steps.attest.outputs.bundle-path }}
+        working-directory: artifacts
+        run: |
+          jq -ce '.' "$BUNDLE" > release-provenance.jsonl
+          verification=(
+            --repo "$GITHUB_REPOSITORY"
+            --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/build-cli-release.yml"
+            --source-digest "$GITHUB_SHA"
+            --signer-digest "$GITHUB_SHA"
+            --bundle release-provenance.jsonl
+          )
+          for arch in amd64 arm64; do
+            gh attestation verify "plainapp-linux-$arch.tar.gz" "${verification[@]}"
+          done
+          tampered=$(mktemp)
+          trap 'rm -f "$tampered"' EXIT
+          cp plainapp-linux-amd64.tar.gz "$tampered"
+          printf 'x' >> "$tampered"
+          if gh attestation verify "$tampered" "${verification[@]}"; then
+            echo "Attestation unexpectedly accepted an altered archive." >&2
+            exit 1
+          fi
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-verification
+          path: |
+            artifacts/checksums.txt
+            artifacts/release-provenance.jsonl
+          if-no-files-found: error
