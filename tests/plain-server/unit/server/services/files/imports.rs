@@ -7,6 +7,9 @@ async fn internal_import_keeps_its_staged_source_until_the_database_commit_befor
     let core =
         Arc::new(crate::server::ContentServer::open(&directory.path().join("data")).unwrap());
     let state = core.runtime_state().core;
+    let cached = state.cache.root().join("import-test-cache.txt");
+    std::fs::create_dir_all(state.cache.root()).unwrap();
+    std::fs::write(&cached, b"cached").unwrap();
     let (generation, mut requests) = state.host.connect();
     let importing = {
         let state = state.clone();
@@ -54,14 +57,17 @@ async fn internal_import_keeps_its_staged_source_until_the_database_commit_befor
     assert!(state.cache_changes.try_write().is_err());
     let mut clearing = Box::pin(plain_rs::infrastructure::cache::clear_application(&state));
     assert!(futures_util::poll!(&mut clearing).is_pending());
+    assert_eq!(std::fs::read(&cached).unwrap(), b"cached");
     stream.write(b" clear".to_vec()).await.unwrap();
     stream.finish().await.unwrap();
     let row = importing.await.unwrap().unwrap();
     clearing.await.unwrap();
+    let background_reader = state.cache_changes.read().await;
+    assert!(!cached.try_exists().unwrap());
     assert_eq!(
         std::fs::read(state.directory.join(row.real_path)).unwrap(),
         b"before clear"
     );
-    assert!(state.cache_changes.try_write().is_ok());
+    drop(background_reader);
     core.stop_core().await;
 }
