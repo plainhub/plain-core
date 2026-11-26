@@ -215,6 +215,13 @@ cmake_language(DEFER CALL capture)
                 self.verify_runtime(target, 'libonnxruntime.dylib',
                                     ['-DCMAKE_OSX_DEPLOYMENT_TARGET=11.0'], [])
 
+    def test_windows_runtime_uses_one_static_crt_for_onnx_protobuf_and_abseil(self):
+        self.verify_runtime('x86_64-pc-windows-msvc', 'onnxruntime.dll', [
+            '-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded$<$<CONFIG:Debug>:Debug>',
+            '-DABSL_MSVC_STATIC_RUNTIME=ON',
+            '-Dprotobuf_MSVC_STATIC_RUNTIME=ON',
+        ], [])
+
     def test_mobile_runtime_keeps_existing_platform_providers(self):
         android = ['-Donnxruntime_USE_XNNPACK=ON', '-Donnxruntime_DISABLE_FLOAT4_TYPES=ON', '-Donnxruntime_DISABLE_FLOAT8_TYPES=ON']
         self.verify_runtime('aarch64-linux-android', 'libonnxruntime.so', [*android, '-DANDROID_ABI=arm64-v8a'], [])

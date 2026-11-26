@@ -123,8 +123,14 @@ def prepare_runtime(target, output, cache):
             ]
         else:
             configure.append("-DCMAKE_OSX_DEPLOYMENT_TARGET=11.0")
-    elif "windows-msvc" in target and os.environ.get("CMAKE_GENERATOR", "Visual Studio").startswith("Visual Studio"):
-        configure += ["-A", {"aarch64": "ARM64", "i686": "Win32", "x86_64": "x64"}[target.split("-")[0]]]
+    elif "windows-msvc" in target:
+        configure += [
+            "-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded$<$<CONFIG:Debug>:Debug>",
+            "-DABSL_MSVC_STATIC_RUNTIME=ON",
+            "-Dprotobuf_MSVC_STATIC_RUNTIME=ON",
+        ]
+        if os.environ.get("CMAKE_GENERATOR", "Visual Studio").startswith("Visual Studio"):
+            configure += ["-A", {"aarch64": "ARM64", "i686": "Win32", "x86_64": "x64"}[target.split("-")[0]]]
 
     run(configure)
     run(["cmake", "--build", build, "--config", "Release", "--target", "onnxruntime",
