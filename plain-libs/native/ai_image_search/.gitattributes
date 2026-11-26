@@ -1,0 +1,4 @@
+onnxruntime/** -text
+onnxruntime.lock text eol=lf
+prepare_onnxruntime.py text eol=lf
+apple_sdk_headers.cmake text eol=lf

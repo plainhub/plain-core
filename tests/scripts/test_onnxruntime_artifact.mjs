@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url'
 const native = new URL('../../plain-libs/native/ai_image_search/', import.meta.url)
 const verifier = fileURLToPath(new URL('verify_onnxruntime.cmake', native))
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex')
+const sourceLock = sha256(readFileSync(new URL('onnxruntime.lock', native)))
 
 test('validates a prepared runtime against a trusted digest and the target recipe', t => {
   const directory = mkdtempSync(join(tmpdir(), 'plain-onnx-artifact-'))
@@ -19,7 +20,7 @@ test('validates a prepared runtime against a trusted digest and the target recip
   const target = 'x86_64-unknown-linux-gnu'
   const artifact = 'synthetic runtime fixture'
   const digest = sha256(artifact)
-  const identity = { target, source: true, recipe: sha256(readFileSync(new URL('prepare_onnxruntime.py', native))) }
+  const identity = { target, source: true, recipe: sha256(readFileSync(new URL('prepare_onnxruntime.py', native))), source_lock: sourceLock }
 
   writeFileSync(library, artifact)
   writeFileSync(join(directory, 'LICENSE'), 'Fixture license')
@@ -40,6 +41,8 @@ test('validates a prepared runtime against a trusted digest and the target recip
   writeFileSync(library, artifact)
   writeFileSync(receipt, JSON.stringify({ identity: { ...identity, recipe: sha256('obsolete recipe') }, sha256: digest }))
   assert.match(verify().stderr, /target or source recipe mismatch/)
+  writeFileSync(receipt, JSON.stringify({ identity: { ...identity, source_lock: sha256('obsolete source') }, sha256: digest }))
+  assert.match(verify().stderr, /target or source recipe mismatch/)
 })
 
 test('uses a trusted target digest before staging the runtime and notices', t => {
@@ -55,7 +58,7 @@ test('uses a trusted target digest before staging the runtime and notices', t =>
   const files = {
     [libraryName]: artifact,
     'runtime.json': JSON.stringify({
-      identity: { target, source: true, recipe: sha256(readFileSync(new URL('prepare_onnxruntime.py', native))) },
+      identity: { target, source: true, recipe: sha256(readFileSync(new URL('prepare_onnxruntime.py', native))), source_lock: sourceLock },
       sha256: digest,
     }),
     LICENSE: 'Fixture license',

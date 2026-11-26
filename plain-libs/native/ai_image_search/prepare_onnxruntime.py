@@ -8,22 +8,31 @@ import shutil
 import subprocess
 import sys
 
-VERSION = "1.30.0"
-SOURCE_COMMIT = "f2c39fe2f838cf35ce7da92824f5a5e3ee6e88a7"
+
+SOURCE = Path(__file__).resolve().with_name("onnxruntime")
+SOURCE_LOCK = SOURCE.with_suffix(".lock")
 
 
-
-def run(args, **kwargs):
-    subprocess.run([str(a) for a in args], check=True, **kwargs)
-
-
+def run(args):
+    subprocess.run([str(arg) for arg in args], check=True)
 
 
 def file_hash(path):
-    digest = hashlib.sha256()
-    with path.open("rb") as data:
-        for chunk in iter(lambda: data.read(65536), b""):
+    with path.open("rb") as file:
+        digest = hashlib.sha256()
+        for chunk in iter(lambda: file.read(65536), b""):
             digest.update(chunk)
+        return digest.hexdigest()
+
+
+def source_hash(source):
+    digest = hashlib.sha256()
+    for path in sorted(source.rglob("*"), key=lambda path: path.relative_to(source).as_posix()):
+        if path.is_symlink():
+            raise RuntimeError("ONNX Runtime source must not contain symlinks")
+        if path.is_file():
+            name = path.relative_to(source).as_posix()
+            digest.update(f"{name}\0{file_hash(path)}\n".encode())
     return digest.hexdigest()
 
 
@@ -47,83 +56,88 @@ def main():
     parser.add_argument("--target", required=True)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
-    target = args.target
-    cache = Path(os.environ.get("PLAIN_ONNX_CACHE", Path.home() / ".cache/plain-onnxruntime")) / VERSION
+    version = json.loads(SOURCE_LOCK.read_text())["version"]
+    cache = Path(os.environ.get("PLAIN_ONNX_CACHE", Path.home() / ".cache/plain-onnxruntime")).resolve() / version
     cache.mkdir(parents=True, exist_ok=True)
-    with acquire_lock(cache / ("prepare-" + target + ".lock")):
-        prepare_runtime(target, args.output, cache)
+    with acquire_lock(cache / ("prepare-" + args.target + ".lock")):
+        prepare_runtime(args.target, args.output, cache)
 
 
 def prepare_runtime(target, output, cache):
-    output.mkdir(parents=True, exist_ok=True)
-    name = "onnxruntime.dll" if "windows" in target else "libonnxruntime.a" if "apple-ios" in target else "libonnxruntime.dylib" if "apple" in target else "libonnxruntime.so"
-    destination = output / name
-    stamp = output / "runtime.json"
-    identity = {"version": VERSION, "target": target, "source": True, "recipe": file_hash(Path(__file__))}
-    if "apple-ios" in target:
+    source = json.loads(SOURCE_LOCK.read_text())
+    recipe = file_hash(Path(__file__))
+    identity = {
+        "version": source["version"], "target": target, "source": True,
+        "recipe": recipe, "source_lock": file_hash(SOURCE_LOCK),
+    }
+    ios = "apple-ios" in target
+    if ios:
         identity["apple_sdk_headers"] = file_hash(Path(__file__).with_name("apple_sdk_headers.cmake"))
-    if destination.is_file() and stamp.is_file():
-        recorded = json.loads(stamp.read_text())
-        if recorded.get("identity") == identity and recorded.get("sha256") == file_hash(destination) and all((output / name).is_file() for name in ("LICENSE", "ThirdPartyNotices.txt")):
+    name = "onnxruntime.dll" if "windows" in target else "libonnxruntime.a" if ios else "libonnxruntime.dylib" if "apple" in target else "libonnxruntime.so"
+    output.mkdir(parents=True, exist_ok=True)
+    destination = output / name
+    receipt = output / "runtime.json"
+    notices = ("LICENSE", "ThirdPartyNotices.txt")
+    if destination.is_file() and receipt.is_file():
+        recorded = json.loads(receipt.read_text())
+        if recorded == {"identity": identity, "sha256": file_hash(destination)} and all((output / name).is_file() for name in notices):
             return
-    checkout = cache / "source"
-    checkout_lock = acquire_lock(cache / "checkout.lock")
-    try:
-        if not checkout.exists():
-            run(["git", "clone", "--depth", "1", "--branch", "v" + VERSION,
-                 "--recurse-submodules", "--shallow-submodules", "https://github.com/microsoft/onnxruntime.git", checkout])
-    finally:
-        checkout_lock.close()
-    git = ["git", "-c", "core.fsmonitor=false", "-c", "core.hooksPath=" + os.devnull, "--no-optional-locks", "-C", str(checkout)]
-    commit = subprocess.check_output([*git, "rev-parse", "HEAD"], text=True).strip()
-    if commit != SOURCE_COMMIT:
-        raise RuntimeError("ONNX Runtime source revision mismatch")
-    changes = subprocess.check_output([*git, "status", "--porcelain", "--untracked-files=all", "--ignore-submodules=none"], text=True)
-    if changes:
-        raise RuntimeError("ONNX Runtime source checkout is modified")
-    submodules = subprocess.check_output([*git, "submodule", "status", "--recursive"], text=True)
-    if any(not line.startswith(" ") for line in submodules.splitlines()):
-        raise RuntimeError("ONNX Runtime submodule revision is missing or changed")
-    for legal_name in ("LICENSE", "ThirdPartyNotices.txt"):
-        shutil.copy2(checkout / legal_name, output / legal_name)
-    build = cache / target
-    cmd = [sys.executable, checkout / "tools/ci_build/build.py", "--build_dir", build,
-           "--config", "Release", "--update", "--build", "--skip_tests",
-           "--parallel", os.environ.get("PLAIN_ONNX_BUILD_JOBS", "4"),
-           "--cmake_extra_defines", "onnxruntime_BUILD_UNIT_TESTS=OFF", "onnxruntime_USE_TELEMETRY=OFF", "CMAKE_POLICY_VERSION_MINIMUM=3.5"]
+
+    if source_hash(SOURCE) != source["sha256"]:
+        raise RuntimeError("ONNX Runtime source does not match onnxruntime.lock")
+    build = cache / target / (identity["source_lock"][:12] + "-" + recipe[:12]) / "Release"
+    configure = [
+        "cmake", "-S", SOURCE / "cmake", "-B", build, "-DCMAKE_BUILD_TYPE=Release",
+        "-DCMAKE_POLICY_VERSION_MINIMUM=3.5", "-DCMAKE_DISABLE_FIND_PACKAGE_Git=ON",
+        f"-DPython_EXECUTABLE={sys.executable}",
+        f"-Donnxruntime_CMAKE_DEPS_MIRROR_DIR={cache / 'mirror'}",
+        "-Donnxruntime_BUILD_SHARED_LIB=ON", "-Donnxruntime_BUILD_UNIT_TESTS=OFF",
+        "-Donnxruntime_USE_TELEMETRY=OFF", "-Donnxruntime_DISABLE_RTTI=OFF",
+        "-Donnxruntime_ENABLE_CPU_FP16_OPS=OFF", "-Donnxruntime_USE_KLEIDIAI=ON", "-Donnxruntime_USE_SVE=ON",
+    ]
     if "android" in target:
         abi = {"aarch64-linux-android": "arm64-v8a", "armv7-linux-androideabi": "armeabi-v7a",
                "i686-linux-android": "x86", "x86_64-linux-android": "x86_64"}[target]
-        sdk = os.environ.get("ANDROID_HOME") or os.environ.get("ANDROID_SDK_ROOT")
         ndk = os.environ.get("ANDROID_NDK_HOME")
-        if not sdk or not ndk:
-            raise RuntimeError("ANDROID_HOME and ANDROID_NDK_HOME are required for the source build")
-        cmd += ["--android", "--android_sdk_path", sdk, "--android_ndk_path", ndk,
-                "--android_abi", abi, "--android_api", "26", "--build_shared_lib", "--android_cpp_shared", "--use_xnnpack"]
-    elif "apple-ios" in target:
-        sdk = "iphonesimulator" if target.endswith("-sim") or target.startswith("x86_64") else "iphoneos"
-        cmd += ["CMAKE_PROJECT_TOP_LEVEL_INCLUDES=" + str(Path(__file__).with_name("apple_sdk_headers.cmake").resolve())]
-        cmd += ["--ios", "--cmake_generator", "Xcode", "--apple_sysroot", sdk, "--osx_arch", "x86_64" if target.startswith("x86_64") else "arm64",
-                "--apple_deploy_target", "15.0", "--build_apple_framework", "--use_coreml", "--use_xnnpack"]
-    else:
-        cmd += ["--build_shared_lib"]
-        if "apple" in target:
-            cmd += ["--use_coreml", "--osx_arch", "x86_64" if target.startswith("x86_64") else "arm64"]
-    cmd += ["--skip_submodule_sync"]
-    run(cmd)
-    if "apple-ios" in target:
-        archives = sorted((build / "Release").rglob("static_framework/onnxruntime.framework/onnxruntime"))
-        if len(archives) != 1:
-            raise RuntimeError("ONNX Runtime static framework missing or ambiguous")
-        shutil.copy2(archives[0], destination)
+        if not ndk:
+            raise RuntimeError("ANDROID_NDK_HOME is required to build ONNX Runtime for Android")
+        configure += [
+            "-DCMAKE_TOOLCHAIN_FILE=" + str(Path(ndk) / "build/cmake/android.toolchain.cmake"),
+            "-DANDROID_ABI=" + abi, "-DANDROID_PLATFORM=android-26", "-DANDROID_MIN_SDK=26",
+            "-DANDROID_USE_LEGACY_TOOLCHAIN_FILE=false", "-DANDROID_STL=c++_shared",
+            "-Donnxruntime_USE_XNNPACK=ON",
+            "-Donnxruntime_DISABLE_FLOAT4_TYPES=ON", "-Donnxruntime_DISABLE_FLOAT8_TYPES=ON",
+        ]
+    elif "apple" in target:
+        configure += ["-Donnxruntime_USE_COREML=ON", "-DCMAKE_OSX_ARCHITECTURES=" + ("x86_64" if target.startswith("x86_64") else "arm64")]
+        if ios:
+            sdk = "iphonesimulator" if target.endswith("-sim") or target.startswith("x86_64") else "iphoneos"
+            headers = Path(__file__).with_name("apple_sdk_headers.cmake").resolve()
+            configure += [
+                "-G", "Xcode", "-DCMAKE_SYSTEM_NAME=iOS", "-DCMAKE_OSX_SYSROOT=" + sdk,
+                "-DCMAKE_OSX_DEPLOYMENT_TARGET=15.0", "-DPLATFORM_NAME=" + sdk,
+                "-DCMAKE_TOOLCHAIN_FILE=" + str(SOURCE / "cmake/onnxruntime_ios.toolchain.cmake"),
+                "-DCMAKE_PROJECT_TOP_LEVEL_INCLUDES=" + str(headers),
+                "-Dprotobuf_BUILD_PROTOC_BINARIES=OFF", "-Donnxruntime_BUILD_APPLE_FRAMEWORK=ON",
+                "-Donnxruntime_USE_XNNPACK=ON",
+            ]
+    elif "windows-msvc" in target and os.environ.get("CMAKE_GENERATOR", "Visual Studio").startswith("Visual Studio"):
+        configure += ["-A", {"aarch64": "ARM64", "i686": "Win32", "x86_64": "x64"}[target.split("-")[0]]]
+
+    run(configure)
+    run(["cmake", "--build", build, "--config", "Release", "--target", "onnxruntime",
+         "--parallel", os.environ.get("PLAIN_ONNX_BUILD_JOBS", "4")])
+    if ios:
+        libraries = list(build.glob("Release-*/static_framework/onnxruntime.framework/onnxruntime"))
     else:
         pattern = "libonnxruntime*.dylib" if "apple" in target else name + "*" if name.endswith(".so") else name
-        libraries = sorted(p for p in (build / "Release").rglob(pattern) if p.is_file() and not p.is_symlink())
-        if len(libraries) != 1:
-            raise RuntimeError("ONNX Runtime library missing or ambiguous after source build")
-        shutil.copy2(libraries[0], destination)
-    digest = file_hash(destination)
-    stamp.write_text(json.dumps({"identity": identity, "sha256": digest}))
+        libraries = [path for path in build.rglob(pattern) if path.is_file() and not path.is_symlink()]
+    if len(libraries) != 1:
+        raise RuntimeError("ONNX Runtime library missing or ambiguous after source build")
+    shutil.copy2(libraries[0], destination)
+    for name in notices:
+        shutil.copy2(SOURCE / name, output / name)
+    receipt.write_text(json.dumps({"identity": identity, "sha256": file_hash(destination)}))
 
 
 if __name__ == "__main__":
