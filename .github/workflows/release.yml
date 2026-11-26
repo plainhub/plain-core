@@ -136,8 +136,6 @@ jobs:
           The installer selects the Linux package and checks its release signature and checksum before installing it.
 
           NOTES
-            printf '\nBuilt from [`%s`](https://github.com/%s/commit/%s) ([build run](https://github.com/%s/actions/runs/%s)).\n\n' \
-              "$GITHUB_SHA" "$GITHUB_REPOSITORY" "$GITHUB_SHA" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID"
             cat <<'NOTES'
           ## What's Changed
 
