@@ -59,7 +59,6 @@ pub(crate) fn build_router(state: ServerState, receiver: watch::Receiver<bool>) 
         .with_state(state.clone());
     Router::new()
         .fallback(crate::http::static_files::fallback)
-        .layer(DefaultBodyLimit::max(64 * 1024 * 1024 * 1024))
         .with_state(state.clone())
         .merge(transfer_routes)
         .merge(status_router)

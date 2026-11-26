@@ -414,6 +414,7 @@ async fn startup_device_name_initialization_is_shared_and_preserves_user_changes
 #[tokio::test]
 async fn embedded_web_assets_survive_cache_clear_without_extraction() {
     use crate::http::web_bundle::{SharedWebBundle, WebBundle};
+    use plain_libs::tower::ServiceExt;
     struct Bundle;
     impl WebBundle for Bundle {
         fn read(&self, path: &str) -> Option<&'static [u8]> {
@@ -437,6 +438,8 @@ async fn embedded_web_assets_survive_cache_clear_without_extraction() {
     );
     let bundle: SharedWebBundle = Arc::new(Bundle);
     server.set_web_bundle(bundle.clone());
+    let (_stop, receiver) = tokio::sync::watch::channel(false);
+    let router = crate::http::router::build_router(state.clone(), receiver);
     for iteration in 0..2 {
         if iteration == 1 {
             let cleared = server
@@ -452,14 +455,16 @@ async fn embedded_web_assets_survive_cache_clear_without_extraction() {
             ("/settings", "embedded"),
             ("/assets/app.js", "console.log('embedded')"),
         ] {
-            let response = crate::http::static_files::fallback(
-                plain_libs::axum::extract::State(server.runtime_state()),
-                plain_libs::axum::http::Request::builder()
-                    .uri(path)
-                    .body(plain_libs::axum::body::Body::empty())
-                    .unwrap(),
-            )
-            .await;
+            let response = router
+                .clone()
+                .oneshot(
+                    plain_libs::axum::http::Request::builder()
+                        .uri(path)
+                        .body(plain_libs::axum::body::Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
             assert_eq!(response.status(), plain_libs::axum::http::StatusCode::OK);
             let body = plain_libs::axum::body::to_bytes(response.into_body(), 4096)
                 .await
