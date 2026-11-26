@@ -122,7 +122,11 @@ Status CreateInputFeatureProvider(const std::unordered_map<std::string, OnnxTens
         break;
       }
       case ONNX_NAMESPACE::TensorProto_DataType_FLOAT16: {
-        data_type = MLMultiArrayDataTypeFloat16;
+        if (@available(macOS 12.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)) {
+          data_type = MLMultiArrayDataTypeFloat16;
+        } else {
+          return ORT_MAKE_STATUS(ONNXRUNTIME, FAIL, "CoreML Float16 inputs require a newer OS");
+        }
         break;
       }
       case ONNX_NAMESPACE::TensorProto_DataType_INT32: {
@@ -406,6 +410,7 @@ void ProfileComputePlan(NSURL* compileUrl, MLModelConfiguration* config) {
 #define HAS_COREMLOPTIMIZATIONHINT 0
 #endif
 
+API_AVAILABLE(macos(15.0), ios(18.0), tvos(18.0), watchos(11.0))
 void ConfigureOptimizationHints(MLModelConfiguration* config, const CoreMLOptions& coreml_options) {
 #if HAS_COREMLOPTIMIZATIONHINT
   MLOptimizationHints* optimizationHints = [[MLOptimizationHints alloc] init];
@@ -573,7 +578,11 @@ Status Execution::LoadModel() {
       } else if (coreml_compute_unit & COREML_FLAG_USE_CPU_AND_GPU) {
         config.computeUnits = MLComputeUnitsCPUAndGPU;
       } else if (coreml_compute_unit & COREML_FLAG_ONLY_ENABLE_DEVICE_WITH_ANE) {
-        config.computeUnits = MLComputeUnitsCPUAndNeuralEngine;  // Apple Neural Engine
+        if (@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)) {
+          config.computeUnits = MLComputeUnitsCPUAndNeuralEngine;
+        } else {
+          return ORT_MAKE_STATUS(ONNXRUNTIME, FAIL, "CoreML CPU and Neural Engine mode requires a newer OS");
+        }
       } else {
         config.computeUnits = MLComputeUnitsAll;
       }
@@ -582,11 +591,10 @@ Status Execution::LoadModel() {
         config.allowLowPrecisionAccumulationOnGPU = YES;
       }
 
-      // Set the specialization strategy to FastPrediction  for macOS 10.15+
-      if (HAS_COREML8_OR_LATER) {
+      if (@available(macOS 15.0, iOS 18.0, tvOS 18.0, watchOS 11.0, *)) {
         ConfigureOptimizationHints(config, coreml_options_);
       } else {
-        LOGS(logger_, WARNING) << "iOS 17.4+/macOS 14.4+ or later is required to ConfigureOptimizationHints";
+        LOGS(logger_, WARNING) << "iOS 18+/macOS 15+ is required to configure specialization strategy";
       }
 
       if (coreml_options_.ProfileComputePlan()) {
