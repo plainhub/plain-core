@@ -209,6 +209,12 @@ cmake_language(DEFER CALL capture)
             with self.subTest(target=target):
                 self.verify_runtime(target, name, ['-Donnxruntime_USE_COREML=ON'] if 'apple' in target else [], ['-Donnxruntime_USE_XNNPACK=ON', '-Donnxruntime_USE_WEBGPU=ON'])
 
+    def test_macos_runtime_uses_a_filesystem_capable_deployment_target(self):
+        for target in ['aarch64-apple-darwin', 'x86_64-apple-darwin']:
+            with self.subTest(target=target), patch.dict(os.environ, {'MACOSX_DEPLOYMENT_TARGET': '10.13'}):
+                self.verify_runtime(target, 'libonnxruntime.dylib',
+                                    ['-DCMAKE_OSX_DEPLOYMENT_TARGET=11.0'], [])
+
     def test_mobile_runtime_keeps_existing_platform_providers(self):
         android = ['-Donnxruntime_USE_XNNPACK=ON', '-Donnxruntime_DISABLE_FLOAT4_TYPES=ON', '-Donnxruntime_DISABLE_FLOAT8_TYPES=ON']
         self.verify_runtime('aarch64-linux-android', 'libonnxruntime.so', [*android, '-DANDROID_ABI=arm64-v8a'], [])

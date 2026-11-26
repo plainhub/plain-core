@@ -121,6 +121,8 @@ def prepare_runtime(target, output, cache):
                 "-Dprotobuf_BUILD_PROTOC_BINARIES=OFF", "-Donnxruntime_BUILD_APPLE_FRAMEWORK=ON",
                 "-Donnxruntime_USE_XNNPACK=ON",
             ]
+        else:
+            configure.append("-DCMAKE_OSX_DEPLOYMENT_TARGET=11.0")
     elif "windows-msvc" in target and os.environ.get("CMAKE_GENERATOR", "Visual Studio").startswith("Visual Studio"):
         configure += ["-A", {"aarch64": "ARM64", "i686": "Win32", "x86_64": "x64"}[target.split("-")[0]]]
 

@@ -175,13 +175,8 @@ fn library_path() -> String {
     };
     if let Ok(executable) = std::env::current_exe() {
         if let Some(directory) = executable.parent() {
-            for path in [
-                directory.join(name),
-                directory.join("../Resources").join(name),
-            ] {
-                if path.is_file() {
-                    return path.to_string_lossy().into_owned();
-                }
+            if let Some(path) = packaged_library(directory, name) {
+                return path.to_string_lossy().into_owned();
             }
         }
     }
@@ -191,6 +186,17 @@ fn library_path() -> String {
     } else {
         name.into()
     }
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+fn packaged_library(directory: &std::path::Path, name: &str) -> Option<std::path::PathBuf> {
+    [
+        directory.join(name),
+        directory.join("../Resources").join(name),
+    ]
+    .into_iter()
+    .chain(cfg!(target_os = "macos").then(|| directory.join("../Frameworks").join(name)))
+    .find(|path| path.is_file())
 }
 
 #[cfg(test)]

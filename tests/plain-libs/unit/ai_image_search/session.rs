@@ -30,3 +30,21 @@ fn concurrent_context_handoff_and_reopen_remain_usable() {
         errors.first()
     );
 }
+
+#[cfg(target_os = "macos")]
+#[test]
+fn packaged_macos_runtime_is_loaded_from_frameworks() {
+    let root = crate::temporary::tempdir().unwrap();
+    let contents = root.path().join("PlainApp.app/Contents");
+    let executable = contents.join("MacOS");
+    let frameworks = contents.join("Frameworks");
+    std::fs::create_dir_all(&executable).unwrap();
+    std::fs::create_dir_all(&frameworks).unwrap();
+    let library = frameworks.join("libonnxruntime.dylib");
+    std::fs::write(&library, b"library").unwrap();
+    let located = packaged_library(&executable, "libonnxruntime.dylib").unwrap();
+    assert_eq!(
+        located.canonicalize().unwrap(),
+        library.canonicalize().unwrap()
+    );
+}
