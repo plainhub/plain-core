@@ -27,7 +27,19 @@ macro_rules! ascii_copy_impl_single {
         }
     };
 }
-cfg_if::cfg_if! { if # [cfg (target_arch = "arm")] { # [inline (always)] fn ascii_valid_impl (bytes : & [u8]) -> Option < (u8 , usize) > { let mut consumed = 0usize ; 'outer : loop { let (strides , tail) = bytes . as_chunks ::< { core :: mem :: size_of ::< usize > () } > () ; if let Some ((first_stride , strides_tail)) = strides . split_first () { let first_usize = usize :: from_ne_bytes (* first_stride) ; if first_usize & ASCII_MASK != 0 { break 'outer ; } consumed = core :: mem :: size_of ::< usize > () ; let (double_strides , single_stride) = strides_tail . as_chunks ::< 2 > () ; for double_stride in double_strides . iter () { let first_usize = usize :: from_ne_bytes (double_stride [0]) ; let second_usize = usize :: from_ne_bytes (double_stride [1]) ; if (first_usize | second_usize) & ASCII_MASK != 0 { break 'outer ; } consumed += core :: mem :: size_of ::< usize > () * 2 ; } for stride in single_stride . iter () { let last_usize = usize :: from_ne_bytes (* stride) ; if last_usize & ASCII_MASK != 0 { break 'outer ; } consumed += core :: mem :: size_of ::< usize > () ; } } for slot in tail . iter () { let c = * slot ; if c >= 0x80 { return Some ((c , consumed)) ; } consumed += 1 ; } return None ; } let tail = & bytes [consumed ..] ; for slot in tail . iter () { let c = * slot ; if c >= 0x80 { return Some ((c , consumed)) ; } consumed += 1 ; } debug_assert ! (false) ; None } } else { # [inline (always)] fn ascii_valid_impl (bytes : & [u8]) -> Option < (u8 , usize) > { let mut consumed = 0usize ; let (strides , tail) = bytes . as_chunks ::< STRIDE > () ; for stride in strides . iter () { if let Some ((b , pos)) = validate_ascii_stride (stride) { return Some ((b , consumed + pos)) ; } consumed += STRIDE ; } for slot in tail . iter () { let b = * slot ; if b >= 0x80 { return Some ((b , consumed)) ; } consumed += 1 ; } None } } }
+#[inline(always)]
+fn ascii_valid_impl(bytes: &[u8]) -> Option<(u8, usize)> {
+    let (strides, tail) = bytes.as_chunks::<STRIDE>();
+    for (index, stride) in strides.iter().enumerate() {
+        if let Some((byte, offset)) = validate_ascii_stride(stride) {
+            return Some((byte, index * STRIDE + offset));
+        }
+    }
+    let offset = strides.len() * STRIDE;
+    tail.iter()
+        .position(|byte| !byte.is_ascii())
+        .map(|index| (tail[index], offset + index))
+}
 cfg_if::cfg_if! { if #[cfg(all())] { ascii_copy_impl_single ! (ascii_to_ascii_impl , ascii_to_ascii_stride , ascii_to_ascii_double_stride , u8 , u8) ;  } }
 cfg_if::cfg_if! { if #[cfg(all())] {  } }
 macro_rules! ascii_copy {

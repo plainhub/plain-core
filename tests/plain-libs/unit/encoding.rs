@@ -128,3 +128,16 @@ fn utf8_simd_and_scalar_error_boundaries_match_the_standard_library() {
         }
     }
 }
+
+#[test]
+fn legacy_decoder_preserves_ascii_prefix_across_stride_boundaries() {
+    for offset in [0, 3, 4, 15, 16, 17, 31, 32, 47] {
+        let mut encoded = [b'x'; 48];
+        encoded[offset] = 0xe0;
+        let expected = format!("{}а{}", "x".repeat(offset), "x".repeat(47 - offset));
+        let decoded = WINDOWS_1251
+            .decode_without_bom_handling_and_without_replacement(&encoded)
+            .unwrap();
+        assert_eq!(decoded, expected);
+    }
+}
