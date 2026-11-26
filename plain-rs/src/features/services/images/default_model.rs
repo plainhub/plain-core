@@ -1,11 +1,14 @@
 use plain_libs::ai_image_search::models::manifest::*;
 
+pub(super) const PUBLISHER: &str = "google";
+pub(super) const ID: &str = "siglip2-base-patch16-256";
+
 const BASE: &str = "https://huggingface.co/onnx-community/siglip2-base-patch16-256-ONNX/resolve/d1114256522a37ffa257a0a58017348ab0058db2";
 
 pub fn manifest() -> Manifest {
     Manifest {
         format_version: 1,
-        id: "siglip2-base-patch16-256".into(),
+        id: ID.into(),
         name: "SigLIP2 Base".into(),
         license: "Apache-2.0".into(),
         source: "https://huggingface.co/google/siglip2-base-patch16-256".into(),

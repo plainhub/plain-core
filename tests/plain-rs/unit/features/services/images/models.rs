@@ -353,6 +353,41 @@ fn projection_runtime() -> (
     (directory, runtime, updates)
 }
 
+#[cfg(feature = "ai-image-search")]
+#[tokio::test]
+async fn restore_builtin_model_from_its_named_directory() {
+    let (directory, runtime, _) = projection_runtime();
+    let models = directory.path().join("ai_models");
+    let installed = models.join("google/siglip2-base-patch16-256");
+    let mut manifest = plain_libs::ai_image_search::models::test_fixture::fixture(&installed);
+    manifest.id = "siglip2-base-patch16-256".into();
+    std::fs::write(
+        installed.join("manifest.json"),
+        plain_libs::serde_json::to_vec(&manifest).unwrap(),
+    )
+    .unwrap();
+    runtime.prefs.set(AI_IMAGE_SEARCH_MODEL, "default").unwrap();
+    runtime.prefs.set("ai_image_search_enabled", true).unwrap();
+
+    runtime.enable(true).await.unwrap();
+    settled(&runtime).await;
+    let status = runtime.snapshot().status;
+    assert_eq!(
+        status.status,
+        ImageSearchStatusType::Ready,
+        "{}",
+        status.error_message
+    );
+    assert_eq!(
+        runtime.engine.lock().unwrap().as_ref().unwrap().manifest.id,
+        "siglip2-base-patch16-256"
+    );
+    assert!(installed.join("manifest.json").is_file());
+    assert!(!models.join("default").exists());
+    assert!(!models.join("download").exists());
+    runtime.shutdown().await;
+}
+
 #[cfg(not(feature = "ai-image-search"))]
 #[tokio::test]
 async fn model_runtime_without_ai_never_activates_or_removes_models() {

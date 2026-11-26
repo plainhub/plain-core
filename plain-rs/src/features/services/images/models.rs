@@ -1,3 +1,4 @@
+use super::default_model;
 use crate::features::prefs::pref_keys::AI_IMAGE_SEARCH_MODEL;
 use crate::features::services::images::index::ImageIndex;
 use crate::features::services::images::status::ImageSearchStatus;
@@ -198,6 +199,15 @@ impl Runtime {
             _ => Err("Image search model must be default or imported".into()),
         }
     }
+    fn model_directory(&self, model: &str) -> PathBuf {
+        if model == "default" {
+            self.directory
+                .join(default_model::PUBLISHER)
+                .join(default_model::ID)
+        } else {
+            self.directory.join(model)
+        }
+    }
     pub async fn enable(self: &Arc<Self>, restore: bool) -> Result<(), String> {
         if restore && !cfg!(feature = "ai-image-search") {
             return Ok(());
@@ -205,7 +215,10 @@ impl Runtime {
         let model = self.selected_model()?;
         if restore
             && (!self.prefs.get_or("ai_image_search_enabled", false)
-                || !self.directory.join(model).join("manifest.json").is_file())
+                || !self
+                    .model_directory(model)
+                    .join("manifest.json")
+                    .is_file())
         {
             return Ok(());
         }
@@ -258,7 +271,7 @@ impl Runtime {
             Selection::Incoming | Selection::Imported => "imported",
             Selection::Active => self.selected_model()?,
         };
-        let active = self.directory.join(model);
+        let active = self.model_directory(model);
         let default_is_current = plain_libs::ai_image_search::models::manifest::Manifest::read(
             &active.join("manifest.json"),
         )
@@ -299,6 +312,8 @@ impl Runtime {
         }
         let previous = self.directory.join("previous");
         if source != active {
+            let parent = active.parent().ok_or("Missing model directory parent")?;
+            std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
             if previous.exists() {
                 std::fs::remove_dir_all(&previous).map_err(|e| e.to_string())?;
             }
