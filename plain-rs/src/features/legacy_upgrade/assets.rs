@@ -12,6 +12,7 @@ pub(super) struct Assets<'a> {
     source: &'a Path,
     target: &'a Path,
     db: &'a Connection,
+    desktop_db: Option<&'a Connection>,
     file_names: HashMap<String, String>,
     old_paths: BTreeSet<PathBuf>,
     installed: InstalledAssets,
@@ -23,10 +24,16 @@ impl<'a> Assets<'a> {
             source,
             target,
             db,
+            desktop_db: None,
             file_names: HashMap::new(),
             old_paths: BTreeSet::new(),
             installed: InstalledAssets::default(),
         }
+    }
+
+    pub fn with_desktop_db(mut self, db: &'a Connection) -> Self {
+        self.desktop_db = Some(db);
+        self
     }
 
     pub fn finish(self) -> (Vec<PathBuf>, InstalledAssets) {
@@ -92,7 +99,18 @@ impl<'a> Assets<'a> {
     }
 
     pub fn chat_uri(&mut self, value: &str, created: &str, updated: &str) -> Result<String> {
-        if value.starts_with("fid:") {
+        if let Some(suffix) = value.strip_prefix("fid:") {
+            let id = suffix.split('.').next().unwrap_or_default();
+            if let Some(source) = self.desktop_db
+                && !self.file_names.contains_key(id)
+            {
+                let (size, mime, path, count, created, updated) = source.query_row(
+                    "SELECT size, mime_type, real_path, ref_count, created_at, updated_at FROM app_files WHERE id=?1",
+                    [id],
+                    |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?, row.get(5)?)),
+                ).context("Legacy desktop attachment record is missing")?;
+                self.app_file(id.into(), size, mime, path, count, created, updated)?;
+            }
             return self.fid(value);
         }
         let relative = value

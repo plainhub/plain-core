@@ -1,5 +1,6 @@
 mod assets;
 mod chat;
+pub(crate) mod desktop;
 mod preferences;
 mod room;
 mod rows;
@@ -206,7 +207,7 @@ impl LegacyStorage {
             let mut source = room::read(&self.database())?;
             let source = source.transaction()?;
             rows::import(&source, &tx, &mut assets)?;
-            chat::import(&source, &tx, &mut assets, &self_id)?;
+            chat::import(&source, &tx, &mut assets, &self_id, chat::Format::Android)?;
         }
         let pomodoro_settings = rows::import_preferences(settings, &tx, &mut assets)?;
         let (files, installed) = assets.finish();

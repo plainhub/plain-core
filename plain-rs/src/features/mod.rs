@@ -4,7 +4,7 @@ pub mod capability;
 pub mod client_identity;
 pub mod record_id;
 
-#[cfg(all(feature = "runtime", any(target_os = "android", test)))]
+#[cfg(feature = "runtime")]
 pub mod legacy_upgrade;
 
 #[cfg(feature = "runtime")]

@@ -1,6 +1,89 @@
 use crate::server::ContentServer;
 
 #[tokio::test]
+async fn desktop_v4_startup_migrates_published_desktop_chat_and_identity_once() {
+    use plain_libs::rusqlite::{Connection, params};
+    use plain_libs::serde_json::json;
+
+    let directory = plain_libs::temporary::tempdir().unwrap();
+    let data = directory.path().join("data");
+    let cache = directory.path().join("cache");
+    std::fs::create_dir(&data).unwrap();
+    let old_database = data.join("local_chat.db");
+    let legacy = Connection::open(&old_database).unwrap();
+    legacy.execute_batch("CREATE TABLE chats (id TEXT PRIMARY KEY, from_id TEXT NOT NULL, to_id TEXT NOT NULL, channel_id TEXT NOT NULL, content TEXT NOT NULL, status TEXT NOT NULL, status_data TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+        CREATE TABLE chat_channels (id TEXT PRIMARY KEY, name TEXT NOT NULL, owner TEXT NOT NULL, members TEXT NOT NULL, key TEXT NOT NULL, version INTEGER NOT NULL, status TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+        CREATE TABLE peers (id TEXT PRIMARY KEY, name TEXT NOT NULL, ip TEXT NOT NULL, key TEXT NOT NULL, public_key TEXT NOT NULL, status TEXT NOT NULL, port INTEGER NOT NULL, device_type TEXT NOT NULL, token TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+        CREATE TABLE app_files (id TEXT PRIMARY KEY, size INTEGER NOT NULL, mime_type TEXT NOT NULL, real_path TEXT NOT NULL, ref_count INTEGER NOT NULL, weak_hash TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);").unwrap();
+    let date = "2026-01-02T03:04:05Z";
+    legacy
+        .execute(
+            "INSERT INTO chats VALUES (?1, 'me', 'local', '', ?2, 'SENT', '', ?3, ?3)",
+            params![
+                "00abcdef12345678",
+                json!({"type":"text","value":{"text":"Offline chat from Desktop"}}).to_string(),
+                date
+            ],
+        )
+        .unwrap();
+    drop(legacy);
+    let raw_db = std::fs::read(&old_database).unwrap();
+    let (pair, _) = plain_libs::crypto::ed25519_generate();
+    let raw_prefs = json!({"client_id":"plain1","device_name":"Fixture","signature_key_pair":plain_libs::utils::base64::base64_encode(&pair)}).to_string().into_bytes();
+    std::fs::write(data.join("prefs.json"), &raw_prefs).unwrap();
+
+    for _ in 0..2 {
+        let server = ContentServer::open_with_cache(&data, &cache).unwrap();
+        let state = server.runtime_state();
+        assert_eq!(
+            state.native_client_id().unwrap(),
+            "706c6169-0001-8000-8000-00005c3bb5dd"
+        );
+        assert_eq!(
+            plain_rs::features::prefs::security::signing_keypair(&state.prefs).unwrap(),
+            pair
+        );
+        let (count, payload): (i32, String) = state
+            .db
+            .with_conn(|conn| {
+                conn.query_row("SELECT count(*), content FROM chats", [], |row| {
+                    Ok((row.get(0)?, row.get(1)?))
+                })
+            })
+            .unwrap();
+        assert_eq!(count, 1);
+        assert!(payload.contains("Offline chat from Desktop"));
+        assert_eq!(std::fs::read(&old_database).unwrap(), raw_db);
+        assert_eq!(
+            std::fs::read(data.join("prefs-v0.1.backup.json")).unwrap(),
+            raw_prefs
+        );
+        server.shutdown().await;
+        drop(state);
+    }
+}
+
+#[tokio::test]
+async fn desktop_v4_startup_keeps_legacy_inputs_when_chat_import_fails() {
+    let directory = plain_libs::temporary::tempdir().unwrap();
+    let data = directory.path().join("data");
+    let cache = directory.path().join("cache");
+    std::fs::create_dir(&data).unwrap();
+    let old_database = data.join("local_chat.db");
+    let preferences = data.join("prefs.json");
+    let raw_prefs = br#"{"client_id":"plain1","device_name":"Fixture"}"#;
+    std::fs::write(&old_database, b"Corrupt legacy SQLite database").unwrap();
+    std::fs::write(&preferences, raw_prefs).unwrap();
+
+    assert!(ContentServer::open_with_cache(&data, &cache).is_err());
+    assert_eq!(
+        std::fs::read(&old_database).unwrap(),
+        b"Corrupt legacy SQLite database"
+    );
+    assert_eq!(std::fs::read(&preferences).unwrap(), raw_prefs);
+}
+
+#[tokio::test]
 async fn every_runtime_preserves_identity_and_keeps_fresh_native_credentials_out_of_sessions()
  {
     let directory = plain_libs::temporary::tempdir().unwrap();

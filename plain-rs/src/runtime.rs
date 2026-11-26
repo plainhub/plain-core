@@ -124,7 +124,15 @@ impl Runtime {
             &cache_directory,
         )?;
         let paths = crate::infrastructure::data_paths::DataPaths::new(directory);
-        let db = Arc::new(Db::open(&paths.database()).map_err(|e| e.to_string())?);
+        let database = paths.database();
+        let migration_error = |error| format!("Desktop chat migration failed: {error:#}");
+        let source = crate::features::legacy_upgrade::desktop::source(directory, &database)
+            .map_err(migration_error)?;
+        let db = Arc::new(Db::open(&database).map_err(|e| e.to_string())?);
+        if let Some(source) = source {
+            crate::features::legacy_upgrade::desktop::migrate(directory, &source, &db, &prefs)
+                .map_err(migration_error)?;
+        }
         let (events, _) = broadcast::channel(256);
         Self::from_storage(
             directory,

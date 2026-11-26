@@ -49,6 +49,7 @@ struct LegacyAttachment {
     size: i64,
     #[serde(default)]
     duration: i64,
+    duration_ms: Option<i64>,
     #[serde(default)]
     width: i32,
     #[serde(default)]
@@ -59,16 +60,34 @@ struct LegacyAttachment {
     file_name: String,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum Format {
+    Android,
+    Desktop,
+}
+
+impl Format {
+    fn record_id(self, id: &str) -> Result<String> {
+        if self == Self::Desktop && id.len() == 16
+            && id.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+        {
+            return Ok(id.to_owned());
+        }
+        short_id::convert(id)
+    }
+}
+
 pub(super) fn import(
     source: &Connection,
     target: &Connection,
     assets: &mut Assets<'_>,
     self_id: &str,
+    format: Format,
 ) -> Result<()> {
     import_peers(source, target)?;
     import_channels(source, target, self_id)?;
     for_each(source, "SELECT * FROM chats", |row| {
-        let id = short_id::convert(&row.get::<_, String>("id")?)?;
+        let id = format.record_id(&row.get::<_, String>("id")?)?;
         let created = normalize(&row.get::<_, String>("created_at")?)?;
         let updated = normalize(&row.get::<_, String>("updated_at")?)?;
         let from = short_id::reference(&row.get::<_, String>("from_id")?)?;
@@ -81,6 +100,7 @@ pub(super) fn import(
             &created,
             &updated,
             assets,
+            format,
         )?;
         target.execute(
             "INSERT INTO chats(id,from_id,to_id,channel_id,status,status_data,content,created_at,updated_at) \
@@ -202,6 +222,7 @@ fn convert_content(
     created: &str,
     updated: &str,
     assets: &mut Assets<'_>,
+    format: Format,
 ) -> Result<String> {
     let content: LegacyContent =
         serde_json::from_str(data).context("Invalid legacy chat message")?;
@@ -241,18 +262,18 @@ fn convert_content(
                 LegacyContent::Text { .. } => unreachable!(),
             };
             for file in files {
-                if file.uri.starts_with("fsid:") {
+                if format == Format::Android && file.uri.starts_with("fsid:") {
                     removed_remote = true;
                     continue;
                 }
                 let uri = assets.chat_uri(&file.uri, created, updated)?;
                 let id = match file.id.as_deref() {
-                    Some(id) => short_id::convert(id)?,
+                    Some(id) => format.record_id(id)?,
                     None => crate::features::record_id::generate(),
                 };
                 items.push(json!({"type": kind, "attachment": {
                     "id": id, "uri": uri,
-                    "size": file.size, "durationMs": file.duration, "width": file.width, "height": file.height,
+                    "size": file.size, "durationMs": file.duration_ms.unwrap_or(file.duration), "width": file.width, "height": file.height,
                     "summary": file.summary, "fileName": file.file_name,
                 }}));
             }
