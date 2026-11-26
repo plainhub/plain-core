@@ -5,6 +5,7 @@ pub mod hash;
 #[cfg(feature = "auth")]
 pub mod hpke;
 pub mod password;
+pub mod release;
 mod symmetric;
 pub use hash::sha512_hex;
 

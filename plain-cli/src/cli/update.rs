@@ -41,19 +41,7 @@ fn archive_hash<'a>(
     schema: &str,
     archive: &str,
 ) -> Result<&'a str> {
-    use plain_libs::crypto::ed25519_verify;
-    use plain_libs::utils::base64::{base64_decode, base64_encode};
-
-    let der = base64_decode(public_key);
-    let ed25519_spki = b"\x30\x2a\x30\x05\x06\x03\x2b\x65\x70\x03\x21\x00";
-    let Some(key) = der.strip_prefix(ed25519_spki.as_slice()) else {
-        plain_libs::anyhow::bail!("Invalid release signing public key");
-    };
-    ensure!(
-        ed25519_verify(&base64_encode(key), manifest, &base64_encode(signature)),
-        "Release manifest signature verification failed"
-    );
-    let manifest = std::str::from_utf8(manifest)?;
+    let manifest = plain_libs::crypto::release::verify_manifest(manifest, signature, public_key)?;
     let mut lines = manifest.lines();
     ensure!(
         lines.next().and_then(|line| line.strip_prefix("version ")) == Some(release),
