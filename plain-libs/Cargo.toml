@@ -35,6 +35,7 @@ description = "Reusable cryptography, media, file, format and native components"
 "storage-platform" = ["volumes"]
 "linux-platform" = ["storage-platform"]
 "ai-image-search" = ["image", "regex", "dep:smallvec"]
+"image-search-inference" = ["ai-image-search", "dep:ndarray", "dep:prost"]
 "onnx-runtime" = ["ai-image-search", "dep:cc"]
 "test-seams" = []
 "document-nfc" = ["dep:smallvec"]
@@ -56,6 +57,8 @@ description = "Reusable cryptography, media, file, format and native components"
 "encoding" = ["dep:cfg-if"]
 
 [dependencies]
+prost = { version = "=0.14.6", default-features = false, features = ["derive", "std"], optional = true }
+ndarray = { version = "=0.17.2", default-features = false, features = ["std"], optional = true }
 serde_core = { version = "=1.0.229", default-features = false, features = ["std"] }
 form_urlencoded = { version = "=1.2.2", optional = true }
 futures-sink = { version = "=0.3.34", optional = true }

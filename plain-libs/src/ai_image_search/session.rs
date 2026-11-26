@@ -1,9 +1,19 @@
-use super::Input;
+use super::{Input, Values};
 use std::{
     ffi::{CStr, CString, c_char, c_void},
     ptr::NonNull,
     sync::{Arc, Mutex},
 };
+#[repr(C)]
+struct OrtInput {
+    name: *const c_char,
+    data: *mut c_void,
+    bytes: usize,
+    shape: *const i64,
+    rank: usize,
+    element_type: i32,
+}
+
 unsafe extern "C" {
     fn plain_onnx_context(
         library: *const c_char,
@@ -22,7 +32,7 @@ unsafe extern "C" {
     fn plain_onnx_close(session: *mut c_void);
     fn plain_onnx_run(
         session: *mut c_void,
-        inputs: *mut Input,
+        inputs: *const OrtInput,
         count: usize,
         output_name: *const c_char,
         output: *mut f32,
@@ -33,33 +43,32 @@ unsafe extern "C" {
 }
 static CONTEXT_LIFECYCLE: Mutex<()> = Mutex::new(());
 
-pub struct Context(NonNull<c_void>);
-unsafe impl Send for Context {}
-unsafe impl Sync for Context {}
-impl Context {
-    pub fn new() -> Result<Arc<Self>, String> {
-        #[cfg(target_os = "android")]
-        let library = CString::new("libonnxruntime.so").unwrap();
-        #[cfg(target_os = "ios")]
-        let library = CString::new("linked ONNX Runtime").unwrap();
-        #[cfg(not(any(target_os = "android", target_os = "ios")))]
-        let library = CString::new(library_path()).map_err(|e| e.to_string())?;
-        let mut error = [0 as c_char; 2048];
-        let _lifecycle = CONTEXT_LIFECYCLE
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        let pointer =
-            unsafe { plain_onnx_context(library.as_ptr(), error.as_mut_ptr(), error.len()) };
-        NonNull::new(pointer)
-            .map(|pointer| Arc::new(Self(pointer)))
-            .ok_or_else(|| {
-                unsafe { CStr::from_ptr(error.as_ptr()) }
-                    .to_string_lossy()
-                    .into_owned()
-            })
-    }
+pub struct NativeContext(NonNull<c_void>);
+unsafe impl Send for NativeContext {}
+unsafe impl Sync for NativeContext {}
+pub type Context = Arc<NativeContext>;
+
+pub fn create_context() -> Result<Context, String> {
+    #[cfg(target_os = "android")]
+    let library = CString::new("libonnxruntime.so").unwrap();
+    #[cfg(target_os = "ios")]
+    let library = CString::new("linked ONNX Runtime").unwrap();
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    let library = CString::new(library_path()).map_err(|e| e.to_string())?;
+    let mut error = [0 as c_char; 2048];
+    let _lifecycle = CONTEXT_LIFECYCLE
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let pointer = unsafe { plain_onnx_context(library.as_ptr(), error.as_mut_ptr(), error.len()) };
+    NonNull::new(pointer)
+        .map(|pointer| Arc::new(NativeContext(pointer)))
+        .ok_or_else(|| {
+            unsafe { CStr::from_ptr(error.as_ptr()) }
+                .to_string_lossy()
+                .into_owned()
+        })
 }
-impl Drop for Context {
+impl Drop for NativeContext {
     fn drop(&mut self) {
         let _lifecycle = CONTEXT_LIFECYCLE
             .lock()
@@ -71,11 +80,16 @@ impl Drop for Context {
 }
 pub struct Session {
     pointer: NonNull<c_void>,
-    _context: Arc<Context>,
+    _context: Context,
 }
 unsafe impl Send for Session {}
 impl Session {
-    pub fn new(context: &Arc<Context>, model: &std::path::Path) -> Result<Self, String> {
+    pub fn new(
+        context: &Context,
+        model: &std::path::Path,
+        _: &[Input<'_>],
+        _: &str,
+    ) -> Result<Self, String> {
         let mut error = [0 as c_char; 2048];
         let threads = std::thread::available_parallelism().map_or(2, |n| n.get().min(4)) as i32;
         #[cfg(unix)]
@@ -125,17 +139,48 @@ impl Session {
     }
     pub fn run(
         &mut self,
-        inputs: &mut [Input],
+        inputs: &mut [Input<'_>],
         name: &str,
         dimensions: usize,
     ) -> Result<Vec<f32>, String> {
         let name = CString::new(name).map_err(|e| e.to_string())?;
+        let names = inputs
+            .iter()
+            .map(|input| CString::new(input.name))
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())?;
+        let inputs = inputs
+            .iter_mut()
+            .zip(&names)
+            .map(|(input, name)| {
+                let (data, bytes, element_type) = match &mut input.values {
+                    Values::Float(values) => (
+                        values.as_mut_ptr().cast(),
+                        std::mem::size_of_val(values.as_slice()),
+                        1,
+                    ),
+                    Values::Integer(values) => (
+                        values.as_mut_ptr().cast(),
+                        std::mem::size_of_val(values.as_slice()),
+                        7,
+                    ),
+                };
+                OrtInput {
+                    name: name.as_ptr(),
+                    data,
+                    bytes,
+                    shape: input.shape.as_ptr(),
+                    rank: input.shape.len(),
+                    element_type,
+                }
+            })
+            .collect::<Vec<_>>();
         let mut values = vec![0.0; dimensions];
         let mut error = [0 as c_char; 2048];
         let code = unsafe {
             plain_onnx_run(
                 self.pointer.as_ptr(),
-                inputs.as_mut_ptr(),
+                inputs.as_ptr(),
                 inputs.len(),
                 name.as_ptr(),
                 values.as_mut_ptr(),

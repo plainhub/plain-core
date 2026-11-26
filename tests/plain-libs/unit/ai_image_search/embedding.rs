@@ -4,11 +4,10 @@ use crate::ai_image_search::models::test_fixture;
 use crate::ai_image_search::models::test_fixture::fixture;
 use crate::ai_image_search::preprocess;
 
-#[cfg(feature = "onnx-runtime")]
-fn import_image_encoder(model: &[u8], expected: [f32; 4]) {
-    let directory = crate::temporary::tempdir().unwrap();
-    let mut manifest = fixture(directory.path());
-    std::fs::write(directory.path().join(&manifest.image.file), model).unwrap();
+#[cfg(any(feature = "image-search-inference", feature = "onnx-runtime"))]
+fn image_package(directory: &Path, model: &[u8]) -> Manifest {
+    let mut manifest = fixture(directory);
+    std::fs::write(directory.join(&manifest.image.file), model).unwrap();
     let image = manifest
         .files
         .iter_mut()
@@ -19,6 +18,13 @@ fn import_image_encoder(model: &[u8], expected: [f32; 4]) {
     manifest.preprocess.size = 16;
     manifest.preprocess.mean = [0.0; 3];
     manifest.preprocess.std = [1.0; 3];
+    manifest
+}
+
+#[cfg(any(feature = "image-search-inference", feature = "onnx-runtime"))]
+fn import_image_encoder(model: &[u8], expected: [f32; 4]) {
+    let directory = crate::temporary::tempdir().unwrap();
+    let manifest = image_package(directory.path(), model);
     let engine = Engine::open(directory.path().into(), manifest).unwrap();
     let image = directory.path().join("gradient.png");
     crate::image::RgbImage::from_fn(96, 64, |x, y| {
@@ -36,7 +42,32 @@ fn import_image_encoder(model: &[u8], expected: [f32; 4]) {
     }
 }
 
-#[cfg(feature = "onnx-runtime")]
+#[cfg(any(feature = "image-search-inference", feature = "onnx-runtime"))]
+#[test]
+fn importing_a_package_requires_supported_ir_and_declared_opsets() {
+    let valid = include_bytes!("../../../../plain-rs/testdata/image_search/image.onnx");
+    let graph_and_opset = valid.strip_prefix(&[0x08, 9]).unwrap();
+    let no_opset = valid.strip_suffix(&[0x42, 4, 0x0a, 0, 0x10, 17]).unwrap();
+    let supported = [&[0x08, 13][..], graph_and_opset].concat();
+    let directory = crate::temporary::tempdir().unwrap();
+    let manifest = image_package(directory.path(), &supported);
+    Engine::open(directory.path().into(), manifest).unwrap();
+    let future = [&[0x08, 14][..], graph_and_opset].concat();
+    for (model, reason) in [
+        (future.as_slice(), "IR version"),
+        (graph_and_opset, "IR version"),
+        (no_opset, "opset"),
+    ] {
+        let directory = crate::temporary::tempdir().unwrap();
+        let manifest = image_package(directory.path(), model);
+        let error = Engine::open(directory.path().into(), manifest)
+            .err()
+            .expect("model import must fail");
+        assert!(error.contains(reason), "{error}");
+    }
+}
+
+#[cfg(any(feature = "image-search-inference", feature = "onnx-runtime"))]
 #[test]
 fn imports_a_region_encoder_and_samples_its_image_features() {
     import_image_encoder(
@@ -48,7 +79,7 @@ fn imports_a_region_encoder_and_samples_its_image_features() {
     );
 }
 
-#[cfg(feature = "onnx-runtime")]
+#[cfg(any(feature = "image-search-inference", feature = "onnx-runtime"))]
 #[test]
 fn imports_a_model_with_conditional_outputs_and_a_loop_capturing_outer_values() {
     import_image_encoder(
@@ -60,7 +91,7 @@ fn imports_a_model_with_conditional_outputs_and_a_loop_capturing_outer_values() 
     );
 }
 
-#[cfg(feature = "onnx-runtime")]
+#[cfg(any(feature = "image-search-inference", feature = "onnx-runtime"))]
 #[test]
 fn imports_a_model_with_lp_pool() {
     import_image_encoder(
@@ -72,7 +103,7 @@ fn imports_a_model_with_lp_pool() {
     );
 }
 
-#[cfg(feature = "onnx-runtime")]
+#[cfg(any(feature = "image-search-inference", feature = "onnx-runtime"))]
 #[test]
 fn imports_a_model_with_max_unpool() {
     import_image_encoder(
@@ -84,7 +115,7 @@ fn imports_a_model_with_max_unpool() {
     );
 }
 
-#[cfg(feature = "onnx-runtime")]
+#[cfg(any(feature = "image-search-inference", feature = "onnx-runtime"))]
 #[test]
 fn imports_a_model_calling_nested_local_functions_with_a_default_attribute() {
     import_image_encoder(
@@ -96,7 +127,43 @@ fn imports_a_model_calling_nested_local_functions_with_a_default_attribute() {
     );
 }
 
-#[cfg(feature = "onnx-runtime")]
+#[cfg(any(feature = "image-search-inference", feature = "onnx-runtime"))]
+#[test]
+fn imports_a_model_with_a_broadcast_mask_and_variadic_feature_reductions() {
+    import_image_encoder(
+        include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../plain-rs/testdata/image_search/masked.onnx"
+        )),
+        [0.29799414, 0.298136, 0.14138956, 0.8957251],
+    );
+}
+
+#[cfg(any(feature = "image-search-inference", feature = "onnx-runtime"))]
+#[test]
+fn a_loop_with_zero_iterations_preserves_the_inferred_scan_shape() {
+    import_image_encoder(
+        include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../plain-rs/testdata/image_search/empty_scan.onnx"
+        )),
+        [0.0, 0.30151135, 0.90453404, 0.30151135],
+    );
+}
+
+#[cfg(any(feature = "image-search-inference", feature = "onnx-runtime"))]
+#[test]
+fn imports_a_layer_normalized_encoder_with_named_statistics() {
+    import_image_encoder(
+        include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../plain-rs/testdata/image_search/layer_normalization.onnx"
+        )),
+        [0.17164025, 0.110129476, 0.048734095, 0.977771],
+    );
+}
+
+#[cfg(any(feature = "image-search-inference", feature = "onnx-runtime"))]
 #[test]
 fn real_runtime_executes_paired_encoders_and_reloads_released_sessions() {
     let directory = crate::temporary::tempdir().unwrap();
@@ -124,7 +191,7 @@ fn real_runtime_executes_paired_encoders_and_reloads_released_sessions() {
     assert_eq!(engine.text("image").unwrap()[0], 1.0);
     assert_eq!(engine.image(&path).unwrap().unwrap()[0], 1.0);
 }
-#[cfg(feature = "onnx-runtime")]
+#[cfg(any(feature = "image-search-inference", feature = "onnx-runtime"))]
 #[test]
 fn drops_the_active_encoder_before_loading_the_other_graph() {
     let directory = crate::temporary::tempdir().unwrap();
@@ -172,8 +239,14 @@ fn encoder_context_lives_until_the_last_session_and_can_be_reopened() {
     let directory = crate::temporary::tempdir().unwrap();
     let manifest = fixture(directory.path());
     let engine = Engine::open(directory.path().into(), manifest.clone()).unwrap();
-    let context = Arc::downgrade(&engine.context);
-    let session = engine.session(&manifest.text.file).unwrap();
+    let context = std::sync::Arc::downgrade(&engine.context);
+    let session = Session::new(
+        &engine.context,
+        &directory.path().join(&manifest.text.file),
+        &[],
+        &manifest.text.output,
+    )
+    .unwrap();
     drop(engine);
     assert_eq!(context.strong_count(), 1);
     drop(session);
@@ -182,7 +255,7 @@ fn encoder_context_lives_until_the_last_session_and_can_be_reopened() {
     assert_eq!(reopened.text("cat").unwrap(), vec![1.0, 0.0, 0.0, 0.0]);
 }
 
-#[cfg(feature = "onnx-runtime")]
+#[cfg(any(feature = "image-search-inference", feature = "onnx-runtime"))]
 #[test]
 fn packages_reject_corruption_wrong_shapes_and_path_traversal() {
     let directory = crate::temporary::tempdir().unwrap();
@@ -223,6 +296,27 @@ fn external_tensor_files_are_rejected_before_loading() {
     std::fs::write(&path, [0x3a, 255]).unwrap();
     assert!(onnx_package::validate(&path).is_err());
 }
+#[test]
+fn importing_a_package_rejects_external_weights_in_a_function_default() {
+    let directory = crate::temporary::tempdir().unwrap();
+    let mut manifest = fixture(directory.path());
+    let mut graph = std::fs::read(directory.path().join(&manifest.image.file)).unwrap();
+    // Model.functions -> Function.attribute_proto -> Attribute.t -> Tensor.data_location.
+    graph.extend_from_slice(&[0xca, 0x01, 0x06, 0x5a, 0x04, 0x2a, 0x02, 0x70, 0x01]);
+    std::fs::write(directory.path().join(&manifest.image.file), &graph).unwrap();
+    let image = manifest
+        .files
+        .iter_mut()
+        .find(|v| v.name == manifest.image.file)
+        .unwrap();
+    image.size = graph.len() as u64;
+    image.sha256 = format!("{:x}", Sha256::digest(&graph));
+    let error = Engine::open(directory.path().into(), manifest)
+        .err()
+        .unwrap();
+    assert!(error.contains("External ONNX weights"), "{error}");
+}
+
 #[test]
 fn normalization_handles_extreme_floats_and_rejects_invalid_embeddings() {
     let mut vector = [f32::MAX, f32::MAX];

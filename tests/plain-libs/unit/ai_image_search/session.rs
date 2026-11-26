@@ -15,7 +15,7 @@ fn concurrent_context_handoff_and_reopen_remain_usable() {
         });
         let mut errors = Vec::new();
         for _ in 0..20_000 {
-            let context = Context::new();
+            let context = create_context();
             if let Err(error) = &context {
                 errors.push(error.clone());
             }

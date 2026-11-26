@@ -1,0 +1,72 @@
+{
+  "name": "tract",
+  "version": "0.23.10",
+  "repository": "https://github.com/sonos/tract",
+  "sources": {
+    "tract-onnx": {
+      "archive-sha256": "994cd1cb5ea6747ac82707e39ae9588784f6794f96a4a86d137e71ebc49e2689",
+      "files": [
+        "src/model.rs",
+        "src/ops/logic.rs",
+        "src/ops/math.rs",
+        "src/ops/nn/gelu.rs",
+        "src/ops/nn/layer_norm.rs",
+        "src/ops/nn/max_pool.rs",
+        "src/ops/nn/mod.rs",
+        "src/prost/onnx.rs",
+        "src/tensor.rs"
+      ],
+      "revision": "6c392b8028fde233e433afd250067125f7c83a22"
+    },
+    "tract-data": {
+      "revision": "a6884d46ab6afb44fc0e8fa7fd00344d5ff4e9a7",
+      "archive-sha256": "5feff0e09b8cf92be4932457bda1b2156e348bbaf8311753da7f9b102c4af0b3",
+      "files": [
+        "src/tensor.rs"
+      ]
+    },
+    "tract-core": {
+      "revision": "9d0058108d6db14b66135ddcf4a795cbd8cbdd34",
+      "archive-sha256": "5690191b7344a995507bed7523aeea052f907aa1316c0500540eec801e824a1c",
+      "files": [
+        "src/broadcast.rs",
+        "src/model/order.rs",
+        "src/ops/array/concat.rs",
+        "src/ops/array/gather.rs",
+        "src/ops/array/tile.rs",
+        "src/ops/cnn/maxpool.rs",
+        "src/ops/cnn/padding.rs",
+        "src/ops/cnn/sumpool.rs",
+        "src/ops/logic.rs",
+        "src/ops/math/mod.rs",
+        "src/ops/nn/layer_norm.rs",
+        "src/ops/nn/reduce.rs",
+        "src/ops/nn/rms_norm.rs",
+        "src/ops/nn/softmax/mod.rs",
+        "src/plan.rs"
+      ]
+    },
+    "tract-hir": {
+      "revision": "6c392b8028fde233e433afd250067125f7c83a22",
+      "archive-sha256": "a84e8187c517f1a641dcd1b764f1dca2b6b8d39d4c78b2743e1b69874e65b735",
+      "files": [
+        "src/infer/factoid.rs",
+        "src/infer/model.rs",
+        "src/ops/activations.rs",
+        "src/ops/cast.rs",
+        "src/ops/element_wise.rs",
+        "src/ops/identity.rs",
+        "src/ops/matmul.rs",
+        "src/ops/nn/reduce.rs"
+      ]
+    },
+    "tract-linalg": {
+      "revision": "a6884d46ab6afb44fc0e8fa7fd00344d5ff4e9a7",
+      "archive-sha256": "88d389398bb62713b4dd4fc92c3a36ae1552faf522e17b1ae3f636537893a55c",
+      "files": [
+        "src/generic/erf.rs",
+        "src/generic/gelu.rs"
+      ]
+    }
+  }
+}

@@ -1,16 +1,15 @@
+use super::{Input, Values};
 use crate::ai_image_search::models::manifest::Layout;
 use crate::ai_image_search::models::manifest::Manifest;
 use crate::ai_image_search::models::manifest::TextRole;
 use crate::ai_image_search::session::Context;
-use super::Input;
 use crate::ai_image_search::session::Session;
+use crate::tokenizer::{PaddingParams, PaddingStrategy, Tokenizer, TruncationParams};
 use sha2::{Digest, Sha256};
 use std::{
-    ffi::CString,
     path::{Path, PathBuf},
-    sync::{Arc, Mutex},
+    sync::Mutex,
 };
-use crate::tokenizer::{PaddingParams, PaddingStrategy, Tokenizer, TruncationParams};
 
 pub trait ImageSource: std::io::Read + std::io::Seek {}
 impl<T: std::io::Read + std::io::Seek> ImageSource for T {}
@@ -25,7 +24,7 @@ pub struct Engine {
     directory: PathBuf,
     tokenizer: Tokenizer,
     session: Mutex<Option<(bool, Session)>>,
-    context: Arc<Context>,
+    context: Context,
 }
 pub fn normalize(values: &mut [f32]) -> Result<(), String> {
     let norm = values
@@ -103,7 +102,7 @@ impl Engine {
             directory,
             tokenizer,
             session: Mutex::new(None),
-            context: Context::new()?,
+            context: super::session::create_context()?,
         };
         engine.image_tensor(vec![
             0.0;
@@ -117,9 +116,6 @@ impl Engine {
         self.directory = directory;
         self
     }
-    fn session(&self, file: &str) -> Result<Session, String> {
-        Session::new(&self.context, &self.directory.join(file))
-    }
     pub fn text(&self, text: &str) -> Result<Vec<f32>, String> {
         if text.len() > 65536 {
             return Err("Image search text exceeds limit".into());
@@ -131,45 +127,28 @@ impl Engine {
         if encoding.len() != self.manifest.tokenizer.context_length {
             return Err("Tokenizer context length mismatch".into());
         }
-        let mut data = self
+        let shape = [1, encoding.len() as i64];
+        let mut inputs = self
             .manifest
             .text
             .inputs
             .iter()
             .map(|input| {
-                match input.role {
+                let values = match input.role {
                     TextRole::Ids => encoding.get_ids(),
                     TextRole::AttentionMask => encoding.get_attention_mask(),
                     TextRole::TypeIds => encoding.get_type_ids(),
+                };
+                Input {
+                    name: &input.name,
+                    shape: &shape,
+                    values: Values::Integer(values.iter().map(|&v| i64::from(v)).collect()),
                 }
-                .iter()
-                .map(|v| *v as i64)
-                .collect::<Vec<_>>()
-            })
-            .collect::<Vec<_>>();
-        let names = self
-            .manifest
-            .text
-            .inputs
-            .iter()
-            .map(|input| CString::new(input.name.as_str()).map_err(|e| e.to_string()))
-            .collect::<Result<Vec<_>, _>>()?;
-        let shape = [1, encoding.len() as i64];
-        let mut inputs = data
-            .iter_mut()
-            .zip(&names)
-            .map(|(data, name)| Input {
-                name: name.as_ptr(),
-                data: data.as_mut_ptr().cast(),
-                bytes: data.len() * 8,
-                shape: shape.as_ptr(),
-                rank: 2,
-                element_type: 7,
             })
             .collect::<Vec<_>>();
         self.run(false, &mut inputs, &self.manifest.text.output)
     }
-    fn run(&self, image: bool, inputs: &mut [Input], output: &str) -> Result<Vec<f32>, String> {
+    fn run(&self, image: bool, inputs: &mut [Input<'_>], output: &str) -> Result<Vec<f32>, String> {
         let mut session = self.session.lock().map_err(|e| e.to_string())?;
         if session.as_ref().is_none_or(|(kind, _)| *kind != image) {
             *session = None;
@@ -178,7 +157,10 @@ impl Engine {
             } else {
                 &self.manifest.text.file
             };
-            *session = Some((image, self.session(file)?));
+            *session = Some((
+                image,
+                Session::new(&self.context, &self.directory.join(file), inputs, output)?,
+            ));
         }
         session
             .as_mut()
@@ -187,20 +169,16 @@ impl Engine {
             .run(inputs, output, self.manifest.dimensions)
     }
 
-    fn image_tensor(&self, mut data: Vec<f32>) -> Result<Vec<f32>, String> {
+    fn image_tensor(&self, data: Vec<f32>) -> Result<Vec<f32>, String> {
         let size = self.manifest.preprocess.size as i64;
         let shape = match self.manifest.preprocess.layout {
             Layout::Nchw => [1, 3, size, size],
             Layout::Nhwc => [1, size, size, 3],
         };
-        let name = CString::new(self.manifest.image.input.as_str()).map_err(|e| e.to_string())?;
         let mut inputs = [Input {
-            name: name.as_ptr(),
-            data: data.as_mut_ptr().cast(),
-            bytes: data.len() * 4,
-            shape: shape.as_ptr(),
-            rank: 4,
-            element_type: 1,
+            name: &self.manifest.image.input,
+            shape: &shape,
+            values: Values::Float(data),
         }];
         self.run(true, &mut inputs, &self.manifest.image.output)
     }

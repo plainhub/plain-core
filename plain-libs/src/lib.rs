@@ -1,3 +1,5 @@
+#[cfg(any(feature = "media", feature = "image-search-inference"))]
+mod binary16;
 pub mod aad;
 #[cfg(feature = "http-runtime")]
 #[macro_use]
