@@ -118,7 +118,24 @@ not enable AI image search or build ONNX Runtime. Enable it explicitly with
 `cargo test --workspace --locked --features plainapp/ai-image-search` or the AI
 option in the manually dispatched CI workflow.
 
-Building ONNX Runtime from source requires Python 3.10+.
+Building ONNX Runtime from source requires Python 3.10+ and CMake 3.28+.
+`plain-libs/native/ai_image_search/onnxruntime` contains the pinned native
+inference sources used across targets. The build uses these files directly.
+Native dependencies are pinned in `cmake/deps.txt`. For offline builds, place
+their archives under `<PLAIN_ONNX_CACHE>/<version>/mirror`, using each HTTPS
+URL without the `https://` prefix as the path. The upstream build checks each
+archive against its recorded digest.
+
+To update the snapshot, export the reviewed upstream commit into a new directory,
+then compare and replace the source and its adjacent lock together:
+
+```sh
+python3 scripts/import-onnxruntime.py "$checkout" "$commit" "$staging/onnxruntime"
+```
+
+The import keeps the native build inputs and removes upstream contact email
+addresses. Keep the default and imported ONNX model support when changing the
+build options.
 
 For builds with prepared ONNX Runtime artifacts, set `PLAIN_ONNX_RUNTIME_MANIFEST`
 to the absolute path of a trusted JSON file mapping Rust target triples to

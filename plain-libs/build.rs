@@ -14,6 +14,7 @@ fn main() {
         "ANDROID_NDK_HOME",
         "ANDROID_HOME",
         "PLAIN_ONNX_PYTHON",
+        "PLAIN_ONNX_CACHE",
     ] {
         println!("cargo:rerun-if-env-changed={name}");
     }
@@ -99,7 +100,7 @@ fn main() {
     let mut native = cc::Build::new();
     native
         .file("native/ai_image_search/onnx_session.c")
-        .include("native/ai_image_search/onnxruntime");
+        .include("native/ai_image_search/onnxruntime/include/onnxruntime/core/session");
     if target.contains("apple-ios") {
         native.define("PLAIN_ONNX_STATIC", None);
         println!("cargo:rustc-link-search=native={}", runtime.display());
