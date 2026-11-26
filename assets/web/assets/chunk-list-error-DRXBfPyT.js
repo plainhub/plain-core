@@ -1,1 +1,0 @@
-import{_ as e}from"./chunk-reactivity.esm-bundler-Dh02ET-1.js";import{L as t}from"./chunk-gql-client-BavcBul4.js";function n(n,r){let i=e(``);function a(e){e===t.NoPermission&&(n.value=[],r&&(r.value=0)),i.value=n.value.length?``:e}return{listError:i,setListError:a}}export{n as t};
