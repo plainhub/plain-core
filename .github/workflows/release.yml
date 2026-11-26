@@ -187,7 +187,8 @@ jobs:
           : "${AWS_SECRET_ACCESS_KEY:?Configure R2_SECRET_ACCESS_KEY}"
           : "${AWS_ENDPOINT_URL_S3:?Configure R2_ENDPOINT_URL}"
           : "${R2_BUCKET:?Configure R2_BUCKET}"
-          dest="s3://$R2_BUCKET/${R2_PREFIX:+${R2_PREFIX%/}/}$TAG/"
+          : "${R2_PREFIX:?Configure R2_PREFIX for CLI releases}"
+          dest="s3://$R2_BUCKET/${R2_PREFIX%/}/$TAG/"
           for file in artifacts/plainapp-linux-amd64.tar.gz artifacts/plainapp-linux-arm64.tar.gz install.sh \
             artifacts/checksums.txt artifacts/release-provenance.jsonl artifacts/release-manifest.txt artifacts/release-manifest.sig; do
             aws s3 cp "$file" "$dest" --cache-control "public, max-age=31536000, immutable"

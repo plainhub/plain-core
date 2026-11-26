@@ -366,7 +366,7 @@ The updater verifies the latest stable release's signature and archive checksum 
 <details>
 <summary>Releases</summary>
 
-To release the CLI, bump the version in `plain-cli/Cargo.toml` and update the lockfile. Configure `VIRUSTOTAL_API_KEY`, the `RELEASE_SIGNING_PRIVATE_KEY` secret (Ed25519 PEM), and the `RELEASE_SIGNING_PUBLIC_KEY` variable (single-line Base64 DER). Run the **Release** workflow from the release commit. It builds and checks `plainapp` for Linux amd64 and arm64 using the committed Web assets, without AI image search. The workflow creates a GitHub Release draft with a signed manifest, SHA-256 checksums, SLSA provenance, and links to the scan reports. Review the draft and publish it manually in GitHub. Publishing triggers the Discord announcement when `RELEASE_WEBHOOK_URL` is configured.
+To release the CLI, bump the version in `plain-cli/Cargo.toml` and update the lockfile. Configure `VIRUSTOTAL_API_KEY`, the `RELEASE_SIGNING_PRIVATE_KEY` secret (Ed25519 PEM), and the `RELEASE_SIGNING_PUBLIC_KEY` variable (single-line Base64 DER). Run the **Release** workflow from the release commit. It builds and checks `plainapp` for Linux amd64 and arm64 using the committed Web assets, without AI image search. The workflow creates a GitHub Release draft with a signed manifest, SHA-256 checksums, SLSA provenance, and links to the scan reports. Set the repository variable `R2_PREFIX` to `cli` to mirror each release under `cli/<tag>/` in the configured R2 bucket. Review the draft and publish it manually in GitHub. Publishing triggers the Discord announcement when `RELEASE_WEBHOOK_URL` is configured.
 
 </details>
 
