@@ -127,7 +127,7 @@ async fn serve(state: ServerState, parameters: Parameters, mut headers: HeaderMa
                 )),
     };
     let result = async {
-        let file = links::resolve(&state, &parameters.id).await?;
+        let file = links::resolve(&state, &parameters.id, parameters.action).await?;
         let content = content::read(&state, file, options).await?;
         let response = match content {
             Content::File {

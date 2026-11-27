@@ -43,8 +43,9 @@ impl AppPaths {
         };
         Ok(Self {
             cache_dir,
-            tls_cert: configured_path("PLAINAPP_TLS_CERT")
-                .unwrap_or_else(|| data_dir.join("tls.pem")),
+            tls_cert: configured_path("PLAINAPP_TLS_CERT").unwrap_or_else(|| {
+                crate::infrastructure::data_paths::DataPaths::new(&data_dir).tls_certificate()
+            }),
             tls_key: Self::tls_key_for(&data_dir),
             data_dir,
         })

@@ -16,6 +16,15 @@ impl DataPaths {
     pub fn pending_restore(&self) -> PathBuf {
         self.root.join(".restore-pending.json")
     }
+    pub(crate) fn legacy_desktop_database(&self) -> PathBuf {
+        self.root.join("local_chat.db")
+    }
+    pub(crate) fn legacy_desktop_prefs(&self) -> PathBuf {
+        self.root.join("prefs-v0.1.backup.json")
+    }
+    pub fn tls_certificate(&self) -> PathBuf {
+        self.root.join("tls.pem")
+    }
     pub fn database(&self) -> PathBuf {
         self.root.join("plain.db")
     }

@@ -208,7 +208,7 @@ pub async fn directory(state: &CoreRuntime, id: &str) -> Result<Download, Error>
         return Err(Error::Denied("".into()));
     }
     use crate::features::services::files::links;
-    let file = match links::resolve(state, id).await {
+    let file = match links::resolve(state, id, super::content::Action::Download).await {
         Ok(file) => file,
         Err(error) => return Err(Error::Denied(error.to_string())),
     };

@@ -1,3 +1,6 @@
+#[path = "fs/app_data_preview.rs"]
+mod app_data_preview;
+
 use crate::server::ContentServer;
 use crate::server::ServerState;
 use plain_libs::axum::body::Body;

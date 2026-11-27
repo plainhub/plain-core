@@ -47,6 +47,7 @@ impl FilePlatform {
                 .map_err(|error| error.to_string());
         let data = crate::infrastructure::data_paths::DataPaths::new(&directory);
         let database = data.database();
+        let legacy_database = data.legacy_desktop_database();
         let prefs = data.prefs();
         let tls_identity = data.tls_identity();
         let default_key = directory.join("tls.key");
@@ -54,6 +55,9 @@ impl FilePlatform {
             crate::infrastructure::platform::system::consts::AppPaths::tls_key_for(&directory);
         let mut protected_files = vec![
             database.clone(),
+            legacy_database.clone(),
+            data.legacy_desktop_prefs(),
+            data.tls_certificate(),
             prefs.with_extension("json.tmp"),
             prefs,
             tls_identity.with_extension("tmp"),
@@ -67,10 +71,12 @@ impl FilePlatform {
         if let Some(legacy) = &host.startup().legacy_storage {
             protected_files.extend([legacy.preferences(), legacy.backup_preferences()]);
         }
-        for suffix in ["-wal", "-shm", "-journal"] {
-            let mut path = database.clone().into_os_string();
-            path.push(suffix);
-            protected_files.push(path.into());
+        for database in [database, legacy_database] {
+            for suffix in ["-wal", "-shm", "-journal"] {
+                let mut path = database.clone().into_os_string();
+                path.push(suffix);
+                protected_files.push(path.into());
+            }
         }
         // Keep both the configured location and the filesystem's resolved path.
         for path in protected_files.clone() {

@@ -20,11 +20,11 @@ pub struct Metadata {
 }
 
 pub async fn describe(state: &CoreRuntime, id: &str) -> Result<Metadata> {
-    use crate::features::services::files::links;
+    use crate::features::services::files::{content::Action, links};
     let (scope, payload) = resource_link::parse(id)?;
     let key = links::key(state, &scope)?;
     let resource = resource_link::open(&scope, &key, payload)?;
-    let file = links::resolve(state, id).await?;
+    let file = links::resolve(state, id, Action::Describe).await?;
     let name = if file.name.is_empty() {
         file.path.rsplit('/').next().unwrap_or_default().to_owned()
     } else {

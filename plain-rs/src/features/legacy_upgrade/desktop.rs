@@ -46,7 +46,7 @@ fn signing_seed(keypair: &str) -> Result<String> {
 }
 
 pub(crate) fn source(root: &Path, destination: &Path) -> Result<Option<PathBuf>> {
-    let source_path = root.join("local_chat.db");
+    let source_path = DataPaths::new(root).legacy_desktop_database();
     match source_path.symlink_metadata() {
         Ok(meta) => ensure!(meta.is_file(), "Invalid legacy desktop database"),
         Err(error) if error.kind() == ErrorKind::NotFound => return Ok(None),
@@ -70,7 +70,7 @@ pub(crate) fn migrate(root: &Path, source_path: &Path, db: &Db, prefs: &Prefs) -
     }
 
     let paths = DataPaths::new(root);
-    let backup = root.join("prefs-v0.1.backup.json");
+    let backup = paths.legacy_desktop_prefs();
     let previous = read(&backup)?;
     let raw = match &previous {
         Some(bytes) => bytes.clone(),

@@ -1,3 +1,5 @@
+use super::content::Action;
+use crate::features::access::AccessFeature;
 use crate::features::files::resource_link::{self, ResourcePurpose, ResourceType, Scope};
 use crate::runtime::Runtime as CoreRuntime;
 use std::path::Path;
@@ -59,6 +61,7 @@ pub async fn resolve_native_reference(
         state,
         Scope::Session(client_id),
         resource_link::Resource::reference(reference),
+        false,
     )
     .await?;
     let physical_path = file
@@ -72,7 +75,11 @@ pub async fn resolve_native_reference(
     Ok(file)
 }
 
-pub async fn resolve(state: &CoreRuntime, id: &str) -> plain_libs::anyhow::Result<File> {
+pub async fn resolve(
+    state: &CoreRuntime,
+    id: &str,
+    action: Action,
+) -> plain_libs::anyhow::Result<File> {
     let owner = state.clone();
     let id = id.to_owned();
     let (scope, resource) = tokio::task::spawn_blocking(move || -> plain_libs::anyhow::Result<_> {
@@ -81,13 +88,14 @@ pub async fn resolve(state: &CoreRuntime, id: &str) -> plain_libs::anyhow::Resul
         Ok((scope, resource))
     })
     .await??;
-    resolve_resource(state, scope, resource).await
+    resolve_resource(state, scope, resource, action == Action::Preview).await
 }
 
 async fn resolve_resource(
     state: &CoreRuntime,
     scope: Scope,
     resource: resource_link::Resource,
+    preview: bool,
 ) -> plain_libs::anyhow::Result<File> {
     let media = if resource.r#type == ResourceType::Media {
         state
@@ -112,14 +120,14 @@ async fn resolve_resource(
         );
         match resource.r#type {
             ResourceType::SharedFile => {
-                let Scope::Share(share_id) = scope else {
+                let Scope::Share(share_id) = &scope else {
                     plain_libs::anyhow::bail!("Invalid share scope")
                 };
                 file.path = crate::features::files::shares::Service::new(
                     state.db.clone(),
                     state.prefs.clone(),
                 )
-                .resolve(&share_id, &resource.id, true)?
+                .resolve(share_id, &resource.id, true)?
                 .ok_or_else(|| plain_libs::anyhow::anyhow!("Shared file unavailable"))?;
             }
             ResourceType::PackageIcon => {
@@ -164,7 +172,9 @@ async fn resolve_resource(
             }
         }
         if authorize {
-            authorize_path(&state, &file.path)?;
+            let preview_scope =
+                (preview && resource.r#type == ResourceType::File).then_some(&scope);
+            authorize_resource_path(&state, &file.path, preview_scope)?;
         }
         Ok(file)
     })
@@ -172,6 +182,14 @@ async fn resolve_resource(
 }
 
 pub fn authorize_path(state: &CoreRuntime, reference: &str) -> plain_libs::anyhow::Result<()> {
+    authorize_resource_path(state, reference, None)
+}
+
+fn authorize_resource_path(
+    state: &CoreRuntime,
+    reference: &str,
+    preview_scope: Option<&Scope>,
+) -> plain_libs::anyhow::Result<()> {
     if reference.starts_with("content://") || reference.starts_with("ph://") {
         return Ok(());
     }
@@ -219,6 +237,20 @@ pub fn authorize_path(state: &CoreRuntime, reference: &str) -> plain_libs::anyho
                 owned.canonicalize()? == candidate,
                 "Invalid attachment path"
             );
+            return Ok(());
+        }
+        if let Some(Scope::Session(client_id)) = preview_scope
+            && !state.file_platform.uses_sdk()
+            && (path.starts_with(directory) || path.starts_with(&state.directory))
+            && candidate.is_file()
+            && crate::features::services::device::access::is_enabled(
+                &state.prefs,
+                &[AccessFeature::Files],
+            )
+            && state.db.session_get(client_id)?.is_some_and(|session| {
+                session.r#type == crate::features::sessions::SessionType::Login
+            })
+        {
             return Ok(());
         }
         plain_libs::anyhow::bail!("Private application path");
