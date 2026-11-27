@@ -88,14 +88,8 @@ fn imports_an_older_room_database_with_channel_and_pairing_references() {
         storage.clear(&current_db, &current).unwrap(),
         Status::Cleared
     );
-    assert!(!attachment_path.exists());
-    assert_eq!(
-        source
-            .query_row("SELECT count(*) FROM chat_groups", [], |r| r
-                .get::<_, i64>(0))
-            .unwrap(),
-        0
-    );
+    assert!(attachment_path.is_file());
+    assert!(!storage.database().exists());
 }
 
 fn fixture(root: &Path) -> (LegacyStorage, PathBuf, String) {
@@ -239,7 +233,7 @@ fn startup_leaves_invalid_settings_available_for_retry() {
 }
 
 #[test]
-fn deferred_import_reads_backup_and_deletes_only_the_imported_data() {
+fn clear_removes_legacy_database_and_datastore_files_only() {
     let temp = plain_libs::temporary::tempdir().unwrap();
     let (storage, current, old_asset) = fixture(temp.path());
     let db = Db::open(&current.join("plain.db")).unwrap();
@@ -323,36 +317,58 @@ fn deferred_import_reads_backup_and_deletes_only_the_imported_data() {
     });
     assert!(storage.files_directory.join(&old_asset).is_file());
     assert!(current.join("files").join(&old_asset).is_file());
+    for name in ["plain.db-wal", "plain.db-shm", "plain.db-journal", "unrelated.db"] {
+        std::fs::write(storage.database_directory.join(name), b"fixture").unwrap();
+    }
+    let other_store = storage.preferences_directory.join("datastore/other.preferences_pb");
+    std::fs::write(&other_store, b"other").unwrap();
     assert_eq!(storage.clear(&db, &current).unwrap(), Status::Cleared);
     assert_eq!(storage.clear(&db, &current).unwrap(), Status::Cleared);
     assert!(current.join("files").join(&old_asset).is_file());
-    assert!(!storage.files_directory.join(&old_asset).exists());
-    let retained = Connection::open(storage.database()).unwrap();
-    assert_eq!(
-        retained
-            .query_row("SELECT count(*) FROM image_editor_projects", [], |r| r
-                .get::<_, i64>(0))
-            .unwrap(),
-        1
-    );
-    assert_eq!(
-        retained
-            .query_row("SELECT count(*) FROM chats", [], |r| r.get::<_, i64>(0))
-            .unwrap(),
-        0
-    );
-    assert!(
-        preferences::read(&storage.backup_preferences())
-            .unwrap()
-            .client_id
-            .is_none()
-    );
-    assert!(
-        std::fs::read(storage.backup_preferences())
-            .unwrap()
-            .windows(6)
-            .any(|bytes| bytes == b"locale")
-    );
+    assert!(!storage.database().exists());
+    assert!(!storage.backup_preferences().exists());
+    for name in ["plain.db-wal", "plain.db-shm", "plain.db-journal"] {
+        assert!(!storage.database_directory.join(name).exists());
+    }
+    assert!(storage.files_directory.join(&old_asset).is_file());
+    assert_eq!(std::fs::read(other_store).unwrap(), b"other");
+    assert!(storage.database_directory.join("unrelated.db").is_file());
+    assert!(db.get_chat_by_id(&short_id::convert("message").unwrap()).is_some());
+}
+
+#[test]
+fn clear_retries_after_only_the_legacy_database_was_removed() {
+    let temp = plain_libs::temporary::tempdir().unwrap();
+    let (storage, current, _) = fixture(temp.path());
+    let db = Db::open(&current.join("plain.db")).unwrap();
+    let prefs = Prefs::in_memory();
+    storage.prepare_identity(&prefs).unwrap();
+    storage.import(&db, &prefs, &current).unwrap();
+    let backup = storage.backup_preferences();
+    std::fs::remove_file(&backup).unwrap();
+    std::fs::create_dir(&backup).unwrap();
+
+    assert!(storage.clear(&db, &current).is_err());
+    assert!(!storage.database().exists());
+    assert_eq!(storage.status(&db, &current).unwrap(), Status::Imported);
+    std::fs::remove_dir(&backup).unwrap();
+    assert_eq!(storage.clear(&db, &current).unwrap(), Status::Cleared);
+}
+
+#[test]
+fn previously_cleared_rows_can_be_cleaned_up_at_file_level() {
+    let temp = plain_libs::temporary::tempdir().unwrap();
+    let (storage, current, _) = fixture(temp.path());
+    let db = Db::open(&current.join("plain.db")).unwrap();
+    storage.prepare_identity(&Prefs::in_memory()).unwrap();
+    db.with_conn(|conn| plain_libs::kv::set_in_connection(
+        conn, STATE_KEY, Some(r#"{"status":"CLEARED","files":[],"pomodoro_settings":null}"#),
+    )).unwrap();
+
+    assert_eq!(storage.status(&db, &current).unwrap(), Status::Imported);
+    assert_eq!(storage.clear(&db, &current).unwrap(), Status::Cleared);
+    assert!(!storage.database().exists());
+    assert!(!storage.backup_preferences().exists());
 }
 
 #[test]
@@ -439,10 +455,11 @@ fn the_global_chat_draft_stays_in_the_old_preferences() {
         Some("old note draft")
     );
 
+    let old_settings = std::fs::read(storage.backup_preferences()).unwrap();
+    let draft = b"old global chat draft";
+    assert!(old_settings.windows(draft.len()).any(|bytes| bytes == draft));
     storage.clear(&db, &current).unwrap();
-    let old_settings = std::fs::read_to_string(storage.backup_preferences()).unwrap();
-    assert!(old_settings.contains("old global chat draft"));
-    assert!(!old_settings.contains("old note draft"));
+    assert!(!storage.backup_preferences().exists());
 }
 
 #[test]

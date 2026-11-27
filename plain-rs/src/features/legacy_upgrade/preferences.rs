@@ -37,46 +37,6 @@ fn read_bytes(path: &Path) -> Result<Option<Vec<u8>>> {
     Ok(Some(bytes))
 }
 
-pub(super) fn clear(path: &Path) -> Result<()> {
-    use std::io::Write;
-    let Some(bytes) = read_bytes(path)? else {
-        return Ok(());
-    };
-    let mut remaining = bytes.as_slice();
-    let mut retained = Vec::new();
-    while !remaining.is_empty() {
-        let start = remaining;
-        let (number, value) = field(&mut remaining)?;
-        let imported = if let (1, Some(entry)) = (number, value) {
-            matches!(
-                map_entry(entry)?.0,
-                Some(
-                    "client_id"
-                        | "signature_key_pair"
-                        | "scan_history"
-                        | "pomodoro_settings"
-                        | "favorite_folders"
-                        | "quick_note_draft"
-                )
-            )
-        } else {
-            false
-        };
-        if !imported {
-            retained.extend_from_slice(&start[..start.len() - remaining.len()]);
-        }
-    }
-    if retained.len() != bytes.len() {
-        let mut output = plain_libs::temporary::NamedTempFile::new_in(
-            path.parent().context("Missing legacy settings directory")?,
-        )?;
-        output.write_all(&retained)?;
-        output.as_file().sync_all()?;
-        output.persist(path)?;
-    }
-    Ok(())
-}
-
 fn decode(bytes: &[u8]) -> Result<Preferences> {
     let mut decoded = Preferences::default();
     length_delimited_fields(bytes, |number, entry| {

@@ -31,7 +31,6 @@ pub enum Status {
 #[derive(Serialize, Deserialize)]
 struct Receipt {
     status: Status,
-    files: Vec<PathBuf>,
     pomodoro_settings: Option<Value>,
 }
 
@@ -142,6 +141,9 @@ impl LegacyStorage {
 
     pub fn status(&self, db: &Db, target: &Path) -> Result<Status> {
         if let Some(receipt) = db.with_conn(|conn| Receipt::read(conn))? {
+            if receipt.status == Status::Cleared && self.present(&target.join("plain.db"))? {
+                return Ok(Status::Imported);
+            }
             return Ok(receipt.status);
         }
         Ok(if self.present(&target.join("plain.db"))? {
@@ -160,7 +162,6 @@ impl LegacyStorage {
             }
             let receipt = Receipt {
                 status: Status::Skipped,
-                files: Vec::new(),
                 pomodoro_settings: None,
             };
             receipt.write(connection)?;
@@ -227,10 +228,9 @@ impl LegacyStorage {
             chat::import(&source, &tx, &mut assets, &self_id, chat::Format::Android)?;
         }
         let pomodoro_settings = rows::import_preferences(settings, &tx, &mut assets)?;
-        let (files, installed) = assets.finish();
+        let installed = assets.finish();
         let receipt = Receipt {
             status: Status::Pending,
-            files,
             pomodoro_settings,
         };
         complete_onboarding(&tx)?;
@@ -241,36 +241,29 @@ impl LegacyStorage {
     }
 
     pub fn clear(&self, db: &Db, target: &Path) -> Result<Status> {
-        let _app_files = db.app_files_lock()?;
         db.with_conn(|conn| {
             let mut receipt = Receipt::read(conn)?.context("Legacy data has not been imported")?;
-            if receipt.status == Status::Cleared {
-                return Ok(receipt.status);
-            }
             ensure!(
-                receipt.status == Status::Imported,
+                matches!(receipt.status, Status::Imported | Status::Cleared),
                 "Legacy data has not been imported"
             );
-            self.present(&target.join("plain.db"))?;
-            for relative in &receipt.files {
-                ensure!(
-                    assets::clean_relative(relative),
-                    "Invalid migrated file path"
-                );
-                match assets::source_path(&self.files_directory, relative) {
-                    Ok(path) => std::fs::remove_file(path)?,
-                    Err(error)
-                        if error
-                            .downcast_ref::<std::io::Error>()
-                            .is_some_and(|e| e.kind() == ErrorKind::NotFound) => {}
-                    Err(error) => return Err(error),
+            let present = self.present(&target.join("plain.db"))?;
+            if receipt.status == Status::Cleared && !present {
+                return Ok(Status::Cleared);
+            }
+            for path in [
+                self.database_directory.join("plain.db-wal"),
+                self.database_directory.join("plain.db-shm"),
+                self.database_directory.join("plain.db-journal"),
+                self.database(),
+                self.backup_preferences(),
+            ] {
+                match std::fs::remove_file(&path) {
+                    Ok(()) => {}
+                    Err(error) if error.kind() == ErrorKind::NotFound => {}
+                    Err(error) => return Err(error).with_context(|| format!("Failed to remove {}", path.display())),
                 }
             }
-            if self.database().try_exists()? {
-                room::clear(&self.database())?;
-            }
-            preferences::clear(&self.backup_preferences())?;
-            receipt.files.clear();
             receipt.status = Status::Cleared;
             receipt.write(conn)?;
             Ok(receipt.status)

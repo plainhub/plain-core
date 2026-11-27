@@ -121,7 +121,7 @@ pub(crate) fn migrate(root: &Path, source_path: &Path, db: &Db, prefs: &Prefs) -
                 &converted,
                 chat::Format::Desktop,
             )?;
-            let (_, installed) = assets.finish();
+            let installed = assets.finish();
             plain_libs::kv::set_in_connection(&target, RECEIPT, Some(ROWS_IMPORTED))?;
             target.commit()?;
             installed.committed();

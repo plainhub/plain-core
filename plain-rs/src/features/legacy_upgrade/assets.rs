@@ -4,7 +4,7 @@ use plain_libs::anyhow::{Context, Result, ensure};
 use plain_libs::rusqlite::{Connection, OptionalExtension, params};
 use plain_libs::temporary::NamedTempFile;
 use plain_libs::utils::{dbtime, mime};
-use std::collections::{BTreeSet, HashMap};
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Component, Path, PathBuf};
 
@@ -14,7 +14,6 @@ pub(super) struct Assets<'a> {
     db: &'a Connection,
     desktop_db: Option<&'a Connection>,
     file_names: HashMap<String, String>,
-    old_paths: BTreeSet<PathBuf>,
     installed: InstalledAssets,
 }
 
@@ -26,7 +25,6 @@ impl<'a> Assets<'a> {
             db,
             desktop_db: None,
             file_names: HashMap::new(),
-            old_paths: BTreeSet::new(),
             installed: InstalledAssets::default(),
         }
     }
@@ -36,8 +34,8 @@ impl<'a> Assets<'a> {
         self
     }
 
-    pub fn finish(self) -> (Vec<PathBuf>, InstalledAssets) {
-        (self.old_paths.into_iter().collect(), self.installed)
+    pub fn finish(self) -> InstalledAssets {
+        self.installed
     }
 
     pub fn app_file(
@@ -263,8 +261,6 @@ impl<'a> Assets<'a> {
             staging.persist_noclobber(destination)?;
             self.installed.paths.push(destination.to_owned());
         }
-        self.old_paths
-            .insert(source.strip_prefix(self.source.canonicalize()?)?.to_owned());
         Ok(())
     }
 }
@@ -290,14 +286,14 @@ impl Drop for InstalledAssets {
     }
 }
 
-pub(super) fn clean_relative(path: &Path) -> bool {
+fn clean_relative(path: &Path) -> bool {
     !path.as_os_str().is_empty()
         && path
             .components()
             .all(|part| matches!(part, Component::Normal(_)))
 }
 
-pub(super) fn source_path(root: &Path, path: &Path) -> Result<PathBuf> {
+fn source_path(root: &Path, path: &Path) -> Result<PathBuf> {
     let real_root = root.canonicalize()?;
     let real_source = if path.is_absolute() {
         path.canonicalize()?

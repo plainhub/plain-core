@@ -41,16 +41,16 @@ const OPTIONAL_TABLES: &[(&str, usize)] = &[
     ("clipboard", 25),
 ];
 
-fn open(path: &Path, flags: OpenFlags) -> Result<(Connection, usize)> {
-    let connection = Connection::open_with_flags(path, flags)?;
+pub(super) fn read(path: &Path) -> Result<Connection> {
+    let db = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
     let version = usize::try_from(
-        connection.pragma_query_value(None, "user_version", |row| row.get::<_, i32>(0))?,
+        db.pragma_query_value(None, "user_version", |row| row.get::<_, i32>(0))?,
     )?;
     let known_identity = version
         .checked_sub(1)
         .and_then(|index| IDENTITIES.get(index))
         .with_context(|| format!("Legacy database schema {version} cannot be upgraded"))?;
-    let identity: String = connection.query_row(
+    let identity: String = db.query_row(
         "SELECT identity_hash FROM room_master_table WHERE id=42",
         [],
         |row| row.get(0),
@@ -59,11 +59,6 @@ fn open(path: &Path, flags: OpenFlags) -> Result<(Connection, usize)> {
         identity == *known_identity,
         "Legacy database has an unexpected schema"
     );
-    Ok((connection, version))
-}
-
-pub(super) fn read(path: &Path) -> Result<Connection> {
-    let (db, version) = open(path, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
     for &(table, introduced) in OPTIONAL_TABLES {
         if version < introduced {
             db.execute_batch(&format!("CREATE TEMP VIEW {table} AS SELECT 1 WHERE 0"))?;
@@ -112,28 +107,4 @@ pub(super) fn read(path: &Path) -> Result<Connection> {
         )?;
     }
     Ok(db)
-}
-
-pub(super) fn clear(path: &Path) -> Result<()> {
-    let (mut connection, version) = open(path, OpenFlags::SQLITE_OPEN_READ_WRITE)?;
-    let tx = connection.transaction()?;
-    tx.execute_batch(
-        "DELETE FROM chats; DELETE FROM notes; DELETE FROM feed_entries; DELETE FROM feeds; \
-        DELETE FROM tag_relations WHERE type<>9; DELETE FROM tags WHERE type<>9;",
-    )?;
-    if version >= 6 {
-        tx.execute_batch(if version < 9 {
-            "DELETE FROM chat_groups"
-        } else {
-            "DELETE FROM chat_channels"
-        })?;
-    }
-    for &(table, introduced) in OPTIONAL_TABLES {
-        if version >= introduced {
-            tx.execute_batch(&format!("DELETE FROM {table}"))?;
-        }
-    }
-    tx.commit()?;
-    connection.execute_batch("VACUUM;")?;
-    Ok(())
 }
