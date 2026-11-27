@@ -133,3 +133,7 @@ pub(super) fn matmul(
         _ => return Err("Incompatible MatMul types".into()),
     })
 }
+
+#[cfg(test)]
+#[path = "../../../../tests/plain-libs/unit/ai_image_search/tract/matmul.rs"]
+mod tests;
