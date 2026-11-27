@@ -355,3 +355,31 @@ fn fragmented_timecode_preview_preserves_track_reference_and_timecode_sample() {
         Some(((3600 + 2 * 60 + 3) * 25) + 4)
     );
 }
+
+#[test]
+fn flat_preview_seeks_to_the_last_idr_before_three_quarters_without_crossing_other_payloads() {
+    let source = include_bytes!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../plain-rs/testdata/fragmented-timecode.mp4"
+    ));
+    let mut bytes = Vec::new();
+    assert!(
+        flatten_fragments(&mut std::io::Cursor::new(source), &mut bytes, &false.into()).unwrap()
+    );
+
+    let mut preview = std::io::Cursor::new(bytes);
+    let track = VideoTrack::read_avc(&mut preview).unwrap();
+    let sync = track.keyframe_at(track.duration_ticks * 3 / 4);
+    assert_eq!(sync, 51);
+
+    // Independent packet inspection: IDR 51 at 2.000 s through sample 57 at 2.240 s.
+    let idr = track.read_sample(&mut preview, sync, 538).unwrap().unwrap();
+    let start = preview.position() as usize - idr.len();
+    assert_eq!(idr, source[5112..5650]);
+    let target = track.read_sample(&mut preview, 57, 14).unwrap().unwrap();
+    assert_eq!(target, source[5773..5787]);
+    assert_eq!(
+        &preview.get_ref()[start..preview.position() as usize],
+        &source[5112..5787]
+    );
+}
