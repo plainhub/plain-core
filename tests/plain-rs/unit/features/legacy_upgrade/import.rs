@@ -356,6 +356,42 @@ fn deferred_import_reads_backup_and_deletes_only_the_imported_data() {
 }
 
 #[test]
+fn skipped_upgrades_remain_available_for_manual_import_after_restart() {
+    let temp = plain_libs::temporary::tempdir().unwrap();
+    let (storage, current, _) = fixture(temp.path());
+    let path = current.join("plain.db");
+    let prefs = Prefs::in_memory();
+    storage.prepare_identity(&prefs).unwrap();
+    let db = Db::open(&path).unwrap();
+    assert_eq!(storage.skip(&db, &current).unwrap(), Status::Skipped);
+    drop(db);
+
+    let db = Db::open(&path).unwrap();
+    assert_eq!(storage.status(&db, &current).unwrap(), Status::Skipped);
+    assert_eq!(storage.import(&db, &prefs, &current).unwrap(), Status::Imported);
+    assert_eq!(storage.status(&db, &current).unwrap(), Status::Imported);
+}
+
+#[test]
+fn android_import_preserves_control_characters_in_legacy_chat_text() {
+    let temp = plain_libs::temporary::tempdir().unwrap();
+    let (storage, current, _) = fixture(temp.path());
+    let old = Connection::open(storage.database()).unwrap();
+    let text = "First \"quoted\" line\\\n下一行\t\u{0}end";
+    let content = json!({"type":"TEXT","value":{"text":text}}).to_string()
+        .replace("\\n", "\n").replace("\\t", "\t").replace("\\u0000", "\0");
+    old.execute("UPDATE chats SET content=?1", [content]).unwrap();
+    let db = Db::open(&current.join("plain.db")).unwrap();
+    let prefs = Prefs::in_memory();
+    storage.prepare_identity(&prefs).unwrap();
+
+    assert_eq!(storage.import(&db, &prefs, &current).unwrap(), Status::Imported);
+    let message = db.get_chat_by_id(&short_id::convert("message").unwrap()).unwrap();
+    let content: Value = serde_json::from_str(&message.content).unwrap();
+    assert_eq!(content["value"]["text"], text);
+}
+
+#[test]
 fn an_attachment_only_message_survives_without_the_unavailable_file() {
     let temp = plain_libs::temporary::tempdir().unwrap();
     let (storage, current, _) = fixture(temp.path());

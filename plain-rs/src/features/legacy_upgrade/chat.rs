@@ -217,6 +217,33 @@ fn convert_deliveries(data: &str) -> Result<Option<String>> {
     Ok(Some(json!({"results": results}).to_string()))
 }
 
+fn android_chat_json(data: &str) -> std::borrow::Cow<'_, str> {
+    use std::fmt::Write;
+
+    let mut output = String::new();
+    let mut start = 0;
+    let mut quoted = false;
+    let mut escaped = false;
+    for (index, byte) in data.bytes().enumerate() {
+        if escaped {
+            escaped = false;
+        } else if byte == b'"' {
+            quoted = !quoted;
+        } else if quoted && byte == b'\\' {
+            escaped = true;
+        } else if quoted && byte < 0x20 {
+            output.push_str(&data[start..index]);
+            write!(output, "\\u{byte:04x}").unwrap();
+            start = index + 1;
+        }
+    }
+    if start == 0 {
+        return data.into();
+    }
+    output.push_str(&data[start..]);
+    output.into()
+}
+
 fn convert_content(
     data: &str,
     created: &str,
@@ -224,8 +251,12 @@ fn convert_content(
     assets: &mut Assets<'_>,
     format: Format,
 ) -> Result<String> {
+    let data = match format {
+        Format::Android => android_chat_json(data),
+        Format::Desktop => data.into(),
+    };
     let content: LegacyContent =
-        serde_json::from_str(data).context("Invalid legacy chat message")?;
+        serde_json::from_str(&data).context("Invalid legacy chat message")?;
     let mut text = None;
     let mut items = Vec::new();
     let mut previews = Vec::new();

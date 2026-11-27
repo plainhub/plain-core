@@ -151,6 +151,23 @@ impl LegacyStorage {
         })
     }
 
+    pub fn skip(&self, db: &Db, target: &Path) -> Result<Status> {
+        ensure!(self.present(&target.join("plain.db"))?, "Legacy data is unavailable");
+        db.with_conn(|connection| {
+            if let Some(receipt) = Receipt::read(connection)? {
+                ensure!(receipt.status == Status::Skipped, "Legacy import has already started");
+                return Ok(receipt.status);
+            }
+            let receipt = Receipt {
+                status: Status::Skipped,
+                files: Vec::new(),
+                pomodoro_settings: None,
+            };
+            receipt.write(connection)?;
+            Ok(receipt.status)
+        })
+    }
+
     pub fn import(&self, db: &Db, prefs: &Prefs, target: &Path) -> Result<Status> {
         let _app_files = db.app_files_lock()?;
         let receipt = db.with_conn(|conn| self.import_rows(conn, prefs, target))?;
