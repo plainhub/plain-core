@@ -52,7 +52,7 @@ async fn imported_named_encoders_search_existing_and_new_image_vectors() {
         &[EmbeddingInput {
             id: rows[0].id.clone(),
             path: rows[0].path.clone(),
-            embedding_base64: "AAAAAAAAAAAAAAAAP4AAAA==".into(),
+            embedding: vec![0.0, 0.0, 0.0, 1.0],
         }],
     )
     .unwrap();
@@ -312,7 +312,7 @@ async fn siglip2_import_searches_an_ort_index_and_adds_a_matching_vector() {
         &[EmbeddingInput {
             id: rows[0].id.clone(),
             path: rows[0].path.clone(),
-            embedding_base64: plain_libs::utils::base64::base64_encode(golden),
+            embedding: plain_libs::utils::vector::decode_f32_be(golden).unwrap(),
         }],
     )
     .unwrap();

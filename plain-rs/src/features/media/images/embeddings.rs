@@ -2,12 +2,10 @@ use crate::infrastructure::db::Db;
 use crate::infrastructure::error::DomainError;
 use crate::infrastructure::error::DomainResult;
 use plain_libs::rusqlite::params;
-#[derive(serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct EmbeddingInput {
     pub id: String,
     pub path: String,
-    pub embedding_base64: String,
+    pub embedding: Vec<f32>,
 }
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -26,23 +24,30 @@ pub fn save(db: &Db, items: &[EmbeddingInput]) -> DomainResult<()> {
     if items.len() > 100 {
         return Err(DomainError::Other("embedding batch too large".into()));
     }
-    let blobs = items
-        .iter()
-        .map(|i| {
-            if i.id.is_empty() || i.path.is_empty() {
-                return Err(DomainError::Other("missing embedding identity".into()));
-            }
-            let blob = decode(&i.embedding_base64)?;
-            vector(&blob)?;
-            Ok(blob)
-        })
-        .collect::<DomainResult<Vec<_>>>()?;
-    db.with_conn(|c| {
-        let tx=c.unchecked_transaction()?;
-        for (i,blob) in items.iter().zip(blobs) {
-            tx.execute("INSERT INTO image_embeddings (file_id,path,embedding) VALUES (?1,?2,?3) ON CONFLICT(file_id) DO UPDATE SET path=excluded.path,embedding=excluded.embedding",params![i.id,i.path,blob])?;
+    for item in items {
+        if item.id.is_empty() || item.path.is_empty() {
+            return Err(DomainError::Other("missing embedding identity".into()));
         }
-        tx.commit()?;Ok(())
+        if item.embedding.is_empty() || item.embedding.len() > 4096 {
+            return Err(DomainError::Other("invalid embedding dimensions".into()));
+        }
+        if item.embedding.iter().any(|value| !value.is_finite()) {
+            return Err(DomainError::Other("invalid embedding values".into()));
+        }
+    }
+    db.with_conn(|c| {
+        let tx = c.unchecked_transaction()?;
+        {
+            let mut insert = tx.prepare("INSERT INTO image_embeddings (file_id,path,embedding) VALUES (?1,?2,?3) ON CONFLICT(file_id) DO UPDATE SET path=excluded.path,embedding=excluded.embedding")?;
+            let mut blob = Vec::new();
+            for item in items {
+                blob.clear();
+                blob.extend(item.embedding.iter().flat_map(|value| value.to_be_bytes()));
+                insert.execute(params![item.id, item.path, &blob])?;
+            }
+        }
+        tx.commit()?;
+        Ok(())
     })
 }
 pub fn search(db: &Db, query: &str, limit: usize) -> DomainResult<Vec<SearchResult>> {

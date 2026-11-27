@@ -770,12 +770,7 @@ async fn loaded_image_search_preserves_filters_counts_and_semantic_order() {
     let embedding = |id: String, path: String, score: f32| EmbeddingInput {
         id,
         path,
-        embedding_base64: plain_libs::utils::base64::base64_encode(
-            &[score, 0.0, 0.0, 0.0]
-                .into_iter()
-                .flat_map(f32::to_be_bytes)
-                .collect::<Vec<_>>(),
-        ),
+        embedding: vec![score, 0.0, 0.0, 0.0],
     };
     let mut embeddings = [0, 1, 2, 4, 5, 6]
         .into_iter()

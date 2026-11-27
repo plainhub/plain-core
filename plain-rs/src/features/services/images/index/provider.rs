@@ -177,12 +177,7 @@ impl Provider for ImageProvider {
                     crate::features::media::images::embeddings::EmbeddingInput {
                         id: item.id.clone(),
                         path: item.path.clone(),
-                        embedding_base64: plain_libs::utils::base64::base64_encode(
-                            &vector
-                                .iter()
-                                .flat_map(|v| v.to_be_bytes())
-                                .collect::<Vec<_>>(),
-                        ),
+                        embedding: vector,
                     },
                 ),
                 None => embedded.skipped_ids.push(item.id.clone()),

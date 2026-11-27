@@ -22,8 +22,6 @@ pub struct Page {
     pub next_cursor: String,
     pub done: bool,
 }
-#[derive(serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct Embedded {
     pub items: Vec<EmbeddingInput>,
     pub skipped_ids: Vec<String>,

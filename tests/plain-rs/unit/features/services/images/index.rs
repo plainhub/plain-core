@@ -108,7 +108,7 @@ async fn canceled_generation_cannot_resurrect_deleted_embeddings() {
     let input = EmbeddingInput {
         id: "one".into(),
         path: "/synthetic/one".into(),
-        embedding_base64: plain_libs::utils::base64::base64_encode(&1.0_f32.to_be_bytes()),
+        embedding: vec![1.0],
     };
     image_embeddings::save(&service.db, std::slice::from_ref(&input)).unwrap();
     assert_eq!(service.remove(&["one".into()]).unwrap(), 1);
@@ -166,7 +166,7 @@ async fn native_full_and_selected_indexing_use_local_catalog_and_encoder_without
         &[EmbeddingInput {
             id: "obsolete".into(),
             path: "/obsolete.png".into(),
-            embedding_base64: plain_libs::utils::base64::base64_encode(&1.0f32.to_be_bytes()),
+            embedding: vec![1.0],
         }],
     )
     .unwrap();

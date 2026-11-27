@@ -63,7 +63,7 @@ fn catalog_writes_invalidate_revision_but_embedding_writes_do_not_invalidate_the
         &[crate::features::media::images::embeddings::EmbeddingInput {
             id: "1".into(),
             path: "/catalog/1.png".into(),
-            embedding_base64: plain_libs::utils::base64::base64_encode(&1.0f32.to_be_bytes()),
+            embedding: vec![1.0],
         }],
     )
     .unwrap();

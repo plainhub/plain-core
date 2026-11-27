@@ -535,16 +535,12 @@ async fn semantic_search_pages_all_matches_and_filters_before_pagination() {
         } else {
             1.0 - i as f32 / 1000.0
         };
-        let bytes = vector
-            .iter()
-            .flat_map(|v| (v * score).to_be_bytes())
-            .collect::<Vec<_>>();
         embeddings::save(
             &db,
             &[EmbeddingInput {
                 id: row.id.clone(),
                 path: row.path.clone(),
-                embedding_base64: plain_libs::utils::base64::base64_encode(&bytes),
+                embedding: vector.iter().map(|v| v * score).collect(),
             }],
         )
         .unwrap();
@@ -558,16 +554,12 @@ async fn semantic_search_pages_all_matches_and_filters_before_pagination() {
             selected.push(row.id.clone());
         }
     }
-    let orphan_bytes = vector
-        .iter()
-        .flat_map(|v| v.to_be_bytes())
-        .collect::<Vec<_>>();
     embeddings::save(
         &db,
         &[EmbeddingInput {
             id: "orphan".into(),
             path: "/synthetic/missing.png".into(),
-            embedding_base64: plain_libs::utils::base64::base64_encode(&orphan_bytes),
+            embedding: vector.clone(),
         }],
     )
     .unwrap();

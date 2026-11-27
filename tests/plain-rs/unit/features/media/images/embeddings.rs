@@ -14,7 +14,7 @@ fn item(id: &str, values: &[f32]) -> EmbeddingInput {
     EmbeddingInput {
         id: id.into(),
         path: format!("/synthetic/{id}"),
-        embedding_base64: encode(values),
+        embedding: values.to_vec(),
     }
 }
 #[test]
@@ -103,4 +103,15 @@ fn scored_search_returns_all_matches_in_stable_order() {
     for minimum in [f32::NAN, f32::INFINITY, -1.1, 1.1] {
         assert!(search_with_score(&db, &encode(&[1.0, 0.0]), minimum).is_err());
     }
+}
+
+#[test]
+fn indexing_stores_the_original_big_endian_blob_without_an_encoding_handoff() {
+    let db = test_db("embedding_blob_bytes");
+    let input = item("photo", &[1.0, -0.0, f32::MIN_POSITIVE]);
+    save(&db, &[input]).unwrap();
+    let blob: Vec<u8> = db
+        .with_conn(|c| c.query_row("SELECT embedding FROM image_embeddings", [], |r| r.get(0)))
+        .unwrap();
+    assert_eq!(blob, [0x3f, 0x80, 0, 0, 0x80, 0, 0, 0, 0, 0x80, 0, 0]);
 }
