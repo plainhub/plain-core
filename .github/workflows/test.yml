@@ -47,12 +47,12 @@ jobs:
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
 
-      - name: Check standard builds do not enable ONNX Runtime
+      - name: Check image inference is disabled in standard builds
         if: ${{ !inputs.ai_image_search }}
         run: |
           features=$(cargo tree --workspace --locked -e features -i plain-libs --prefix none)
-          if grep -Fq -e 'plain-libs feature "onnx-runtime"' -e 'plain-rs feature "ai-image-search"' <<< "$features"; then
-            echo "ONNX Runtime must not be enabled in standard CI"
+          if grep -Fq -e 'plain-libs feature "image-search-inference"' -e 'plain-rs feature "ai-image-search"' <<< "$features"; then
+            echo "Image search inference must be disabled in standard CI"
             exit 1
           fi
 
