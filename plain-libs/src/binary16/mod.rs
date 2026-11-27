@@ -1,19 +1,16 @@
 pub(crate) fn to_f32(value: u16) -> f32 {
     let sign = u32::from(value & 0x8000) << 16;
-    let exponent = (value >> 10) & 0x1f;
-    let mantissa = u32::from(value & 0x03ff);
-    let bits = match (exponent, mantissa) {
-        (0, 0) => sign,
-        (0, _) => {
-            let shift = mantissa.leading_zeros() - 21;
-            let exponent = (113 - shift) << 23;
-            sign | exponent | (((mantissa << shift) & 0x03ff) << 13)
-        }
-        (31, 0) => sign | 0x7f80_0000,
-        (31, _) => sign | 0x7fc0_0000 | (mantissa << 13),
-        _ => sign | ((u32::from(exponent) + 112) << 23) | (mantissa << 13),
+    let magnitude = value & 0x7fff;
+    let bits = if magnitude < 0x0400 {
+        (f32::from(magnitude) * (1.0 / 16_777_216.0)).to_bits()
+    } else if magnitude < 0x7c00 {
+        (u32::from(magnitude) << 13) + 0x3800_0000
+    } else if magnitude == 0x7c00 {
+        0x7f80_0000
+    } else {
+        0x7fc0_0000 | (u32::from(magnitude & 0x03ff) << 13)
     };
-    f32::from_bits(bits)
+    f32::from_bits(sign | bits)
 }
 
 #[cfg(feature = "image-search-inference")]

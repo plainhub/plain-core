@@ -37,3 +37,19 @@ fn double_precision_cast_preserves_bits_beyond_a_float32_tie() {
         }
     }
 }
+
+#[test]
+fn widens_every_half_encoding_to_the_exact_single_precision_bits() {
+    for bits in 0..=u16::MAX {
+        let exponent = (bits >> 10) & 31;
+        let fraction = bits & 1023;
+        let magnitude = match (exponent, fraction) {
+            (31, 0) => f32::INFINITY.to_bits(),
+            (31, _) => 0x7fc0_0000 | (u32::from(fraction) << 13),
+            (0, _) => (f32::from(fraction) * 2f32.powi(-24)).to_bits(),
+            _ => (f32::from(1024 + fraction) * 2f32.powi(i32::from(exponent) - 25)).to_bits(),
+        };
+        let sign = u32::from(bits >> 15) << 31;
+        assert_eq!(to_f32(bits).to_bits(), sign | magnitude, "{bits:04x}");
+    }
+}
