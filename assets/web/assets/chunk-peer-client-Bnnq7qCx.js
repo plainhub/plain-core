@@ -1,0 +1,1 @@
+import{X as e}from"./chunk-http-D-n4h0JX.js";import{n as t}from"./chunk-gql-client-BWgFNBf3.js";async function n(n,r,i){return t(`${e(n)}/graphql`,n.token,r,i)}export{n as t};
