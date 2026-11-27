@@ -114,9 +114,8 @@ GraphQL resolver modules use query.rs and mutation.rs for operation roots. Share
 ## Build
 
 Requires Rust 1.99+ and a C compiler. AI image search uses a portable Rust
-module derived from Tract 0.23.10 to run ONNX encoders. Enable the feature with
-`cargo test --workspace --locked --features plainapp/ai-image-search` or the AI
-option in the manually dispatched CI workflow.
+module derived from Tract 0.23.10 to run ONNX encoders. It is included in
+standard PlainApp builds. Users still choose when to enable it.
 
 ```sh
 cargo check --workspace --locked
@@ -220,7 +219,7 @@ No management TCP port or shared secret is added.
 ### Install manually
 
 ```sh
-cargo build --release --locked -p plainapp --features ai-image-search
+cargo build --release --locked -p plainapp
 install -m 0755 target/release/plainapp /usr/local/bin/plainapp
 sudo plainapp install                     # admin password and systemd unit
 sudo systemctl enable --now plainapp

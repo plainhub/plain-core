@@ -5,10 +5,6 @@ on:
   pull_request:
   workflow_dispatch:
     inputs:
-      ai_image_search:
-        description: Include the native AI image search engine and tests
-        type: boolean
-        default: false
       release_smoke:
         description: Test Linux CLI installation and uninstallation on amd64 and arm64
         type: boolean
@@ -18,7 +14,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: rust-tests-${{ github.ref }}-${{ inputs.release_smoke && 'release' || inputs.ai_image_search && 'ai' || 'standard' }}
+  group: rust-tests-${{ github.ref }}-${{ inputs.release_smoke && 'release' || 'standard' }}
   cancel-in-progress: true
 
 env:
@@ -32,7 +28,6 @@ jobs:
     env:
       CC: gcc-14
       CXX: g++-14
-      AI_FEATURE: ${{ inputs.ai_image_search && 'plainapp/ai-image-search' || '' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -47,20 +42,19 @@ jobs:
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
 
-      - name: Check image inference is disabled in standard builds
-        if: ${{ !inputs.ai_image_search }}
+      - name: Check the default CLI includes image inference
         run: |
-          features=$(cargo tree --workspace --locked -e features -i plain-libs --prefix none)
-          if grep -Fq -e 'plain-libs feature "image-search-inference"' -e 'plain-rs feature "ai-image-search"' <<< "$features"; then
-            echo "Image search inference must be disabled in standard CI"
+          features=$(cargo tree --locked -p plainapp -e features -i plain-libs --prefix none)
+          if ! grep -Fq 'plain-libs feature "image-search-inference"' <<< "$features"; then
+            echo "Image search inference must be included in the default CLI build"
             exit 1
           fi
 
       - name: Compile all packages
-        run: cargo build --workspace --locked --features "$AI_FEATURE"
+        run: cargo build --workspace --locked
 
       - name: Run Rust unit tests
-        run: cargo test --workspace --locked --no-fail-fast --features "$AI_FEATURE"
+        run: cargo test --workspace --locked --no-fail-fast
 
       - name: Run CLI release script tests
         run: python3 -m unittest discover -s tests/unit/scripts -p 'test_*cli_release.py'

@@ -209,9 +209,6 @@ impl Runtime {
         }
     }
     pub async fn enable(self: &Arc<Self>, restore: bool) -> Result<(), String> {
-        if restore && !cfg!(feature = "ai-image-search") {
-            return Ok(());
-        }
         let model = self.selected_model()?;
         if restore
             && (!self.prefs.get_or("ai_image_search_enabled", false)
@@ -238,9 +235,6 @@ impl Runtime {
         self.activate(Selection::Incoming).await
     }
     async fn activate(self: &Arc<Self>, selection: Selection) -> Result<(), String> {
-        if !cfg!(feature = "ai-image-search") {
-            return Err("AI image search is not available in this build".into());
-        }
         let _guard = self.operations.lock().await;
         if self
             .task
@@ -500,9 +494,6 @@ impl Runtime {
         Ok(())
     }
     pub async fn cancel(&self, disable: bool) -> Result<(), String> {
-        if !cfg!(feature = "ai-image-search") {
-            return Err("AI image search is not available in this build".into());
-        }
         let _guard = self.operations.lock().await;
         let active = self
             .task

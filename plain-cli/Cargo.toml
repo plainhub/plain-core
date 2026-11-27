@@ -9,9 +9,6 @@ default-run = "plainapp"
 name = "plainapp"
 path = "src/main.rs"
 
-[features]
-ai-image-search = ["plain_server/ai-image-search"]
-
 [dependencies]
 plain-libs = { path = "../plain-libs", default-features = false }
 plain-rs = { path = "../plain-rs", default-features = false, features = ["unix-platform"] }

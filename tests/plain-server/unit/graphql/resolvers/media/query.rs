@@ -9,7 +9,6 @@ use std::sync::Arc;
 
 const GRANTED: &str = r#"["IMAGES","VIDEOS","AUDIO","DOCS","FILES"]"#;
 
-#[cfg(feature = "ai-image-search")]
 #[path = "image_model_import.rs"]
 mod image_model_import;
 
@@ -690,7 +689,6 @@ async fn image_search_uses_the_original_query_for_text_filters_paging_and_count(
     assert_eq!(data["imageCount"], 2);
 }
 
-#[cfg(feature = "ai-image-search")]
 #[tokio::test]
 async fn loaded_image_search_preserves_filters_counts_and_semantic_order() {
     use plain_rs::features::media::images::embeddings::{self, EmbeddingInput};
