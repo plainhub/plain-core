@@ -54,6 +54,21 @@ fn child_directory_reads_follow_the_requested_fields() {
 }
 
 #[test]
+fn listed_directories_count_visible_children_through_native_browse() {
+    let root = crate::temporary::tempdir().unwrap();
+    let child = root.path().join("Downloads");
+    fs::create_dir(&child).unwrap();
+    fs::write(child.join("document.txt"), b"fixture").unwrap();
+    fs::write(child.join(".hidden"), b"fixture").unwrap();
+    for (query, count) in [("", 1), ("show_hidden:true", 2)] {
+        let page = request(root.path(), query).plan().unwrap().execute().unwrap();
+        assert_eq!(page.count, 1);
+        assert_eq!(page.items[0].name, "Downloads");
+        assert_eq!(page.items[0].child_count, count);
+    }
+}
+
+#[test]
 fn literal_name_queries_preserve_text_without_injecting_filters() {
     let root = crate::temporary::tempdir().unwrap();
     for (text, query) in [

@@ -783,9 +783,7 @@ pub fn count_dir_entries_fast(path: &Path, threshold: i32) -> std::io::Result<i3
 
 #[cfg(target_os = "linux")]
 fn open_dir(path: &Path) -> std::io::Result<std::os::fd::OwnedFd> {
-    // O_RDONLY | O_DIRECTORY on Linux. The constant 0o200000 is
-    // O_DIRECTORY on glibc; we set it via libc::O_DIRECTORY.
-    let flags = libc::O_RDONLY | 0o200_000;
+    let flags = libc::O_RDONLY | libc::O_DIRECTORY;
     let cstr = std::ffi::CString::new(path.as_os_str().as_encoded_bytes())?;
     let fd = unsafe { libc::open(cstr.as_ptr(), flags) };
     if fd < 0 {
