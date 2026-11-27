@@ -61,10 +61,7 @@ fn product<T: LinalgScalar>(
     let (m, n) = (a.shape()[row], b.shape()[col]);
     let mut shape = batch.clone();
     shape.extend([m, n]);
-    let count = shape
-        .iter()
-        .try_fold(1usize, |v, &n| v.checked_mul(n))
-        .ok_or("MatMul shape overflow")?;
+    let count = super::tensor::checked_volume(&shape).ok_or("MatMul shape overflow")?;
     let mut data = Vec::new();
     data.try_reserve_exact(count).map_err(|e| e.to_string())?;
     data.resize(count, T::zero());

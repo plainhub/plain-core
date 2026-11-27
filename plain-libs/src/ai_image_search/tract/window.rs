@@ -23,9 +23,7 @@ pub(super) struct Geometry {
 }
 
 pub(super) fn volume(dims: &[usize]) -> Result<usize, String> {
-    dims.iter()
-        .try_fold(1usize, |n, &d| n.checked_mul(d))
-        .ok_or_else(|| "ONNX tensor volume overflow".into())
+    super::tensor::checked_volume(dims).ok_or_else(|| "ONNX tensor volume overflow".into())
 }
 
 pub(super) fn coordinates(mut index: usize, shape: &[usize]) -> Vec<usize> {

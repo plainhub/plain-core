@@ -100,7 +100,7 @@ impl NodeProto {
 }
 
 impl Op {
-    pub(super) fn from_node(node: &NodeProto, opset: i64) -> Result<Self, String> {
+    pub(super) fn from_node(node: &mut NodeProto, opset: i64) -> Result<Self, String> {
         if !node.domain.is_empty() && node.domain != "ai.onnx" {
             return Err(format!("Unsupported ONNX domain {}", node.domain));
         }
@@ -124,21 +124,21 @@ impl Op {
             "Size" => Self::Size,
             "Expand" => Self::Expand,
             "ConstantOfShape" => {
-                let scalar = if let Some(value) = node.attribute.iter().find(|a| a.name == "value")
-                {
-                    let value = Tensor::from_proto(
-                        value
-                            .t
-                            .clone()
-                            .ok_or("Expected ConstantOfShape value tensor")?,
-                    )?;
-                    if value.shape() != [1] {
-                        return Err("Expected one ConstantOfShape element".into());
-                    }
-                    value.reshape(&[])?
-                } else {
-                    Tensor::F32(super::tensor::array(&[], vec![0.])?)
-                };
+                let scalar =
+                    if let Some(value) = node.attribute.iter_mut().find(|a| a.name == "value") {
+                        let value = Tensor::from_proto(
+                            value
+                                .t
+                                .take()
+                                .ok_or("Expected ConstantOfShape value tensor")?,
+                        )?;
+                        if value.shape() != [1] {
+                            return Err("Expected one ConstantOfShape element".into());
+                        }
+                        value.reshape(&[])?
+                    } else {
+                        Tensor::F32(super::tensor::array(&[], vec![0.])?)
+                    };
                 Self::ConstantOfShape(scalar)
             }
             "Add" => Self::Binary(Binary::Add),
@@ -235,7 +235,7 @@ impl Op {
             "Constant" => {
                 let attr = node
                     .attribute
-                    .iter()
+                    .drain(..)
                     .find(|a| {
                         matches!(
                             a.name.as_str(),
@@ -252,33 +252,24 @@ impl Op {
                     .ok_or("Missing ONNX constant")?;
                 let tensor = match attr.name.as_str() {
                     "sparse_value" => Tensor::from_sparse(
-                        attr.sparse_tensor
-                            .clone()
-                            .ok_or("Missing sparse tensor constant")?,
+                        attr.sparse_tensor.ok_or("Missing sparse tensor constant")?,
                     )?,
-                    "value" => {
-                        Tensor::from_proto(attr.t.clone().ok_or("Missing tensor constant")?)?
-                    }
+                    "value" => Tensor::from_proto(attr.t.ok_or("Missing tensor constant")?)?,
                     "value_float" => Tensor::F32(super::tensor::array(&[], vec![attr.f])?),
-                    "value_floats" => Tensor::F32(super::tensor::array(
-                        &[attr.floats.len()],
-                        attr.floats.clone(),
-                    )?),
+                    "value_floats" => {
+                        Tensor::F32(super::tensor::array(&[attr.floats.len()], attr.floats)?)
+                    }
                     "value_int" => Tensor::I64(super::tensor::array(&[], vec![attr.i])?),
                     "value_ints" => {
-                        Tensor::I64(super::tensor::array(&[attr.ints.len()], attr.ints.clone())?)
+                        Tensor::I64(super::tensor::array(&[attr.ints.len()], attr.ints)?)
                     }
                     "value_string" => Tensor::String(super::tensor::array(
                         &[],
-                        vec![std::sync::Arc::from(attr.s.clone())],
+                        vec![std::sync::Arc::from(attr.s)],
                     )?),
                     _ => Tensor::String(super::tensor::array(
                         &[attr.strings.len()],
-                        attr.strings
-                            .iter()
-                            .cloned()
-                            .map(std::sync::Arc::from)
-                            .collect(),
+                        attr.strings.into_iter().map(std::sync::Arc::from).collect(),
                     )?),
                 };
                 Self::Const(tensor)

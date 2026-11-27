@@ -21,6 +21,12 @@ pub(super) enum Tensor {
     String(Array<Arc<[u8]>>),
 }
 
+pub(super) fn checked_volume(shape: &[usize]) -> Option<usize> {
+    shape
+        .iter()
+        .try_fold(1usize, |size, &dim| size.checked_mul(dim))
+}
+
 pub(super) fn array<T: Clone>(shape: &[usize], data: Vec<T>) -> Result<Array<T>, String> {
     ArrayD::from_shape_vec(IxDyn(shape), data)
         .map(|array| array.into_shared())
@@ -34,10 +40,7 @@ impl Tensor {
             .iter()
             .map(|&n| usize::try_from(n).map_err(|_| format!("Invalid ONNX tensor dimension {n}")))
             .collect::<Result<Vec<_>, _>>()?;
-        let elements = shape
-            .iter()
-            .try_fold(1usize, |n, &d| n.checked_mul(d))
-            .ok_or("ONNX tensor shape exceeds address space")?;
+        let elements = checked_volume(&shape).ok_or("ONNX tensor shape exceeds address space")?;
         let dtype = DataType::try_from(tensor.data_type).map_err(|e| e.to_string())?;
         if tensor.segment.is_some() {
             return Err("Segmented ONNX tensor data is unsupported".into());

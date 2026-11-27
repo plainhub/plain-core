@@ -87,7 +87,7 @@ impl Graph {
             ops.push(context.op(node)?);
         }
         super::layer_norm::detect(&mut graph, &mut ops, &input_names);
-        let plan = Plan::for_outputs(&graph, outputs)?;
+        let mut plan = Plan::for_outputs(&graph, outputs)?;
         let mut facts: Vec<_> = (0..plan.names.len())
             .map(|_| InferenceFact::default())
             .collect();
@@ -114,7 +114,7 @@ impl Graph {
         let mut ops: Vec<_> = ops.into_iter().map(Some).collect();
         let mut steps = Vec::with_capacity(plan.order.len());
         for (&node, release) in plan.order.iter().zip(plan.release) {
-            let wiring = &plan.nodes[node];
+            let wiring = &mut plan.nodes[node];
             let inputs = wiring
                 .inputs
                 .iter()
@@ -128,7 +128,7 @@ impl Graph {
             steps.push(Step {
                 op: ops[node].take().unwrap(),
                 inputs,
-                outputs: wiring.outputs.clone(),
+                outputs: std::mem::take(&mut wiring.outputs),
                 release,
             });
         }

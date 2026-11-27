@@ -1,4 +1,4 @@
-#[derive(Clone, PartialEq, prost::Message)]
+#[derive(Clone, prost::Message)]
 pub struct AttributeProto {
     #[prost(string, tag = "1")]
     pub name: String,
@@ -26,7 +26,7 @@ pub struct AttributeProto {
     pub strings: Vec<Vec<u8>>,
 }
 pub mod attribute_proto {
-    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, prost::Enumeration)]
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, prost::Enumeration)]
     #[repr(i32)]
     pub enum AttributeType {
         Undefined = 0,
@@ -46,14 +46,14 @@ pub mod attribute_proto {
         TypeProtos = 14,
     }
 }
-#[derive(Clone, PartialEq, prost::Message)]
+#[derive(Clone, prost::Message)]
 pub struct ValueInfoProto {
     #[prost(string, tag = "1")]
     pub name: String,
     #[prost(message, optional, tag = "2")]
     pub r#type: Option<TypeProto>,
 }
-#[derive(Clone, PartialEq, prost::Message)]
+#[derive(Clone, prost::Message)]
 pub struct NodeProto {
     #[prost(string, repeated, tag = "1")]
     pub input: Vec<String>,
@@ -68,7 +68,7 @@ pub struct NodeProto {
     #[prost(message, repeated, tag = "5")]
     pub attribute: Vec<AttributeProto>,
 }
-#[derive(Clone, PartialEq, prost::Message)]
+#[derive(prost::Message)]
 pub struct ModelProto {
     #[prost(int64, optional, tag = "1")]
     pub ir_version: Option<i64>,
@@ -79,7 +79,7 @@ pub struct ModelProto {
     #[prost(message, repeated, tag = "25")]
     pub functions: Vec<FunctionProto>,
 }
-#[derive(Clone, PartialEq, prost::Message)]
+#[derive(Clone, prost::Message)]
 pub struct GraphProto {
     #[prost(message, repeated, tag = "1")]
     pub node: Vec<NodeProto>,
@@ -94,7 +94,7 @@ pub struct GraphProto {
     #[prost(message, repeated, tag = "13")]
     pub value_info: Vec<ValueInfoProto>,
 }
-#[derive(Clone, PartialEq, prost::Message)]
+#[derive(Clone, prost::Message)]
 pub struct TensorProto {
     #[prost(int64, repeated, tag = "1")]
     pub dims: Vec<i64>,
@@ -120,9 +120,9 @@ pub struct TensorProto {
     pub uint64_data: Vec<u64>,
 }
 pub mod tensor_proto {
-    #[derive(Clone, PartialEq, prost::Message)]
+    #[derive(Clone, prost::Message)]
     pub struct Segment {}
-    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, prost::Enumeration)]
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, prost::Enumeration)]
     #[repr(i32)]
     pub enum DataType {
         Undefined = 0,
@@ -151,7 +151,7 @@ pub mod tensor_proto {
         Float4e2m1 = 23,
     }
 }
-#[derive(Clone, PartialEq, prost::Message)]
+#[derive(Clone, prost::Message)]
 pub struct SparseTensorProto {
     #[prost(message, optional, tag = "1")]
     pub values: Option<TensorProto>,
@@ -160,19 +160,19 @@ pub struct SparseTensorProto {
     #[prost(int64, repeated, tag = "3")]
     pub dims: Vec<i64>,
 }
-#[derive(Clone, PartialEq, prost::Message)]
+#[derive(Clone, prost::Message)]
 pub struct TensorShapeProto {
     #[prost(message, repeated, tag = "1")]
     pub dim: Vec<tensor_shape_proto::Dimension>,
 }
 pub mod tensor_shape_proto {
-    #[derive(Clone, PartialEq, prost::Message)]
+    #[derive(Clone, prost::Message)]
     pub struct Dimension {
         #[prost(oneof = "dimension::Value", tags = "1, 2")]
         pub value: Option<dimension::Value>,
     }
     pub mod dimension {
-        #[derive(Clone, PartialEq, prost::Oneof)]
+        #[derive(Clone, prost::Oneof)]
         pub enum Value {
             #[prost(int64, tag = "1")]
             DimValue(i64),
@@ -181,33 +181,33 @@ pub mod tensor_shape_proto {
         }
     }
 }
-#[derive(Clone, PartialEq, prost::Message)]
+#[derive(Clone, prost::Message)]
 pub struct TypeProto {
     #[prost(oneof = "type_proto::Value", tags = "1")]
     pub value: Option<type_proto::Value>,
 }
 pub mod type_proto {
-    #[derive(Clone, PartialEq, prost::Message)]
+    #[derive(Clone, prost::Message)]
     pub struct Tensor {
         #[prost(enumeration = "super::tensor_proto::DataType", tag = "1")]
         pub elem_type: i32,
         #[prost(message, optional, tag = "2")]
         pub shape: Option<super::TensorShapeProto>,
     }
-    #[derive(Clone, PartialEq, prost::Oneof)]
+    #[derive(Clone, prost::Oneof)]
     pub enum Value {
         #[prost(message, tag = "1")]
         TensorType(Tensor),
     }
 }
-#[derive(Clone, PartialEq, prost::Message)]
+#[derive(prost::Message)]
 pub struct OperatorSetIdProto {
     #[prost(string, tag = "1")]
     pub domain: String,
     #[prost(int64, tag = "2")]
     pub version: i64,
 }
-#[derive(Clone, PartialEq, prost::Message)]
+#[derive(prost::Message)]
 pub struct FunctionProto {
     #[prost(string, optional, tag = "1")]
     pub name: Option<String>,

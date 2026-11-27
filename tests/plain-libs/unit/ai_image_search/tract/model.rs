@@ -1,6 +1,29 @@
 use super::*;
 
 #[test]
+fn constant_reuses_the_decoded_float_buffer() {
+    use onnx::proto::{AttributeProto, NodeProto};
+
+    let values = vec![0.25, 0.5, 0.75];
+    let buffer = values.as_ptr();
+    let mut node = NodeProto {
+        op_type: "Constant".into(),
+        attribute: vec![AttributeProto {
+            name: "value_floats".into(),
+            floats: values,
+            ..Default::default()
+        }],
+        ..Default::default()
+    };
+
+    let Op::Const(Tensor::F32(output)) = Op::from_node(&mut node, 13).unwrap() else {
+        panic!("expected a float constant")
+    };
+    assert_eq!(output.as_slice().unwrap(), [0.25, 0.5, 0.75]);
+    assert_eq!(output.as_ptr(), buffer);
+}
+
+#[test]
 fn runs_a_custom_pair_with_nhwc_and_permuted_named_text_inputs() {
     let dir = crate::temporary::tempdir().unwrap();
     let image_path = dir.path().join("image.onnx");

@@ -1,4 +1,4 @@
-use super::tensor::{Tensor, dispatch};
+use super::tensor::{Tensor, checked_volume, dispatch};
 use ndarray::{Axis, IxDyn};
 
 pub(super) fn axis(index: i64, rank: usize, end: bool) -> Result<usize, String> {
@@ -16,12 +16,10 @@ pub(super) fn axis(index: i64, rank: usize, end: bool) -> Result<usize, String> 
 pub(super) fn flatten(data: &Tensor, at: i64) -> Result<Tensor, String> {
     let shape = data.shape();
     let at = axis(at, shape.len(), true)?;
-    let volume = |s: &[usize]| {
-        s.iter()
-            .try_fold(1usize, |n, &d| n.checked_mul(d))
-            .ok_or("Flatten shape overflow")
-    };
-    data.reshape(&[volume(&shape[..at])?, volume(&shape[at..])?])
+    data.reshape(&[
+        checked_volume(&shape[..at]).ok_or("Flatten shape overflow")?,
+        checked_volume(&shape[at..]).ok_or("Flatten shape overflow")?,
+    ])
 }
 
 pub(super) fn gather(data: &Tensor, indices: &Tensor, at: i64) -> Result<Tensor, String> {
@@ -105,11 +103,7 @@ pub(super) fn reshape(
             .ok_or("Reshape volume overflow")?;
         shape.push(dimension);
     }
-    let elements = data
-        .shape()
-        .iter()
-        .try_fold(1usize, |n, &d| n.checked_mul(d))
-        .ok_or("Reshape input overflow")?;
+    let elements = checked_volume(data.shape()).ok_or("Reshape input overflow")?;
     if let Some(i) = inferred {
         if volume == 0 || !elements.is_multiple_of(volume) {
             return Err("Cannot infer reshape dimension".into());
@@ -201,10 +195,7 @@ pub(super) fn tile(data: &Tensor, repeats: &Tensor) -> Result<Tensor, String> {
                 .ok_or("Invalid tile extent")
         })
         .collect::<Result<_, _>>()?;
-    shape
-        .iter()
-        .try_fold(1usize, |n, &v| n.checked_mul(v))
-        .ok_or("Tile volume overflow")?;
+    checked_volume(&shape).ok_or("Tile volume overflow")?;
     Ok(dispatch!(data, |a, Kind| {
         Kind(
             ArrayD::from_shape_fn(IxDyn(&shape), |mut index| {
