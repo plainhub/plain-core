@@ -3,6 +3,9 @@ use crate::binary16::{from_f32, to_f32};
 use ndarray::{ArrayViewD, IxDyn, Zip};
 use num_traits::Float;
 
+#[path = "half_binary.rs"]
+mod half_binary;
+
 pub(super) fn multi_broadcast(shapes: &[&[usize]]) -> Result<Vec<usize>, String> {
     let rank = shapes.iter().map(|s| s.len()).max().unwrap_or(0);
     let mut shape = Vec::with_capacity(rank);
@@ -75,8 +78,13 @@ impl Binary {
             }};
         }
         match (a, b) {
-            (Tensor::F16(a), Tensor::F16(b)) => binary!(a, b, F16, |&x, &y| from_f32(
-                self.float(to_f32(x), to_f32(y))
+            (Tensor::F16(a), Tensor::F16(b)) => Ok(Tensor::F16(
+                half_binary::eval(
+                    self,
+                    a.broadcast(IxDyn(&dims)).ok_or("Invalid left broadcast")?,
+                    b.broadcast(IxDyn(&dims)).ok_or("Invalid right broadcast")?,
+                )?
+                .into_shared(),
             )),
             (Tensor::F32(a), Tensor::F32(b)) => binary!(a, b, F32, |&x, &y| self.float(x, y)),
             (Tensor::F64(a), Tensor::F64(b)) => binary!(a, b, F64, |&x, &y| self.float(x, y)),

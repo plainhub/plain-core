@@ -60,7 +60,7 @@ pub fn tensor_reader(
             )
         }
     }
-    .to_rgb8();
+    .into_rgb8();
     let area = (size * size) as usize;
     let mut tensor = vec![0.0; area * 3];
     for (i, pixel) in image.pixels().enumerate() {

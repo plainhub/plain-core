@@ -28,14 +28,37 @@ impl Session {
         inputs: &mut [Input<'_>],
         dimensions: usize,
     ) -> Result<Vec<f32>, String> {
-        let tensor::Tensor::F32(output) = self.0.run(inputs)? else {
-            return Err("Invalid ONNX embedding output type/shape".into());
-        };
-        if output.shape() != [1, dimensions] {
-            return Err("Invalid ONNX embedding output type/shape".into());
-        }
-        let mut values = output.iter().copied().collect::<Vec<_>>();
-        super::embedding::normalize(&mut values)?;
-        Ok(values)
+        embedding(self.0.run(inputs)?, dimensions)
     }
 }
+
+fn embedding(output: tensor::Tensor, dimensions: usize) -> Result<Vec<f32>, String> {
+    let tensor::Tensor::F32(output) = output else {
+        return Err("Invalid ONNX embedding output type/shape".into());
+    };
+    if output.shape() != [1, dimensions] {
+        return Err("Invalid ONNX embedding output type/shape".into());
+    }
+    let mut values = if output.is_standard_layout() {
+        match output.try_into_owned_nocopy() {
+            Ok(owned) => {
+                let (mut data, offset) = owned.into_raw_vec_and_offset();
+                let start = offset.unwrap_or(0);
+                if start != 0 {
+                    data.copy_within(start..start + dimensions, 0);
+                }
+                data.truncate(dimensions);
+                data
+            }
+            Err(shared) => shared.iter().copied().collect(),
+        }
+    } else {
+        output.iter().copied().collect()
+    };
+    super::embedding::normalize(&mut values)?;
+    Ok(values)
+}
+
+#[cfg(test)]
+#[path = "../../../../tests/plain-libs/unit/ai_image_search/tract/embedding_output.rs"]
+mod tests;
