@@ -177,7 +177,8 @@ pub fn format_disk_single_partition(
 
     let mut mps = list_mounted(disk);
     if !mps.is_empty() {
-        let mounts = crate::infrastructure::platform::linux::mounts::list::list_mounts();
+        use crate::infrastructure::platform::linux::mounts::list::{MountUsage, list_mounts};
+        let mounts = list_mounts(MountUsage::DiskAudit);
         let volumes = mps
             .iter()
             .map(|path| {

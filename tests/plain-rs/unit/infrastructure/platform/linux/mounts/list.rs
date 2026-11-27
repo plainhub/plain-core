@@ -210,3 +210,30 @@ fn classify_keeps_root_filesystems_without_physical_block_devices() {
         assert!(!mount.is_remote);
     }
 }
+
+
+#[test]
+fn browsable_mounts_keep_filesystem_capacity_once_and_do_not_enumerate_partitions() {
+    let mounted = || vec![Mount {
+        id: "fsuuid:usb-volume".into(),
+        mount_point: Some("/".into()),
+        total_bytes: 62_230_941_696,
+        free_bytes: Some(56_115_666_944),
+        ..Mount::default()
+    }];
+    let partition_reads = std::cell::Cell::new(0);
+    let partitions = || {
+        partition_reads.set(partition_reads.get() + 1);
+        partition_mounts(&[usb_disk(Some("/"))])
+    };
+    let browsable = mounts_for(MountUsage::Browse, mounted(), partitions);
+    assert_eq!(browsable.len(), 1);
+    assert_eq!(browsable[0].mount_point.as_deref(), Some("/"));
+    assert_eq!(browsable[0].free_bytes, Some(56_115_666_944));
+    assert_eq!(partition_reads.get(), 0);
+    let audit = mounts_for(MountUsage::DiskAudit, mounted(), partitions);
+    assert_eq!(audit.len(), 2);
+    assert_eq!(partition_reads.get(), 1);
+    assert_eq!(audit[1].path.as_deref(), Some("/dev/sdfixture1"));
+    assert_eq!(audit[1].mount_point.as_deref(), Some("/"));
+}

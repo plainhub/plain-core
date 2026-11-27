@@ -53,8 +53,9 @@ pub fn list() -> Vec<MountFacts> {
 pub fn native_facts() -> Result<plain_libs::serde_json::Value, String> {
     #[cfg(target_os = "linux")]
     {
+        use crate::infrastructure::platform::linux::mounts::list::{MountUsage, list_mounts};
         Ok(plain_libs::serde_json::Value::Array(
-            crate::infrastructure::platform::linux::mounts::list::list_mounts()
+            list_mounts(MountUsage::Browse)
                 .into_iter()
                 .map(linux_facts)
                 .collect(),

@@ -30,10 +30,24 @@ pub struct Mount {
     pub disk_model: Option<String>,
 }
 
-pub fn list_mounts() -> Vec<Mount> {
-    let mut out = list_mounted_volumes();
-    out.extend(list_disk_partitions());
-    out
+pub(crate) enum MountUsage {
+    Browse,
+    DiskAudit,
+}
+
+pub(crate) fn list_mounts(usage: MountUsage) -> Vec<Mount> {
+    mounts_for(usage, list_mounted_volumes(), list_disk_partitions)
+}
+
+fn mounts_for(
+    usage: MountUsage,
+    mut mounted: Vec<Mount>,
+    partitions: impl FnOnce() -> Vec<Mount>,
+) -> Vec<Mount> {
+    if let MountUsage::DiskAudit = usage {
+        mounted.extend(partitions());
+    }
+    mounted
 }
 
 #[derive(Default, Clone)]
