@@ -1,6 +1,7 @@
 use super::sizes::Sizes;
 
 pub(super) struct Run {
+    pub composition: Vec<i64>,
     pub first: u32,
     pub time: u64,
     pub description: u32,
@@ -39,15 +40,17 @@ impl Run {
         }
         self.sizes.count.saturating_sub(1)
     }
-    fn sync(&self, index: u32) -> bool {
-        let flags = self.flags.get(index as usize).copied().unwrap_or_else(|| {
+    pub(super) fn sample_flags(&self, index: u32) -> u32 {
+        self.flags.get(index as usize).copied().unwrap_or_else(|| {
             if index == 0 {
                 self.first_flags.unwrap_or(self.default_flags)
             } else {
                 self.default_flags
             }
-        });
-        flags & 0x10000 == 0
+        })
+    }
+    fn sync(&self, index: u32) -> bool {
+        self.sample_flags(index) & 0x10000 == 0
     }
     pub fn sync_before(&self, limit: u32) -> Option<u32> {
         if self.sizes.count == 0 {

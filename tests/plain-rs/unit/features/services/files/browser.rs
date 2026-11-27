@@ -354,3 +354,87 @@ async fn native_hev1_conversion_caches_the_result_and_cleans_intermediates() {
         1
     );
 }
+
+#[tokio::test]
+async fn fragmented_preview_caches_a_flat_movie_and_preserves_the_original() {
+    let dir = plain_libs::temporary::tempdir().unwrap();
+    let runtime = Runtime::new(dir.path().join("cache"));
+    let source = dir.path().join("source.mp4");
+    let original = include_bytes!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/testdata/fragmented-av.mp4"
+    ));
+    std::fs::write(&source, original).unwrap();
+    let preview = runtime
+        .convert(source.to_str().unwrap(), Operation::Remux)
+        .await
+        .unwrap()
+        .expect("indexed preview");
+    let bytes = std::fs::read(&preview).unwrap();
+    let boxes = |kind: &[u8; 4]| bytes.windows(4).position(|v| v == kind);
+    assert!(boxes(b"moov").unwrap() < boxes(b"mdat").unwrap());
+    assert!(boxes(b"moof").is_none());
+    assert!(boxes(b"ctts").is_some());
+    assert_eq!(
+        runtime
+            .convert(source.to_str().unwrap(), Operation::Remux)
+            .await
+            .unwrap(),
+        Some(preview.clone())
+    );
+    assert_eq!(
+        runtime
+            .convert(preview.to_str().unwrap(), Operation::Remux)
+            .await
+            .unwrap(),
+        None
+    );
+    let mut input = std::io::Cursor::new(original);
+    let mut output = std::io::Cursor::new(bytes);
+    use plain_libs::media::isobmff::VideoTrack;
+    let a = VideoTrack::read_avc(&mut input).unwrap();
+    let b = VideoTrack::read_avc(&mut output).unwrap();
+    assert_eq!(a.sample_count, b.sample_count);
+    for sample in 1..=a.sample_count {
+        assert_eq!(
+            a.read_sample(&mut input, sample, 65536).unwrap().unwrap(),
+            b.read_sample(&mut output, sample, 65536).unwrap().unwrap()
+        );
+    }
+    for second in 0..3 {
+        let tick = u64::from(a.timescale) * second;
+        assert_eq!(a.keyframe_at(tick), b.keyframe_at(tick));
+    }
+    assert_eq!(std::fs::read(source).unwrap(), original);
+}
+
+#[tokio::test]
+async fn indexed_fragments_and_unrepresentable_fragment_timing_use_the_original() {
+    let dir = plain_libs::temporary::tempdir().unwrap();
+    let runtime = Runtime::new(dir.path().join("cache"));
+    let source = dir.path().join("source.mp4");
+    let original = include_bytes!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/testdata/fragmented-av.mp4"
+    ));
+    let mut indexed = original.to_vec();
+    let fragment = indexed.windows(4).position(|tag| tag == b"moof").unwrap() - 4;
+    indexed.splice(fragment..fragment, atom(b"sidx", &[0; 24]));
+    let mut discontinuous = original.to_vec();
+    let tfdt = discontinuous
+        .windows(4)
+        .position(|tag| tag == b"tfdt")
+        .unwrap();
+    discontinuous[tfdt + 15] = 1;
+    for data in [indexed, discontinuous] {
+        std::fs::write(&source, &data).unwrap();
+        assert_eq!(
+            runtime
+                .convert(source.to_str().unwrap(), Operation::Remux)
+                .await
+                .unwrap(),
+            None
+        );
+        assert_eq!(std::fs::read(&source).unwrap(), data);
+    }
+}

@@ -266,3 +266,62 @@ fn extended_header_never_reads_past_the_asset_boundary() {
     assert_eq!(mp4_file_milliseconds(&mut file, 0, 8), None);
     assert_eq!(file.stream_position().unwrap(), 8);
 }
+
+#[test]
+fn flat_preview_preserves_interleaved_payloads_video_reordering_and_audio_timing() {
+    let source = include_bytes!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../plain-rs/testdata/fragmented-av.mp4"
+    ));
+    let mut output = Vec::new();
+    assert!(
+        flatten_fragments(
+            &mut std::io::Cursor::new(source),
+            &mut output,
+            &false.into()
+        )
+        .unwrap()
+    );
+    let expected_media: Vec<u8> = atoms(source)
+        .unwrap()
+        .into_iter()
+        .filter(|a| &a.kind == b"mdat")
+        .flat_map(|a| a.data.iter().copied())
+        .collect();
+    assert_eq!(child(&output, b"mdat").unwrap(), expected_media);
+    let movie = child(&output, b"moov").unwrap();
+    let tables: Vec<_> = atoms(movie)
+        .unwrap()
+        .into_iter()
+        .filter(|a| &a.kind == b"trak")
+        .map(|a| {
+            let media = child(a.data, b"mdia").unwrap();
+            child(child(media, b"minf").unwrap(), b"stbl").unwrap()
+        })
+        .collect();
+    assert_eq!(tables.len(), 2);
+    let entries = |data: &[u8], kind| {
+        let table = child(data, kind).unwrap();
+        assert_eq!(u32_at(table, 0), Some(0));
+        assert_eq!(table.len(), 8 + u32_at(table, 4).unwrap() as usize * 8);
+        table[8..]
+            .chunks_exact(8)
+            .map(|row| (u32_at(row, 0).unwrap(), u32_at(row, 4).unwrap()))
+            .collect::<Vec<_>>()
+    };
+    let composition: Vec<_> = entries(tables[0], b"ctts")
+        .into_iter()
+        .flat_map(|(count, offset)| std::iter::repeat_n(offset, count as usize))
+        .collect();
+    assert_eq!(
+        composition,
+        [
+            4096, 4096, 6144, 2048, 4096, 4096, 10240, 4096, 0, 2048, 4096, 8192, 2048, 2048, 4096
+        ]
+    );
+    assert_eq!(entries(tables[0], b"stts"), [(15, 2048)]);
+    assert_eq!(
+        entries(tables[1], b"stts"),
+        [(1, 3200), (23, 1024), (1, 448)]
+    );
+}

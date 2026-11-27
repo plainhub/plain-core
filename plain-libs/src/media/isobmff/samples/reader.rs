@@ -115,6 +115,7 @@ impl VideoTrack {
                 &mut next_sample,
                 &mut next_time,
                 &mut fragments,
+                false,
             ))?;
         }
         Ok(Self {
@@ -122,7 +123,9 @@ impl VideoTrack {
             hevc_headers: config.hevc_headers,
             width: config.width,
             height: config.height,
-            rotation: video::track_matrix(tkhd).and_then(video::matrix_rotation).unwrap_or(0),
+            rotation: video::track_matrix(tkhd)
+                .and_then(video::matrix_rotation)
+                .unwrap_or(0),
             timescale,
             duration_ticks: if duration_ticks == 0 {
                 next_time

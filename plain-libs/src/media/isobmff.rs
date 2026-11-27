@@ -290,9 +290,11 @@ pub fn tracks(path: &Path) -> Option<Tracks> {
     let mut file = File::open(path).ok()?;
     let length = file.metadata().ok()?.len();
     let mut offset = 0;
+    let mut front_index = false;
     while offset < length {
         let (kind, start, end) = header(&mut file, offset, length)?;
         offset = end;
+        front_index |= &kind == b"sidx";
         if &kind != b"moov" {
             continue;
         }
@@ -338,6 +340,23 @@ pub fn tracks(path: &Path) -> Option<Tracks> {
             }
         }
         result.audio_only = saw_audio && !saw_video && !missing_handler;
+        if saw_video && !result.needs_remux && !front_index && child(&bytes, b"mvex").is_some() {
+            let mut fragments = 0;
+            while offset < length {
+                let (kind, _, end) = header(&mut file, offset, length)?;
+                if &kind == b"sidx" {
+                    break;
+                }
+                if &kind == b"moof" {
+                    fragments += 1;
+                    if fragments == 2 {
+                        result.needs_remux = true;
+                        break;
+                    }
+                }
+                offset = end;
+            }
+        }
         return Some(result);
     }
     None
@@ -367,8 +386,8 @@ mod samples;
 
 mod metadata_tracks;
 pub use metadata_tracks::remove_mebx_tracks;
-pub use samples::VideoTrack;
+pub use samples::{VideoTrack, flatten_fragments};
 
-mod rewrite;
 mod hevc_normalize;
+mod rewrite;
 pub use hevc_normalize::canonicalize_hev1;

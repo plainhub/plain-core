@@ -2,8 +2,11 @@ use std::io::{self, Read, Seek, SeekFrom};
 
 mod avc;
 mod defaults;
+mod flat;
+mod flat_tables;
 mod fragment_run;
 mod fragments;
+pub use flat::flatten_fragments;
 pub(super) mod hevc;
 mod reader;
 mod sizes;

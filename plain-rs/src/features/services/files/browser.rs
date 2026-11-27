@@ -69,6 +69,13 @@ impl Runtime {
                     return media_task(move |canceled| {
                         let mut input = std::fs::File::open(input)?;
                         let mut writer = std::fs::OpenOptions::new().write(true).open(&output.0)?;
+                        if plain_libs::media::isobmff::flatten_fragments(
+                            &mut input,
+                            &mut writer,
+                            canceled,
+                        )? {
+                            return Ok(true);
+                        }
                         Ok(plain_libs::media::isobmff::remove_mebx_tracks(
                             &mut input,
                             &mut writer,
@@ -148,6 +155,10 @@ impl Runtime {
         if before.size == 0 {
             return Ok(None);
         }
+        let destination = cache_path(&self.cache, path, &before, operation);
+        if operation == Operation::Remux && cached(&destination).await {
+            return Ok(Some(destination));
+        }
         let input = source.clone();
         let decision = tokio::task::spawn_blocking(move || {
             let Some(tracks) = plain_libs::media::isobmff::tracks(&input) else {
@@ -174,11 +185,7 @@ impl Runtime {
         if Source::read(&source).await? != before {
             return Err("Source changed during video conversion".into());
         }
-        let destination = cache_path(&self.cache, path, &before, operation);
-        if tokio::fs::metadata(&destination)
-            .await
-            .is_ok_and(|metadata| metadata.is_file() && metadata.len() > 0)
-        {
+        if cached(&destination).await {
             return Ok(Some(destination));
         }
         let parent = destination.parent().ok_or("Missing video cache parent")?;
@@ -217,6 +224,12 @@ impl Runtime {
         Ok(Some(destination))
     }
 }
+async fn cached(path: &Path) -> bool {
+    tokio::fs::metadata(path)
+        .await
+        .is_ok_and(|metadata| metadata.is_file() && metadata.len() > 0)
+}
+
 fn cache_path(root: &Path, path: &str, source: &Source, operation: Operation) -> PathBuf {
     let mut hash = Sha256::new();
     hash.update(b"browser-video-v1\0");

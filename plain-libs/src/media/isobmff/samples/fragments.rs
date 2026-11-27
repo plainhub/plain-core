@@ -11,6 +11,7 @@ pub(super) fn read(
     next_sample: &mut u32,
     next_time: &mut u64,
     output: &mut Vec<Run>,
+    composition_offsets: bool,
 ) -> Option<()> {
     let mut implicit_base = moof;
     for traf in atoms(data)?.into_iter().filter(|a| &a.kind == b"traf") {
@@ -89,6 +90,7 @@ pub(super) fn read(
             {
                 return None;
             }
+            let mut composition = Vec::new();
             let mut sizes = Vec::new();
             let mut durations = Vec::new();
             let mut sample_flags = Vec::new();
@@ -105,9 +107,18 @@ pub(super) fn read(
                             cursor += 4;
                         }
                     }
+                    if composition_offsets && id == selected && flags & 0x800 != 0 {
+                        let raw = u32_at(entry, cursor)?;
+                        composition.push(if flags >> 24 == 1 {
+                            i64::from(raw as i32)
+                        } else {
+                            i64::from(raw)
+                        });
+                    }
                 }
             }
             let run = Run {
+                composition,
                 first: *next_sample,
                 time,
                 description: default.description,
