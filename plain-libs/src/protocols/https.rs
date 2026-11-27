@@ -40,11 +40,17 @@ pub async fn accept_tls(
     {
         return Err(error);
     }
-    time::timeout(
+    let tls = time::timeout(
         Duration::from_secs(10),
         TlsAcceptor::from(config).accept(stream),
     )
-    .await?
+    .await??;
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    if tls.get_ref().1.alpn_protocol() == Some(b"h2") {
+        // Unacknowledged bytes from a canceled stream also block later streams on this connection.
+        socket2::SockRef::from(tls.get_ref().0).set_send_buffer_size(64 * 1024)?;
+    }
+    Ok(tls)
 }
 
 pub async fn serve(
@@ -122,3 +128,7 @@ async fn accept(listener: &TcpListener) -> (TcpStream, net::SocketAddr) {
         }
     }
 }
+
+#[cfg(all(test, feature = "tls"))]
+#[path = "../../../tests/plain-libs/unit/protocols/https.rs"]
+mod tests;
