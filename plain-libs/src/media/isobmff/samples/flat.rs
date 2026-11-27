@@ -1,7 +1,7 @@
-use super::super::{MAX_BOX_BYTES, atoms, child, header, payload, rewrite, track, u32_at};
+use super::super::{atoms, child, header, payload, rewrite, track, u32_at, MAX_BOX_BYTES};
 use super::{
     defaults,
-    flat_tables::{Index, atom, movie, relocate_chunks},
+    flat_tables::{atom, movie, Index},
     fragments,
 };
 use std::{
@@ -49,7 +49,10 @@ fn plan(input: &mut (impl Read + Seek), length: u64, canceled: &AtomicBool) -> O
     let mut video = false;
     for a in atoms(&moov)?.iter().filter(|a| &a.kind == b"trak") {
         let t = track(a.data)?;
-        video |= t.video;
+        if !matches!(&t.handler, b"vide" | b"soun" | b"tmcd") {
+            return None;
+        }
+        video |= &t.handler == b"vide";
         if indexes
             .insert(
                 t.id,
@@ -125,7 +128,7 @@ fn plan(input: &mut (impl Read + Seek), length: u64, canceled: &AtomicBool) -> O
     atom(&mut prefix, b"ftyp", &ftyp?);
     let mut indexed = movie(&moov, &indexes)?;
     let media_start = (prefix.len() + indexed.len() + 8 + 16) as u64;
-    relocate_chunks(&mut indexed, media_start)?;
+    rewrite::shift_chunks(&mut indexed, media_start, 0..=size)?;
     atom(&mut prefix, b"moov", &indexed);
     Some(Plan {
         prefix,

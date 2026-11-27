@@ -86,7 +86,7 @@ async fn ordinary_files_and_long_videos_do_not_probe_support_or_encode() {
                     file.to_str().unwrap(),
                     operation,
                     || panic!("unexpected support check"),
-                    |_, _| async { panic!("unexpected encoder") }
+                    |_, _, _| async { panic!("unexpected encoder") }
                 )
                 .await
                 .unwrap()
@@ -148,7 +148,7 @@ async fn unsupported_transcode_never_enters_the_encoder() {
                 file.to_str().unwrap(),
                 Operation::Transcode,
                 || false,
-                |_, _| async { panic!("unsupported encoder") }
+                |_, _, _| async { panic!("unsupported encoder") }
             )
             .await
             .unwrap()
@@ -163,7 +163,7 @@ async fn concurrent_requests_encode_once_and_reuse_the_same_committed_bytes() {
     std::fs::write(&file, movie(b"hvc1", 3000, false)).unwrap();
     let runtime = Runtime::new(dir.path().join("core/cache"));
     let calls = AtomicUsize::new(0);
-    let encode = |_: PathBuf, output: Arc<Output>| {
+    let encode = |_: PathBuf, output: Arc<Output>, _: Conversion| {
         let calls = &calls;
         async move {
             calls.fetch_add(1, Ordering::SeqCst);
@@ -201,7 +201,7 @@ async fn remux_drops_metadata_by_selecting_the_remux_primitive_once() {
             file.to_str().unwrap(),
             Operation::Remux,
             supported,
-            |input, output| async move {
+            |input, output, _| async move {
                 assert_eq!(input.file_name().unwrap(), "source.mp4");
                 tokio::fs::write(&output.0, b"remux").await.unwrap();
                 Ok(true)
@@ -277,7 +277,7 @@ async fn replaced_sources_and_encoder_failures_never_publish_partial_cache_entri
             file.to_str().unwrap(),
             Operation::Transcode,
             supported,
-            |input, output| async move {
+            |input, output, _| async move {
                 tokio::fs::write(input, b"replaced").await.unwrap();
                 tokio::fs::write(&output.0, b"partial").await.unwrap();
                 Ok(true)
@@ -291,7 +291,7 @@ async fn replaced_sources_and_encoder_failures_never_publish_partial_cache_entri
             file.to_str().unwrap(),
             Operation::Transcode,
             supported,
-            |_, output| async move {
+            |_, output, _| async move {
                 tokio::fs::write(&output.0, b"partial").await.unwrap();
                 Err("synthetic failure".into())
             },
@@ -303,7 +303,7 @@ async fn replaced_sources_and_encoder_failures_never_publish_partial_cache_entri
             file.to_str().unwrap(),
             Operation::Transcode,
             supported,
-            |_, output| async move {
+            |_, output, _| async move {
                 tokio::fs::write(&output.0, b"complete").await.unwrap();
                 Ok(true)
             },

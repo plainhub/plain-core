@@ -44,17 +44,7 @@ impl Index {
     fn tables(&self, source: &[u8]) -> Option<(Vec<u8>, u64)> {
         let mut out = Vec::new();
         let stsd = child(source, b"stsd")?;
-        let descriptions = atoms(stsd.get(8..)?)?;
-        if descriptions.len() != u32_at(stsd, 4)? as usize
-            || descriptions.iter().any(|a| {
-                !matches!(
-                    &a.kind,
-                    b"avc1" | b"avc3" | b"hvc1" | b"hev1" | b"mp4a" | b"av01" | b"vp09" | b"Opus"
-                )
-            })
-        {
-            return None;
-        }
+        let descriptions = super::super::rewrite::sample_descriptions(stsd)?;
         if atoms(source)?.iter().any(|a| match &a.kind {
             b"stsd" => false,
             b"stts" | b"stsc" | b"stco" | b"co64" => a.data != [0; 8],
@@ -236,24 +226,4 @@ pub(super) fn movie(data: &[u8], indexes: &HashMap<u32, Index>) -> Option<Vec<u8
     atom(&mut result, b"mvhd", &duration(mvhd, 16, end)?);
     result.extend(out);
     Some(result)
-}
-
-pub(super) fn relocate_chunks(mut boxes: &mut [u8], media_start: u64) -> Option<()> {
-    while !boxes.is_empty() {
-        let length = u32_at(boxes, 0)? as usize;
-        let (entry, rest) = boxes.split_at_mut_checked(length)?;
-        let (header, body) = entry.split_at_mut_checked(8)?;
-        match &header[4..] {
-            b"trak" | b"mdia" | b"minf" | b"stbl" => relocate_chunks(body, media_start)?,
-            b"co64" => {
-                for chunk in body.get_mut(8..)?.chunks_exact_mut(8) {
-                    let relative = u64::from_be_bytes(chunk.try_into().ok()?);
-                    chunk.copy_from_slice(&relative.checked_add(media_start)?.to_be_bytes());
-                }
-            }
-            _ => {}
-        }
-        boxes = rest;
-    }
-    Some(())
 }

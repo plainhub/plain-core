@@ -1,4 +1,4 @@
-use crate::http::file_response::{self, secure};
+use crate::http::file_response::{self, secure, stream::Source};
 use crate::server::ServerState;
 use plain_libs::axum::{
     extract::{Request, State},
@@ -146,13 +146,13 @@ async fn serve(state: ServerState, parameters: Parameters, mut headers: HeaderMa
                     &mime
                 };
                 secure(
-                    file_response::stream_file(&path, mime, &headers).await,
+                    Source::Path(path).respond(mime, &headers).await,
                     Some(&name),
                     download,
                 )
             }
             Content::Temporary { file, mime, name } => secure(
-                file_response::stream_temporary(file, mime, &headers).await,
+                Source::Temporary(file).respond(mime, &headers).await,
                 name.as_deref(),
                 false,
             ),
@@ -163,7 +163,7 @@ async fn serve(state: ServerState, parameters: Parameters, mut headers: HeaderMa
             } => {
                 #[cfg(feature = "http_transport")]
                 {
-                    match file_response::resource(
+                    match file_response::resource::respond(
                         &state.resources,
                         &path,
                         state.stop.clone(),
@@ -188,7 +188,7 @@ async fn serve(state: ServerState, parameters: Parameters, mut headers: HeaderMa
                 false,
             ),
             Content::Thumbnail { bytes, name } => secure(
-                file_response::thumbnail(
+                file_response::thumbnail::respond(
                     bytes,
                     headers
                         .get(header::IF_NONE_MATCH)

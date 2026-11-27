@@ -34,14 +34,12 @@ pub(super) fn read(reader: &mut (impl Read + Seek)) -> Option<VideoInfo> {
             if &atom.kind != b"trak" {
                 continue;
             }
-            let Some(track) = super::track(atom.data).filter(|track| track.video) else {
+            let Some(track) = super::track(atom.data).filter(|track| &track.handler == b"vide")
+            else {
                 continue;
             };
             let matrix = track_matrix(child(atom.data, b"tkhd")?)?;
-            let (mut width, mut height) = (
-                u32_at(matrix, 36)? >> 16,
-                u32_at(matrix, 40)? >> 16,
-            );
+            let (mut width, mut height) = (u32_at(matrix, 36)? >> 16, u32_at(matrix, 40)? >> 16);
             let sample_table = child(atom.data, b"mdia")
                 .and_then(|data| child(data, b"minf"))
                 .and_then(|data| child(data, b"stbl"));

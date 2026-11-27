@@ -33,6 +33,13 @@ pub async fn accept_tls(
     stream: TcpStream,
 ) -> io::Result<TlsStream<TcpStream>> {
     stream.set_nodelay(true)?;
+    // Apply backpressure at one TLS record so canceled streams do not fill the kernel send queue.
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    if let Err(error) = socket2::SockRef::from(&stream).set_tcp_notsent_lowat(16 * 1024)
+        && error.raw_os_error() != Some(libc::ENOPROTOOPT)
+    {
+        return Err(error);
+    }
     time::timeout(
         Duration::from_secs(10),
         TlsAcceptor::from(config).accept(stream),

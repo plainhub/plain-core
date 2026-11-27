@@ -27,7 +27,7 @@ async fn render_conditional(
     conditional: Option<&str>,
 ) -> (u16, plain_libs::axum::http::HeaderMap, Vec<u8>) {
     let bytes = state.thumbnails.get(state, request).await;
-    let response = crate::http::file_response::thumbnail(bytes, conditional);
+    let response = crate::http::file_response::thumbnail::respond(bytes, conditional);
     let status = response.status().as_u16();
     let headers = response.headers().clone();
     let bytes = plain_libs::axum::body::to_bytes(response.into_body(), usize::MAX)

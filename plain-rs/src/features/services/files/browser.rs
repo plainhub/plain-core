@@ -1,3 +1,4 @@
+use plain_libs::media::isobmff::{self, PreviewRewrite};
 use sha2::{Digest, Sha256};
 use std::{
     path::{Path, PathBuf},
@@ -37,6 +38,10 @@ impl Source {
         })
     }
 }
+enum Conversion {
+    Remux(PreviewRewrite),
+    Transcode,
+}
 struct Output(PathBuf);
 impl Drop for Output {
     fn drop(&mut self) {
@@ -64,23 +69,12 @@ impl Runtime {
             path,
             operation,
             || operation == Operation::Remux || transcode_available(),
-            |input, output| async move {
-                if operation == Operation::Remux {
+            |input, output, conversion| async move {
+                if let Conversion::Remux(rewrite) = conversion {
                     return media_task(move |canceled| {
                         let mut input = std::fs::File::open(input)?;
                         let mut writer = std::fs::OpenOptions::new().write(true).open(&output.0)?;
-                        if plain_libs::media::isobmff::flatten_fragments(
-                            &mut input,
-                            &mut writer,
-                            canceled,
-                        )? {
-                            return Ok(true);
-                        }
-                        Ok(plain_libs::media::isobmff::remove_mebx_tracks(
-                            &mut input,
-                            &mut writer,
-                            canceled,
-                        )?)
+                        Ok(rewrite.apply(&mut input, &mut writer, canceled)?)
                     })
                     .await;
                 }
@@ -147,7 +141,7 @@ impl Runtime {
     ) -> Result<Option<PathBuf>, String>
     where
         S: FnOnce() -> bool,
-        E: FnOnce(PathBuf, Arc<Output>) -> EF,
+        E: FnOnce(PathBuf, Arc<Output>, Conversion) -> EF,
         EF: std::future::Future<Output = Result<bool, String>>,
     {
         let source = PathBuf::from(path);
@@ -160,24 +154,20 @@ impl Runtime {
             return Ok(Some(destination));
         }
         let input = source.clone();
-        let decision = tokio::task::spawn_blocking(move || {
-            let Some(tracks) = plain_libs::media::isobmff::tracks(&input) else {
-                return false;
-            };
-            match operation {
-                Operation::Remux => tracks.needs_remux,
-                Operation::Transcode => {
-                    matches!(tracks.first_video_codec.as_deref(), Some("hvc1" | "hev1"))
-                        && plain_libs::media::isobmff::mp4_milliseconds(&input).unwrap_or(0)
-                            <= 600_000
-                }
+        let conversion = tokio::task::spawn_blocking(move || match operation {
+            Operation::Remux => isobmff::preview_rewrite(&input).map(Conversion::Remux),
+            Operation::Transcode => {
+                let tracks = isobmff::tracks(&input)?;
+                (matches!(tracks.first_video_codec.as_deref(), Some("hvc1" | "hev1"))
+                    && isobmff::mp4_milliseconds(&input).unwrap_or(0) <= 600_000)
+                    .then_some(Conversion::Transcode)
             }
         })
         .await
         .map_err(|error| error.to_string())?;
-        if !decision {
+        let Some(conversion) = conversion else {
             return Ok(None);
-        }
+        };
         if !supported() {
             return Ok(None);
         }
@@ -206,7 +196,7 @@ impl Runtime {
         .await
         .map_err(|error| error.to_string())?
         .map_err(|error| error.to_string())?;
-        if !encode(source.clone(), temporary.clone()).await? {
+        if !encode(source.clone(), temporary.clone(), conversion).await? {
             return Ok(None);
         }
         let metadata = tokio::fs::metadata(&temporary.0)

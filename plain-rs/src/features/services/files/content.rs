@@ -302,7 +302,7 @@ pub async fn read(
                     name: Some(filename.to_owned()),
                 });
             }
-            if mime == "video/mp4" {
+            if mime == "video/mp4" || (preview && matches!(mime, "video/quicktime" | "video/3gpp")) {
                 if options.action == Action::Transcode {
                     let codec = crate::features::services::files::resources::read(
                         &state.host,

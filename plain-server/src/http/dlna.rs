@@ -1,3 +1,4 @@
+use crate::http::file_response::stream::Source;
 use crate::server::ServerState;
 use plain_libs::axum::{
     extract::{ConnectInfo, Path, Request as HttpRequest, State},
@@ -207,17 +208,7 @@ async fn media_response(
         let Ok(input) = state.resources.read_file(path, state.stop.clone()).await else {
             return StatusCode::BAD_GATEWAY.into_response();
         };
-        let Ok(size) = u64::try_from(input.length) else {
-            return StatusCode::BAD_GATEWAY.into_response();
-        };
-        return crate::http::file_response::stream_open_file(
-            tokio::fs::File::from_std(input.file),
-            input.offset as u64,
-            size,
-            &resource.mime,
-            headers,
-        )
-        .await;
+        return Source::Native(input).respond(&resource.mime, headers).await;
     }
     let path = match plain_rs::features::services::files::references::resolve(
         state.db.clone(),
@@ -227,7 +218,7 @@ async fn media_response(
         Ok(path) => path,
         Err(_) => return StatusCode::NOT_FOUND.into_response(),
     };
-    crate::http::file_response::stream_file(std::path::Path::new(&path), &resource.mime, headers)
+    Source::Path(path.into()).respond(&resource.mime, headers)
         .await
 }
 

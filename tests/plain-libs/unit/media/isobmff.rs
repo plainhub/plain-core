@@ -274,14 +274,12 @@ fn flat_preview_preserves_interleaved_payloads_video_reordering_and_audio_timing
         "/../plain-rs/testdata/fragmented-av.mp4"
     ));
     let mut output = Vec::new();
-    assert!(
-        flatten_fragments(
-            &mut std::io::Cursor::new(source),
-            &mut output,
-            &false.into()
-        )
-        .unwrap()
-    );
+    assert!(flatten_fragments(
+        &mut std::io::Cursor::new(source),
+        &mut output,
+        &false.into()
+    )
+    .unwrap());
     let expected_media: Vec<u8> = atoms(source)
         .unwrap()
         .into_iter()
@@ -315,13 +313,45 @@ fn flat_preview_preserves_interleaved_payloads_video_reordering_and_audio_timing
         .collect();
     assert_eq!(
         composition,
-        [
-            4096, 4096, 6144, 2048, 4096, 4096, 10240, 4096, 0, 2048, 4096, 8192, 2048, 2048, 4096
-        ]
+        [4096, 4096, 6144, 2048, 4096, 4096, 10240, 4096, 0, 2048, 4096, 8192, 2048, 2048, 4096]
     );
     assert_eq!(entries(tables[0], b"stts"), [(15, 2048)]);
     assert_eq!(
         entries(tables[1], b"stts"),
         [(1, 3200), (23, 1024), (1, 448)]
+    );
+}
+
+#[test]
+fn fragmented_timecode_preview_preserves_track_reference_and_timecode_sample() {
+    let source = include_bytes!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../plain-rs/testdata/fragmented-timecode.mp4"
+    ));
+    let mut output = Vec::new();
+    assert!(flatten_fragments(
+        &mut std::io::Cursor::new(source),
+        &mut output,
+        &false.into()
+    )
+    .unwrap());
+    let movie = child(&output, b"moov").unwrap();
+    let tracks: Vec<_> = atoms(movie)
+        .unwrap()
+        .into_iter()
+        .filter(|a| &a.kind == b"trak")
+        .collect();
+    assert_eq!(tracks.len(), 2);
+    let reference = child(child(tracks[0].data, b"tref").unwrap(), b"tmcd").unwrap();
+    assert_eq!(reference, &2u32.to_be_bytes());
+    let media = child(tracks[1].data, b"mdia").unwrap();
+    assert_eq!(&child(media, b"hdlr").unwrap()[8..12], b"tmcd");
+    let tables = child(child(media, b"minf").unwrap(), b"stbl").unwrap();
+    let description = child(tables, b"stsd").unwrap();
+    assert_eq!(&description[12..16], b"tmcd");
+    let offset = u64_at(child(tables, b"co64").unwrap(), 8).unwrap() as usize;
+    assert_eq!(
+        u32_at(&output, offset),
+        Some(((3600 + 2 * 60 + 3) * 25) + 4)
     );
 }

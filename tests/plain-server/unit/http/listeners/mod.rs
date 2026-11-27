@@ -283,6 +283,11 @@ async fn https_connections_disable_nagle_before_application_data() {
     assert!(!stream.nodelay().unwrap());
     let mut stream = https::accept_tls(config, stream).await.unwrap();
     assert!(stream.get_ref().0.nodelay().unwrap());
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    assert_eq!(
+        socket2::SockRef::from(stream.get_ref().0).tcp_notsent_lowat().unwrap(),
+        16 * 1024
+    );
     let mut request = Vec::new();
     let mut buffer = [0; 1024];
     while !request.ends_with(b"\r\n\r\n") {

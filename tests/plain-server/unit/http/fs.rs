@@ -1776,3 +1776,61 @@ async fn native_resources_use_memory_credentials_and_old_links_expire_after_rest
     assert_eq!(body_bytes(response).await, b"native bytes");
     core.stop_core().await;
 }
+
+#[tokio::test]
+async fn local_mov_preview_places_index_before_media_and_download_preserves_source() {
+    let (_root, _core, state, _key) = test_state();
+    let files = plain_libs::temporary::tempdir().unwrap();
+    let source = include_bytes!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../plain-rs/testdata/tail-index.mov"
+    ));
+    let path = files.path().join("clip.mov");
+    std::fs::write(&path, source).unwrap();
+    let id = file_id(&state, path.to_str().unwrap());
+    let request = format!("id={id}&action=PREVIEW");
+    let preview = call_fs(&state, &request, &[]).await;
+    assert_eq!(preview.headers()[header::CONTENT_TYPE], "video/quicktime");
+    let preview = body_bytes(preview).await;
+    let index = preview.windows(4).position(|b| b == b"moov").unwrap();
+    let media = preview.windows(4).position(|b| b == b"mdat").unwrap();
+    assert!(
+        index < media,
+        "the browser needs the index before the media"
+    );
+    assert_eq!(
+        body_bytes(call_fs(&state, &request, &[range_header("bytes=0-127")]).await).await,
+        preview[..128]
+    );
+    assert_eq!(
+        body_bytes(call_fs(&state, &format!("id={id}&action=DOWNLOAD"), &[]).await).await,
+        source
+    );
+}
+
+#[tokio::test]
+async fn other_video_containers_serve_ranges_from_the_original_with_their_own_mime() {
+    let (_root, _core, state, _key) = test_state();
+    let files = plain_libs::temporary::tempdir().unwrap();
+    for (extension, mime) in [
+        ("webm", "video/webm"),
+        ("mkv", "video/x-matroska"),
+        ("avi", "video/x-msvideo"),
+        ("ogv", "video/ogg"),
+        ("ts", "video/mp2t"),
+    ] {
+        let path = files.path().join(format!("clip.{extension}"));
+        let original = b"opaque-container-payload";
+        std::fs::write(&path, original).unwrap();
+        let id = file_id(&state, path.to_str().unwrap());
+        let response = call_fs(
+            &state,
+            &format!("id={id}&action=PREVIEW"),
+            &[range_header("bytes=7-15")],
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::PARTIAL_CONTENT);
+        assert_eq!(response.headers()[header::CONTENT_TYPE], mime);
+        assert_eq!(body_bytes(response).await, original[7..16]);
+    }
+}

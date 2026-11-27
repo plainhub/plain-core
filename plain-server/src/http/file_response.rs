@@ -1,262 +1,44 @@
+pub(crate) mod resource;
+pub(crate) mod stream;
+pub(crate) mod thumbnail;
+
 use plain_libs::axum::{
-    http::{HeaderMap, StatusCode, header},
-    response::{IntoResponse, Response},
+    http::{HeaderValue, header},
+    response::Response,
 };
-use std::path::Path;
 
-pub(crate) async fn stream_file(
-    path: &Path,
-    mime: &str,
-    headers: &HeaderMap,
-) -> plain_libs::axum::response::Response {
-    let Ok(file) = tokio::fs::File::open(path).await else {
-        return StatusCode::NOT_FOUND.into_response();
-    };
-    let Ok(metadata) = file.metadata().await else {
-        return StatusCode::NOT_FOUND.into_response();
-    };
-    if !metadata.is_file() {
-        return StatusCode::NOT_FOUND.into_response();
-    }
-    stream_open_file(file, 0, metadata.len(), mime, headers).await
-}
-
-pub(crate) async fn stream_open_file(
-    mut file: tokio::fs::File,
-    base: u64,
-    size: u64,
-    mime: &str,
-    headers: &HeaderMap,
-) -> Response {
-    use plain_libs::utils::http::RangeParse;
-    use tokio::io::{AsyncReadExt, AsyncSeekExt};
-    let range = headers
-        .get(plain_libs::axum::http::header::RANGE)
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or_default();
-    let (status, start, length, end) =
-        match plain_libs::utils::http::parse_range_header(range, size) {
-            RangeParse::Full => (StatusCode::OK, 0, size, None),
-            RangeParse::Partial(start, end) => (
-                StatusCode::PARTIAL_CONTENT,
-                start,
-                end - start + 1,
-                Some(end),
-            ),
-            RangeParse::Unsatisfiable => {
-                return (
-                    StatusCode::RANGE_NOT_SATISFIABLE,
-                    [(plain_libs::axum::http::header::CONTENT_RANGE, format!("bytes */{size}"))],
-                )
-                    .into_response();
-            }
-        };
-    if file
-        .seek(std::io::SeekFrom::Start(base + start))
-        .await
-        .is_err()
-    {
-        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
-    }
-    let stream =
-        futures_util::stream::try_unfold((file, length), |(mut file, remaining)| async move {
-            if remaining == 0 {
-                return Ok::<_, std::io::Error>(None);
-            }
-            let mut buffer = vec![0; remaining.min(64 * 1024) as usize];
-            let read = file.read(&mut buffer).await?;
-            if read == 0 {
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::UnexpectedEof,
-                    "app file truncated",
-                ));
-            }
-            buffer.truncate(read);
-            Ok(Some((buffer, (file, remaining - read as u64))))
-        });
-    let mut response = plain_libs::axum::body::Body::from_stream(stream).into_response();
-    *response.status_mut() = status;
-    let output = response.headers_mut();
-    output.insert(
-        plain_libs::axum::http::header::CONTENT_LENGTH,
-        length.to_string().parse().unwrap(),
-    );
-    output.insert(plain_libs::axum::http::header::ACCEPT_RANGES, "bytes".parse().unwrap());
-    output.insert(
-        plain_libs::axum::http::header::CACHE_CONTROL,
-        "private, no-cache".parse().unwrap(),
-    );
-    if let Ok(value) = mime.parse() {
-        output.insert(plain_libs::axum::http::header::CONTENT_TYPE, value);
-    }
-    if let Some(end) = end {
-        output.insert(
-            plain_libs::axum::http::header::CONTENT_RANGE,
-            format!("bytes {start}-{end}/{size}").parse().unwrap(),
-        );
-    }
-    response
-}
-
-pub(crate) fn escape(value: &str) -> String {
-    value
-        .as_bytes()
-        .iter()
-        .map(|b| match b {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
-                (*b as char).to_string()
-            }
-            _ => format!("%{b:02X}"),
-        })
-        .collect()
-}
 fn disposition(name: &str, download: bool) -> String {
-    let name = escape(name);
+    let name = plain_libs::utils::query::url_encode(name);
     format!(
         "{}; filename=\"{name}\"; filename*=utf-8''{name}",
         if download { "attachment" } else { "inline" }
     )
 }
 pub(crate) fn secure(mut response: Response, name: Option<&str>, download: bool) -> Response {
-    response
-        .headers_mut()
-        .insert("x-content-type-options", "nosniff".parse().unwrap());
-    let mime = response
-        .headers()
+    let headers = response.headers_mut();
+    headers.insert(
+        header::X_CONTENT_TYPE_OPTIONS,
+        HeaderValue::from_static("nosniff"),
+    );
+    let mime = headers
         .get(header::CONTENT_TYPE)
         .and_then(|v| v.to_str().ok())
-        .unwrap_or_default()
-        .split(';')
-        .next()
+        .and_then(|v| v.split(';').next())
         .unwrap_or_default();
     if mime == "text/html" || mime.ends_with("+xml") || mime.ends_with("/xml") {
-        response
-            .headers_mut()
-            .insert("content-security-policy", "sandbox".parse().unwrap());
+        headers.insert(
+            header::CONTENT_SECURITY_POLICY,
+            HeaderValue::from_static("sandbox"),
+        );
     }
     if let Some(name) = name {
         if let Ok(value) = disposition(name, download).parse() {
-            response
-                .headers_mut()
-                .insert(header::CONTENT_DISPOSITION, value);
+            headers.insert(header::CONTENT_DISPOSITION, value);
         }
-        response.headers_mut().insert(
-            "access-control-expose-headers",
-            "Content-Disposition".parse().unwrap(),
+        headers.insert(
+            header::ACCESS_CONTROL_EXPOSE_HEADERS,
+            HeaderValue::from_static("Content-Disposition"),
         );
     }
     response
-}
-
-pub(crate) async fn stream_temporary(
-    file: plain_rs::features::services::files::previews::Temporary,
-    mime: &str,
-    headers: &HeaderMap,
-) -> Response {
-    use futures_util::StreamExt;
-    let response = stream_file(&file.0, mime, headers).await;
-    let (parts, body) = response.into_parts();
-    let stream = body.into_data_stream().map(move |chunk| {
-        let _ = &file;
-        chunk
-    });
-    Response::from_parts(parts, plain_libs::axum::body::Body::from_stream(stream))
-}
-
-pub(crate) fn thumbnail(
-    bytes: Result<
-        Option<plain_libs::axum::body::Bytes>,
-        plain_rs::features::services::images::thumbnails::Error,
-    >,
-    conditional: Option<&str>,
-) -> Response {
-    use sha2::{Digest, Sha256};
-    match bytes {
-        Ok(Some(bytes)) => {
-            let mime = plain_rs::features::services::files::content::thumbnail_mime(&bytes);
-            let etag = format!(
-                "\"{}\"",
-                plain_libs::utils::hex::bytes_to_hex(&Sha256::digest(&bytes))
-            );
-            if conditional.is_some_and(|value| {
-                value.split(',').any(|tag| {
-                    let tag = tag.trim();
-                    tag == "*" || tag.strip_prefix("W/").unwrap_or(tag) == etag
-                })
-            }) {
-                return (
-                    StatusCode::NOT_MODIFIED,
-                    [
-                        ("etag", etag),
-                        ("cache-control", "private, no-cache".to_string()),
-                    ],
-                )
-                    .into_response();
-            }
-            (
-                [
-                    ("content-type", mime.to_string()),
-                    ("etag", etag),
-                    ("cache-control", "private, no-cache".to_string()),
-                ],
-                bytes,
-            )
-                .into_response()
-        }
-        Ok(None) => StatusCode::NOT_FOUND.into_response(),
-        Err(error) => (
-            StatusCode::BAD_REQUEST,
-            plain_libs::axum::Json(plain_libs::serde_json::json!({"error":error.to_string()})),
-        )
-            .into_response(),
-    }
-}
-
-#[cfg(test)]
-#[path = "../../../tests/plain-server/unit/http/file_response.rs"]
-mod tests;
-
-pub(crate) async fn resource(
-    resources: &plain_rs::infrastructure::host::resources::NativeResources,
-    path: &str,
-    stop: tokio::sync::watch::Receiver<bool>,
-    headers: &HeaderMap,
-) -> Result<Response, StatusCode> {
-    if headers.contains_key(header::RANGE) {
-        let input = resources
-            .read_file(path, stop)
-            .await
-            .map_err(|_| StatusCode::BAD_GATEWAY)?;
-        let size = u64::try_from(input.length).map_err(|_| StatusCode::BAD_GATEWAY)?;
-        return Ok(stream_open_file(
-            tokio::fs::File::from_std(input.file),
-            input.offset as u64,
-            size,
-            "application/octet-stream",
-            headers,
-        )
-        .await);
-    }
-    use plain_rs::infrastructure::host::resources::ResourceError;
-    let reader = resources
-        .read_native(path, stop)
-        .await
-        .map_err(|error| match error {
-            ResourceError::Busy => StatusCode::TOO_MANY_REQUESTS,
-            ResourceError::Unavailable => StatusCode::SERVICE_UNAVAILABLE,
-            ResourceError::Timeout => StatusCode::GATEWAY_TIMEOUT,
-            ResourceError::Closed => StatusCode::BAD_GATEWAY,
-        })?;
-    let stream = futures_util::stream::try_unfold(reader, |mut reader| async move {
-        reader
-            .read()
-            .await
-            .map(|bytes| bytes.map(|bytes| (bytes, reader)))
-            .map_err(|error| std::io::Error::new(std::io::ErrorKind::ConnectionAborted, error))
-    });
-    Ok((
-        [(header::CONTENT_TYPE, "application/octet-stream")],
-        plain_libs::axum::body::Body::from_stream(stream),
-    )
-        .into_response())
 }

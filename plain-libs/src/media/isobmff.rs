@@ -71,7 +71,7 @@ struct Track {
     id: u32,
     scale: u32,
     ticks: u64,
-    video: bool,
+    handler: [u8; 4],
 }
 fn track(data: &[u8]) -> Option<Track> {
     let mut id = None;
@@ -101,16 +101,12 @@ fn track(data: &[u8]) -> Option<Track> {
             _ => {}
         }
     }
-    let handler = handler?;
-    if handler != b"vide" && handler != b"soun" {
-        return None;
-    }
     let (scale, ticks) = time?;
     Some(Track {
         id: id?,
         scale,
         ticks,
-        video: handler == b"vide",
+        handler: handler?.try_into().ok()?,
     })
 }
 fn run_ticks(data: &[u8], default: u32) -> Option<u64> {
@@ -227,7 +223,9 @@ pub fn mp4_file_milliseconds(
                         }
                     }
                     b"trak" => {
-                        if let Some(track) = track(atom.data) {
+                        if let Some(track) =
+                            track(atom.data).filter(|t| matches!(&t.handler, b"vide" | b"soun"))
+                        {
                             tracks.push(track)
                         }
                     }
@@ -244,7 +242,9 @@ pub fn mp4_file_milliseconds(
             if movie.is_some() {
                 return movie;
             }
-            selected = tracks.into_iter().max_by_key(|track| track.video);
+            selected = tracks
+                .into_iter()
+                .max_by_key(|track| &track.handler == b"vide");
             break;
         }
         offset = end;
@@ -287,14 +287,24 @@ fn child<'a>(data: &'a [u8], kind: &[u8; 4]) -> Option<&'a [u8]> {
 }
 
 pub fn tracks(path: &Path) -> Option<Tracks> {
+    inspect(path).map(|(tracks, _)| tracks)
+}
+
+pub fn preview_rewrite(path: &Path) -> Option<PreviewRewrite> {
+    inspect(path)?.1
+}
+
+fn inspect(path: &Path) -> Option<(Tracks, Option<PreviewRewrite>)> {
     let mut file = File::open(path).ok()?;
     let length = file.metadata().ok()?.len();
     let mut offset = 0;
     let mut front_index = false;
+    let mut saw_media = false;
     while offset < length {
         let (kind, start, end) = header(&mut file, offset, length)?;
         offset = end;
         front_index |= &kind == b"sidx";
+        saw_media |= &kind == b"mdat";
         if &kind != b"moov" {
             continue;
         }
@@ -340,6 +350,7 @@ pub fn tracks(path: &Path) -> Option<Tracks> {
             }
         }
         result.audio_only = saw_audio && !saw_video && !missing_handler;
+        let mut rewrite = result.needs_remux.then_some(PreviewRewrite::Metadata);
         if saw_video && !result.needs_remux && !front_index && child(&bytes, b"mvex").is_some() {
             let mut fragments = 0;
             while offset < length {
@@ -350,14 +361,21 @@ pub fn tracks(path: &Path) -> Option<Tracks> {
                 if &kind == b"moof" {
                     fragments += 1;
                     if fragments == 2 {
-                        result.needs_remux = true;
+                        rewrite = Some(PreviewRewrite::Fragments);
                         break;
                     }
                 }
                 offset = end;
             }
         }
-        return Some(result);
+        if rewrite.is_none() && saw_video && saw_media && end == length
+            && matches!(crate::utils::mime::mime_from_ext(path.to_str()?), "video/quicktime" | "video/3gpp")
+            && child(&bytes, b"mvex").is_none() && fast_start::local_tracks(&bytes).is_some()
+        {
+            rewrite = Some(PreviewRewrite::FastStart);
+        }
+        result.needs_remux = rewrite.is_some();
+        return Some((result, rewrite));
     }
     None
 }
@@ -386,8 +404,11 @@ mod samples;
 
 mod metadata_tracks;
 pub use metadata_tracks::remove_mebx_tracks;
-pub use samples::{VideoTrack, flatten_fragments};
+pub use samples::{flatten_fragments, VideoTrack};
 
 mod hevc_normalize;
 mod rewrite;
 pub use hevc_normalize::canonicalize_hev1;
+
+mod fast_start;
+pub use rewrite::PreviewRewrite;

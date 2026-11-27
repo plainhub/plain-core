@@ -36,7 +36,7 @@ fn response(result: Result<Download, Error>) -> Response {
             };
         }
     };
-    let encoded = crate::http::file_response::escape(&name);
+    let encoded = plain_libs::utils::query::url_encode(&name);
     let disposition = format!("attachment;filename=\"{encoded}\";filename*=utf-8''{encoded}");
     let length = reader.size;
     let stream = futures_util::stream::try_unfold(reader, |mut reader| async move {
