@@ -1,0 +1,62 @@
+{
+  "formatVersion": 1,
+  "id": "einsum",
+  "name": "Einsum image pooling",
+  "license": "Apache-2.0",
+  "source": "local",
+  "dimensions": 4,
+  "minimumScore": 0.0,
+  "files": [
+    {
+      "name": "image.onnx",
+      "size": 207,
+      "sha256": "7f24cd059949e2c583b45ab12dfe6e287b30b217a4d3509d7c550e5afd0e20f5"
+    },
+    {
+      "name": "text.onnx",
+      "size": 137,
+      "sha256": "b2996c0f4dfdc670944eee778734e347c9b395ea349fedbb2ba3607a519a60ee"
+    },
+    {
+      "name": "tokenizer.json",
+      "size": 362,
+      "sha256": "2c473e97fe2a5f2d5f8e1cd80454b2fcf4e94599c194991e8ec46c7b9912a543"
+    }
+  ],
+  "image": {
+    "file": "image.onnx",
+    "input": "pixels",
+    "output": "embedding"
+  },
+  "text": {
+    "file": "text.onnx",
+    "inputs": [
+      {
+        "name": "ids",
+        "role": "ids"
+      }
+    ],
+    "output": "embedding"
+  },
+  "tokenizer": {
+    "file": "tokenizer.json",
+    "contextLength": 4,
+    "padToken": "[PAD]"
+  },
+  "preprocess": {
+    "size": 16,
+    "resize": "stretch",
+    "layout": "nchw",
+    "interpolation": "bilinear",
+    "mean": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "std": [
+      1.0,
+      1.0,
+      1.0
+    ]
+  }
+}

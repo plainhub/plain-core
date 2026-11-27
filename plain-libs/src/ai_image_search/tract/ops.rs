@@ -17,6 +17,8 @@ pub(super) enum Op {
     LayerNorm(super::layer_norm::LayerNorm),
     LayerNormalization(super::layer_norm::LayerNormalization),
     MatMul,
+    EinSum(super::einsum::EinSum),
+    QAttention(super::qattention::QAttention),
     Conv(super::conv::Conv),
     Pool(super::pool::Pool),
     MaxUnpool(super::window::Window),
@@ -109,10 +111,16 @@ impl NodeProto {
 
 impl Op {
     pub(super) fn from_node(node: &NodeProto, opset: i64) -> Result<Self, String> {
+        if node.domain == "com.microsoft" && node.op_type == "QAttention" && opset == 1 {
+            return Ok(Self::QAttention(super::qattention::QAttention::from_node(
+                node,
+            )?));
+        }
         if !node.domain.is_empty() && node.domain != "ai.onnx" {
             return Err(format!("Unsupported ONNX domain {}", node.domain));
         }
         Ok(match node.op_type.as_str() {
+            "Einsum" => Self::EinSum(super::einsum::EinSum::from_node(node, opset)?),
             "Sum" => Self::Nary(Binary::Add, false),
             "Max" => Self::Nary(Binary::Max, false),
             "Min" => Self::Nary(Binary::Min, false),
@@ -330,6 +338,8 @@ impl Op {
 
     pub(super) fn eval(&self, inputs: &[Option<&Tensor>]) -> Result<Vec<Tensor>, String> {
         let result = match (self, inputs) {
+            (Self::EinSum(op), _) => op.eval(inputs)?,
+            (Self::QAttention(op), _) => return op.eval(inputs),
             (Self::Pool(op), [Some(data)]) => return op.eval(data),
             (Self::MaxUnpool(window), [Some(data), Some(idx), ..]) if inputs.len() <= 3 => {
                 super::pool::max_unpool(window, data, idx, inputs.get(2).copied().flatten())?

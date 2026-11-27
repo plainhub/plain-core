@@ -73,6 +73,161 @@ async fn imported_named_encoders_search_existing_and_new_image_vectors() {
             "imageCount": 2
         })
     );
+    let stored_vectors = || {
+        db.with_conn(|conn| {
+            let mut statement =
+                conn.prepare("SELECT file_id, embedding FROM image_embeddings ORDER BY file_id")?;
+            statement
+                .query_map([], |row| {
+                    Ok((row.get::<_, String>(0)?, row.get::<_, Vec<u8>>(1)?))
+                })?
+                .collect::<Result<Vec<_>, _>>()
+        })
+        .unwrap()
+    };
+    let original_vectors = stored_vectors();
+    let active_manifest = dir.path().join("ai_models/imported/manifest.json");
+    let original_manifest = std::fs::read(&active_manifest).unwrap();
+    stage_encoder(&incoming, "qattention", "roi_align.onnx", "qattention.onnx");
+    let manifest_path = incoming.join("manifest.json");
+    let mut manifest: Value =
+        plain_libs::serde_json::from_slice(&std::fs::read(&manifest_path).unwrap()).unwrap();
+    manifest["text"]["output"] = json!("absent_output");
+    std::fs::write(
+        manifest_path,
+        plain_libs::serde_json::to_vec(&manifest).unwrap(),
+    )
+    .unwrap();
+    let replacement = schema.execute("mutation { importImageSearchModel }").await;
+    assert!(replacement.errors.is_empty(), "{:?}", replacement.errors);
+    assert_eq!(
+        replacement.data.into_json().unwrap()["importImageSearchModel"],
+        true
+    );
+    tokio::time::timeout(Duration::from_secs(30), async {
+        while models.snapshot().status.error_message.is_empty() {
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+    })
+    .await
+    .unwrap();
+    assert_eq!(
+        models.snapshot().status.status,
+        ImageSearchStatusType::Ready
+    );
+    assert_eq!(std::fs::read(&active_manifest).unwrap(), original_manifest);
+    assert_eq!(stored_vectors(), original_vectors);
+    let after = models.search("cat").await.unwrap();
+    assert_eq!(
+        after
+            .iter()
+            .map(|h| (&h.image_id, h.score))
+            .collect::<Vec<_>>(),
+        hits.iter()
+            .map(|h| (&h.image_id, h.score))
+            .collect::<Vec<_>>()
+    );
+    let returned = schema
+        .execute(r#"{images(query:"text:cat",offset:0,limit:2,sortBy:NAME_ASC){id}}"#)
+        .await;
+    assert!(returned.errors.is_empty(), "{:?}", returned.errors);
+    assert_eq!(
+        returned.data.into_json().unwrap(),
+        json!({"images":[{"id":rows[1].id},{"id":rows[0].id}]})
+    );
+}
+
+#[tokio::test]
+async fn a_custom_einsum_encoder_is_imported_and_searchable() {
+    verify_imported_encoder(
+        "einsum",
+        "einsum.onnx",
+        "text.onnx",
+        [255, 0, 0],
+        256.0 / 65537.0_f32.sqrt(),
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn a_custom_quantized_attention_encoder_is_imported_and_searchable() {
+    verify_imported_encoder(
+        "qattention",
+        "roi_align.onnx",
+        "qattention.onnx",
+        [0, 0, 0],
+        0.50200355,
+    )
+    .await;
+}
+
+fn stage_encoder(incoming: &Path, package: &str, image: &str, text: &str) {
+    let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("../plain-rs/testdata/image_search");
+    std::fs::create_dir_all(incoming).unwrap();
+    for (src, dst) in [
+        (image, "image.onnx"),
+        (text, "text.onnx"),
+        ("tokenizer.json", "tokenizer.json"),
+    ] {
+        std::fs::copy(fixtures.join(src), incoming.join(dst)).unwrap();
+    }
+    std::fs::copy(
+        fixtures.join(format!("{package}.json")),
+        incoming.join("manifest.json"),
+    )
+    .unwrap();
+}
+
+async fn verify_imported_encoder(
+    package: &str,
+    image: &str,
+    text: &str,
+    pixel: [u8; 3],
+    score: f32,
+) {
+    let (dir, schema, db) = fixture_seeded(
+        GRANTED,
+        true,
+        |_| {},
+        |method, _| panic!("unexpected host call {method}"),
+    );
+    schema
+        .data::<Arc<ImageIndex>>()
+        .unwrap()
+        .use_native_catalog_for_test();
+    let incoming = dir.path().join("ai_models/incoming");
+    stage_encoder(&incoming, package, image, text);
+    let path = dir.path().join("photo.png");
+    plain_libs::image::RgbImage::from_pixel(64, 64, plain_libs::image::Rgb(pixel))
+        .save(&path)
+        .unwrap();
+    let rows = db
+        .record_media_files(&[media(
+            DataType::Image,
+            path.to_str().unwrap(),
+            "photo",
+            200,
+            "b1",
+        )])
+        .unwrap();
+    import_and_index(&schema).await;
+    let hits = schema
+        .data::<Arc<Runtime>>()
+        .unwrap()
+        .search("cat")
+        .await
+        .unwrap();
+    assert_eq!(hits.len(), 1);
+    assert_eq!(hits[0].image_id, rows[0].id);
+    assert!((hits[0].score - score).abs() < 1e-5, "{}", hits[0].score);
+    let response = schema
+        .execute(r#"{images(query:"text:cat",offset:0,limit:1,sortBy:NAME_ASC){id}}"#)
+        .await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    assert_eq!(
+        response.data.into_json().unwrap(),
+        json!({"images": [{"id": rows[0].id}]})
+    );
 }
 
 async fn import_and_index(schema: &PublicSchema) {

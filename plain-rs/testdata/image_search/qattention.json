@@ -1,0 +1,62 @@
+{
+  "formatVersion": 1,
+  "id": "qattention",
+  "name": "Quantized text attention",
+  "license": "Apache-2.0",
+  "source": "local",
+  "dimensions": 4,
+  "minimumScore": 0.0,
+  "files": [
+    {
+      "name": "image.onnx",
+      "size": 340,
+      "sha256": "5d41a6528ab7852f161727402397cbe5eda5741b8df5972900a04d14f71265fd"
+    },
+    {
+      "name": "text.onnx",
+      "size": 477,
+      "sha256": "188025b4526015d788488f52e3ac4ad850eefe9ca12fbcd03e73f3154c1c2911"
+    },
+    {
+      "name": "tokenizer.json",
+      "size": 362,
+      "sha256": "2c473e97fe2a5f2d5f8e1cd80454b2fcf4e94599c194991e8ec46c7b9912a543"
+    }
+  ],
+  "image": {
+    "file": "image.onnx",
+    "input": "pixels",
+    "output": "embedding"
+  },
+  "text": {
+    "file": "text.onnx",
+    "inputs": [
+      {
+        "name": "ids",
+        "role": "ids"
+      }
+    ],
+    "output": "embedding"
+  },
+  "tokenizer": {
+    "file": "tokenizer.json",
+    "contextLength": 4,
+    "padToken": "[PAD]"
+  },
+  "preprocess": {
+    "size": 16,
+    "resize": "stretch",
+    "layout": "nchw",
+    "interpolation": "bilinear",
+    "mean": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "std": [
+      1.0,
+      1.0,
+      1.0
+    ]
+  }
+}
