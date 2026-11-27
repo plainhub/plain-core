@@ -4,7 +4,7 @@ use crate::ai_image_search::models::test_fixture;
 use crate::ai_image_search::models::test_fixture::fixture;
 use crate::ai_image_search::preprocess;
 
-#[cfg(any(feature = "image-search-inference", feature = "onnx-runtime"))]
+#[cfg(feature = "image-search-inference")]
 fn image_package(directory: &Path, model: &[u8]) -> Manifest {
     let mut manifest = fixture(directory);
     std::fs::write(directory.join(&manifest.image.file), model).unwrap();
@@ -21,7 +21,7 @@ fn image_package(directory: &Path, model: &[u8]) -> Manifest {
     manifest
 }
 
-#[cfg(any(feature = "image-search-inference", feature = "onnx-runtime"))]
+#[cfg(feature = "image-search-inference")]
 fn import_image_encoder(model: &[u8], expected: [f32; 4]) {
     let directory = crate::temporary::tempdir().unwrap();
     let manifest = image_package(directory.path(), model);
@@ -42,7 +42,7 @@ fn import_image_encoder(model: &[u8], expected: [f32; 4]) {
     }
 }
 
-#[cfg(any(feature = "image-search-inference", feature = "onnx-runtime"))]
+#[cfg(feature = "image-search-inference")]
 #[test]
 fn importing_a_package_requires_supported_ir_and_declared_opsets() {
     let valid = include_bytes!("../../../../plain-rs/testdata/image_search/image.onnx");
@@ -67,55 +67,7 @@ fn importing_a_package_requires_supported_ir_and_declared_opsets() {
     }
 }
 
-#[cfg(any(feature = "image-search-inference", feature = "onnx-runtime"))]
-#[test]
-fn imports_a_region_encoder_and_samples_its_image_features() {
-    import_image_encoder(
-        include_bytes!(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/../plain-rs/testdata/image_search/roi_align.onnx"
-        )),
-        [0.3686542, 0.36889288, 0.32116455, 0.7904843],
-    );
-}
-
-#[cfg(any(feature = "image-search-inference", feature = "onnx-runtime"))]
-#[test]
-fn imports_a_model_with_conditional_outputs_and_a_loop_capturing_outer_values() {
-    import_image_encoder(
-        include_bytes!(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/../plain-rs/testdata/image_search/control_flow.onnx"
-        )),
-        [0.5730256, 0.57310337, 0.5624586, 0.16381265],
-    );
-}
-
-#[cfg(any(feature = "image-search-inference", feature = "onnx-runtime"))]
-#[test]
-fn imports_a_model_with_lp_pool() {
-    import_image_encoder(
-        include_bytes!(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/../plain-rs/testdata/image_search/lp_pool.onnx"
-        )),
-        [0.6109104, 0.61207587, 0.4977555, 0.066264704],
-    );
-}
-
-#[cfg(any(feature = "image-search-inference", feature = "onnx-runtime"))]
-#[test]
-fn imports_a_model_with_max_unpool() {
-    import_image_encoder(
-        include_bytes!(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/../plain-rs/testdata/image_search/max_unpool.onnx"
-        )),
-        [0.38373765, 0.3841037, 0.33403698, 0.77047324],
-    );
-}
-
-#[cfg(any(feature = "image-search-inference", feature = "onnx-runtime"))]
+#[cfg(feature = "image-search-inference")]
 #[test]
 fn imports_a_model_calling_nested_local_functions_with_a_default_attribute() {
     import_image_encoder(
@@ -127,7 +79,7 @@ fn imports_a_model_calling_nested_local_functions_with_a_default_attribute() {
     );
 }
 
-#[cfg(any(feature = "image-search-inference", feature = "onnx-runtime"))]
+#[cfg(feature = "image-search-inference")]
 #[test]
 fn imports_a_model_with_a_broadcast_mask_and_variadic_feature_reductions() {
     import_image_encoder(
@@ -139,19 +91,7 @@ fn imports_a_model_with_a_broadcast_mask_and_variadic_feature_reductions() {
     );
 }
 
-#[cfg(any(feature = "image-search-inference", feature = "onnx-runtime"))]
-#[test]
-fn a_loop_with_zero_iterations_preserves_the_inferred_scan_shape() {
-    import_image_encoder(
-        include_bytes!(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/../plain-rs/testdata/image_search/empty_scan.onnx"
-        )),
-        [0.0, 0.30151135, 0.90453404, 0.30151135],
-    );
-}
-
-#[cfg(any(feature = "image-search-inference", feature = "onnx-runtime"))]
+#[cfg(feature = "image-search-inference")]
 #[test]
 fn imports_a_layer_normalized_encoder_with_named_statistics() {
     import_image_encoder(
@@ -163,7 +103,7 @@ fn imports_a_layer_normalized_encoder_with_named_statistics() {
     );
 }
 
-#[cfg(any(feature = "image-search-inference", feature = "onnx-runtime"))]
+#[cfg(feature = "image-search-inference")]
 #[test]
 fn real_runtime_executes_paired_encoders_and_reloads_released_sessions() {
     let directory = crate::temporary::tempdir().unwrap();
@@ -191,7 +131,7 @@ fn real_runtime_executes_paired_encoders_and_reloads_released_sessions() {
     assert_eq!(engine.text("image").unwrap()[0], 1.0);
     assert_eq!(engine.image(&path).unwrap().unwrap()[0], 1.0);
 }
-#[cfg(any(feature = "image-search-inference", feature = "onnx-runtime"))]
+#[cfg(feature = "image-search-inference")]
 #[test]
 fn drops_the_active_encoder_before_loading_the_other_graph() {
     let directory = crate::temporary::tempdir().unwrap();
@@ -233,29 +173,7 @@ fn drops_the_active_encoder_before_loading_the_other_graph() {
     );
     assert_eq!(engine.text("cat").unwrap(), [1., 0., 0., 0.]);
 }
-#[cfg(feature = "onnx-runtime")]
-#[test]
-fn encoder_context_lives_until_the_last_session_and_can_be_reopened() {
-    let directory = crate::temporary::tempdir().unwrap();
-    let manifest = fixture(directory.path());
-    let engine = Engine::open(directory.path().into(), manifest.clone()).unwrap();
-    let context = std::sync::Arc::downgrade(&engine.context);
-    let session = Session::new(
-        &engine.context,
-        &directory.path().join(&manifest.text.file),
-        &[],
-        &manifest.text.output,
-    )
-    .unwrap();
-    drop(engine);
-    assert_eq!(context.strong_count(), 1);
-    drop(session);
-    assert!(context.upgrade().is_none());
-    let reopened = Engine::open(directory.path().into(), manifest).unwrap();
-    assert_eq!(reopened.text("cat").unwrap(), vec![1.0, 0.0, 0.0, 0.0]);
-}
-
-#[cfg(any(feature = "image-search-inference", feature = "onnx-runtime"))]
+#[cfg(feature = "image-search-inference")]
 #[test]
 fn packages_reject_corruption_wrong_shapes_and_path_traversal() {
     let directory = crate::temporary::tempdir().unwrap();

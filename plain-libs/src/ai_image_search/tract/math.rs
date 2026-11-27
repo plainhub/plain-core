@@ -259,33 +259,12 @@ fn erf<T: Float>(x: T) -> T {
     (T::one() - (T::one() + y).powi(16).recip()).copysign(x)
 }
 
-pub(super) fn softmax(
-    input: &Tensor,
-    axis: i64,
-    legacy: bool,
-    log: bool,
-) -> Result<Tensor, String> {
+pub(super) fn softmax(input: &Tensor, axis: i64, log: bool) -> Result<Tensor, String> {
     let rank = input.shape().len();
     let at = super::array_ops::axis(axis, rank, false)?;
-    fn run<T: Float>(
-        a: ArrayViewD<'_, T>,
-        at: usize,
-        legacy: bool,
-        log: bool,
-    ) -> Result<Array<T>, String> {
-        let shape = a.shape().to_vec();
-        let mut result = a.as_standard_layout().into_owned();
-        if result.is_empty() {
-            return Ok(result.into_shared());
-        }
-        if legacy {
-            let rows = shape[..at].iter().product::<usize>();
-            let cols = shape[at..].iter().product::<usize>();
-            result = result
-                .into_shape_with_order(IxDyn(&[rows, cols]))
-                .map_err(|e| e.to_string())?;
-        }
-        for mut lane in result.lanes_mut(ndarray::Axis(if legacy { 1 } else { at })) {
+    fn run<T: Float>(a: ArrayViewD<'_, T>, at: usize, log: bool) -> Array<T> {
+        let mut result = a.to_owned();
+        for mut lane in result.lanes_mut(ndarray::Axis(at)) {
             let max = lane.iter().copied().fold(T::neg_infinity(), T::max);
             lane.mapv_inplace(|x| x - max);
             let sum = lane.iter().fold(T::zero(), |s, &x| s + x.exp());
@@ -296,19 +275,16 @@ pub(super) fn softmax(
                 lane.mapv_inplace(|x| x.exp() / sum);
             }
         }
-        result
-            .into_shape_with_order(IxDyn(&shape))
-            .map(|a| a.into_shared())
-            .map_err(|e| e.to_string())
+        result.into_shared()
     }
     Ok(match input {
         Tensor::F16(a) => Tensor::F16(
-            run(a.mapv(to_f32).view(), at, legacy, log)?
+            run(a.mapv(to_f32).view(), at, log)
                 .mapv(from_f32)
                 .into_shared(),
         ),
-        Tensor::F32(a) => Tensor::F32(run(a.view(), at, legacy, log)?),
-        Tensor::F64(a) => Tensor::F64(run(a.view(), at, legacy, log)?),
+        Tensor::F32(a) => Tensor::F32(run(a.view(), at, log)),
+        Tensor::F64(a) => Tensor::F64(run(a.view(), at, log)),
         _ => return Err("Softmax requires float data".into()),
     })
 }

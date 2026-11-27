@@ -1,38 +1,6 @@
 use super::*;
 
 #[test]
-fn executes_region_encoder_through_its_named_embedding_output() {
-    let dir = crate::temporary::tempdir().unwrap();
-    let path = dir.path().join("encoder.onnx");
-    std::fs::write(
-        &path,
-        include_bytes!(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/../plain-rs/testdata/image_search/roi_align.onnx"
-        )),
-    )
-    .unwrap();
-    let mut inputs = [Input {
-        name: "pixels",
-        shape: &[1, 3, 16, 16],
-        values: Values::Float(vec![0.; 768]),
-    }];
-    let model = Model::open(&path, &inputs, "embedding").unwrap();
-    let Tensor::F32(out) = model.run(&mut inputs).unwrap() else {
-        panic!("expected f32 output")
-    };
-    assert_eq!(out.shape(), [1, 4]);
-    assert_eq!(out.as_slice().unwrap(), [0., 0., 0., 1.]);
-    inputs[0].values = Values::Float((0..768).map(|v| v as f32).collect());
-    let Tensor::F32(out) = model.run(&mut inputs).unwrap() else {
-        panic!("expected f32 output")
-    };
-    for (&v, expected) in out.iter().zip([119., 375., 631., 1.]) {
-        assert!((v - expected).abs() < 0.001, "{v} ({expected})");
-    }
-}
-
-#[test]
 fn runs_a_custom_pair_with_nhwc_and_permuted_named_text_inputs() {
     let dir = crate::temporary::tempdir().unwrap();
     let image_path = dir.path().join("image.onnx");

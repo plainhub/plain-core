@@ -99,23 +99,6 @@ impl InferenceFact {
         }
     }
 
-    pub(super) fn empty_scan(&self) -> Option<Result<super::tensor::Tensor, String>> {
-        let mut dims = vec![0];
-        for axis in self.shape.iter().flatten() {
-            dims.push(match axis {
-                Dimension::Value(n) => (*n).max(0),
-                _ => 0,
-            });
-        }
-        Some(super::tensor::Tensor::from_proto(
-            super::onnx::proto::TensorProto {
-                data_type: self.element?,
-                dims,
-                ..Default::default()
-            },
-        ))
-    }
-
     pub(super) fn check(&self, dtype: i32, shape: &[usize]) -> Result<(), String> {
         if self.element.is_some_and(|n| n != dtype) {
             return Err(format!("Unexpected ONNX element type {dtype}"));

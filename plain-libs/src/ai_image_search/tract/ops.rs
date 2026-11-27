@@ -3,7 +3,6 @@ use super::array_ops::{
 };
 use super::logic::{Comparison, Logic};
 use super::onnx::proto::{NodeProto, attribute_proto::AttributeType};
-use super::roi_align::RoiAlign;
 use super::tensor::Tensor;
 
 use super::math::{Binary, Unary, softmax};
@@ -13,20 +12,12 @@ use super::reduce::Reducer;
 pub(super) enum Op {
     Const(Tensor),
     Function(Box<super::model::Graph>),
-    Control(Box<super::control_flow::ControlFlow>),
     LayerNorm(super::layer_norm::LayerNorm),
     LayerNormalization(super::layer_norm::LayerNormalization),
     MatMul,
     EinSum(super::einsum::EinSum),
-    QAttention(super::qattention::QAttention),
     Conv(super::conv::Conv),
-    Pool(super::pool::Pool),
-    MaxUnpool(super::window::Window),
-    Slice {
-        starts: Option<Vec<i64>>,
-        ends: Option<Vec<i64>>,
-        axes: Option<Vec<i64>>,
-    },
+    Slice,
     Gemm {
         trans_a: bool,
         trans_b: bool,
@@ -45,8 +36,7 @@ pub(super) enum Op {
     CastLike,
     ConstantOfShape(Tensor),
     Unary(Unary),
-    Softmax(i64, bool, bool),
-    RoiAlign(RoiAlign),
+    Softmax(i64, bool),
     Flatten(i64),
     Concat(i64),
     Gather(i64),
@@ -58,8 +48,8 @@ pub(super) enum Op {
     },
     Reshape(bool),
     Transpose(Option<Vec<i64>>),
-    Squeeze(Option<Vec<i64>>),
-    Unsqueeze(Option<Vec<i64>>),
+    Squeeze,
+    Unsqueeze,
     Tile,
 }
 
@@ -111,11 +101,6 @@ impl NodeProto {
 
 impl Op {
     pub(super) fn from_node(node: &NodeProto, opset: i64) -> Result<Self, String> {
-        if node.domain == "com.microsoft" && node.op_type == "QAttention" && opset == 1 {
-            return Ok(Self::QAttention(super::qattention::QAttention::from_node(
-                node,
-            )?));
-        }
         if !node.domain.is_empty() && node.domain != "ai.onnx" {
             return Err(format!("Unsupported ONNX domain {}", node.domain));
         }
@@ -217,10 +202,8 @@ impl Op {
             "Cos" => Self::Unary(Unary::Cos),
             "Floor" => Self::Unary(Unary::Floor),
             "Ceil" => Self::Unary(Unary::Ceil),
-            "Softmax" | "LogSoftmax" => Self::Softmax(
-                node.integer("axis")?
-                    .unwrap_or(if opset < 13 { 1 } else { -1 }),
-                opset < 13,
+            "Softmax" | "LogSoftmax" if opset >= 13 => Self::Softmax(
+                node.integer("axis")?.unwrap_or(-1),
                 node.op_type == "LogSoftmax",
             ),
             "LayerNormalization" => {
@@ -245,7 +228,6 @@ impl Op {
                     node.integer("noop_with_empty_axes")?.unwrap_or(0) != 0,
                 )
             }
-            "RoiAlign" => Self::RoiAlign(RoiAlign::from_node(node, opset)?),
             "Flatten" => Self::Flatten(node.integer("axis")?.unwrap_or(1)),
             "Concat" => Self::Concat(node.integer("axis")?.ok_or("Missing Concat axis")?),
             "Gather" => Self::Gather(node.integer("axis")?.unwrap_or(0)),
@@ -302,15 +284,8 @@ impl Op {
                 Self::Const(tensor)
             }
             "MatMul" => Self::MatMul,
-            "LpPool" | "AveragePool" | "MaxPool" | "GlobalLpPool" | "GlobalMaxPool"
-            | "GlobalAveragePool" => Self::Pool(super::pool::Pool::parse(node)?),
-            "MaxUnpool" => Self::MaxUnpool(super::window::Window::parse(node)?),
             "Conv" => Self::Conv(super::conv::Conv::parse(node)?),
-            "Slice" => Self::Slice {
-                starts: node.axes("starts")?,
-                ends: node.axes("ends")?,
-                axes: node.axes("axes")?,
-            },
+            "Slice" if opset >= 10 => Self::Slice,
             "Gemm" => Self::Gemm {
                 trans_a: node.integer("transA")?.unwrap_or(0) != 0,
                 trans_b: node.integer("transB")?.unwrap_or(0) != 0,
@@ -329,8 +304,8 @@ impl Op {
             },
             "Reshape" => Self::Reshape(node.integer("allowzero")?.unwrap_or(0) != 0),
             "Transpose" => Self::Transpose(node.axes("perm")?),
-            "Squeeze" => Self::Squeeze(node.axes("axes")?),
-            "Unsqueeze" => Self::Unsqueeze(node.axes("axes")?),
+            "Squeeze" if opset >= 13 => Self::Squeeze,
+            "Unsqueeze" if opset >= 13 => Self::Unsqueeze,
             "Tile" => Self::Tile,
             _ => return Err(format!("Unsupported ONNX operator {}", node.op_type)),
         })
@@ -339,15 +314,9 @@ impl Op {
     pub(super) fn eval(&self, inputs: &[Option<&Tensor>]) -> Result<Vec<Tensor>, String> {
         let result = match (self, inputs) {
             (Self::EinSum(op), _) => op.eval(inputs)?,
-            (Self::QAttention(op), _) => return op.eval(inputs),
-            (Self::Pool(op), [Some(data)]) => return op.eval(data),
-            (Self::MaxUnpool(window), [Some(data), Some(idx), ..]) if inputs.len() <= 3 => {
-                super::pool::max_unpool(window, data, idx, inputs.get(2).copied().flatten())?
-            }
             (Self::Function(graph), _) => {
                 return graph.eval(inputs.iter().map(|v| v.cloned()).collect());
             }
-            (Self::Control(op), _) => return op.eval(inputs),
             (Self::Const(value), []) => value.clone(),
             (Self::LayerNorm(norm), [Some(input)]) => norm.eval(input)?,
             (Self::LayerNormalization(norm), [Some(input), Some(scale), ..])
@@ -359,22 +328,7 @@ impl Op {
                 op.eval(data, w, inputs.get(2).copied().flatten())?
             }
 
-            (
-                Self::Slice {
-                    starts: Some(starts),
-                    ends: Some(ends),
-                    axes,
-                },
-                [Some(data)],
-            ) => super::array_ops::slice(data, starts, ends, axes.as_deref(), None)?,
-            (
-                Self::Slice {
-                    starts: None,
-                    ends: None,
-                    ..
-                },
-                [Some(data), Some(starts), Some(ends), ..],
-            ) if inputs.len() <= 5 => {
+            (Self::Slice, [Some(data), Some(starts), Some(ends), ..]) if inputs.len() <= 5 => {
                 let axes = inputs.get(3).copied().flatten().map(integers).transpose()?;
                 let steps = inputs.get(4).copied().flatten().map(integers).transpose()?;
                 super::array_ops::slice(
@@ -450,11 +404,8 @@ impl Op {
             }
             (Self::Binary(op), [Some(a), Some(b)]) => op.eval(a, b)?,
             (Self::Unary(op), [Some(a)]) => op.eval(a)?,
-            (Self::Softmax(axis, legacy, log), [Some(a)]) => softmax(a, *axis, *legacy, *log)?,
+            (Self::Softmax(axis, log), [Some(a)]) => softmax(a, *axis, *log)?,
 
-            (Self::RoiAlign(op), [Some(image), Some(boxes), Some(batches)]) => {
-                op.evaluate(image, boxes, batches)?
-            }
             (Self::Flatten(axis), [Some(data)]) => flatten(data, *axis)?,
             (Self::Concat(axis), _) => {
                 let tensors = inputs
@@ -482,14 +433,9 @@ impl Op {
                 reshape(data, shape, *allowzero)?
             }
             (Self::Transpose(perm), [Some(data)]) => transpose(data, perm.as_deref())?,
-            (Self::Squeeze(axes), [Some(data)] | [Some(data), None]) => {
-                squeeze(data, axes.as_deref())?
-            }
-            (Self::Squeeze(None), [Some(data), Some(axes)]) => {
-                squeeze(data, Some(&integers(axes)?))?
-            }
-            (Self::Unsqueeze(Some(axes)), [Some(data)]) => unsqueeze(data, axes)?,
-            (Self::Unsqueeze(None), [Some(data), Some(axes)]) => unsqueeze(data, &integers(axes)?)?,
+            (Self::Squeeze, [Some(data)] | [Some(data), None]) => squeeze(data, None)?,
+            (Self::Squeeze, [Some(data), Some(axes)]) => squeeze(data, Some(&integers(axes)?))?,
+            (Self::Unsqueeze, [Some(data), Some(axes)]) => unsqueeze(data, &integers(axes)?)?,
             (Self::Tile, [Some(data), Some(repeats)]) => tile(data, repeats)?,
             _ => return Err("Invalid ONNX input arity".into()),
         };

@@ -113,46 +113,10 @@ GraphQL resolver modules use query.rs and mutation.rs for operation roots. Share
 
 ## Build
 
-Requires Rust 1.99+ and a C compiler. Standard workspace builds and tests do
-not enable AI image search or build ONNX Runtime. Enable it explicitly with
+Requires Rust 1.99+ and a C compiler. AI image search uses a portable Rust
+module derived from Tract 0.23.10 to run ONNX encoders. Enable the feature with
 `cargo test --workspace --locked --features plainapp/ai-image-search` or the AI
 option in the manually dispatched CI workflow.
-
-Building ONNX Runtime from source requires Python 3.10+ and CMake 3.28+.
-`plain-libs/native/ai_image_search/onnxruntime` contains the pinned native
-inference sources used across targets. The build uses these files directly.
-Native dependencies are pinned in `cmake/deps.txt`. For offline builds, place
-their archives under `<PLAIN_ONNX_CACHE>/<version>/mirror`, using each HTTPS
-URL without the `https://` prefix as the path. The upstream build checks each
-archive against its recorded digest.
-
-To update the snapshot, export the reviewed upstream commit into a new directory,
-then compare and replace the source and its adjacent lock together:
-
-```sh
-python3 scripts/import-onnxruntime.py "$checkout" "$commit" "$staging/onnxruntime"
-```
-
-The import keeps the native build inputs and removes upstream contact email
-addresses. Keep the default and imported ONNX model support when changing the
-build options.
-
-For builds with prepared ONNX Runtime artifacts, set `PLAIN_ONNX_RUNTIME_MANIFEST`
-to the absolute path of a trusted JSON file mapping Rust target triples to
-their library SHA-256 digests. Obtain the manifest independently from the trusted
-build record. Place each artifact in a directory named after its target next to
-the manifest. The producer prepares each target with the existing recipe:
-
-```sh
-python3 plain-libs/native/ai_image_search/prepare_onnxruntime.py --target "$target" --output "$artifact_root/$target"
-```
-
-Each target directory contains the native library, `runtime.json`, `LICENSE`
-and `ThirdPartyNotices.txt`. Cargo uses CMake 3.19+ to verify the selected
-artifact and stage it in the usual build output without running Python.
-`PLAIN_ONNX_RUNTIME_DIR` still controls the output directory when set by a consumer.
-
-For a single prepared runtime already in place, set `PLAIN_ONNX_RUNTIME_DIR` and `PLAIN_ONNX_RUNTIME_SHA256` instead.
 
 ```sh
 cargo check --workspace --locked

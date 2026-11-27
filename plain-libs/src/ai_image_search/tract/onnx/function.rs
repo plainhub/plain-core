@@ -1,4 +1,4 @@
-use super::super::{control_flow, model::Graph, ops::Op};
+use super::super::{model::Graph, ops::Op};
 use super::proto::{
     AttributeProto, FunctionProto, GraphProto, NodeProto, OperatorSetIdProto, ValueInfoProto,
 };
@@ -80,7 +80,7 @@ impl<'a> ParsingContext<'a> {
                 symbols: self.symbols,
             };
             node.input.resize(function.input.len(), String::new());
-            let (graph, _) = Graph::body(graph, &context, false)?;
+            let graph = Graph::body(graph, &context)?;
             return Ok(Op::Function(Box::new(graph)));
         }
         let version = self
@@ -88,7 +88,7 @@ impl<'a> ParsingContext<'a> {
             .iter()
             .find(|op| domain(&op.domain) == domain(&node.domain))
             .map_or(1, |op| op.version);
-        control_flow::parse(node, version, self)
+        Op::from_node(node, version)
     }
 }
 

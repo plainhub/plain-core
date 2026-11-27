@@ -8,12 +8,11 @@ enum Padding {
 }
 
 pub(super) struct Window {
-    pub kernel: Option<Vec<usize>>,
+    kernel: Option<Vec<usize>>,
     strides: Option<Vec<usize>>,
     dilations: Option<Vec<usize>>,
     pads: Option<Vec<usize>>,
     auto_pad: Padding,
-    ceil: bool,
 }
 
 pub(super) struct Geometry {
@@ -92,7 +91,6 @@ impl Window {
             dilations: dims("dilations")?,
             pads: dims("pads")?,
             auto_pad,
-            ceil: node.integer("ceil_mode")?.unwrap_or(0) != 0,
         })
     }
 
@@ -159,23 +157,11 @@ impl Window {
                         .checked_add(left)
                         .and_then(|v| v.checked_add(right))
                         .ok_or("ONNX extent overflow")?;
-                    let mut n = if padded >= effective {
-                        let extent = padded - effective;
-                        1 + if self.ceil {
-                            extent.div_ceil(stride)
-                        } else {
-                            extent / stride
-                        }
+                    let n = if padded >= effective {
+                        1 + (padded - effective) / stride
                     } else {
-                        usize::from(self.ceil && effective - padded < stride)
+                        0
                     };
-                    if self.ceil
-                        && n > 0
-                        && (n - 1).checked_mul(stride).ok_or("ONNX stride overflow")?
-                            >= width + left
-                    {
-                        n -= 1;
-                    }
                     (n, left)
                 }
             };
@@ -188,23 +174,5 @@ impl Window {
             strides,
             dilations,
         })
-    }
-
-    pub fn unpool(&self, spatial: &[usize]) -> Result<Vec<usize>, String> {
-        let kernel = self
-            .kernel
-            .as_ref()
-            .ok_or("Missing MaxUnpool kernel shape")?;
-        let (strides, _, pads) = self.parameters(spatial.len(), kernel)?;
-        spatial
-            .iter()
-            .enumerate()
-            .map(|(i, &n)| {
-                let size = (n as i128 - 1) * strides[i] as i128 + kernel[i] as i128
-                    - pads[i] as i128
-                    - pads[i + spatial.len()] as i128;
-                usize::try_from(size).map_err(|_| "Invalid MaxUnpool output extent".into())
-            })
-            .collect()
     }
 }

@@ -1,13 +1,10 @@
 use super::infer::InferenceFact;
-use super::onnx::{
-    self,
-    proto::{GraphProto, ValueInfoProto},
-};
+use super::onnx::{self, proto::GraphProto};
 use super::ops::Op;
 use super::plan::Plan;
 use super::tensor::{Tensor, array};
 use crate::ai_image_search::{Input, Values};
-use std::{collections::HashSet, path::Path};
+use std::path::Path;
 
 pub(super) struct Model {
     graph: Graph,
@@ -41,7 +38,7 @@ impl Model {
             .iter()
             .map(|&i| inputs[i].name.to_owned())
             .collect();
-        let (graph, _) = Graph::compile(graph, &[bindings.output], &context, input_names, false)?;
+        let graph = Graph::compile(graph, &[bindings.output], &context, input_names)?;
         Ok(Self {
             graph,
             input_order: bindings.input_order,
@@ -73,65 +70,21 @@ impl Model {
 }
 
 impl Graph {
-    pub(super) fn body(
-        graph: GraphProto,
-        context: &onnx::ParsingContext,
-        nested: bool,
-    ) -> Result<(Self, Vec<String>), String> {
+    pub(super) fn body(graph: GraphProto, context: &onnx::ParsingContext) -> Result<Self, String> {
         let inputs = graph.input.iter().map(|i| i.name.clone()).collect();
         let outputs = (0..graph.output.len()).collect::<Vec<_>>();
-        Self::compile(graph, &outputs, context, inputs, nested)
+        Self::compile(graph, &outputs, context, inputs)
     }
 
     fn compile(
         mut graph: GraphProto,
         outputs: &[usize],
         context: &onnx::ParsingContext,
-        mut input_names: Vec<String>,
-        nested: bool,
-    ) -> Result<(Self, Vec<String>), String> {
+        input_names: Vec<String>,
+    ) -> Result<Self, String> {
         let mut ops = Vec::with_capacity(graph.node.len());
         for node in &mut graph.node {
             ops.push(context.op(node)?);
-        }
-        let mut captures = Vec::new();
-        if nested {
-            let mut known: HashSet<&str> = graph
-                .input
-                .iter()
-                .map(|v| v.name.as_str())
-                .chain(graph.initializer.iter().map(|v| v.name.as_str()))
-                .chain(
-                    graph
-                        .sparse_initializer
-                        .iter()
-                        .filter_map(|v| v.values.as_ref())
-                        .map(|v| v.name.as_str()),
-                )
-                .chain(
-                    graph
-                        .node
-                        .iter()
-                        .flat_map(|n| n.output.iter().map(String::as_str)),
-                )
-                .collect();
-            for name in graph
-                .node
-                .iter()
-                .flat_map(|n| &n.input)
-                .chain(graph.output.iter().map(|v| &v.name))
-            {
-                if !name.is_empty() && known.insert(name) {
-                    captures.push(name.clone());
-                }
-            }
-            for name in &captures {
-                graph.input.push(ValueInfoProto {
-                    name: name.clone(),
-                    ..Default::default()
-                });
-            }
-            input_names.extend_from_slice(&captures);
         }
         super::layer_norm::detect(&mut graph, &mut ops, &input_names);
         let plan = Plan::for_outputs(&graph, outputs)?;
@@ -211,16 +164,13 @@ impl Graph {
                 }
             }
         }
-        Ok((
-            Self {
-                steps,
-                outputs: plan.outputs,
-                constants,
-                facts,
-                inputs: input_slots,
-            },
-            captures,
-        ))
+        Ok(Self {
+            steps,
+            outputs: plan.outputs,
+            constants,
+            facts,
+            inputs: input_slots,
+        })
     }
 
     pub(super) fn output_fact(&self, index: usize) -> Option<&InferenceFact> {

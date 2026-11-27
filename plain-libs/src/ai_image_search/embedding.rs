@@ -1,9 +1,8 @@
+use super::Session;
 use super::{Input, Values};
 use crate::ai_image_search::models::manifest::Layout;
 use crate::ai_image_search::models::manifest::Manifest;
 use crate::ai_image_search::models::manifest::TextRole;
-use crate::ai_image_search::session::Context;
-use crate::ai_image_search::session::Session;
 use crate::tokenizer::{PaddingParams, PaddingStrategy, Tokenizer, TruncationParams};
 use sha2::{Digest, Sha256};
 use std::{
@@ -24,7 +23,6 @@ pub struct Engine {
     directory: PathBuf,
     tokenizer: Tokenizer,
     session: Mutex<Option<(bool, Session)>>,
-    context: Context,
 }
 pub fn normalize(values: &mut [f32]) -> Result<(), String> {
     let norm = values
@@ -102,7 +100,6 @@ impl Engine {
             directory,
             tokenizer,
             session: Mutex::new(None),
-            context: super::session::create_context()?,
         };
         engine.image_tensor(vec![
             0.0;
@@ -159,14 +156,14 @@ impl Engine {
             };
             *session = Some((
                 image,
-                Session::new(&self.context, &self.directory.join(file), inputs, output)?,
+                Session::new(&self.directory.join(file), inputs, output)?,
             ));
         }
         session
             .as_mut()
             .unwrap()
             .1
-            .run(inputs, output, self.manifest.dimensions)
+            .run(inputs, self.manifest.dimensions)
     }
 
     fn image_tensor(&self, data: Vec<f32>) -> Result<Vec<f32>, String> {

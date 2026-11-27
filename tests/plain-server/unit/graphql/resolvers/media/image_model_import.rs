@@ -88,7 +88,7 @@ async fn imported_named_encoders_search_existing_and_new_image_vectors() {
     let original_vectors = stored_vectors();
     let active_manifest = dir.path().join("ai_models/imported/manifest.json");
     let original_manifest = std::fs::read(&active_manifest).unwrap();
-    stage_encoder(&incoming, "qattention", "roi_align.onnx", "qattention.onnx");
+    stage_encoder(&incoming, "einsum", "einsum.onnx", "text.onnx");
     let manifest_path = incoming.join("manifest.json");
     let mut manifest: Value =
         plain_libs::serde_json::from_slice(&std::fs::read(&manifest_path).unwrap()).unwrap();
@@ -145,18 +145,6 @@ async fn a_custom_einsum_encoder_is_imported_and_searchable() {
         "text.onnx",
         [255, 0, 0],
         256.0 / 65537.0_f32.sqrt(),
-    )
-    .await;
-}
-
-#[tokio::test]
-async fn a_custom_quantized_attention_encoder_is_imported_and_searchable() {
-    verify_imported_encoder(
-        "qattention",
-        "roi_align.onnx",
-        "qattention.onnx",
-        [0, 0, 0],
-        0.50200355,
     )
     .await;
 }

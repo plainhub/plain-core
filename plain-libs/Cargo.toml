@@ -36,7 +36,6 @@ description = "Reusable cryptography, media, file, format and native components"
 "linux-platform" = ["storage-platform"]
 "ai-image-search" = ["image", "regex", "dep:smallvec"]
 "image-search-inference" = ["ai-image-search", "dep:ndarray", "dep:prost"]
-"onnx-runtime" = ["ai-image-search", "dep:cc"]
 "test-seams" = []
 "document-nfc" = ["dep:smallvec"]
 "compound-file" = []
@@ -113,8 +112,6 @@ zeroize = { version = "1.9", optional = true }
 "rav1d" = { path = "codecs/rav1d", optional = true }
 "smallvec" = { "version" = "=1.16.2", "features" = ["const_new", "const_generics"], "optional" = true }
 
-[build-dependencies]
-"cc" = { version = "1", optional = true }
 
 [dev-dependencies]
 "tokio" = { version = "1", features = ["full", "test-util"] }

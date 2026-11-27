@@ -12,7 +12,6 @@
         "src/ops/math.rs",
         "src/ops/nn/gelu.rs",
         "src/ops/nn/layer_norm.rs",
-        "src/ops/nn/max_pool.rs",
         "src/ops/nn/mod.rs",
         "src/prost/onnx.rs",
         "src/tensor.rs"
@@ -36,9 +35,7 @@
         "src/ops/array/concat.rs",
         "src/ops/array/gather.rs",
         "src/ops/array/tile.rs",
-        "src/ops/cnn/maxpool.rs",
         "src/ops/cnn/padding.rs",
-        "src/ops/cnn/sumpool.rs",
         "src/ops/einsum/eval.rs",
         "src/ops/logic.rs",
         "src/ops/math/mod.rs",
@@ -69,22 +66,6 @@
       "files": [
         "src/generic/erf.rs",
         "src/generic/gelu.rs"
-      ]
-    }
-  },
-  "compatibility": {
-    "com.microsoft::QAttention": {
-      "schema": 1,
-      "repository": "https://github.com/microsoft/onnxruntime",
-      "version": "1.30.0",
-      "revision": "f2c39fe2f838cf35ce7da92824f5a5e3ee6e88a7",
-      "license": "LICENSE-ONNXRUNTIME",
-      "files": [
-        "onnxruntime/core/graph/contrib_ops/quantization_defs.cc",
-        "onnxruntime/contrib_ops/cpu/quantization/attention_quant.cc",
-        "onnxruntime/contrib_ops/cpu/bert/attention_base.h",
-        "onnxruntime/contrib_ops/cpu/bert/attention_cpu_base.h",
-        "onnxruntime/contrib_ops/cpu/bert/attention_helper.h"
       ]
     }
   }
