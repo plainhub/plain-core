@@ -1,5 +1,9 @@
 use super::*;
 
+thread_local! {
+    pub(in crate::ai_image_search::tract) static RHS_CONVERSIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 fn values(shape: &[usize], seed: usize) -> Array<u16> {
     let len = shape.iter().product();
     let data = (0..len)

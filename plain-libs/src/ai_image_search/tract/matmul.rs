@@ -89,6 +89,15 @@ fn product<T: LinalgScalar>(
         .map_err(|e| e.to_string())
 }
 
+#[cfg(test)]
+pub(super) use tests::RHS_CONVERSIONS;
+
+pub(super) fn widen_rhs(rhs: &Array<u16>) -> ArrayD<f32> {
+    #[cfg(test)]
+    RHS_CONVERSIONS.set(RHS_CONVERSIONS.get() + 1);
+    rhs.mapv(to_f32)
+}
+
 pub(super) fn half_product(
     a: &Array<u16>,
     b: ArrayViewD<'_, f32>,
@@ -112,7 +121,7 @@ pub(super) fn matmul(
 ) -> Result<Tensor, String> {
     Ok(match (a, b) {
         (Tensor::F16(a), Tensor::F16(b)) => {
-            half_product(a, b.mapv(to_f32).view(), a_trans, b_trans, alpha)?
+            half_product(a, widen_rhs(b).view(), a_trans, b_trans, alpha)?
         }
         (Tensor::F32(a), Tensor::F32(b)) => {
             Tensor::F32(product(a.view(), b.view(), a_trans, b_trans, alpha)?)

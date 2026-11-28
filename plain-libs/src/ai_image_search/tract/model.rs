@@ -224,7 +224,7 @@ impl Graph {
         for (index, step) in self.steps.iter().enumerate() {
             let weight = if images.len() > 1 {
                 step.shared_weight.and_then(|i| match &self.constants[i].1 {
-                    Tensor::F16(b) => Some(b.mapv(crate::binary16::to_f32)),
+                    Tensor::F16(b) => Some(super::matmul::widen_rhs(b)),
                     _ => None,
                 })
             } else {

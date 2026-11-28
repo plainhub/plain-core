@@ -330,3 +330,83 @@ fn importing_two_text_inputs_binds_ids_and_attention_by_name() {
         );
     }
 }
+
+#[test]
+fn batches_widen_constant_weights_once_and_keep_dynamic_products_per_image() {
+    use super::super::matmul::RHS_CONVERSIONS;
+    use crate::binary16::from_f32;
+    use onnx::proto::{NodeProto, OperatorSetIdProto, TensorProto, ValueInfoProto};
+
+    let matmul = |lhs: &str, rhs: &str, out: &str| NodeProto {
+        op_type: "MatMul".into(),
+        input: vec![lhs.into(), rhs.into()],
+        output: vec![out.into()],
+        ..Default::default()
+    };
+    let graph = GraphProto {
+        input: vec![ValueInfoProto {
+            name: "image".into(),
+            ..Default::default()
+        }],
+        output: vec![ValueInfoProto {
+            name: "out".into(),
+            ..Default::default()
+        }],
+        initializer: vec![TensorProto {
+            name: "weights".into(),
+            dims: vec![2, 2],
+            data_type: 10,
+            int32_data: [2., 0., 0., 3.].map(|v| i32::from(from_f32(v))).into(),
+            ..Default::default()
+        }],
+        node: vec![
+            matmul("image", "weights", "projection"),
+            matmul("projection", "image", "out"),
+        ],
+        ..Default::default()
+    };
+    let graph = Graph::body(
+        graph,
+        &onnx::ParsingContext::new(
+            &[],
+            &[OperatorSetIdProto {
+                version: 13,
+                ..Default::default()
+            }],
+            &Default::default(),
+        ),
+    )
+    .unwrap();
+    for size in [0, 1, 2, 3, 4] {
+        let feeds: Vec<_> = (1..=size)
+            .map(|i| {
+                let bits = [i as f32, 1., 0., 1.].map(from_f32);
+                vec![Some(Tensor::F16(array(&[2, 2], bits.into()).unwrap()))]
+            })
+            .collect();
+        RHS_CONVERSIONS.set(0);
+        for image in &feeds {
+            graph.eval(image.clone()).unwrap();
+        }
+        assert_eq!(RHS_CONVERSIONS.get(), 2 * size, "serial size {size}");
+        RHS_CONVERSIONS.set(0);
+        let results = graph.eval_many(feeds).unwrap();
+        assert_eq!(results.len(), size);
+        for (i, result) in (1..=size).zip(results) {
+            let [Tensor::F16(output)] = result.as_slice() else {
+                panic!("expected half precision")
+            };
+            let x = i as f32;
+            assert_eq!(output.shape(), [2, 2]);
+            assert_eq!(
+                output.as_slice().unwrap(),
+                [2. * x * x, 2. * x + 3., 0., 3.].map(from_f32)
+            );
+        }
+        assert_eq!(
+            RHS_CONVERSIONS.get(),
+            usize::from(size != 0) + size,
+            "batch size {size}"
+        );
+    }
+}

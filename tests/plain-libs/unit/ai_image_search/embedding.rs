@@ -270,3 +270,115 @@ fn manifest_reader_bounds_input_before_parsing() {
     std::fs::write(&path, vec![b' '; 65537]).unwrap();
     assert!(Manifest::read(&path).err().unwrap().contains("64 KiB"));
 }
+
+#[cfg(feature = "image-search-inference")]
+fn original_siglip2_engine() -> Engine {
+    let package = PathBuf::from(std::env::var_os("PLAIN_TEST_SIGLIP2_PACKAGE").unwrap());
+    let manifest = Manifest::read(&package.join("manifest.json")).unwrap();
+    Engine::open(package, manifest).unwrap()
+}
+
+#[cfg(feature = "image-search-inference")]
+fn write_gradient(path: &Path, width: u32, height: u32, inverse: bool) {
+    crate::image::RgbImage::from_fn(width, height, |x, y| {
+        let channels = [
+            (x * 255 / (width - 1)) as u8,
+            (y * 255 / (height - 1)) as u8,
+            ((x + 2 * y) % 256) as u8,
+        ];
+        crate::image::Rgb(if inverse {
+            channels.map(|v| 255 - v)
+        } else {
+            channels
+        })
+    })
+    .save(path)
+    .unwrap();
+}
+
+#[cfg(all(
+    feature = "image-search-inference",
+    target_arch = "aarch64",
+    any(target_os = "android", target_os = "macos")
+))]
+#[test]
+#[ignore = "requires the original SigLIP2 files in PLAIN_TEST_SIGLIP2_PACKAGE"]
+fn siglip2_single_and_batched_images_match_archived_vector_bits() {
+    let engine = original_siglip2_engine();
+    let dir = crate::temporary::tempdir().unwrap();
+    let paths = ["gradient.png", "inverse.png"].map(|name| dir.path().join(name));
+    write_gradient(&paths[0], 96, 64, false);
+    write_gradient(&paths[1], 96, 64, true);
+    // SHA-256 of the previous single-image encoder's 768 big-endian FP32 components.
+    let expected = [
+        if cfg!(target_os = "android") {
+            "a063fea9d88a79cb5c202cc864ff35f0d3528cba57c3e424dcb3376b13aae5f9"
+        } else {
+            "6fb9e98eebbc83847a80d7a874cd421fb1b9e76b104b31018f5b8c47d8251e3e"
+        },
+        "e720b0fdf1ad242ad86acfd6f544e5d8a3669b58fbed09650f6b668020137b22",
+    ];
+    let check = |vector: Vec<f32>, index: usize| {
+        assert_eq!(vector.len(), 768);
+        let mut hash = Sha256::new();
+        for v in vector {
+            hash.update(v.to_be_bytes());
+        }
+        assert_eq!(
+            format!("{:x}", hash.finalize()),
+            expected[index],
+            "{:?}",
+            paths[index]
+        );
+    };
+    for (index, path) in paths.iter().enumerate() {
+        check(engine.image(path).unwrap().unwrap(), index);
+    }
+    let order = [1, 0, 0, 1];
+    let inputs = order
+        .into_iter()
+        .map(|i| engine.prepare_image(&paths[i]).unwrap().unwrap())
+        .collect();
+    let outputs = engine.encode_images(inputs).unwrap();
+    assert_eq!(outputs.len(), order.len());
+    for (vector, index) in outputs.into_iter().zip(order) {
+        check(vector, index);
+    }
+}
+
+#[cfg(feature = "image-search-inference")]
+#[test]
+#[ignore = "manual release benchmark with PLAIN_TEST_SIGLIP2_PACKAGE"]
+fn benchmark_siglip2_single_image_latency_and_batch_throughput() {
+    use std::time::Instant;
+    let dir = crate::temporary::tempdir().unwrap();
+    let small = dir.path().join("small.png");
+    let large = dir.path().join("large.jpg");
+    write_gradient(&small, 96, 64, false);
+    write_gradient(&large, 4000, 3000, false);
+    let start = Instant::now();
+    let engine = original_siglip2_engine();
+    eprintln!("Engine::open: {:?}", start.elapsed());
+    let start = Instant::now();
+    engine.image(&small).unwrap().unwrap();
+    eprintln!("First image after open: {:?}", start.elapsed());
+    for group_size in [1, 4, 4, 1] {
+        let start = Instant::now();
+        for group in [&small, &large, &small, &large].chunks(group_size) {
+            let image_start = Instant::now();
+            let pixels = group
+                .iter()
+                .map(|path| engine.prepare_image(path).unwrap().unwrap())
+                .collect();
+            let vectors = engine.encode_images(pixels).unwrap();
+            assert_eq!(vectors.len(), group.len());
+            if group_size == 1 {
+                eprintln!("{}: {:?}", group[0].display(), image_start.elapsed());
+            }
+        }
+        eprintln!(
+            "Group size {group_size}, elapsed per image: {:?}",
+            start.elapsed() / 4
+        );
+    }
+}
