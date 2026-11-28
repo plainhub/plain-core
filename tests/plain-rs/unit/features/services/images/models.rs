@@ -758,7 +758,29 @@ async fn semantic_search_pages_all_matches_and_filters_before_pagination() {
         search::count(&platform, &runtime, "cat", "text:cat")
             .await
             .unwrap(),
+        619
+    );
+    let unfiltered = search::rows(&platform, &runtime, "cat", "text:cat", 0, 620, "NAME_ASC")
+        .await
+        .unwrap();
+    assert_eq!(
+        unfiltered
+            .iter()
+            .map(|row| row["id"].as_str().unwrap())
+            .collect::<Vec<_>>(),
+        expected
+    );
+    assert_eq!(
+        search::count(&platform, &runtime, "cat", query)
+            .await
+            .unwrap(),
         69
+    );
+    assert_eq!(
+        search::rows(&platform, &runtime, "cat", query, 50, 50, "NAME_ASC")
+            .await
+            .unwrap(),
+        page
     );
     worker.abort();
     runtime.state.lock().unwrap().status = ImageSearchStatusType::Unavailable;
