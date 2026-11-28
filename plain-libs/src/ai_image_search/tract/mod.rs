@@ -30,6 +30,17 @@ impl Session {
     ) -> Result<Vec<f32>, String> {
         embedding(self.0.run(inputs)?, dimensions)
     }
+    pub(super) fn run_images(
+        &mut self,
+        inputs: &mut [Input<'_>],
+        dimensions: usize,
+    ) -> Result<Vec<Vec<f32>>, String> {
+        self.0
+            .run_images(inputs)?
+            .into_iter()
+            .map(|output| embedding(output, dimensions))
+            .collect()
+    }
 }
 
 fn embedding(output: tensor::Tensor, dimensions: usize) -> Result<Vec<f32>, String> {

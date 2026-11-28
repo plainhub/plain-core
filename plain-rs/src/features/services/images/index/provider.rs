@@ -6,8 +6,8 @@ use crate::features::media::images::indexing::Snapshot;
 use crate::infrastructure::error::DomainError;
 use crate::infrastructure::error::DomainResult;
 use crate::infrastructure::host::bridge::Host;
-use serde::de::DeserializeOwned;
 use plain_libs::serde_json::{Value, json};
+use serde::de::DeserializeOwned;
 use std::sync::Arc;
 pub struct ImageProvider {
     catalog: Option<Arc<crate::infrastructure::db::Db>>,
@@ -57,12 +57,12 @@ impl ImageProvider {
             .map_err(|e| DomainError::Other(format!("invalid image index host response: {e}")))
     }
 
-    fn encode(
+    fn prepare(
         &self,
         encoder: Arc<dyn plain_libs::ai_image_search::embedding::ImageEncoder>,
         item: &Image,
     ) -> DomainResult<Option<Vec<f32>>> {
-        self.encode_with(encoder, item, |source, output| {
+        self.prepare_with(encoder, item, |source, output| {
             self.runtime
                 .block_on(crate::features::services::files::resources::read(
                     &self.host,
@@ -73,7 +73,7 @@ impl ImageProvider {
         })
     }
 
-    fn encode_with(
+    fn prepare_with(
         &self,
         encoder: Arc<dyn plain_libs::ai_image_search::embedding::ImageEncoder>,
         item: &Image,
@@ -81,18 +81,18 @@ impl ImageProvider {
     ) -> DomainResult<Option<Vec<f32>>> {
         let mut staged = None;
         let resource = item.path.starts_with("ph://") || item.path.starts_with("content://");
-        let vector = if resource {
+        let pixels = if resource {
             let source_encoder = encoder.clone();
             let cache = self.cache.clone();
-            let (vector, temporary) = self
+            let (pixels, temporary) = self
                 .runtime
                 .block_on(crate::features::services::files::input::read_source(
                     &self.resources,
                     &self.cache,
                     &item.path,
                     move |reader| {
-                        let vector = source_encoder.image_reader(reader)?;
-                        let temporary = if vector.is_none() {
+                        let pixels = source_encoder.prepare_reader(reader)?;
+                        let temporary = if pixels.is_none() {
                             use std::io::{Seek, SeekFrom};
                             reader
                                 .seek(SeekFrom::Start(0))
@@ -106,19 +106,19 @@ impl ImageProvider {
                         } else {
                             None
                         };
-                        Ok((vector, temporary))
+                        Ok((pixels, temporary))
                     },
                 ))
                 .map_err(DomainError::Other)?;
             staged = temporary;
-            vector
+            pixels
         } else {
             encoder
-                .image(std::path::Path::new(&item.path))
+                .prepare_image(std::path::Path::new(&item.path))
                 .map_err(DomainError::Other)?
         };
-        if vector.is_some() || self.catalog.is_some() {
-            return Ok(vector);
+        if pixels.is_some() || self.catalog.is_some() {
+            return Ok(pixels);
         }
         std::fs::create_dir_all(&self.cache)
             .map_err(|error| DomainError::Other(error.to_string()))?;
@@ -132,7 +132,9 @@ impl ImageProvider {
         if decoded != Value::Bool(true) {
             return Ok(None);
         }
-        encoder.image(output.path()).map_err(DomainError::Other)
+        encoder
+            .prepare_image(output.path())
+            .map_err(DomainError::Other)
     }
 }
 impl Provider for ImageProvider {
@@ -170,18 +172,34 @@ impl Provider for ImageProvider {
             items: Vec::new(),
             skipped_ids: Vec::new(),
         };
-        for item in items {
-            let vector = self.encode(encoder.clone(), item)?;
-            match vector {
-                Some(vector) => embedded.items.push(
+        for group in items.chunks(4) {
+            let mut images = Vec::with_capacity(group.len());
+            let mut pixels = Vec::with_capacity(group.len());
+            for item in group {
+                match self.prepare(encoder.clone(), item)? {
+                    Some(input) => {
+                        images.push(item);
+                        pixels.push(input);
+                    }
+                    None => embedded.skipped_ids.push(item.id.clone()),
+                }
+            }
+            if images.is_empty() {
+                continue;
+            }
+            let vectors = encoder.encode_images(pixels).map_err(DomainError::Other)?;
+            if vectors.len() != images.len() {
+                return Err(DomainError::Other("Invalid image embedding count".into()));
+            }
+            embedded
+                .items
+                .extend(images.into_iter().zip(vectors).map(|(item, embedding)| {
                     crate::features::media::images::embeddings::EmbeddingInput {
                         id: item.id.clone(),
                         path: item.path.clone(),
-                        embedding: vector,
-                    },
-                ),
-                None => embedded.skipped_ids.push(item.id.clone()),
-            }
+                        embedding,
+                    }
+                }));
         }
         self.verify(revision)?;
         Ok(embedded)

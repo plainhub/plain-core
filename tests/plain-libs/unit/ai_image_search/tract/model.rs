@@ -54,6 +54,21 @@ fn runs_a_custom_pair_with_nhwc_and_permuted_named_text_inputs() {
         panic!("expected float output")
     };
     assert_eq!(red.as_slice().unwrap(), [1., 0., 0., 1.]);
+    let mut images = [[1., 0., 0.], [0., 1., 0.], [0., 0., 1.]].map(|rgb| Input {
+        name: "pixels",
+        shape: &[1, 24, 24, 3],
+        values: Values::Float(rgb.repeat(24 * 24)),
+    });
+    let outputs = model.run_images(&mut images).unwrap();
+    assert_eq!(outputs.len(), 3);
+    for (channel, output) in outputs.into_iter().enumerate() {
+        let Tensor::F32(output) = output else {
+            panic!("expected float output")
+        };
+        let mut expected = [0., 0., 0., 1.];
+        expected[channel] = 1.;
+        assert_eq!(output.as_slice().unwrap(), expected);
+    }
     drop(model);
     let mut tokens = [
         Input {
@@ -119,6 +134,13 @@ fn original_vision_encoder_matches_ort() {
         values: Values::Float(values),
     }];
     let model = Model::open(&package.join("image.onnx"), &inputs, "pooler_output").unwrap();
+    assert!(
+        model
+            .graph
+            .steps
+            .iter()
+            .any(|step| step.shared_weight.is_some())
+    );
     let Tensor::F32(output) = model.run(&mut inputs).unwrap() else {
         panic!("expected FP32 output")
     };

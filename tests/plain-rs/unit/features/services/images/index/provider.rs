@@ -62,7 +62,7 @@ async fn resource_image(decode: bool, fail: bool, available: bool) {
             path: "ph://photo".into(),
         };
         let result = if decode {
-            provider.encode_with(encoder, &item, |source, output| {
+            provider.prepare_with(encoder, &item, |source, output| {
                 decode_count.fetch_add(1, Ordering::SeqCst);
                 assert_eq!(std::fs::read(source).unwrap(), b"raw-image");
                 assert!(source.starts_with(&worker_cache));
@@ -73,7 +73,7 @@ async fn resource_image(decode: bool, fail: bool, available: bool) {
                 Ok(Value::Bool(available))
             })
         } else {
-            provider.encode(encoder, &item)
+            provider.prepare(encoder, &item)
         };
         provider.finish();
         result

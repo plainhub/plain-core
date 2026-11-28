@@ -64,6 +64,10 @@ fn setup(
         fn release(&self) {
             self.0.fetch_add(1, Ordering::SeqCst);
         }
+        fn encode_images(&self, inputs: Vec<Vec<f32>>) -> Result<Vec<Vec<f32>>, String> {
+            assert_eq!(inputs.len(), 4);
+            Ok(inputs)
+        }
         fn image_reader(
             &self,
             _: &mut dyn plain_libs::ai_image_search::embedding::ImageSource,
@@ -272,4 +276,130 @@ async fn generation_failure_finishes_the_worker_and_idle_is_immediately_ready() 
     );
     assert!(!service.status().is_running);
     assert!(service.wait_until_idle().now_or_never().is_some());
+}
+
+#[tokio::test]
+#[ignore = "requires the original SigLIP2 files in PLAIN_TEST_SIGLIP2_PACKAGE"]
+async fn image_index_batches_preserve_embedding_bytes_scores_and_ranking() {
+    use crate::features::enums::DataType;
+    use crate::infrastructure::db::MediaFileMetadata;
+    use plain_libs::ai_image_search::{
+        embedding::{Engine, ImageEncoder},
+        models::manifest::Manifest,
+    };
+
+    let source = std::path::PathBuf::from(std::env::var_os("PLAIN_TEST_SIGLIP2_PACKAGE").unwrap());
+    let engine = Arc::new(
+        Engine::open(
+            source.clone(),
+            Manifest::read(&source.join("manifest.json")).unwrap(),
+        )
+        .unwrap(),
+    );
+    let directory = plain_libs::temporary::tempdir().unwrap();
+    let db = Arc::new(Db::open(&directory.path().join("catalog.db")).unwrap());
+    let reference = Db::open(std::path::Path::new(":memory:")).unwrap();
+    let mut expected = Vec::new();
+    for index in 0..8u32 {
+        let path = directory.path().join(format!("fixture-{index}.png"));
+        if index == 3 {
+            std::fs::write(&path, b"unsupported image").unwrap();
+        } else {
+            plain_libs::image::RgbImage::from_fn(96 + index, 64 + index, |x, y| {
+                plain_libs::image::Rgb([
+                    (x * 7 + y * index) as u8,
+                    (y * 13 + x * index) as u8,
+                    (x * y + index * 53) as u8,
+                ])
+            })
+            .save(&path)
+            .unwrap();
+        }
+        let name = path.to_str().unwrap();
+        let rows = db
+            .record_media_files(&[MediaFileMetadata {
+                data_type: DataType::Image,
+                path: name.into(),
+                title: format!("fixture-{index}"),
+                artist: String::new(),
+                album: String::new(),
+                album_artist: String::new(),
+                bucket_id: String::new(),
+                size_bytes: std::fs::metadata(&path).unwrap().len() as i64,
+                duration_ms: 0,
+                width: 96,
+                height: 64,
+                rotation: 0,
+                taken_at: None,
+                created_at: "2026-01-01T00:00:00Z".into(),
+                updated_at: "2026-01-01T00:00:00Z".into(),
+            }])
+            .unwrap();
+        if let Some(embedding) = engine.image(&path).unwrap() {
+            assert_eq!(embedding.len(), 768);
+            expected.push(EmbeddingInput {
+                id: rows[0].id.clone(),
+                path: name.into(),
+                embedding,
+            });
+        }
+    }
+    image_embeddings::save(&reference, &expected).unwrap();
+    image_embeddings::save(&db, &expected[..1]).unwrap();
+    let query = engine.text("a colorful gradient").unwrap();
+    let query = plain_libs::utils::base64::base64_encode(
+        &query
+            .into_iter()
+            .flat_map(f32::to_be_bytes)
+            .collect::<Vec<_>>(),
+    );
+    let host = Arc::new(Host::default());
+    let service = Arc::new(ImageIndex::new(
+        db.clone(),
+        host.clone(),
+        tokio::sync::broadcast::channel(16).0,
+        Arc::new(crate::infrastructure::host::resources::NativeResources::new(host)),
+        directory.path().join("cache"),
+    ));
+    service.use_native_catalog_for_test();
+    service.set_encoder(Some(engine));
+    service.start(false).unwrap();
+    tokio::time::timeout(
+        std::time::Duration::from_secs(240),
+        service.wait_until_idle(),
+    )
+    .await
+    .unwrap();
+    let status = service.status();
+    assert_eq!(status.error_message, "1 images could not be decoded");
+    assert_eq!(status.skipped_images, 1);
+    assert_eq!(status.indexed_images, 7);
+    assert_eq!(image_embeddings::count(&db).unwrap(), 7);
+    for input in &expected {
+        let actual: Vec<u8> = db
+            .with_conn(|c| {
+                c.query_row(
+                    "SELECT embedding FROM image_embeddings WHERE file_id=?1",
+                    [&input.id],
+                    |r| r.get(0),
+                )
+            })
+            .unwrap();
+        assert_eq!(
+            actual,
+            input
+                .embedding
+                .iter()
+                .flat_map(|v| v.to_be_bytes())
+                .collect::<Vec<_>>()
+        );
+    }
+    let scores = |db: &Db| {
+        image_embeddings::search_with_score(db, &query, -1.)
+            .unwrap()
+            .into_iter()
+            .map(|r| (r.image_id, r.score.to_bits()))
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(scores(&db), scores(&reference));
 }

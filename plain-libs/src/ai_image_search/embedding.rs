@@ -17,6 +17,17 @@ pub trait ImageEncoder: Send + Sync {
     fn release(&self) {}
     fn image(&self, path: &Path) -> Result<Option<Vec<f32>>, String>;
     fn image_reader(&self, source: &mut dyn ImageSource) -> Result<Option<Vec<f32>>, String>;
+
+    // Single-image encoders return finished vectors during preparation.
+    fn prepare_image(&self, path: &Path) -> Result<Option<Vec<f32>>, String> {
+        self.image(path)
+    }
+    fn prepare_reader(&self, source: &mut dyn ImageSource) -> Result<Option<Vec<f32>>, String> {
+        self.image_reader(source)
+    }
+    fn encode_images(&self, inputs: Vec<Vec<f32>>) -> Result<Vec<Vec<f32>>, String> {
+        Ok(inputs)
+    }
 }
 pub struct Engine {
     pub manifest: Manifest,
@@ -143,9 +154,20 @@ impl Engine {
                 }
             })
             .collect::<Vec<_>>();
-        self.run(false, &mut inputs, &self.manifest.text.output)
+        self.with_session(
+            false,
+            &mut inputs,
+            &self.manifest.text.output,
+            |session, inputs| session.run(inputs, self.manifest.dimensions),
+        )
     }
-    fn run(&self, image: bool, inputs: &mut [Input<'_>], output: &str) -> Result<Vec<f32>, String> {
+    fn with_session<T>(
+        &self,
+        image: bool,
+        inputs: &mut [Input<'_>],
+        output: &str,
+        run: impl FnOnce(&mut Session, &mut [Input<'_>]) -> Result<T, String>,
+    ) -> Result<T, String> {
         let mut session = self.session.lock().map_err(|e| e.to_string())?;
         if session.as_ref().is_none_or(|(kind, _)| *kind != image) {
             *session = None;
@@ -156,28 +178,17 @@ impl Engine {
             };
             *session = Some((
                 image,
-                Session::new(&self.directory.join(file), inputs, output)?,
+                Session::new(
+                    &self.directory.join(file),
+                    if image { &inputs[..1] } else { inputs },
+                    output,
+                )?,
             ));
         }
-        session
-            .as_mut()
-            .unwrap()
-            .1
-            .run(inputs, self.manifest.dimensions)
+        run(&mut session.as_mut().unwrap().1, inputs)
     }
-
-    fn image_tensor(&self, data: Vec<f32>) -> Result<Vec<f32>, String> {
-        let size = self.manifest.preprocess.size as i64;
-        let shape = match self.manifest.preprocess.layout {
-            Layout::Nchw => [1, 3, size, size],
-            Layout::Nhwc => [1, size, size, 3],
-        };
-        let mut inputs = [Input {
-            name: &self.manifest.image.input,
-            shape: &shape,
-            values: Values::Float(data),
-        }];
-        self.run(true, &mut inputs, &self.manifest.image.output)
+    fn image_tensor(&self, input: Vec<f32>) -> Result<Vec<f32>, String> {
+        Ok(self.encode_images(vec![input])?.pop().unwrap())
     }
     pub fn release_all(&self) {
         *self.session.lock().unwrap() = None;
@@ -190,21 +201,48 @@ impl Engine {
     }
 }
 impl ImageEncoder for Engine {
+    fn image(&self, path: &Path) -> Result<Option<Vec<f32>>, String> {
+        self.prepare_image(path)?
+            .map(|input| self.image_tensor(input))
+            .transpose()
+    }
     fn image_reader(&self, source: &mut dyn ImageSource) -> Result<Option<Vec<f32>>, String> {
-        crate::ai_image_search::preprocess::tensor_reader(
-            std::io::BufReader::new(source),
-            &self.manifest.preprocess,
-        )?
-        .map(|values| self.image_tensor(values))
-        .transpose()
+        self.prepare_reader(source)?
+            .map(|input| self.image_tensor(input))
+            .transpose()
+    }
+    fn encode_images(&self, images: Vec<Vec<f32>>) -> Result<Vec<Vec<f32>>, String> {
+        if images.is_empty() {
+            return Ok(Vec::new());
+        }
+        let size = self.manifest.preprocess.size as i64;
+        let shape = match self.manifest.preprocess.layout {
+            Layout::Nchw => [1, 3, size, size],
+            Layout::Nhwc => [1, size, size, 3],
+        };
+        let mut inputs = images
+            .into_iter()
+            .map(|image| Input {
+                name: &self.manifest.image.input,
+                shape: &shape,
+                values: Values::Float(image),
+            })
+            .collect::<Vec<_>>();
+        self.with_session(
+            true,
+            &mut inputs,
+            &self.manifest.image.output,
+            |session, inputs| session.run_images(inputs, self.manifest.dimensions),
+        )
+    }
+    fn prepare_reader(&self, source: &mut dyn ImageSource) -> Result<Option<Vec<f32>>, String> {
+        super::preprocess::tensor_reader(std::io::BufReader::new(source), &self.manifest.preprocess)
     }
     fn release(&self) {
         self.release_image();
     }
-    fn image(&self, path: &Path) -> Result<Option<Vec<f32>>, String> {
-        crate::ai_image_search::preprocess::tensor(path, &self.manifest.preprocess)?
-            .map(|values| self.image_tensor(values))
-            .transpose()
+    fn prepare_image(&self, path: &Path) -> Result<Option<Vec<f32>>, String> {
+        super::preprocess::tensor(path, &self.manifest.preprocess)
     }
 }
 

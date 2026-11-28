@@ -24,6 +24,7 @@ struct Step {
     inputs: Vec<Option<usize>>,
     outputs: Vec<Option<usize>>,
     release: Vec<usize>,
+    shared_weight: Option<usize>,
 }
 
 impl Model {
@@ -46,8 +47,15 @@ impl Model {
     }
 
     pub(super) fn run(&self, inputs: &mut [Input<'_>]) -> Result<Tensor, String> {
-        let feeds = self
-            .input_order
+        let feeds = self.feeds(inputs)?;
+        self.graph
+            .eval(feeds)?
+            .pop()
+            .ok_or_else(|| "Missing encoder output".into())
+    }
+
+    fn feeds(&self, inputs: &mut [Input<'_>]) -> Result<Vec<Option<Tensor>>, String> {
+        self.input_order
             .iter()
             .map(|&index| {
                 let input = &mut inputs[index];
@@ -61,11 +69,19 @@ impl Model {
                     Values::Integer(v) => Tensor::I64(array(&shape, std::mem::take(v))?),
                 }))
             })
-            .collect::<Result<Vec<_>, String>>()?;
+            .collect()
+    }
+
+    pub(super) fn run_images(&self, inputs: &mut [Input<'_>]) -> Result<Vec<Tensor>, String> {
+        let feeds = inputs
+            .iter_mut()
+            .map(|input| self.feeds(std::slice::from_mut(input)))
+            .collect::<Result<Vec<_>, _>>()?;
         self.graph
-            .eval(feeds)?
-            .pop()
-            .ok_or_else(|| "Missing encoder output".into())
+            .eval_many(feeds)?
+            .into_iter()
+            .map(|mut outputs| outputs.pop().ok_or_else(|| "Missing encoder output".into()))
+            .collect()
     }
 }
 
@@ -130,6 +146,7 @@ impl Graph {
                 inputs,
                 outputs: std::mem::take(&mut wiring.outputs),
                 release,
+                shared_weight: None,
             });
         }
         let retained_slot = |name: &str| {
@@ -155,7 +172,12 @@ impl Graph {
         for (slot, tensor) in &constants {
             facts[*slot].unify(InferenceFact::from_tensor(tensor))?;
         }
-        for step in &steps {
+        for step in &mut steps {
+            if let (Op::MatMul, [Some(_), Some(rhs)]) = (&step.op, step.inputs.as_slice()) {
+                step.shared_weight = constants
+                    .iter()
+                    .position(|(slot, t)| slot == rhs && matches!(t, Tensor::F16(_)));
+            }
             for (index, slot) in step.outputs.iter().enumerate() {
                 if let Some(slot) = slot
                     && let Some(inferred) = step.op.output_fact(&step.inputs, &facts, index)
@@ -178,48 +200,74 @@ impl Graph {
     }
 
     pub(super) fn eval(&self, inputs: Vec<Option<Tensor>>) -> Result<Vec<Tensor>, String> {
-        if inputs.len() != self.inputs.len() {
-            return Err("Unexpected ONNX graph input count".into());
-        }
-        let mut values = vec![None; self.facts.len()];
-        for (slot, tensor) in &self.constants {
-            values[*slot] = Some(tensor.clone());
-        }
-        for (&slot, tensor) in self.inputs.iter().zip(inputs) {
-            if let Some(tensor) = tensor {
-                self.facts[slot].check(tensor.dtype() as i32, tensor.shape())?;
-                values[slot] = Some(tensor);
+        Ok(self.eval_many(vec![inputs])?.pop().unwrap())
+    }
+
+    fn eval_many(&self, feeds: Vec<Vec<Option<Tensor>>>) -> Result<Vec<Vec<Tensor>>, String> {
+        let mut images = Vec::with_capacity(feeds.len());
+        for inputs in feeds {
+            if inputs.len() != self.inputs.len() {
+                return Err("Unexpected ONNX graph input count".into());
             }
-        }
-        for (index, step) in self.steps.iter().enumerate() {
-            let inputs = step
-                .inputs
-                .iter()
-                .map(|input| input.and_then(|slot| values[slot].as_ref()))
-                .collect::<Vec<_>>();
-            let outputs = step
-                .op
-                .eval(&inputs)
-                .map_err(|e| format!("ONNX node {index}: {e}"))?;
-            if outputs.len() != step.outputs.len() {
-                return Err(format!("Invalid output count at ONNX node {index}"));
+            let mut values = vec![None; self.facts.len()];
+            for (slot, tensor) in &self.constants {
+                values[*slot] = Some(tensor.clone());
             }
-            for (slot, tensor) in step.outputs.iter().zip(outputs) {
-                if let Some(slot) = slot {
-                    self.facts[*slot].check(tensor.dtype() as i32, tensor.shape())?;
-                    values[*slot] = Some(tensor);
+            for (&slot, tensor) in self.inputs.iter().zip(inputs) {
+                if let Some(tensor) = tensor {
+                    self.facts[slot].check(tensor.dtype() as i32, tensor.shape())?;
+                    values[slot] = Some(tensor);
                 }
             }
-            for &slot in &step.release {
-                values[slot] = None;
+            images.push(values);
+        }
+        for (index, step) in self.steps.iter().enumerate() {
+            let weight = if images.len() > 1 {
+                step.shared_weight.and_then(|i| match &self.constants[i].1 {
+                    Tensor::F16(b) => Some(b.mapv(crate::binary16::to_f32)),
+                    _ => None,
+                })
+            } else {
+                None
+            };
+            for values in &mut images {
+                let inputs = step
+                    .inputs
+                    .iter()
+                    .map(|input| input.and_then(|slot| values[slot].as_ref()))
+                    .collect::<Vec<_>>();
+                let outputs = match (&weight, inputs.as_slice()) {
+                    (Some(b), [Some(Tensor::F16(a)), Some(_)]) => {
+                        super::matmul::half_product(a, b.view(), false, false, 1.).map(|v| vec![v])
+                    }
+                    _ => step.op.eval(&inputs),
+                }
+                .map_err(|e| format!("ONNX node {index}: {e}"))?;
+                if outputs.len() != step.outputs.len() {
+                    return Err(format!("Invalid output count at ONNX node {index}"));
+                }
+                for (slot, tensor) in step.outputs.iter().zip(outputs) {
+                    if let Some(slot) = slot {
+                        self.facts[*slot].check(tensor.dtype() as i32, tensor.shape())?;
+                        values[*slot] = Some(tensor);
+                    }
+                }
+                for &slot in &step.release {
+                    values[slot] = None;
+                }
             }
         }
-        self.outputs
-            .iter()
-            .map(|&slot| {
-                values[slot]
-                    .clone()
-                    .ok_or_else(|| "Missing ONNX graph output".into())
+        images
+            .into_iter()
+            .map(|values| {
+                self.outputs
+                    .iter()
+                    .map(|&slot| {
+                        values[slot]
+                            .clone()
+                            .ok_or_else(|| "Missing ONNX graph output".into())
+                    })
+                    .collect()
             })
             .collect()
     }

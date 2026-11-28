@@ -89,6 +89,20 @@ fn product<T: LinalgScalar>(
         .map_err(|e| e.to_string())
 }
 
+pub(super) fn half_product(
+    a: &Array<u16>,
+    b: ArrayViewD<'_, f32>,
+    a_trans: bool,
+    b_trans: bool,
+    alpha: f32,
+) -> Result<Tensor, String> {
+    Ok(Tensor::F16(
+        product(a.mapv(to_f32).view(), b, a_trans, b_trans, alpha)?
+            .mapv(from_f32)
+            .into_shared(),
+    ))
+}
+
 pub(super) fn matmul(
     a: &Tensor,
     b: &Tensor,
@@ -97,17 +111,9 @@ pub(super) fn matmul(
     alpha: f32,
 ) -> Result<Tensor, String> {
     Ok(match (a, b) {
-        (Tensor::F16(a), Tensor::F16(b)) => Tensor::F16(
-            product(
-                a.mapv(to_f32).view(),
-                b.mapv(to_f32).view(),
-                a_trans,
-                b_trans,
-                alpha,
-            )?
-            .mapv(from_f32)
-            .into_shared(),
-        ),
+        (Tensor::F16(a), Tensor::F16(b)) => {
+            half_product(a, b.mapv(to_f32).view(), a_trans, b_trans, alpha)?
+        }
         (Tensor::F32(a), Tensor::F32(b)) => {
             Tensor::F32(product(a.view(), b.view(), a_trans, b_trans, alpha)?)
         }

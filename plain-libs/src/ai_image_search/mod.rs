@@ -31,6 +31,14 @@ mod unavailable {
             Err("AI image search is not available in this build".into())
         }
 
+        pub fn run_images(
+            &mut self,
+            _: &mut [Input<'_>],
+            _: usize,
+        ) -> Result<Vec<Vec<f32>>, String> {
+            match *self {}
+        }
+
         pub fn run(&mut self, _: &mut [Input<'_>], _: usize) -> Result<Vec<f32>, String> {
             match *self {}
         }
